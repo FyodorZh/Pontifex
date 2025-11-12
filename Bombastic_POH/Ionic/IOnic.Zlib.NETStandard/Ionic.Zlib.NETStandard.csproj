@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>Ionic.Zlib</AssemblyName>
+    <RootNamespace>Ionic.Zlib</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ZLibSrc\CRC32.cs" Link="CRC32.cs" />
+    <Compile Include="..\ZLibSrc\Deflate.cs" Link="Deflate.cs" />
+    <Compile Include="..\ZLibSrc\DeflateStream.cs" Link="DeflateStream.cs" />
+    <Compile Include="..\ZLibSrc\GZipStream.cs" Link="GZipStream.cs" />
+    <Compile Include="..\ZLibSrc\Inflate.cs" Link="Inflate.cs" />
+    <Compile Include="..\ZLibSrc\InfTree.cs" Link="InfTree.cs" />
+    <Compile Include="..\ZLibSrc\ParallelDeflateOutputStream.cs" Link="ParallelDeflateOutputStream.cs" />
+    <Compile Include="..\ZLibSrc\Tree.cs" Link="Tree.cs" />
+    <Compile Include="..\ZLibSrc\Zlib.cs" Link="Zlib.cs" />
+    <Compile Include="..\ZLibSrc\ZlibBaseStream.cs" Link="ZlibBaseStream.cs" />
+    <Compile Include="..\ZLibSrc\ZlibCodec.cs" Link="ZlibCodec.cs" />
+    <Compile Include="..\ZLibSrc\ZlibConstants.cs" Link="ZlibConstants.cs" />
+    <Compile Include="..\ZLibSrc\ZlibStream.cs" Link="ZlibStream.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,177 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\..\packages\NUnit.3.10.1\build\NUnit.props" Condition="Exists('..\..\packages\NUnit.3.10.1\build\NUnit.props')" />
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <LangVersion>12</LangVersion>
+    <TargetFramework>net481</TargetFramework>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{9A89D67A-D718-4509-9C6D-CEA954E00F40}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>TransportAnalyzer</RootNamespace>
+    <AssemblyName>TransportAnalyzer</AssemblyName>
+    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Windows.Forms.DataVisualization" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Hosts\AckRawProtocolClient.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Hosts\AckRawProtocolClient.Designer.cs">
+      <DependentUpon>AckRawProtocolClient.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Hosts\AckRawProtocolServer.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Hosts\AckRawProtocolServer.Designer.cs">
+      <DependentUpon>AckRawProtocolServer.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Hosts\TransportMultiClient.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Hosts\TransportMultiClient.Designer.cs">
+      <DependentUpon>TransportMultiClient.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ListBoxLogConsumer.cs" />
+    <Compile Include="TestLogic\AckRawProtocol\AckRawTestClient.cs" />
+    <Compile Include="TestLogic\AckRawProtocol\AckRawProtocol.cs" />
+    <Compile Include="TestLogic\AckRawProtocol\AckRawTestServer.cs" />
+    <Compile Include="TestLogic\AckRaw\AckRawClientLogic.cs" />
+    <Compile Include="TestLogic\AckRaw\AckRawServerLogic.cs" />
+    <Compile Include="TestLogic\AckRaw\AckRawCommonLogic.cs" />
+    <Compile Include="TrasnportConstructor.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="TrasnportConstructor.Designer.cs">
+      <DependentUpon>TrasnportConstructor.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Hosts\TransportClient.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Hosts\TransportClient.Designer.cs">
+      <DependentUpon>TransportClient.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Hosts\TransportServer.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Hosts\TransportServer.Designer.cs">
+      <DependentUpon>TransportServer.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TransportAnalyzer.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="TransportAnalyzer.Designer.cs">
+      <DependentUpon>TransportAnalyzer.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="Hosts\AckRawProtocolClient.resx">
+      <DependentUpon>AckRawProtocolClient.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Hosts\AckRawProtocolServer.resx">
+      <DependentUpon>AckRawProtocolServer.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Hosts\TransportMultiClient.resx">
+      <DependentUpon>TransportMultiClient.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="TrasnportConstructor.resx">
+      <DependentUpon>TrasnportConstructor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <EmbeddedResource Include="TransportAnalyzer.resx">
+      <DependentUpon>TransportAnalyzer.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Hosts\TransportClient.resx">
+      <DependentUpon>TransportClient.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Hosts\TransportServer.resx">
+      <DependentUpon>TransportServer.cs</DependentUpon>
+    </EmbeddedResource>
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\IDLib\IDLib.csproj">
+      <Project>{3a2dc730-dd72-4f41-a265-3be0cfe43dbe}</Project>
+      <Name>IDLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Logger\Log\Log.csproj">
+      <Project>{dd1daf66-09e6-4bb7-9030-cf3ff8b81c95}</Project>
+      <Name>Log</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Protocol\Protocol.csproj">
+      <Project>{576752e3-c8df-4e5c-a756-bf3eb0714099}</Project>
+      <Name>Protocol</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Serializer\Serializer.csproj">
+      <Project>{66e4e1e6-e09e-4ab2-b63c-a83e4bbabc9f}</Project>
+      <Name>Serializer</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Transport.NetSockets\Transport.NetSockets.csproj">
+      <Project>{9d0b53d4-5ab0-4e91-a27b-9cfc332283dc}</Project>
+      <Name>Transport.NetSockets</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Transport\Transport.csproj">
+      <Project>{5e939e4f-f861-47b7-8ea3-d5264fd35a46}</Project>
+      <Name>Transport</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Utils\Utils.csproj">
+      <Project>{6bc7af0d-f2f1-4330-b869-c1da69f980f1}</Project>
+      <Name>Utils</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

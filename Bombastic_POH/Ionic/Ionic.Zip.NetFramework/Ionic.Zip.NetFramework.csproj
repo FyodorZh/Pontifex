@@ -1,0 +1,145 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{6207D4FF-A857-496C-AC71-245B4CA67BA7}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Ionic.Zip</RootNamespace>
+    <AssemblyName>Ionic.Zip</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\..\..\UnityPlatformerClient\Assets\Plugins\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\..\..\UnityPlatformerClient\Assets\Plugins\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\ZipSrc\ComHelper.cs">
+      <Link>ComHelper.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\EncryptionAlgorithm.cs">
+      <Link>EncryptionAlgorithm.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\Events.cs">
+      <Link>Events.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\Exceptions.cs">
+      <Link>Exceptions.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ExtractExistingFileAction.cs">
+      <Link>ExtractExistingFileAction.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\FileSelector.cs">
+      <Link>FileSelector.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\OffsetStream.cs">
+      <Link>OffsetStream.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\Shared.cs">
+      <Link>Shared.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\WinZipAes.cs">
+      <Link>WinZipAes.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipConstants.cs">
+      <Link>ZipConstants.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipCrypto.cs">
+      <Link>ZipCrypto.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipDirEntry.cs">
+      <Link>ZipDirEntry.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipEntry.cs">
+      <Link>ZipEntry.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipEntry.Extract.cs">
+      <Link>ZipEntry.Extract.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipEntry.Read.cs">
+      <Link>ZipEntry.Read.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipEntry.Write.cs">
+      <Link>ZipEntry.Write.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipEntrySource.cs">
+      <Link>ZipEntrySource.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipErrorAction.cs">
+      <Link>ZipErrorAction.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.AddUpdate.cs">
+      <Link>ZipFile.AddUpdate.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.Check.cs">
+      <Link>ZipFile.Check.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.cs">
+      <Link>ZipFile.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.Events.cs">
+      <Link>ZipFile.Events.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.Extract.cs">
+      <Link>ZipFile.Extract.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.Read.cs">
+      <Link>ZipFile.Read.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.Save.cs">
+      <Link>ZipFile.Save.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.SaveSelfExtractor.cs">
+      <Link>ZipFile.SaveSelfExtractor.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.Selector.cs">
+      <Link>ZipFile.Selector.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipFile.x-IEnumerable.cs">
+      <Link>ZipFile.x-IEnumerable.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipInputStream.cs">
+      <Link>ZipInputStream.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipOutputStream.cs">
+      <Link>ZipOutputStream.cs</Link>
+    </Compile>
+    <Compile Include="..\ZipSrc\ZipSegmentedStream.cs">
+      <Link>ZipSegmentedStream.cs</Link>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Ionic.Zlib.NETFramework\Ionic.Zlib.NETFramework.csproj">
+      <Project>{6c975df0-8084-48bf-8b35-e7e693fffb88}</Project>
+      <Name>Ionic.Zlib.NETFramework</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
