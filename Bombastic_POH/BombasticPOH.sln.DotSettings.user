@@ -10,7 +10,14 @@
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=8e5a3c23_002D463e_002D444b_002Da156_002D024640b40118/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="All tests from &amp;lt;UnitTest&amp;gt;" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
   &lt;Project Location="C:\Work\Home\Pontifex\Bombastic_POH\UnitTest" Presentation="&amp;lt;UnitTest&amp;gt;" /&gt;&#xD;
 &lt;/SessionState&gt;</s:String>
+	<s:Boolean x:Key="/Default/UnloadedProject/UnloadedProjects/=144153ed_002D1e8a_002D48a3_002Da6f8_002D9e53bc84f788_0023Transport_002EProtocols/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/UnloadedProject/UnloadedProjects/=5efdea3e_002Dc1d4_002D4002_002Db802_002Da9b10375ebc5_0023_005FChemodan/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/UnloadedProject/UnloadedProjects/=648905ff_002Dc719_002D4457_002D94d3_002D1c500914a88e_0023SharedCode/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/UnloadedProject/UnloadedProjects/=9172931d_002Df939_002D4871_002D97b5_002D1d748a10b946_0023Transport_002ESerializer/@EntryIndexedValue">True</s:Boolean>
+	
+	
+	
+	
 	
 	
 	
