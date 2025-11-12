@@ -1,0 +1,40 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Work\\Home\\Pontifex\\Bombastic_POH\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{9A89D67A-D718-4509-9C6D-CEA954E00F40}|TransportAnalyzer\\TransportAnalyzer.csproj|c:\\work\\home\\pontifex\\bombastic_poh\\transportanalyzer\\transportanalyzer.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{9A89D67A-D718-4509-9C6D-CEA954E00F40}|TransportAnalyzer\\TransportAnalyzer.csproj|solutionrelative:transportanalyzer\\transportanalyzer.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "TransportAnalyzer",
+              "DocumentMoniker": "C:\\Work\\Home\\Pontifex\\Bombastic_POH\\TransportAnalyzer\\TransportAnalyzer.csproj",
+              "RelativeDocumentMoniker": "TransportAnalyzer\\TransportAnalyzer.csproj",
+              "ToolTip": "C:\\Work\\Home\\Pontifex\\Bombastic_POH\\TransportAnalyzer\\TransportAnalyzer.csproj",
+              "RelativeToolTip": "TransportAnalyzer\\TransportAnalyzer.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-11-12T20:02:46.36Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
