@@ -10,7 +10,6 @@ using Transport.Abstractions.Handlers.Server;
 using Transport.Abstractions.Servers;
 using Transport.Endpoints;
 using Transport.Transports.Core;
-using TimeSpan = Shared.TimeSpan;
 
 namespace Transport.Transports.Udp
 {

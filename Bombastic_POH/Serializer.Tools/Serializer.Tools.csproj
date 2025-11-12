@@ -10,9 +10,4 @@
     <ProjectReference Include="..\Serializer.Extensions\Serializer.Extensions.csproj" />
     <ProjectReference Include="..\Serializer\Serializer.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Reference Include="Ionic.Zlib">
-      <HintPath>..\Ionic.Zlib.dll</HintPath>
-    </Reference>
-  </ItemGroup>
 </Project>

@@ -19,7 +19,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <LangVersion>5</LangVersion>
+    <LangVersion>12</LangVersion>
     <Prefer32Bit>false</Prefer32Bit>
     <OutputPath>bin\Debug/netstandard2.1/</OutputPath>
   </PropertyGroup>
@@ -46,14 +46,10 @@
     <DefaultItemExcludes>obj/**;**/*.meta;$(DefaultItemExcludes);</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Ionic\IOnic.Zlib.NETStandard\Ionic.Zlib.NETStandard.csproj" />
     <ProjectReference Include="..\Logger\Log\Log.csproj" />
     <ProjectReference Include="..\Serializer.Extensions\Serializer.Extensions.csproj" />
     <ProjectReference Include="..\Serializer\Serializer.csproj" />
     <ProjectReference Include="..\Utils\Utils.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="Ionic.Zlib">
-      <HintPath>..\Ionic.Zlib.dll</HintPath>
-    </Reference>
   </ItemGroup>
 </Project>

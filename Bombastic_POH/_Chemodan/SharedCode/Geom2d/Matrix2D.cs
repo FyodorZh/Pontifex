@@ -250,7 +250,10 @@ namespace Geom2d
         {
             get
             {
-                DBG.Diagnostics.Assert(IsScaleShift());
+                if (!IsScaleShift())
+                {
+                    throw new InvalidOperationException("Matrix is not scale-shift");
+                }
                 return new Geom2d.Vector(_m00, _m11);
             }
         }

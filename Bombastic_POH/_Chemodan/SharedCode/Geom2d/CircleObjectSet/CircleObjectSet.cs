@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 namespace Geom2d
 {
     public abstract class BaseCircleObjectSet<TData>
@@ -70,12 +71,11 @@ namespace Geom2d
         {
             get
             {
-                DBG.Diagnostics.Assert(false);
-                return 0;
+                throw new InvalidOperationException();
             }
         }
         
-        public abstract Shared.Pool.CollectableEnumerable<TData> Select(Circle region);
+        //public abstract Shared.Pool.CollectableEnumerable<TData> Select(Circle region);
 
         protected abstract CircleObject<TData> DoCreateObject(float size, TData userData);
 

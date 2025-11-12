@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Shared.Pool;
 
 namespace Geom2d
 {
@@ -107,33 +106,33 @@ namespace Geom2d
             return false;
         }
 
-        public override CollectableEnumerable<TData> Select(Circle circle)
-        {
-            CollectableEnumerable<TData> list = ObjectPool<CollectableEnumerable<TData>>.Allocate();
-
-            float r = circle.r + mMaxOjbectSize;
-            int id = FindLeftmostObjectId(circle.x - r);
-            if (id != -1)
-            {
-                float rightBorder = circle.x + r;
-
-                while (id < mCount)
-                {
-                    if (mObjects[id].Position.x > rightBorder)
-                    {
-                        break;
-                    }
-
-                    if (circle.Intersect(mObjects[id].CurCircle))
-                    {
-                        list.Add(mObjects[id].UserDataRef);
-                    }
-                    ++id;
-                }
-            }
-
-            return list;
-        }
+        // public override CollectableEnumerable<TData> Select(Circle circle)
+        // {
+        //     CollectableEnumerable<TData> list = ObjectPool<CollectableEnumerable<TData>>.Allocate();
+        //
+        //     float r = circle.r + mMaxOjbectSize;
+        //     int id = FindLeftmostObjectId(circle.x - r);
+        //     if (id != -1)
+        //     {
+        //         float rightBorder = circle.x + r;
+        //
+        //         while (id < mCount)
+        //         {
+        //             if (mObjects[id].Position.x > rightBorder)
+        //             {
+        //                 break;
+        //             }
+        //
+        //             if (circle.Intersect(mObjects[id].CurCircle))
+        //             {
+        //                 list.Add(mObjects[id].UserDataRef);
+        //             }
+        //             ++id;
+        //         }
+        //     }
+        //
+        //     return list;
+        // }
 
         private int FindLeftmostObjectId(float xPos)
         {
