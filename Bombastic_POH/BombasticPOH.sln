@@ -22,8 +22,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Transport.Protocols", "Tran
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharedCode", "SharedCode\SharedCode.csproj", "{648905FF-C719-4457-94D3-1C500914A88E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serializer.Tools", "Serializer.Tools\Serializer.Tools.csproj", "{D6359AA9-EE85-44DC-9EA2-BA0B2290D76F}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Protocol", "Protocol\Protocol.csproj", "{576752E3-C8DF-4E5C-A756-BF3EB0714099}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TransportAnalyzer", "TransportAnalyzer\TransportAnalyzer.csproj", "{9A89D67A-D718-4509-9C6D-CEA954E00F40}"
@@ -84,10 +82,6 @@ Global
 		{648905FF-C719-4457-94D3-1C500914A88E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{648905FF-C719-4457-94D3-1C500914A88E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{648905FF-C719-4457-94D3-1C500914A88E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D6359AA9-EE85-44DC-9EA2-BA0B2290D76F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D6359AA9-EE85-44DC-9EA2-BA0B2290D76F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D6359AA9-EE85-44DC-9EA2-BA0B2290D76F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D6359AA9-EE85-44DC-9EA2-BA0B2290D76F}.Release|Any CPU.Build.0 = Release|Any CPU
 		{576752E3-C8DF-4E5C-A756-BF3EB0714099}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{576752E3-C8DF-4E5C-A756-BF3EB0714099}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{576752E3-C8DF-4E5C-A756-BF3EB0714099}.Release|Any CPU.ActiveCfg = Release|Any CPU
