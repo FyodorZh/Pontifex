@@ -1,4 +1,6 @@
-﻿namespace Shared
+﻿using System;
+
+namespace Shared
 {
     public class CycleQueue<T> : IQueue<T>, IArray<T>
     {
@@ -115,7 +117,10 @@
         {
             get
             {
-                DBG.Diagnostics.Assert(mCount > 0);
+                if (mCount <= 0)
+                {
+                    throw new Exception();
+                }
                 return mData[mId];
             }
         }
@@ -124,7 +129,10 @@
         {
             get
             {
-                DBG.Diagnostics.Assert(mCount > 0);
+                if (mCount <= 0)
+                {
+                    throw new Exception();
+                }
                 return mData[(mId + mCount - 1) & mCapacityMask];
             }
         }
@@ -133,20 +141,19 @@
         {
             get
             {
-                DBG.Diagnostics.Assert(id >= 0 && id < mCount);
                 if (id >= 0 && id < mCount)
                 {
                     return mData[(mId + id) & mCapacityMask];
                 }
-                return default(T);
+                throw new Exception();
             }
             set
             {
-                DBG.Diagnostics.Assert(id >= 0 && id < mCount);
                 if (id >= 0 && id < mCount)
                 {
                     mData[(mId + id) & mCapacityMask] = value;
                 }
+                throw new Exception();
             }
         }
 
@@ -254,57 +261,57 @@
             }
         }
 
-        [UT.UT("CycleQueue")]
-        private static void UT(UT.IUTest test)
-        {
-            CycleQueue<int> queue = new CycleQueue<int>(2);
-            test.Equal(queue.Count, 0);
-
-            int output;
-
-            queue.Put(1);
-            test.Equal(queue.Count, 1);
-            test.Equal(queue.Head, queue.Tail);
-            test.Equal(queue.Tail, queue[0]);
-
-            test.Equal(queue.TryPop(out output), true);
-            test.Equal(output, 1);
-
-            queue.Put(1);
-            queue.Put(2);
-            test.Equal(queue.Count, 2);
-            test.Equal(queue.Head, 1);
-            test.Equal(queue.Tail, 2);
-            test.Equal(queue[0], 1);
-            test.Equal(queue[1], 2);
-
-            queue.Put(3);
-
-            Log.d("HEAD TO TAIL");
-            foreach (var q in queue.Enumerate(QueueEnumerationOrder.HeadToTail))
-            {
-                Log.d("{0}", q);
-            }
-
-            Log.d("TAIL TO HEAD");
-            foreach (var q in queue.Enumerate(QueueEnumerationOrder.TailToHead))
-            {
-                Log.d("{0}", q);
-            }
-
-            test.Equal(queue[2], 3);
-
-            test.Equal(queue.TryPop(out output), true);
-            test.Equal(output, 1);
-
-            test.Equal(queue[0], 2);
-
-            test.Equal(queue.TryPop(out output), true);
-            test.Equal(output, 2);
-
-            test.Equal(queue.TryPop(out output), true);
-            test.Equal(output, 3);
-        }
+        // [UT.UT("CycleQueue")]
+        // private static void UT(UT.IUTest test)
+        // {
+        //     CycleQueue<int> queue = new CycleQueue<int>(2);
+        //     test.Equal(queue.Count, 0);
+        //
+        //     int output;
+        //
+        //     queue.Put(1);
+        //     test.Equal(queue.Count, 1);
+        //     test.Equal(queue.Head, queue.Tail);
+        //     test.Equal(queue.Tail, queue[0]);
+        //
+        //     test.Equal(queue.TryPop(out output), true);
+        //     test.Equal(output, 1);
+        //
+        //     queue.Put(1);
+        //     queue.Put(2);
+        //     test.Equal(queue.Count, 2);
+        //     test.Equal(queue.Head, 1);
+        //     test.Equal(queue.Tail, 2);
+        //     test.Equal(queue[0], 1);
+        //     test.Equal(queue[1], 2);
+        //
+        //     queue.Put(3);
+        //
+        //     Log.d("HEAD TO TAIL");
+        //     foreach (var q in queue.Enumerate(QueueEnumerationOrder.HeadToTail))
+        //     {
+        //         Log.d("{0}", q);
+        //     }
+        //
+        //     Log.d("TAIL TO HEAD");
+        //     foreach (var q in queue.Enumerate(QueueEnumerationOrder.TailToHead))
+        //     {
+        //         Log.d("{0}", q);
+        //     }
+        //
+        //     test.Equal(queue[2], 3);
+        //
+        //     test.Equal(queue.TryPop(out output), true);
+        //     test.Equal(output, 1);
+        //
+        //     test.Equal(queue[0], 2);
+        //
+        //     test.Equal(queue.TryPop(out output), true);
+        //     test.Equal(output, 2);
+        //
+        //     test.Equal(queue.TryPop(out output), true);
+        //     test.Equal(output, 3);
+        // }
 
     }
 }

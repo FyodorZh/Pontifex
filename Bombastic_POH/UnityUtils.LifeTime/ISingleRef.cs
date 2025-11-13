@@ -1,6 +1,5 @@
 //#define TRACE_HISTORY
 
-using System;
 using System.Diagnostics;
 
 namespace Shared
@@ -50,7 +49,7 @@ namespace Shared
 #if TRACE_HISTORY
             var history = mTracer.Export();
 #endif
-            string text = "Invalid SingleRef object of type " + GetType() + " usage. Error = " + error;
+            string text = $"Invalid SingleRef object of type {GetType()} usage. Error = {error}";
             Log.w(text);
             Debug.Assert(false, text);
         }

@@ -1,4 +1,4 @@
-//#define TRACE_HISTORY
+#define TRACE_HISTORY
 
 #if TRACE_HISTORY
     #define TRACE_HISTORY_ALL
@@ -18,7 +18,7 @@ namespace Shared
     public interface IMultiRef : IReleasable
     {
         /// <summary>
-        /// TRUE если объект имеет хотябы одного владельца
+        /// TRUE если объект имеет хотя бы одного владельца
         /// </summary>
         bool IsAlive { get; }
 
@@ -28,24 +28,13 @@ namespace Shared
         void AddRef();
     }
 
-    public static class Ext_IMultiRef
+    public static class IMultiRef_Ext
     {
         public static T Acquire<T>(this T element)
             where T : class, IMultiRef
         {
             element.AddRef();
             return element;
-        }
-
-        [Conditional("DEBUG")]
-        public static void CheckAlive<T>(this T element)
-            where T : IMultiRef
-        {
-            if (!element.IsAlive)
-            {
-                Log.e("Resource " + element + " is not alive");
-            }
-            Debug.Assert(element.IsAlive);
         }
     }
 
@@ -60,15 +49,12 @@ namespace Shared
             NoUsageAssertionFail,
         }
 
-        private RefCounter mRefCounter = new RefCounter();
+        private readonly RefCounter _refCounter = new RefCounter();
 
-        protected virtual bool TraceEnabled
-        {
-            get { return false; }
-        }
+        protected virtual bool TraceEnabled => false;
 
 #if TRACE_HISTORY
-        private readonly ActionHistoryTracer mTracer = new ActionHistoryTracer();
+        private readonly ActionHistoryTracer _tracer = new ActionHistoryTracer();
 
         private void Trace(string name)
         {
@@ -76,7 +62,7 @@ namespace Shared
             if (TraceEnabled)
             #endif
             {
-                mTracer.RecordEvent(name);
+                _tracer.RecordEvent(name);
             }
         }
 #endif
@@ -88,14 +74,14 @@ namespace Shared
 #if TRACE_HISTORY
                 Trace("Ctor");
 #endif
-                mRefCounter.Init();
+                _refCounter.Init();
             }
         }
 
 #if TRACE_DESTRUCTOR
         ~MultiRefImpl()
         {
-            if (mRefCounter.IsValid)
+            if (_refCounter.IsValid)
             {
                 OnRefCountError(ErrorType.Leak);
             }
@@ -106,10 +92,10 @@ namespace Shared
 
         protected virtual void OnRefCountError(ErrorType error)
         {
-            string text = "Invalid MultiRef object of type " + GetType() + " usage. Error = " + error;
+            string text = $"Invalid MultiRef object of type {GetType()} usage. Error = {error}";
             Log.w(text);
 #if TRACE_HISTORY
-            var history = mTracer.Export();
+            var history = _tracer.Export();
             foreach (var stack in history)
             {
                 Log.w(stack.Action + "\n" + stack.Stack.ToString());
@@ -118,17 +104,14 @@ namespace Shared
             Debug.Assert(false, text);
         }
 
-        public bool IsAlive
-        {
-            get { return mRefCounter.IsValid; }
-        }
+        public bool IsAlive => _refCounter.IsValid;
 
         public void AddRef()
         {
 #if TRACE_HISTORY_ALL
             Trace("AddRef");
 #endif
-            if (mRefCounter.AddRef() == 0)
+            if (_refCounter.AddRef() == 0)
             {
                 OnRefCountError(ErrorType.AddRefOfReleasedObject);
             }
@@ -136,7 +119,7 @@ namespace Shared
 
         public void Release()
         {
-            int cnt = mRefCounter.Release();
+            int cnt = _refCounter.Release();
 
 #if TRACE_HISTORY
         #if TRACE_HISTORY_ALL
@@ -162,10 +145,10 @@ namespace Shared
         protected bool Revive()
         {
 #if TRACE_HISTORY
-            mTracer.Clear();
+            _tracer.Clear();
             Trace("Revive");
 #endif
-            if (!mRefCounter.Revive())
+            if (!_refCounter.Revive())
             {
                 OnRefCountError(ErrorType.WrongReviveUsage);
                 return false;
@@ -176,7 +159,7 @@ namespace Shared
 
         protected void AssertNoUsage()
         {
-            if (mRefCounter.IsValid)
+            if (_refCounter.IsValid)
             {
                 OnRefCountError(ErrorType.NoUsageAssertionFail);
             }
@@ -184,7 +167,7 @@ namespace Shared
 
         public override string ToString()
         {
-            return "RefCount:" + mRefCounter;
+            return "RefCount:" + _refCounter;
         }
     }
 }

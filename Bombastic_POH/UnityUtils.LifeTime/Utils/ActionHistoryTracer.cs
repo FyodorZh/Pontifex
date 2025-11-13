@@ -6,7 +6,7 @@ namespace Shared
 {
     internal class ActionHistoryTracer
     {
-        public struct Record
+        public readonly struct Record
         {
             public readonly string Action;
             public readonly StackTrace Stack;

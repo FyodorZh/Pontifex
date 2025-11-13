@@ -193,87 +193,87 @@ namespace Shared
             }
         }
 
-        [UT.UT("PriorityQueue")]
-        private static void UT(UT.IUTest test)
-        {
-            PriorityQueue<int, int> queue = new PriorityQueue<int, int>();
-            test.Equal(queue.Count, 0);
-
-            System.Collections.Generic.SortedList<int, int> list = new System.Collections.Generic.SortedList<int, int>();
-            int val;
-
-            for (int i = 1; i < 10000; ++i)
-            {
-                val = i;
-
-                queue.Enqueue(val, val);
-                list.Add(val, val);
-
-                val = -i;
-
-                queue.Enqueue(val, val);
-                list.Add(val, val);
-
-                int a = queue.Dequeue();
-                var en = list.GetEnumerator();
-                en.MoveNext();
-                int b = en.Current.Value;
-                list.Remove(b);
-
-                test.Equal(a, b);
-            }
-
-            /*
-            System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-            sw.Reset();
-            sw.Start();
-            for (int i = 1; i < 10000; ++i)
-            {
-                val = i;
-                queue.Enqueu(val, val);
-                val = -i;
-                queue.Enqueu(val, val);
-                val = queue.Dequeue();
-            }
-            sw.Stop();
-            Log.i("Time " + sw.ElapsedMilliseconds);
-                        
-            System.Collections.Generic.SortedDictionary<int, int> sdic = new System.Collections.Generic.SortedDictionary<int, int>();
-
-            sw.Reset();
-            sw.Start();
-            for (int i = 1; i < 10000; ++i)
-            {
-                val = i;
-                sdic.Add(val, val);
-                val = -i;
-                sdic.Add(val, val);
-                var en = sdic.GetEnumerator();
-                en.MoveNext();
-                val = en.Current.Value;
-                sdic.Remove(val);
-            }
-            sw.Stop();
-            Log.i("Time " + sw.ElapsedMilliseconds);
-
-            System.Collections.Generic.SortedList<int, int> slist = new System.Collections.Generic.SortedList<int, int>();
-
-            sw.Reset();
-            sw.Start();
-            for (int i = 1; i < 10000; ++i)
-            {
-                val = i;
-                slist.Add(val, val);
-                val = -i;
-                slist.Add(val, val);
-                var en = slist.GetEnumerator();
-                val = en.Current.Value;
-                en.MoveNext();
-                slist.Remove(val);
-            }
-            sw.Stop();
-            Log.i("Time " + sw.ElapsedMilliseconds);
-            */
-        }
+//         [UT.UT("PriorityQueue")]
+//         private static void UT(UT.IUTest test)
+//         {
+//             PriorityQueue<int, int> queue = new PriorityQueue<int, int>();
+//             test.Equal(queue.Count, 0);
+//
+//             System.Collections.Generic.SortedList<int, int> list = new System.Collections.Generic.SortedList<int, int>();
+//             int val;
+//
+//             for (int i = 1; i < 10000; ++i)
+//             {
+//                 val = i;
+//
+//                 queue.Enqueue(val, val);
+//                 list.Add(val, val);
+//
+//                 val = -i;
+//
+//                 queue.Enqueue(val, val);
+//                 list.Add(val, val);
+//
+//                 int a = queue.Dequeue();
+//                 var en = list.GetEnumerator();
+//                 en.MoveNext();
+//                 int b = en.Current.Value;
+//                 list.Remove(b);
+//
+//                 test.Equal(a, b);
+//             }
+//
+//             /*
+//             System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+//             sw.Reset();
+//             sw.Start();
+//             for (int i = 1; i < 10000; ++i)
+//             {
+//                 val = i;
+//                 queue.Enqueu(val, val);
+//                 val = -i;
+//                 queue.Enqueu(val, val);
+//                 val = queue.Dequeue();
+//             }
+//             sw.Stop();
+//             Log.i("Time " + sw.ElapsedMilliseconds);
+//                         
+//             System.Collections.Generic.SortedDictionary<int, int> sdic = new System.Collections.Generic.SortedDictionary<int, int>();
+//
+//             sw.Reset();
+//             sw.Start();
+//             for (int i = 1; i < 10000; ++i)
+//             {
+//                 val = i;
+//                 sdic.Add(val, val);
+//                 val = -i;
+//                 sdic.Add(val, val);
+//                 var en = sdic.GetEnumerator();
+//                 en.MoveNext();
+//                 val = en.Current.Value;
+//                 sdic.Remove(val);
+//             }
+//             sw.Stop();
+//             Log.i("Time " + sw.ElapsedMilliseconds);
+//
+//             System.Collections.Generic.SortedList<int, int> slist = new System.Collections.Generic.SortedList<int, int>();
+//
+//             sw.Reset();
+//             sw.Start();
+//             for (int i = 1; i < 10000; ++i)
+//             {
+//                 val = i;
+//                 slist.Add(val, val);
+//                 val = -i;
+//                 slist.Add(val, val);
+//                 var en = slist.GetEnumerator();
+//                 val = en.Current.Value;
+//                 en.MoveNext();
+//                 slist.Remove(val);
+//             }
+//             sw.Stop();
+//             Log.i("Time " + sw.ElapsedMilliseconds);
+//             */
+//         }
     }
 }

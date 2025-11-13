@@ -1,10 +1,12 @@
-﻿//#define CHECK
+﻿#define CHECK
+
+using System.Collections.Generic;
 
 namespace Shared
 {
-    public struct RefCounter
+    public class RefCounter
     {
-        private volatile int mRefCount;
+        private volatile int _refCount;
 
 #if CHECK
         private struct RefChangeEvent
@@ -13,22 +15,18 @@ namespace Shared
             public System.Diagnostics.StackTrace Stack;
         }
 
-        private System.Collections.Generic.List<RefChangeEvent> mHistory;
+        private readonly List<RefChangeEvent> _history = new();
 #endif
 
         public void Init()
         {
-            mRefCount = 1;
+            _refCount = 1;
 #if CHECK
-            mHistory = new System.Collections.Generic.List<RefChangeEvent>();
-            mHistory.Add(new RefChangeEvent() { IsIncrement = true, Stack = new System.Diagnostics.StackTrace() });
+            _history.Add(new RefChangeEvent() { IsIncrement = true, Stack = new System.Diagnostics.StackTrace() });
 #endif
         }
 
-        public bool IsValid
-        {
-            get { return mRefCount > 0; }
-        }
+        public bool IsValid => _refCount > 0;
 
         /// <summary>
         /// Увеличивает счётчик
@@ -38,23 +36,23 @@ namespace Shared
         {
             while (true)
             {
-                int oldCount = mRefCount;
+                int oldCount = _refCount;
                 if (oldCount <= 0)
                 {
 #if CHECK
                     Log.e("Wrong ref counter usage (AddRef failed):");
-                    for (int i = 0; i < mHistory.Count; ++i)
+                    for (int i = 0; i < _history.Count; ++i)
                     {
-                        Log.e((mHistory[i].IsIncrement ? "+" : "-") + mHistory[i]);
+                        Log.e((_history[i].IsIncrement ? "+" : "-") + _history[i]);
                     }
 #endif
                     return 0;
                 }
 
-                if (System.Threading.Interlocked.CompareExchange(ref mRefCount, oldCount + 1, oldCount) == oldCount)
+                if (System.Threading.Interlocked.CompareExchange(ref _refCount, oldCount + 1, oldCount) == oldCount)
                 {
 #if CHECK
-                    mHistory.Add(new RefChangeEvent() { IsIncrement = true, Stack = new System.Diagnostics.StackTrace() });
+                    _history.Add(new RefChangeEvent() { IsIncrement = true, Stack = new System.Diagnostics.StackTrace() });
 #endif
                     return oldCount + 1;
                 }
@@ -67,15 +65,15 @@ namespace Shared
         /// <returns> Возвращает 0 когда счётчик обнулился </returns>
         public int Release()
         {
-            int res = System.Threading.Interlocked.Decrement(ref mRefCount);
+            int res = System.Threading.Interlocked.Decrement(ref _refCount);
 #if CHECK
-            mHistory.Add(new RefChangeEvent() { IsIncrement = false, Stack = new System.Diagnostics.StackTrace() });
+            _history.Add(new RefChangeEvent() { IsIncrement = false, Stack = new System.Diagnostics.StackTrace() });
             if (res < 0)
             {
                 Log.e("Wrong ref counter usage (Release failed):");
-                for (int i = 0; i < mHistory.Count; ++i)
+                for (int i = 0; i < _history.Count; ++i)
                 {
-                    Log.e((mHistory[i].IsIncrement ? "+" : "-") + mHistory[i]);
+                    Log.e((_history[i].IsIncrement ? "+" : "-") + _history[i]);
                 }
             }
 #endif
@@ -90,13 +88,13 @@ namespace Shared
         {
             while (true)
             {
-                int oldCount = mRefCount;
+                int oldCount = _refCount;
                 if (oldCount != 0)
                 {
                     return false;
                 }
 
-                if (System.Threading.Interlocked.CompareExchange(ref mRefCount, oldCount + 1, oldCount) == oldCount)
+                if (System.Threading.Interlocked.CompareExchange(ref _refCount, oldCount + 1, oldCount) == oldCount)
                 {
                     return true;
                 }

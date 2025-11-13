@@ -161,6 +161,14 @@
       <Project>{5e939e4f-f861-47b7-8ea3-d5264fd35a46}</Project>
       <Name>Transport</Name>
     </ProjectReference>
+    <ProjectReference Include="..\UnityUtils.LifeTime\UnityUtils.LifeTime.csproj">
+      <Project>{d4807890-9809-4e2c-964b-a4a7404d4566}</Project>
+      <Name>UnityUtils.LifeTime</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\UnityUtils.Memory\UnityUtils.Memory.csproj">
+      <Project>{d4232029-5946-4ae0-b257-0d8b27c79879}</Project>
+      <Name>UnityUtils.Memory</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Utils\Utils.csproj">
       <Project>{6bc7af0d-f2f1-4330-b869-c1da69f980f1}</Project>
       <Name>Utils</Name>
