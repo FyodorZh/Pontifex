@@ -28,7 +28,7 @@ namespace Shared.Buffer
 
     public interface IMemoryBufferView
     {
-        IDLong<IMemoryBuffer> BufferId { get; }
+        long BufferId { get; }
 
         /// <summary>
         /// Memory size

@@ -6,12 +6,12 @@ namespace Shared.Buffer
     {
         private static long mIdCounter = 0;
 
-        private readonly IDLong<IMemoryBuffer> mId = IDLong<IMemoryBuffer>.DeserializeFrom(System.Threading.Interlocked.Increment(ref mIdCounter));
+        private readonly long mId = System.Threading.Interlocked.Increment(ref mIdCounter);
         private readonly CycleQueue<BufferElement> mElements = new CycleQueue<BufferElement>(10);
 
         private IMultiRefLowLevelByteArray mSource;
 
-        public IDLong<IMemoryBuffer> BufferId
+        public long BufferId
         {
             get { return mId; }
         }
