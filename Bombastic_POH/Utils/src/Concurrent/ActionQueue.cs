@@ -1,5 +1,5 @@
 using System;
-using Fundamentum.Collections;
+using Actuarius.Collections;
 
 namespace Shared.Concurrent
 {

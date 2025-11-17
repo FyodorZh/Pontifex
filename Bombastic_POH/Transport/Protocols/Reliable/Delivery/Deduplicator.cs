@@ -1,4 +1,4 @@
-﻿using Fundamentum.Collections;
+﻿using Actuarius.Collections;
 using Shared;
 
 namespace Transport.Protocols.Reliable.Delivery

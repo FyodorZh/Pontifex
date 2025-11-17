@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Shared;
 
-namespace Fundamentum.Collections
+namespace Actuarius.Collections
 {
     public class TrivialQueue<TData> : IQueue_old<TData>
     {

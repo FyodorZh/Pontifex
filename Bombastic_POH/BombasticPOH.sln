@@ -42,6 +42,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils.Containers", "Un
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils", "UnityUtils\UnityUtils.csproj", "{7B8705E5-FF72-4835-A039-050994E81E11}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Collections", "Actuarius\Actuarius.Collections\Actuarius.Collections.csproj", "{69D4E7E4-7025-45C9-B431-0C3AFE3B9E9C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -128,6 +130,10 @@ Global
 		{7B8705E5-FF72-4835-A039-050994E81E11}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B8705E5-FF72-4835-A039-050994E81E11}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B8705E5-FF72-4835-A039-050994E81E11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{69D4E7E4-7025-45C9-B431-0C3AFE3B9E9C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{69D4E7E4-7025-45C9-B431-0C3AFE3B9E9C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{69D4E7E4-7025-45C9-B431-0C3AFE3B9E9C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{69D4E7E4-7025-45C9-B431-0C3AFE3B9E9C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{144153ED-1E8A-48A3-A6F8-9E53BC84F788} = {6160EC40-963C-4242-87A9-7EF01E022570}

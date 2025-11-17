@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Fundamentum.Collections;
+using Actuarius.Collections;
 
 namespace Shared.Pooling
 {

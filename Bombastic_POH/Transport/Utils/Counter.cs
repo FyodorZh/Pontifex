@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Threading;
-using Fundamentum.Collections;
+using Actuarius.Collections;
 using Shared;
 using Transport.Protocols.Reliable.Delivery;
 using TimeSpan = System.TimeSpan;
