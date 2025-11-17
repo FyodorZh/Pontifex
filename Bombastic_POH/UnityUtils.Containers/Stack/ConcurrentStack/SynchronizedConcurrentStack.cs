@@ -8,6 +8,17 @@ namespace Shared
 
         private readonly int mMaxCapacity;
 
+        public int Count
+        {
+            get
+            {
+                lock (mStack)
+                {
+                    return mStack.Count;
+                }
+            }
+        }
+
         public SynchronizedConcurrentStack(int maxCapacity = -1)
         {
             mMaxCapacity = maxCapacity;

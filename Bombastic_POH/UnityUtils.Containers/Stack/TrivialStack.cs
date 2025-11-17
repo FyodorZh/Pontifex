@@ -1,10 +1,13 @@
 using System.Collections.Generic;
+using Fundamentum.Collections;
 
 namespace Shared
 {
     public class TrivialStack<TData> : IStack<TData>
     {
         private readonly Stack<TData> mStack = new Stack<TData>();
+        
+        public int Count => mStack.Count;
 
         public bool Put(TData value)
         {

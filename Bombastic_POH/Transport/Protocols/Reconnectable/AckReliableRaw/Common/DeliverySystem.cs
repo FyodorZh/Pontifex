@@ -1,4 +1,5 @@
-﻿using Shared;
+﻿using Fundamentum.Collections;
+using Shared;
 using Shared.Buffer;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
@@ -23,10 +24,10 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         private volatile bool mIsValid = true;
 
         private DeliveryId mNextId = DeliveryId.Zero.Next;
-        private readonly Shared.CycleQueue<Delivery> mPendingToDeliver = new Shared.CycleQueue<Delivery>();
+        private readonly CycleQueue<Delivery> mPendingToDeliver = new CycleQueue<Delivery>();
         private volatile bool mNoNewPendingToDeliver;
 
-        private readonly Shared.CycleQueue<DeliveryId> mDeliveryReport = new Shared.CycleQueue<DeliveryId>();
+        private readonly CycleQueue<DeliveryId> mDeliveryReport = new CycleQueue<DeliveryId>();
 
         private DeliveryId mLastReceivedMessageId = DeliveryId.Zero;
 

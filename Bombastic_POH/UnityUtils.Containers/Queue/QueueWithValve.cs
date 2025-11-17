@@ -1,8 +1,9 @@
 using System;
+using Fundamentum.Collections;
 
 namespace Shared
 {
-    public class QueueWithValve<TData> : IQueue<TData>, ICountable
+    public class QueueWithValve<TData> : IQueue_old<TData>, ICountable
     {
         private CycleQueue<TData> mQueue = new CycleQueue<TData>();
 

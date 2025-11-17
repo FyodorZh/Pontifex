@@ -1,10 +1,12 @@
+using Fundamentum.Collections;
+
 namespace Shared
 {
     /// <summary>
     /// Коробка в которую можно клсать и изымать элементы, порядок изъятия не определён
     /// </summary>
     /// <typeparam name="TData"> Тип элементов </typeparam>
-    public interface IUnorderedCollection<TData> : IConsumer<TData>, IProducer<TData>
+    public interface IUnorderedCollection<TData> : IConsumer<TData>, IProducer<TData>, IStream<TData> // TODO
     {
     }
 

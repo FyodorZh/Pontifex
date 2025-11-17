@@ -1,4 +1,5 @@
 using System;
+using Fundamentum.Collections;
 
 namespace Shared.Concurrent
 {

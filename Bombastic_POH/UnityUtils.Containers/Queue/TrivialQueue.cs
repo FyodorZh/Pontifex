@@ -1,8 +1,9 @@
 using System.Collections.Generic;
+using Shared;
 
-namespace Shared
+namespace Fundamentum.Collections
 {
-    public class TrivialQueue<TData> : IQueue<TData>
+    public class TrivialQueue<TData> : IQueue_old<TData>
     {
         private readonly Queue<TData> mQueue = new Queue<TData>();
 

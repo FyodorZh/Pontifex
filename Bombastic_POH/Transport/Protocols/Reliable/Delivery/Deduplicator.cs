@@ -1,4 +1,5 @@
-﻿using Shared;
+﻿using Fundamentum.Collections;
+using Shared;
 
 namespace Transport.Protocols.Reliable.Delivery
 {

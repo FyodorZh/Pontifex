@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using Fundamentum.Collections;
 using Shared;
 using Transport.Protocols.Reliable.Delivery;
 using TimeSpan = System.TimeSpan;
@@ -39,7 +40,7 @@ namespace Transport.Utils
 
         private int mValue;
 
-        private readonly Shared.CycleQueue<Data> mQueue = new Shared.CycleQueue<Data>();
+        private readonly CycleQueue<Data> mQueue = new CycleQueue<Data>();
 
         private readonly IDateTimeProvider mTimeProvider;
 

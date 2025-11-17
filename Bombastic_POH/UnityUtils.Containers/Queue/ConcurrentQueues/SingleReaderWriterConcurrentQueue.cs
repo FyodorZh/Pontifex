@@ -1,3 +1,5 @@
+using Fundamentum.Collections;
+
 namespace Shared
 {
     /// <summary>
@@ -7,10 +9,10 @@ namespace Shared
     /// <typeparam name="TData"></typeparam>
     public class SingleReaderWriterConcurrentQueue<TData> : ISingleReaderWriterConcurrentQueue<TData>
     {
-        private IQueue<TData> mWriteDst;
-        private IQueue<TData> mReadSrc;
+        private IStream<TData> mWriteDst;
+        private IStream<TData> mReadSrc;
 
-        private IQueue<TData> mWriteDstRef;
+        private IStream<TData> mWriteDstRef;
 
         private volatile bool mReadyToSwap;
 
@@ -24,7 +26,7 @@ namespace Shared
 
         public bool Put(TData value)
         {
-            IQueue<TData> placeToWrite = System.Threading.Interlocked.Exchange(ref mWriteDst, null);
+            var placeToWrite = System.Threading.Interlocked.Exchange(ref mWriteDst, null);
             var res = placeToWrite.Put(value);
             mReadyToSwap = mReadyToSwap || res;
             System.Threading.Interlocked.Exchange(ref mWriteDst, placeToWrite);

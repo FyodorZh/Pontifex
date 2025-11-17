@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using Fundamentum.Collections;
 using NUnit.Framework;
 using Shared;
 
@@ -40,7 +41,7 @@ namespace TransportAnalyzer.UTests
             Test(new Shared.PriorityQueue<int, int>(), (int)1e6, 0.5001, kv => new KeyValuePair<int, int>((kv.Key * 31 + 371) % 10001, kv.Value + 1));
         }
 
-        private void Test<TElement>(IUnorderedCollection<TElement> collection, int testSize, double percentOfAddition, Func<TElement, TElement> nextElement)
+        private void Test<TElement>(IStream<TElement> collection, int testSize, double percentOfAddition, Func<TElement, TElement> nextElement)
         {
             TElement prevElement = default(TElement);
 

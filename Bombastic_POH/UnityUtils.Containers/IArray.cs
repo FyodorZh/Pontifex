@@ -1,27 +1,19 @@
+using Fundamentum.Collections;
+
 namespace Shared
 {
-    public interface IROArray<TObject> : ICountable
-    {
-        TObject this[int id] { get; }
-    }
-
-    public interface IArray<TObject> : IROArray<TObject>
-    {
-        new TObject this[int id] { get; set; }
-    }
-
     public static class IROArray_Ext
     {
-        public static AsEnumerable<TObject> Enumerate<TObject>(this IROArray<TObject> list)
+        public static AsEnumerable<TObject> Enumerate<TObject>(this IReadOnlyArray<TObject> list)
         {
             return new AsEnumerable<TObject>(list);
         }
 
         public struct AsEnumerable<TObject>
         {
-            private readonly IROArray<TObject> mList;
+            private readonly IReadOnlyArray<TObject> mList;
 
-            public AsEnumerable(IROArray<TObject> list)
+            public AsEnumerable(IReadOnlyArray<TObject> list)
             {
                 mList = list;
             }
@@ -34,11 +26,11 @@ namespace Shared
 
         public struct Enumerator<TObject>// : IEnumerator<TObject>
         {
-            private readonly IROArray<TObject> mList;
+            private readonly IReadOnlyArray<TObject> mList;
             private readonly int mCount;
             private int mIdx;
 
-            public Enumerator(IROArray<TObject> list)
+            public Enumerator(IReadOnlyArray<TObject> list)
             {
                 mList = list;
                 mCount = list.Count;

@@ -1,17 +1,19 @@
+using Fundamentum.Collections;
+
 namespace Shared.Pooling
 {
     public class Pool<TObject> : IPool<TObject>
         where TObject : class
     {
         private readonly IConstructor<TObject> mConstructor;
-        private readonly IUnorderedCollection<TObject> mPool;
+        private readonly IStream<TObject> mPool;
 
         public Pool(IConstructor<TObject> ctor)
             : this(ctor, new CycleQueue<TObject>())
         {
         }
 
-        public Pool(IConstructor<TObject> ctor, IUnorderedCollection<TObject> pool)
+        public Pool(IConstructor<TObject> ctor, IStream<TObject> pool)
         {
             mConstructor = ctor;
             mPool = pool;

@@ -16,7 +16,12 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Fundamentum\Fundamentum.Collections\Fundamentum.Collections.csproj" />
         <ProjectReference Include="..\Logger\Log\Log.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Utils\" />
     </ItemGroup>
 
 </Project>

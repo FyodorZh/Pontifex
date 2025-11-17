@@ -1,4 +1,6 @@
-﻿namespace Shared
+﻿using Fundamentum.Collections;
+
+namespace Shared
 {
     public class SynchronizedConcurrentQueue<TData> : IConcurrentQueue<TData>
     {

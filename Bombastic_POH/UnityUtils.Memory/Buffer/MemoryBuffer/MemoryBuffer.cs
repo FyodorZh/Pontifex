@@ -1,4 +1,5 @@
 ﻿using System;
+using Fundamentum.Collections;
 
 namespace Shared.Buffer
 {
@@ -228,7 +229,7 @@ namespace Shared.Buffer
         {
             if (before)
             {
-                mElements.EnqueueToHead(element);
+                mElements.PutToHead(element);
             }
             else
             {

@@ -1,3 +1,5 @@
+using Fundamentum;
+
 namespace Shared.Pooling
 {
     public class Pow2ByteArrayConcurrentPool : ConcurrentPool<byte[], int>

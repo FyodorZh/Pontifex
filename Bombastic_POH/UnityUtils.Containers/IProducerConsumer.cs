@@ -1,36 +1,13 @@
+using Fundamentum.Collections;
+
+
 namespace Shared
 {
-    /// <summary>
-    /// Потребитель данных
-    /// </summary>
-    public interface IConsumer<TData>
-    {
-        /// <summary>
-        /// Кладёт элемент в приёмник.
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns> FALSE если положить элемент не удалось. Например, исчерпана ёмкость коллекции или что угодно другое </returns>
-        bool Put(TData value);
-    }
-
     /// <summary>
     /// Многопоточный потребитель данных
     /// </summary>
     public interface IConcurrentConsumer<TData> : IConsumer<TData>
     {
-    }
-
-    /// <summary>
-    /// Источник данных
-    /// </summary>
-    public interface IProducer<TData>
-    {
-        /// <summary>
-        /// Получает очередной элемент из продюсера
-        /// </summary>
-        /// <param name="value"> возвращаемый элемент </param>
-        /// <returns> FALSE если очередной элемент получить не удалось </returns>
-        bool TryPop(out TData value);
     }
 
     /// <summary>

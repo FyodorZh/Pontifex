@@ -1,3 +1,5 @@
+using Fundamentum.Collections;
+
 namespace Shared
 {
     public class QueueBasedConcurrentUnorderedCollection<TData> : IConcurrentUnorderedCollection<TData>

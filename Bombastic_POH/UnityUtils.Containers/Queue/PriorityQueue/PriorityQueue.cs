@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using Fundamentum.Collections;
+
 namespace Shared
 {
     /// <summary>
     /// Приоритетная очередь. Чем меньше ключ, тем он приоритетнее
     /// </summary>
-    public partial class PriorityQueue<Key, Data> : IQueue<KeyValuePair<Key, Data>>
+    public partial class PriorityQueue<Key, Data> : IQueue_old<KeyValuePair<Key, Data>>
         where Key : IComparable<Key>
     {
         private readonly List<Key> mKeys = new List<Key>();

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Fundamentum.Collections;
 using Shared;
 using Shared.Pooling;
 using Transport.Abstractions;
