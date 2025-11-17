@@ -9,25 +9,12 @@
 #endif
 
 using System.Diagnostics;
+using Actuarius.Memoria;
+
+
 
 namespace Shared
 {
-    /// <summary>
-    /// Объект у которого есть много владельцев
-    /// </summary>
-    public interface IMultiRef : IReleasable
-    {
-        /// <summary>
-        /// TRUE если объект имеет хотя бы одного владельца
-        /// </summary>
-        bool IsAlive { get; }
-
-        /// <summary>
-        /// Увеличивает число владельцев на 1
-        /// </summary>
-        void AddRef();
-    }
-
     public static class IMultiRef_Ext
     {
         public static T Acquire<T>(this T element)

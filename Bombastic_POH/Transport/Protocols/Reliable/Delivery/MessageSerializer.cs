@@ -1,4 +1,5 @@
-﻿using Serializer.BinarySerializer;
+﻿using Actuarius.Memoria;
+using Serializer.BinarySerializer;
 using Serializer.Factory;
 using Shared;
 using Shared.Buffer;

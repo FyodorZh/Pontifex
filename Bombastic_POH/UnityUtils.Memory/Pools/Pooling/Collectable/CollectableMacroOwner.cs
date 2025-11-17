@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using Actuarius.Collections;
+using Actuarius.Memoria;
 
 namespace Shared.Pooling
 {
     public sealed class CollectableMacroOwner<TObject> : MultiRefCollectable<CollectableMacroOwner<TObject>>, IMacroOwner<TObject>, IConsumer<TObject>
-        where TObject : IReleasable
+        where TObject : IReleasableResource
     {
         private readonly List<TObject> mObjects = new List<TObject>();
 

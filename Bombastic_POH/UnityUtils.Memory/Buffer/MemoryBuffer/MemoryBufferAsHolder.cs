@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Memoria;
 using Shared.ByteSinks;
 
 namespace Shared.Buffer
@@ -51,7 +52,7 @@ namespace Shared.Buffer
         }
 
         #region IMultiRef
-        void IReleasable.Release()
+        void IReleasableResource.Release()
         {
             mRefHolder.Release();
         }

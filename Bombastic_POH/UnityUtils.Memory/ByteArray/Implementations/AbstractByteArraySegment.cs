@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Memoria;
 
 namespace Shared
 {
@@ -7,7 +8,7 @@ namespace Shared
     /// </summary>
     /// <typeparam name="TArray"></typeparam>
     public class AbstractByteArraySegment<TArray> : MultiRefImpl, IMultiRefByteArray
-        where TArray : IByteArray, IReleasable
+        where TArray : IByteArray, IReleasableResource
     {
         private readonly TArray mArray;
 

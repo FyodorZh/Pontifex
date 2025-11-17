@@ -137,6 +137,10 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Actuarius\Actuarius.Memoria\Actuarius.Memoria.csproj">
+      <Project>{271752fc-19f2-4308-9f11-35b255f01155}</Project>
+      <Name>Actuarius.Memoria</Name>
+    </ProjectReference>
     <ProjectReference Include="..\IDLib\IDLib.csproj">
       <Project>{3a2dc730-dd72-4f41-a265-3be0cfe43dbe}</Project>
       <Name>IDLib</Name>

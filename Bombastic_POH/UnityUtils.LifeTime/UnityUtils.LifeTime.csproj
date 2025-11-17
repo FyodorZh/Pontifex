@@ -16,6 +16,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Actuarius\Actuarius.Memoria\Actuarius.Memoria.csproj" />
       <ProjectReference Include="..\Logger\Log\Log.csproj" />
       <ProjectReference Include="..\UnityUtils.Containers\UnityUtils.Containers.csproj" />
     </ItemGroup>

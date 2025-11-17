@@ -1,5 +1,6 @@
 using System;
 using Actuarius.Collections;
+using Actuarius.Memoria;
 
 namespace Shared.Concurrent
 {
@@ -8,7 +9,7 @@ namespace Shared.Concurrent
     /// Каждый экшин будет получать вызов TAction.Invoke() строго последовательно друг относительно друга
     /// </summary>
     /// <typeparam name="TAction"></typeparam>
-    public class ActionQueue<TAction>: IConsumer<TAction>, IReleasable
+    public class ActionQueue<TAction>: IConsumer<TAction>, IReleasableResource
         where TAction : struct, ActionQueue<TAction>.IAction
     {
         public interface IAction

@@ -1,8 +1,9 @@
+using Actuarius.Memoria;
 using Shared.Concurrent;
 
 namespace Shared.FSM
 {
-    public class ConcurrentFSM<TState> : IConcurrentFSM<TState>, IReleasable
+    public class ConcurrentFSM<TState> : IConcurrentFSM<TState>, IReleasableResource
         where TState : struct
     {
         private struct ActionRec: ActionQueue<ActionRec>.IAction

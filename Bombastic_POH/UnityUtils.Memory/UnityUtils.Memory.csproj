@@ -22,4 +22,8 @@
       <ProjectReference Include="..\UnityUtils\UnityUtils.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Archivarius.Tools" Version="0.2.1-dev.4" />
+    </ItemGroup>
+
 </Project>

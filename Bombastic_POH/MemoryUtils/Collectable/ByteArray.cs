@@ -15,6 +15,8 @@
 // PARANOIC_CHECK   = DEEP_CHECK + логироание стеков AddRef()
 
 using System;
+using Actuarius.Memoria;
+
 namespace Shared
 {
     /// Обёртка над массивом байт.
@@ -22,7 +24,7 @@ namespace Shared
     /// 1. AddRef() / Release() с подсчётом ссылок
     /// 2. Автоматическую аллокацию/освобождение данных из пула
     /// 3. Отслеживает утечки памяти и некорректное использование(в режиме отладки)
-    public class ByteArray : IDisposable, Pool.ICollectable, ISingleRef
+    public class ByteArray : IDisposable, Pool.ICollectable, ISingleRefResource
     {
         private Pool.IObjectPool mOwner;
         private int mRefCount;

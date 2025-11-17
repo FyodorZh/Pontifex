@@ -1,4 +1,6 @@
 ﻿//#define MEM_CHECK
+
+using Actuarius.Memoria;
 #if UNITY_EDITOR
 #define MEM_CHECK
 #endif
@@ -30,7 +32,7 @@ namespace Shared.Pool
     /// <summary>
     /// Тривиальная реализация ICollectable с проверками.
     /// </summary>
-    public abstract class Collectable : ICollectable, ISingleRef, System.IDisposable
+    public abstract class Collectable : ICollectable, ISingleRefResource, System.IDisposable
     {
         private enum State
         {
@@ -117,7 +119,7 @@ namespace Shared.Pool
             Release();
         }
 
-        public static void Free<ReleasableT>(ref ReleasableT obj) where ReleasableT : class, IReleasable
+        public static void Free<ReleasableT>(ref ReleasableT obj) where ReleasableT : class, IReleasableResource
         {
             if (obj != null)
             {

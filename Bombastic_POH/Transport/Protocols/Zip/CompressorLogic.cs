@@ -1,11 +1,12 @@
-﻿using Ionic.Zlib;
+﻿using Actuarius.Memoria;
+using Ionic.Zlib;
 using Shared;
 using Shared.Buffer;
 using Shared.Pooling;
 
 namespace Transport.Protocols.Zip
 {
-    public class CompressorLogic : IReleasable
+    public class CompressorLogic : IReleasableResource
     {
         private ZLibCompressor mCompressor;
         private ZLibDecompressor mDecompressor;

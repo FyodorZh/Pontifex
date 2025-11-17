@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Actuarius.Memoria;
 
 namespace Shared
 {
@@ -258,7 +259,7 @@ namespace Shared
             // DO NOTHING
         }
 
-        void IReleasable.Release()
+        void IReleasableResource.Release()
         {
             // DO NOTHING
         }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
+using Actuarius.Memoria;
 using Shared;
 using Shared.Pooling;
 using Transport.Abstractions;
@@ -25,7 +26,7 @@ namespace Transport.Protocols.Reliable.Delivery
             IdIsNotUnique
         }
 
-        private class DeliveryTask : IDeliveryTask, IReleasable
+        private class DeliveryTask : IDeliveryTask, IReleasableResource
         {
             private DeliveryInfo mId;
             private DateTime mScheduleTime;

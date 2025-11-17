@@ -1,17 +1,11 @@
 //#define TRACE_HISTORY
 
 using System.Diagnostics;
+using Actuarius.Memoria;
 
 namespace Shared
 {
-    /// <summary>
-    /// Объект у которого может быть только один владелец
-    /// </summary>
-    public interface ISingleRef : IReleasable
-    {
-    }
-
-    public abstract class SingleRefImpl : ISingleRef
+    public abstract class SingleRefImpl : ISingleRefResource
     {
         protected enum ErrorType
         {

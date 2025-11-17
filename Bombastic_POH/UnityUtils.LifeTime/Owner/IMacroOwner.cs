@@ -1,4 +1,5 @@
 using Actuarius.Collections;
+using Actuarius.Memoria;
 
 namespace Shared
 {

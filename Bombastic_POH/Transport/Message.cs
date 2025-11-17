@@ -1,3 +1,4 @@
+using Actuarius.Memoria;
 using Shared;
 
 namespace Transport.Abstractions
@@ -56,7 +57,7 @@ namespace Transport.Abstractions
         }
     }
 
-    public struct Message : IReleasable
+    public struct Message : IReleasableResource
     {
         public MessageId Id;
         public IMultiRefByteArray Data;

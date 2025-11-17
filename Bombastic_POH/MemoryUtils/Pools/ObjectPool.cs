@@ -1,4 +1,6 @@
-﻿namespace Shared.Pool
+﻿using Actuarius.Memoria;
+
+namespace Shared.Pool
 {
     public interface IObjectPool
     {
@@ -78,7 +80,7 @@
                 PeakUsedCount++;
                 TotalAllocatedCount++;
 
-                ISingleRef singleRefObj = res as ISingleRef;
+                ISingleRefResource singleRefObj = res as ISingleRefResource;
                 if (singleRefObj != null)
                 {
                     singleRefObj.Release();
