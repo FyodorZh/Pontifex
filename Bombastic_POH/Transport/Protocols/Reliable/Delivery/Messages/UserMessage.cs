@@ -1,4 +1,5 @@
-﻿using Shared;
+﻿using Actuarius.Memory;
+using Shared;
 using Shared.Buffer;
 using Shared.Pooling;
 

@@ -8,7 +8,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {
     class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawClientEndpoint>, IAckRawServerHandler, IAckRawClientEndpoint
     {
-        private ByteArraySegment mAckData;
+        private UnionDataList mAckData;
 
         private readonly IAckRawServerHandler mUserHandler;
 
@@ -33,29 +33,29 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             mAttached = false;
         }
 
-        public bool Attach(SessionId sessionId, ByteArraySegment ackData)
+        public bool Attach(SessionId sessionId, UnionDataList ackData)
         {
-            if (mUserHandler != null && sessionId.IsValid && ackData.IsValid)
+            if (mUserHandler != null && sessionId.IsValid)
             {
                 mSessionId = sessionId;
-                mAckData = new ByteArraySegment(ackData.Clone());
+                mAckData = ackData.Clone();
                 mAttached = true;
                 return true;
             }
             return false;
         }
 
-        public bool Reattach(ByteArraySegment ackData)
+        public bool Reattach(UnionDataList ackData)
         {
             if (mAttached)
             {
-                Log.w("{sessionId}: Reattach faield due to true multiple reconnection", this);
+                Log.w("{sessionId}: Reattach failed due to true multiple reconnection", this);
                 return false;
             }
 
             if (!mAckData.EqualByContent(ackData))
             {
-                Log.w("{sessionId}: Reattach faield due to ack-data difference. '{oldAck}' vs '{newAck}'", this, mAckData, ackData);
+                Log.w("{sessionId}: Reattach failed due to ack-data difference. '{oldAck}' vs '{newAck}'", this, mAckData, ackData);
                 return false;
             }
 

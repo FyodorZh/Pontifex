@@ -34,7 +34,7 @@ namespace Transport.Transports.Tcp
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
         private readonly Action<ServerSideSocket> mOnDisconnected;
-        private readonly Func<EndPoint, ByteArraySegment, IAckRawServerHandler> mAcknowledger;
+        private readonly Func<EndPoint, UnionDataList, IAckRawServerHandler> mAcknowledger;
 
         private static long mPrevClientId = 1;
 
@@ -62,7 +62,7 @@ namespace Transport.Transports.Tcp
         public ServerSideSocket(
             Socket socket,
             Action<ServerSideSocket> onDisconnected,
-            Func<EndPoint, ByteArraySegment, IAckRawServerHandler> acknowledger,
+            Func<EndPoint, UnionDataList, IAckRawServerHandler> acknowledger,
             ILogger logger)
         {
             if (onDisconnected == null)

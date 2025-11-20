@@ -77,7 +77,7 @@ namespace Transport.Protocols.Zip
 
             // Записываем упакованные данные буфер
             mPackedStream.Position = 0;
-            mPackedStream.Read(internalBuffer.Array, internalBuffer.Offset, compressedBuffer.Count);
+            mPackedStream.Read(internalBuffer.ReadOnlyArray, internalBuffer.Offset, compressedBuffer.Count);
 
             // Заменяем исходные данные на сжатый буфер
             data.Clear();
@@ -155,7 +155,7 @@ namespace Transport.Protocols.Zip
                 return false;
             }
 
-            mDecompressor.Write(lowLevelCompressedBytes.Array, lowLevelCompressedBytes.Offset, lowLevelCompressedBytes.Count);
+            mDecompressor.Write(lowLevelCompressedBytes.ReadOnlyArray, lowLevelCompressedBytes.Offset, lowLevelCompressedBytes.Count);
             mDecompressor.Flush();
 
             lowLevelCompressedBytes.Release();
@@ -163,7 +163,7 @@ namespace Transport.Protocols.Zip
             IMultiRefLowLevelByteArray unpackedBytes = CollectableByteArraySegmentWrapper.Construct((int)mUnpackedStream.Position);
 
             mUnpackedStream.Position = 0;
-            mUnpackedStream.Read(unpackedBytes.Array, unpackedBytes.Offset, unpackedBytes.Count);
+            mUnpackedStream.Read(unpackedBytes.ReadOnlyArray, unpackedBytes.Offset, unpackedBytes.Count);
             mUnpackedStream.Position = 0;
 
             var res = to.ReadFrom(unpackedBytes);

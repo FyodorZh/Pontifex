@@ -44,7 +44,7 @@ namespace Shared
             // DO NOTHING
         }
 
-        public byte[] Array
+        public byte[] ReadOnlyArray
         {
             get { return mArray; }
         }

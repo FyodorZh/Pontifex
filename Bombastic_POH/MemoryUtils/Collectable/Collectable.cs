@@ -1,6 +1,6 @@
 ﻿//#define MEM_CHECK
 
-using Actuarius.Memoria;
+using Actuarius.Memory;
 #if UNITY_EDITOR
 #define MEM_CHECK
 #endif
@@ -128,7 +128,7 @@ namespace Shared.Pool
             }
         }
 
-        public static void Set<MultiRefT>(ref MultiRefT to, MultiRefT from) where MultiRefT : class, IMultiRef
+        public static void Set<MultiRefT>(ref MultiRefT to, MultiRefT from) where MultiRefT : class, IMultiRefResource
         {
             to = from;
             if (to != null)
@@ -138,7 +138,7 @@ namespace Shared.Pool
         }
     }
 
-    public abstract class MultyRefCollectable : Collectable, IMultiRef
+    public abstract class MultyRefCollectable : Collectable, IMultiRefResource
     {
         protected int mRefCount = 1;
 

@@ -120,7 +120,7 @@ namespace Transport
             get { return mCore.MessageMaxByteSize; }
         }
 
-        public IAckRawServerHandler TryAck(ByteArraySegment ackData, ILogger logger)
+        public IAckRawServerHandler TryAck(UnionDataList ackData, ILogger logger)
         {
             Log.i("UserAcknowledger.TryAck(" + ackData + ")");
             mUserHandler = mUserAcknowledger.TryAck(ackData, logger);

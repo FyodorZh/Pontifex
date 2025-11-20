@@ -1,3 +1,4 @@
+using Actuarius.Memory;
 using Serializer.BinarySerializer;
 using Serializer.Factory;
 using Shared.Pooling;
@@ -5,7 +6,7 @@ using Shared.Serialization;
 
 namespace Shared
 {
-    public class CollectableDataWriter : MultiRefCollectable<CollectableDataWriter>, IByteArray
+    public class CollectableDataWriter : MultiRefCollectable<CollectableDataWriter>, IReadOnlyBytes
     {
         private readonly DataWriter<ManagedWriter<AllocatorFromPool>> mWriter;
 

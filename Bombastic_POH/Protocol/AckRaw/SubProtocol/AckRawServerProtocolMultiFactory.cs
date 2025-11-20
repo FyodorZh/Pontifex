@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Archivarius;
 using Shared;
 using Transport;
 using Transport.Abstractions.Servers;
@@ -81,15 +82,19 @@ namespace NewProtocol
             return false;
         }
 
-        protected override AckRawServerProtocol ConstructSSP(ByteArraySegment ackData, ILogger logger)
+        protected override AckRawServerProtocol ConstructSSP(UnionDataList ackData, ILogger logger)
         {
+            if (!ackData.TryGetFirst(out var value) || value.Type != UnionDataType.String || value.Text == null)
+            {
+                return null;
+            }
+            string protocolName = value.Text;
+            
             foreach (var factory in mSubFactories)
             {
-                byte[] name = factory.NameBytes;
-                ByteArraySegment ack = AckUtils.CheckPrefix(ackData, name);
-                if (ack.IsValid)
+                if (protocolName == factory.Name)
                 {
-                    return factory.Instance.ConstructSSP(ack, logger);
+                    return factory.Instance.ConstructSSP(ackData, logger);
                 }
             }
             logger.w("Unknown sub protocol request");

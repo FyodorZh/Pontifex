@@ -44,8 +44,8 @@ namespace TransportAnalyzer
             mClientFactory.Register(new AckReliableRawUdpProducer());
             mServerFactory.Register(new AckReliableRawUdpProducer());
 
-            mClientFactory.Register(new AckRawReliableClientProducerNew());
-            mServerFactory.Register(new AckRawReliableServerProducerNew());
+            //mClientFactory.Register(new AckRawReliableClientProducerNew());
+            //mServerFactory.Register(new AckRawReliableServerProducerNew());
 
             mClientFactory.Register(new AckRawReconnectableClientProducer());
             mServerFactory.Register(new AckRawReconnectableServerProducer());

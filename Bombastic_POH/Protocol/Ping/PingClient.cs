@@ -50,7 +50,7 @@ namespace NewProtocol.Ping
         private ILogger Log = global::Log.StaticLogger;
 
         private readonly List<SentPacketInfo> mSentList = new List<SentPacketInfo>();
-        private readonly IConcurrentQueue<ReceivedPacketInfo> mReceiveList = new TinyConcurrentQueue<ReceivedPacketInfo>();
+        private readonly IConcurrentQueue_old<ReceivedPacketInfo> mReceiveList = new TinyConcurrentQueue<ReceivedPacketInfo>();
 
         private readonly MessageIdSource mMessageIdSource = new MessageIdSource();
 

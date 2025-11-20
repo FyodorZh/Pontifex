@@ -1,3 +1,4 @@
+using Actuarius.Memory;
 using Shared.Pooling;
 
 namespace Shared
@@ -17,7 +18,7 @@ namespace Shared
             return wrapper;
         }
 
-        public static CollectableByteArraySegmentWrapper CopyOf(IByteArray bytes)
+        public static CollectableByteArraySegmentWrapper CopyOf(IReadOnlyBytes bytes)
         {
             CollectableByteArraySegmentWrapper wrapper;
             if (bytes == null || !bytes.IsValid)
@@ -28,7 +29,7 @@ namespace Shared
             {
                 int count = bytes.Count;
                 wrapper = Construct(count);
-                bytes.CopyTo(wrapper.mArray.Array, wrapper.mArray.Offset, count);
+                bytes.CopyTo(wrapper.mArray.ReadOnlyArray, wrapper.mArray.Offset, count);
             }
             return wrapper;
         }
@@ -44,7 +45,7 @@ namespace Shared
             {
                 int count = bytes.Count;
                 wrapper = Construct(count);
-                bytes.CopyTo(wrapper.mArray.Array, wrapper.mArray.Offset, count);
+                bytes.CopyTo(wrapper.mArray.ReadOnlyArray, wrapper.mArray.Offset, count);
             }
             return wrapper;
         }
@@ -83,9 +84,9 @@ namespace Shared
             return mArray.CopyTo(dst, dstOffset, srcOffset, count);
         }
 
-        public byte[] Array
+        public byte[] ReadOnlyArray
         {
-            get { return mArray.Array; }
+            get { return mArray.ReadOnlyArray; }
         }
 
         public int Offset

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using Archivarius.UnionDataListBackend;
 using NewProtocol;
 using NewProtocol.Client;
 using Shared;
@@ -56,9 +57,9 @@ namespace TransportAnalyzer.TestLogic
             }
         }
 
-        protected override byte[] GetAckData()
+        protected override void WriteAckData(UnionDataList ackData)
         {
-            return AckUtils.AckString("AckRawTestProtocol");
+            ackData.PutFirst("AckRawTestProtocol");
         }
 
         protected override bool OnConnecting(bool protocolIsValid, ByteArraySegment ackResponse)

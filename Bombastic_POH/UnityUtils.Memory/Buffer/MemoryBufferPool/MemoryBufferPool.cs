@@ -1,4 +1,6 @@
-﻿namespace Shared.Buffer
+﻿using Actuarius.Memory;
+
+namespace Shared.Buffer
 {
     public interface IMemoryBufferPool : IPool<IMemoryBuffer>
     {
@@ -53,7 +55,7 @@
             return pool.AllocateAndDeserializeGeneric(data, out bufferAccessor);
         }
 
-        public static bool AllocateAndDeserialize(this IMemoryBufferPool pool, IByteArray data, out IMemoryBufferHolder bufferAccessor)
+        public static bool AllocateAndDeserialize(this IMemoryBufferPool pool, IReadOnlyBytes data, out IMemoryBufferHolder bufferAccessor)
         {
             using (var bufferOwner = data.ToLowLevelByteArray().Own())
             {

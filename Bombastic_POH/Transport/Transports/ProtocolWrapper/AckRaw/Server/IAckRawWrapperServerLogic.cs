@@ -5,7 +5,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 {
     public interface IAckRawWrapperServerLogic
     {
-        ByteArraySegment ProcessAckData(ByteArraySegment data);
+        bool ProcessAckData(UnionDataList ackData);
         void OnConnected();
         void OnDisconnected();
         bool ProcessReceivedData(IMemoryBuffer receivedData);

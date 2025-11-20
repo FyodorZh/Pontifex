@@ -131,9 +131,9 @@ namespace TransportAnalyzer.TestLogic
 
         public ILogger Log { get; set; }
 
-        public IAckRawServerHandler TryAck(ByteArraySegment ackData, ILogger logger)
+        public IAckRawServerHandler TryAck(UnionDataList ackData, ILogger logger)
         {
-            if (Transport.AckUtils.CheckPrefix(ackData, "stress").IsValid)
+            if (ackData.Check("stress") && ackData.Elements.Count == 0)
             {
                 Handler h = new Handler(this);
                 h.Log = Log;

@@ -8,11 +8,11 @@ namespace Transport.Transports.Direct
     internal class DirectServer
     {
         private readonly IEndPoint mServerEp;
-        private readonly Func<ByteArraySegment, IServerDirectCtl> mOnConnecting;
+        private readonly Func<UnionDataList, IServerDirectCtl> mOnConnecting;
 
         private readonly IConcurrentMap<IEndPoint, DirectTransport> mConnectedClients = new TrivialConcurrentDictionary<IEndPoint, DirectTransport>();
 
-        public DirectServer(IEndPoint serverEp, Func<ByteArraySegment, IServerDirectCtl> onConnecting)
+        public DirectServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl> onConnecting)
         {
             mServerEp = serverEp;
             mOnConnecting = onConnecting;
@@ -30,7 +30,9 @@ namespace Transport.Transports.Direct
             DirectTransport transport;
             if (!mConnectedClients.TryGetValue(clientAddress, out transport))
             {
-                IServerDirectCtl serverCtl = mOnConnecting(clientCtl.GetAckData());
+                UnionDataList ackData = new();
+                clientCtl.GetAckData(ackData);
+                IServerDirectCtl serverCtl = mOnConnecting(ackData);
                 if (serverCtl != null)
                 {
                     transport = new DirectTransport(mServerEp, clientAddress, serverCtl, clientCtl, (clientEp) =>

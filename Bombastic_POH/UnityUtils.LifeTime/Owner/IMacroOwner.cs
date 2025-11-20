@@ -1,9 +1,9 @@
 using Actuarius.Collections;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared
 {
-    public interface IMacroOwner<TObject> : IMultiRef, IReadOnlyArray<TObject>
+    public interface IMacroOwner<TObject> : IMultiRefResource, IReadOnlyArray<TObject>
     {
     }
 }

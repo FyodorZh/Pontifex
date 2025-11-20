@@ -1,4 +1,5 @@
-﻿using Shared.Pooling;
+﻿using Actuarius.Collections;
+using Shared.Pooling;
 
 namespace Shared.Buffer
 {

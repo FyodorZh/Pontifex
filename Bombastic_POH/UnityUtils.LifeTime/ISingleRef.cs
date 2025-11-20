@@ -1,7 +1,7 @@
 //#define TRACE_HISTORY
 
 using System.Diagnostics;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared
 {

@@ -1,7 +1,9 @@
-﻿namespace Transport.Abstractions.Handlers
+﻿using Shared;
+
+namespace Transport.Abstractions.Handlers
 {
     public interface IAckHandler : IHandler
     {
-        byte[] GetAckData();
+        void WriteAckData(UnionDataList ackData);
     }
 }

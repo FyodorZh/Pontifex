@@ -11,7 +11,7 @@ namespace Transport.Transports.Direct
 
     internal interface IClientDirectCtl : IAnyDirectCtl
     {
-        ByteArraySegment GetAckData();
+        void GetAckData(UnionDataList ackData);
     }
 
     internal interface IServerDirectCtl : IAnyDirectCtl

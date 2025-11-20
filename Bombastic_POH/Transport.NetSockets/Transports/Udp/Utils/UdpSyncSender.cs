@@ -36,7 +36,7 @@ namespace Transport.Transports.Udp
         {
             ByteArraySegment data = mChunkEncoder.ShowData();
 
-            int count = mSocket.SendTo(data.Array, data.Offset, data.Count, SocketFlags.None, mRemoteEP);
+            int count = mSocket.SendTo(data.ReadOnlyArray, data.Offset, data.Count, SocketFlags.None, mRemoteEP);
             mTrafficCollector.IncOutTraffic(count);
             mChunkEncoder.Clear();
 

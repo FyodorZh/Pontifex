@@ -1,3 +1,5 @@
+using Actuarius.Collections;
+
 namespace Shared.Pooling.ConcurrentBuffered
 {
     public class BucketSource<TObject>

@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Memory;
 using NUnit.Framework;
 using Shared;
 using Shared.Buffer;
@@ -62,7 +63,7 @@ namespace TransportAnalyzer.UTests
             }
         }
 
-        private void Test0_5(IByteArray array, byte[] bytes)
+        private void Test0_5(IReadOnlyBytes array, byte[] bytes)
         {
             Assert.IsTrue(array.IsValid);
             Assert.AreEqual(bytes.Length, array.Count);

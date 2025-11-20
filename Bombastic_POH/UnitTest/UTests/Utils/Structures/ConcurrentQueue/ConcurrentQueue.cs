@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using Actuarius.Collections;
 using NUnit.Framework;
 using Shared;
 
@@ -8,14 +9,14 @@ namespace TransportAnalyzer.UTests
     [TestFixture]
     class ConcurrentQueueTest
     {
-        private class QueueLimiter<T> : IConcurrentQueue<T>
+        private class QueueLimiter<T> : IConcurrentQueue_old<T>
         {
-            private readonly IConcurrentQueue<T> mQueue;
+            private readonly IConcurrentQueue_old<T> mQueue;
 
             private readonly int mCapacity;
             private int mCount;
 
-            public QueueLimiter(IConcurrentQueue<T> queue, int capacity)
+            public QueueLimiter(IConcurrentQueue_old<T> queue, int capacity)
             {
                 mQueue = queue;
                 mCapacity = capacity;
@@ -50,7 +51,7 @@ namespace TransportAnalyzer.UTests
             public long Value;
         }
 
-        private void DoTest(IConcurrentQueue<Pair> queue, int writeConcurrency)
+        private void DoTest(IConcurrentQueue_old<Pair> queue, int writeConcurrency)
         {
             long[] table = new long[writeConcurrency];
 
@@ -87,7 +88,7 @@ namespace TransportAnalyzer.UTests
             Assert.Pass("Time = " + (DateTime.UtcNow - t).TotalSeconds + "s");
         }
 
-        private void DoTest(ISingleReaderWriterConcurrentQueue<long> queue)
+        private void DoTest(ISingleReaderWriterConcurrentUnorderedCollection<long> queue) // it must be queue
         {
             long lastId = 0;
 
@@ -124,7 +125,7 @@ namespace TransportAnalyzer.UTests
         [Test]
         public void TinyConcurrentQueueTest()
         {
-            DoTest(new QueueLimiter<Pair>(new TinyConcurrentQueue<Pair>(), 10000), 3);
+            DoTest(new QueueLimiter<Pair>(new Shared.TinyConcurrentQueue<Pair>(), 10000), 3);
         }
 
         [Test]

@@ -1,4 +1,6 @@
 ﻿using System;
+using Actuarius.Collections;
+using Actuarius.Memory;
 using Shared.ByteSinks;
 
 namespace Shared.Buffer
@@ -86,7 +88,7 @@ namespace Shared.Buffer
             return buffer.ToString();
         }
 
-        int IByteArray.Count
+        int ICountable.Count
         {
             get
             {
@@ -95,7 +97,7 @@ namespace Shared.Buffer
             }
         }
 
-        bool IByteArray.IsValid
+        bool IReadOnlyBytes.IsValid
         {
             get
             {
@@ -103,7 +105,7 @@ namespace Shared.Buffer
             }
         }
 
-        bool IByteArray.CopyTo(byte[] dst, int dstOffset, int srcOffset, int count)
+        bool IReadOnlyBytes.CopyTo(byte[] dst, int dstOffset, int srcOffset, int count)
         {
             var buffer = mObject;
             if (buffer != null)

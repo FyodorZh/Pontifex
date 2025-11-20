@@ -1,3 +1,5 @@
+using Actuarius.Collections;
+
 namespace Shared.Pooling
 {
     public class ConcurrentPool<TObject> : Pool<TObject>, IConcurrentPool<TObject>

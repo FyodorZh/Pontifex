@@ -1,4 +1,5 @@
-﻿using Shared;
+﻿using Actuarius.Memory;
+using Shared;
 using Transport.Abstractions;
 
 namespace Transport.Transports.Udp
@@ -16,7 +17,7 @@ namespace Transport.Transports.Udp
             mData = new byte[mCapacity];
         }
 
-        public bool TryPush(MessageId id, IByteArray data)
+        public bool TryPush(MessageId id, IReadOnlyBytes data)
         {
             int dataLen = data.Count;
             int blockDataLen = dataLen + 4;

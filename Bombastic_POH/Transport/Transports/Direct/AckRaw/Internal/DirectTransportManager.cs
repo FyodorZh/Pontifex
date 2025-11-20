@@ -11,7 +11,7 @@ namespace Transport.Transports.Direct
 
         private readonly IConcurrentMap<IEndPoint, DirectServer> mServers = new TrivialConcurrentDictionary<IEndPoint, DirectServer>();
 
-        public DirectServer StartServer(IEndPoint serverEp, Func<ByteArraySegment, IServerDirectCtl> onConnecting)
+        public DirectServer StartServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl> onConnecting)
         {
             DirectServer server = new DirectServer(serverEp, onConnecting);
 

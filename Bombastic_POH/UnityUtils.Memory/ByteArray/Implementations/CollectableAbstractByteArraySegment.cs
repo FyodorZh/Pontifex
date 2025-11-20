@@ -93,9 +93,9 @@ namespace Shared
 
     public class CollectableAbstractLowLevelByteArraySegment : CollectableAbstractByteArraySegment<CollectableAbstractLowLevelByteArraySegment, IMultiRefLowLevelByteArray>, IMultiRefLowLevelByteArray
     {
-        public byte[] Array
+        public byte[] ReadOnlyArray
         {
-            get { return mCore.Array; }
+            get { return mCore.ReadOnlyArray; }
         }
 
         public int Offset

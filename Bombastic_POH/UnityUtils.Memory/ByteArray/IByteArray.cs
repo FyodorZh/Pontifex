@@ -1,36 +1,13 @@
+using Actuarius.Memory;
+
+
+
 namespace Shared
 {
-    /// <summary>
-    /// Абстрактное тредобезопасное хранилище последовательности байт.
-    /// ReadOnly!
-    /// </summary>
-    public interface IByteArray
-    {
-        /// <summary>
-        /// Количество байт
-        /// </summary>
-        int Count { get; }
-
-        /// <summary>
-        /// false эквивалентно нулевому массиву
-        /// </summary>
-        bool IsValid { get; }
-
-        /// <summary>
-        /// Копирует данные в приёмник.
-        /// </summary>
-        /// <param name="dst"> Куда скопировать </param>
-        /// <param name="dstOffset"> Начиная с какой позиции </param>
-        /// <param name="srcOffset"> Номер первого копируемого элемента в источнике</param>
-        /// <param name="count"> Количество байт для копирования</param>
-        /// <returns> В случае неуспеха возвращает false. Данные в приёмнике остаются в неопределённом состоянии</returns>
-        bool CopyTo(byte[] dst, int dstOffset, int srcOffset, int count);
-    }
-
     public static class Ext_IByteArray
     {
         public static byte[] ToRawArray<T>(this T buffer)
-            where T : IByteArray
+            where T : IReadOnlyBytes
         {
             if (buffer.IsValid)
             {
@@ -42,7 +19,7 @@ namespace Shared
             return null;
         }
 
-        public static IMultiRefLowLevelByteArray ToLowLevelByteArray(this IByteArray buffer)
+        public static IMultiRefLowLevelByteArray ToLowLevelByteArray(this IReadOnlyBytes buffer)
         {
             IMultiRefLowLevelByteArray result = buffer as IMultiRefLowLevelByteArray;
             if (result != null)
@@ -53,14 +30,14 @@ namespace Shared
         }
 
         public static bool CopyTo<T>(this T buffer, byte[] dst, int dstOffset, int count)
-            where T : IByteArray
+            where T : IReadOnlyBytes
         {
             return buffer.CopyTo(dst, dstOffset, 0, count);
         }
 
         public static bool EqualByContent<T1, T2>(this T1 data1, T2 data2)
-            where T1: IByteArray
-            where T2: IByteArray
+            where T1: IReadOnlyBytes
+            where T2: IReadOnlyBytes
         {
             bool isValid1 = data1.IsValid;
             bool isValid2 = data2.IsValid;
@@ -120,7 +97,7 @@ namespace Shared
             return VoidByteArray.Instance;
         }
 
-        public static string DbgToString(this IByteArray array)
+        public static string DbgToString(this IReadOnlyBytes array)
         {
             if (array == null || !array.IsValid)
             {

@@ -27,15 +27,10 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             mUserHandler = userHandler;
         }
 
-        byte[] IAckHandler.GetAckData()
+        void IAckHandler.WriteAckData(UnionDataList ackData)
         {
-            byte[] userAck = mUserHandler.GetAckData();
-            if (userAck != null)
-            {
-                byte[] ack = mWrapperLogic.UpdateAckData(userAck);
-                return ack;
-            }
-            return null;
+            mUserHandler.WriteAckData(ackData);
+            mWrapperLogic.UpdateAckData(ackData);
         }
 
         void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)

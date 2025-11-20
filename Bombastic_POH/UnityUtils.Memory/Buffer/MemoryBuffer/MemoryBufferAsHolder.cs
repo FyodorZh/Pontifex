@@ -1,5 +1,6 @@
 using System;
-using Actuarius.Memoria;
+using Actuarius.Collections;
+using Actuarius.Memory;
 using Shared.ByteSinks;
 
 namespace Shared.Buffer
@@ -57,12 +58,12 @@ namespace Shared.Buffer
             mRefHolder.Release();
         }
 
-        bool IMultiRef.IsAlive
+        bool IMultiRefResource.IsAlive
         {
             get { return mRefHolder.IsAlive; }
         }
 
-        void IMultiRef.AddRef()
+        void IMultiRefResource.AddRef()
         {
             mRefHolder.AddRef();
         }
@@ -105,17 +106,17 @@ namespace Shared.Buffer
         #endregion
 
         #region IByteArray
-        int IByteArray.Count
+        int ICountable.Count
         {
             get { return Size; }
         }
 
-        bool IByteArray.IsValid
+        bool IReadOnlyBytes.IsValid
         {
             get { return true; }
         }
 
-        bool IByteArray.CopyTo(byte[] dst, int dstOffset, int srcOffset, int count)
+        bool IReadOnlyBytes.CopyTo(byte[] dst, int dstOffset, int srcOffset, int count)
         {
             if (dst == null || dstOffset < 0 || srcOffset < 0 || count < 0 ||
                 dstOffset + count > dst.Length || srcOffset + count > Size)

@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Memory;
 using NUnit.Framework;
 using Shared;
 using Shared.ByteSinks;
@@ -18,7 +19,7 @@ namespace TransportAnalyzer.UTests
 
             try
             {
-                sink.Push(0);
+                sink.Put(0);
                 Assert.Fail();
             }
             catch
@@ -44,10 +45,10 @@ namespace TransportAnalyzer.UTests
         {
             try
             {
-                sink.Push(new ByteArraySegment(new byte[0]));
-                sink.Push(1);
-                sink.Push(2);
-                sink.Push(new ByteArraySegment(new byte[] {3, 4, 5}));
+                sink.PutMany(new ByteArraySegment(new byte[0]));
+                sink.Put(1);
+                sink.Put(2);
+                sink.PutMany(new ByteArraySegment(new byte[] {3, 4, 5}));
             }
             catch (Exception ex)
             {

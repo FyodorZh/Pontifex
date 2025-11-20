@@ -49,9 +49,9 @@ namespace Transport.Handlers
         /// Не однопоточный
         /// </summary>
         /// <returns></returns>
-        byte[] IAckHandler.GetAckData()
+        void IAckHandler.WriteAckData(UnionDataList ackData)
         {
-            return mHandler.GetAckData();
+            mHandler.WriteAckData(ackData);
         }
 
         void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)

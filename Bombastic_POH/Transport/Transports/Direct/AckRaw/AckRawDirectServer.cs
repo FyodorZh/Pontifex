@@ -36,7 +36,7 @@ namespace Transport.Transports.Direct
             }
         }
 
-        private IServerDirectCtl OnConnecting(ByteArraySegment ackData)
+        private IServerDirectCtl OnConnecting(UnionDataList ackData)
         {
             var handler = TryConnectNewClient(ackData);
             if (handler != null)

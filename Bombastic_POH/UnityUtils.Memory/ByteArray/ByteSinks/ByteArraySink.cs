@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Memory;
 
 namespace Shared.ByteSinks
 {
@@ -34,16 +35,18 @@ namespace Shared.ByteSinks
             mPos = offset;
         }
 
-        public void Push(byte val)
+        public bool Put(byte val)
         {
             mBytes[mPos++] = val;
+            return true;
         }
 
-        public void Push<TBytes>(TBytes bytes) where TBytes : IByteArray
+        public bool PutMany<TBytes>(TBytes bytes) where TBytes : IReadOnlyBytes
         {
             int count = bytes.Count;
             bytes.CopyTo(mBytes, mPos, 0, count);
             mPos += count;
+            return true;
         }
     }
 }

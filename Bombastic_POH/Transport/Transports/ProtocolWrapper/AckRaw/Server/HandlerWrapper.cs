@@ -12,7 +12,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
     public interface IHandlerWrapper : IAckRawServerHandler
     {
         void Init(IAckRawServerHandler wrappedHandler);
-        ByteArraySegment CheckAckData(ByteArraySegment ackData);
+        bool CheckAckData(UnionDataList ackData);
     }
 
 
@@ -45,7 +45,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             mWrappedHandler = wrappedHandler;
         }
 
-        public ByteArraySegment CheckAckData(ByteArraySegment ackData)
+        public bool CheckAckData(UnionDataList ackData)
         {
             return mLogic.ProcessAckData(ackData);
         }

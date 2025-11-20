@@ -26,7 +26,7 @@ namespace TransportAnalyzer.UTests
         [Test]
         public void TestTinyConcurrentQueue()
         {
-            Test(new TinyConcurrentQueue<int>(), (int)1e6, 0.5001, id => ++id);
+            Test(new Shared.TinyConcurrentQueue<int>(), (int)1e6, 0.5001, id => ++id);
         }
 
         [Test]
@@ -38,7 +38,7 @@ namespace TransportAnalyzer.UTests
         [Test]
         public void TestPriorityQueue()
         {
-            Test(new Shared.PriorityQueue<int, int>(), (int)1e6, 0.5001, kv => new KeyValuePair<int, int>((kv.Key * 31 + 371) % 10001, kv.Value + 1));
+            Test(new Actuarius.Collections.PriorityQueue<int, int>(), (int)1e6, 0.5001, kv => new KeyValuePair<int, int>((kv.Key * 31 + 371) % 10001, kv.Value + 1));
         }
 
         private void Test<TElement>(IStream<TElement> collection, int testSize, double percentOfAddition, Func<TElement, TElement> nextElement)
@@ -92,8 +92,8 @@ namespace TransportAnalyzer.UTests
         [Test]
         public void TestTinyConcurrentQueue()
         {
-            Test1(new TinyConcurrentQueue<int>(), (int)1e5, 0.5001);
-            Test2(new TinyConcurrentQueue<int>(), 10, 100, 5.0);
+            Test1(new Shared.TinyConcurrentQueue<int>(), (int)1e5, 0.5001);
+            Test2(new Shared.TinyConcurrentQueue<int>(), 10, 100, 5.0);
         }
 
         [Test]

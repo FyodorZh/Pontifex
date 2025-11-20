@@ -22,7 +22,7 @@ namespace Transport.Transports.Tcp
             public BytesAccumulator(int size)
             {
                 mBuffer = CollectableByteArraySegmentWrapper.Construct(size);
-                mData = mBuffer.Array;
+                mData = mBuffer.ReadOnlyArray;
                 mEndPosition = mBuffer.Offset + mBuffer.Count;
                 mPosition = mBuffer.Offset;
             }
@@ -95,7 +95,7 @@ namespace Transport.Transports.Tcp
                     if (mReadSizeMode)
                     {
                         int tmpOffset = mCurrentPacket.Buffer.Offset;
-                        uint size = ReadUInt(mCurrentPacket.Buffer.Array, ref tmpOffset);
+                        uint size = ReadUInt(mCurrentPacket.Buffer.ReadOnlyArray, ref tmpOffset);
                         if (size > 0 && size <= mMaxMessageSize)
                         {
                             mReadSizeMode = false;

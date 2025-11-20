@@ -1,5 +1,5 @@
 ﻿using System.Text;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared
 {
@@ -42,7 +42,7 @@ namespace Shared
             get { return mArray[mOffset + id]; }
         }
 
-        public byte[] Array
+        public byte[] ReadOnlyArray
         {
             get { return mArray; }
         }
@@ -105,9 +105,9 @@ namespace Shared
 
         public override bool Equals(object obj)
         {
-            if (obj is ByteArraySegment)
+            if (obj is ByteArraySegment other)
             {
-                return Equals((ByteArraySegment)obj);
+                return Equals(other);
             }
             return false;
         }
@@ -254,7 +254,7 @@ namespace Shared
             get { return true; }
         }
 
-        void IMultiRef.AddRef()
+        void IMultiRefResource.AddRef()
         {
             // DO NOTHING
         }

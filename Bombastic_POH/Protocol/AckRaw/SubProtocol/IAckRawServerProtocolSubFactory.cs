@@ -6,7 +6,7 @@ namespace NewProtocol
     {
         string ProtocolName { get; }
         string CalculateHash(IModelsHashDB protocolModelHashes);
-        AckRawServerProtocol ConstructSSP(ByteArraySegment ackData, ILogger logger);
+        AckRawServerProtocol ConstructSSP(UnionDataList ackData, ILogger logger);
     }
 
     public abstract class AckRawServerProtocolSubFactory<TProtocol> : IAckRawServerProtocolSubFactory
@@ -22,6 +22,6 @@ namespace NewProtocol
             return Protocol.GetProtocolHash<TProtocol>(protocolModelHashes);
         }
 
-        public abstract AckRawServerProtocol ConstructSSP(ByteArraySegment ackData, ILogger logger);
+        public abstract AckRawServerProtocol ConstructSSP(UnionDataList ackData, ILogger logger);
     }
 }

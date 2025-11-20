@@ -9,23 +9,13 @@
 #endif
 
 using System.Diagnostics;
-using Actuarius.Memoria;
-
+using Actuarius.Memory;
+using Actuarius.Memory.Internal;
 
 
 namespace Shared
 {
-    public static class IMultiRef_Ext
-    {
-        public static T Acquire<T>(this T element)
-            where T : class, IMultiRef
-        {
-            element.AddRef();
-            return element;
-        }
-    }
-
-    public abstract class MultiRefImpl : IMultiRef
+    public abstract class MultiRefImpl : IMultiRefResource
     {
         protected enum ErrorType
         {

@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using Actuarius.Memory;
 
 namespace Shared.ByteSinks
 {
@@ -45,7 +46,7 @@ namespace Shared.ByteSinks
             mPos = dstOffset - srcSkipBytes; // возможно < 0
         }
 
-        public void Push(byte val)
+        public bool Put(byte val)
         {
             if (mPos < mDstOffset)
             {
@@ -55,13 +56,14 @@ namespace Shared.ByteSinks
             {
                 mBytes[mPos++] = val;
             }
+            return true;
         }
 
-        public void Push<TBytes>(TBytes bytes) where TBytes : IByteArray
+        public bool PutMany<TBytes>(TBytes bytes) where TBytes : IReadOnlyBytes
         {
             if (!bytes.IsValid)
             {
-                throw new InvalidEnumArgumentException();
+                return false;
             }
 
             int srcCount = bytes.Count;
@@ -85,6 +87,7 @@ namespace Shared.ByteSinks
                     mPos += srcCount;
                 }
             }
+            return true;
         }
     }
 }

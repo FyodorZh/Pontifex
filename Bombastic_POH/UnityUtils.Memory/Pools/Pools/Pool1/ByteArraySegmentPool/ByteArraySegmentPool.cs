@@ -13,7 +13,7 @@ namespace Shared.Pooling
         {
             if (obj.IsValid)
             {
-                mBasePool.Release(obj.Array);
+                mBasePool.Release(obj.ReadOnlyArray);
             }
         }
 

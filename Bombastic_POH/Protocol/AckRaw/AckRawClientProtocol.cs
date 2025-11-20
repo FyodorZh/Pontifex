@@ -39,7 +39,7 @@ namespace NewProtocol
             get { return mState.State == State.Connected; }
         }
 
-        protected abstract byte[] GetAckData();
+        protected abstract void WriteAckData(UnionDataList ackData);
 
         protected abstract bool OnConnecting(bool protocolIsValid, ByteArraySegment ackResponse);
 
@@ -128,9 +128,9 @@ namespace NewProtocol
 
         #region IAckRawClientHandler
 
-        byte[] IAckHandler.GetAckData()
+        void IAckHandler.WriteAckData(UnionDataList ackData)
         {
-            return GetAckData();
+            WriteAckData(ackData);
         }
 
         void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)
@@ -152,7 +152,7 @@ namespace NewProtocol
                 string serverHashString;
                 try
                 {
-                    serverHashString = Encoding.UTF8.GetString(serverHash.Array, serverHash.Offset, serverHash.Count);
+                    serverHashString = Encoding.UTF8.GetString(serverHash.ReadOnlyArray, serverHash.Offset, serverHash.Count);
                 }
                 catch
                 {

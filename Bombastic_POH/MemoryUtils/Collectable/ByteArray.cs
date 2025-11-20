@@ -15,7 +15,7 @@
 // PARANOIC_CHECK   = DEEP_CHECK + логироание стеков AddRef()
 
 using System;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared
 {

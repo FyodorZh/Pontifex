@@ -41,9 +41,9 @@ namespace Transport.Protocols.Monitoring.AckRaw
         {
         }
 
-        byte[] IAckRawWrapperClientLogic.UpdateAckData(byte[] originalAck)
+        void IAckRawWrapperClientLogic.UpdateAckData(UnionDataList ackData)
         {
-            return AckUtils.AppendPrefix(originalAck, "AckRawMonitoring");
+            ackData.PutFirst("AckRawMonitoring");
         }
 
         bool IAckRawWrapperClientLogic.ProcessReceivedData(IMemoryBuffer receivedData)

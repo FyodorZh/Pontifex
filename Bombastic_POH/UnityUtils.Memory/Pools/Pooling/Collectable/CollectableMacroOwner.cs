@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Actuarius.Collections;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared.Pooling
 {

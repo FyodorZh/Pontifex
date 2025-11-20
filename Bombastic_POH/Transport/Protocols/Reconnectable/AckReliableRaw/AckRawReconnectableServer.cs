@@ -1,4 +1,5 @@
-﻿using Shared;
+﻿using Archivarius;
+using Shared;
 using Shared.Utils;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Handlers.Server;
@@ -56,63 +57,59 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             mSessions = null;
         }
 
-        public override int MessageMaxByteSize
-        {
-            get { return mCoreTransport.MessageMaxByteSize; }
-        }
+        public override int MessageMaxByteSize => mCoreTransport.MessageMaxByteSize;
 
-        IAckRawServerHandler IRawServerAcknowledger<IAckRawServerHandler>.TryAck(ByteArraySegment ackData, ILogger logger)
+        IAckRawServerHandler IRawServerAcknowledger<IAckRawServerHandler>.TryAck(UnionDataList ackData, ILogger logger)
         {
-            ackData = AckUtils.CheckPrefix(ackData, ReconnectableInfo.AckRequest);
-            if (ackData.IsValid && ackData.Count > 1)
+            if (ackData.Check(ReconnectableInfo.AckRequest))
             {
-                ByteArraySegment sessionBytes;
-                SessionId sessionId;
-
-                ackData = AckUtils.GetPrefix(ackData, ackData[0], out sessionBytes);
-                if (ackData.IsValid && SessionId.TryDeserialize(out sessionId, sessionBytes))
+                if (!ackData.TryGetFirst(out var r1) || !ackData.TryGetFirst(out var r2) ||
+                    r1.Type != UnionDataType.Int || r2.Type != UnionDataType.Int)
                 {
-                    if (sessionId.IsValid) // Пытаемся продолжить конкретную сессию
+                    return null;
+                }
+                
+                SessionId sessionId = new SessionId(r1.Alias.IntValue, r2.Alias.IntValue); 
+                if (sessionId.IsValid) // Пытаемся продолжить конкретную сессию
+                {
+                    var logic = mSessionsMap.Find(sessionId);
+                    if (logic != null) // Нашли искомую сессию
                     {
-                        var logic = mSessionsMap.Find(sessionId);
-                        if (logic != null) // Нашли искомую сессию
+                        if (logic.Reattach(ackData)) // Ломимся в неё
                         {
-                            if (logic.Reattach(ackData)) // Ломимся в неё
-                            {
-                                return logic;
-                            }
-                            // Сессия есть, но она нас реджектит (у клиента будет не аксепт)
-                            Log.w("Session[{0}] rejected user reconnection", sessionId);
-                            return null;
-                        }
-                        Log.w("Session[{0}] not found", sessionId);
-                        return null;
-                    }
-
-                    IAckRawServerHandler userHandler = TryConnectNewClient(ackData);
-                    if (userHandler != null)
-                    {
-                        ReconnectableServerLogic logic = new ReconnectableServerLogic(userHandler, mDisconnectTimeout);
-
-                        logic.OnConnected += (endPoint) =>
-                            {
-                                userHandler.OnConnected(endPoint);
-                            };
-
-                        logic.OnStopped += (reason) =>
-                            {
-                                Log.i("{0} is closed", logic);
-                                userHandler.OnDisconnected(reason);
-                                mSessionsMap.RemoveSession(logic.Id);
-                            };
-
-                        sessionId = mSessionsMap.AddSession(logic);
-                        if (sessionId.IsValid)
-                        {
-                            logic.Attach(sessionId, ackData);
-                            mSessions.Append(logic, DeltaTime.FromMiliseconds(20));
                             return logic;
                         }
+                        // Сессия есть, но она нас реджектит (у клиента будет не аксепт)
+                        Log.w("Session[{0}] rejected user reconnection", sessionId);
+                        return null;
+                    }
+                    Log.w("Session[{0}] not found", sessionId);
+                    return null;
+                }
+
+                IAckRawServerHandler userHandler = TryConnectNewClient(ackData);
+                if (userHandler != null)
+                {
+                    ReconnectableServerLogic logic = new ReconnectableServerLogic(userHandler, mDisconnectTimeout);
+
+                    logic.OnConnected += (endPoint) =>
+                    {
+                        userHandler.OnConnected(endPoint);
+                    };
+
+                    logic.OnStopped += (reason) =>
+                    {
+                        Log.i("{0} is closed", logic);
+                        userHandler.OnDisconnected(reason);
+                        mSessionsMap.RemoveSession(logic.Id);
+                    };
+
+                    sessionId = mSessionsMap.AddSession(logic);
+                    if (sessionId.IsValid)
+                    {
+                        logic.Attach(sessionId, ackData);
+                        mSessions.Append(logic, DeltaTime.FromMiliseconds(20));
+                        return logic;
                     }
                 }
             }

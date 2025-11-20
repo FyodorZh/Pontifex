@@ -1,6 +1,6 @@
 using System;
 using Actuarius.Collections;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared.Concurrent
 {
@@ -29,7 +29,7 @@ namespace Shared.Concurrent
         private readonly ConcurrentSerializedTicker mTicker;
         private readonly ConcurrentQueueValve<TAction> mQueue;
 
-        public ActionQueue(IConcurrentQueue<TAction> queue)
+        public ActionQueue(IConcurrentQueue_old<TAction> queue)
         {
             mTicker = new ConcurrentSerializedTicker(OnTick);
             mQueue = new ConcurrentQueueValve<TAction>(queue, (action) =>

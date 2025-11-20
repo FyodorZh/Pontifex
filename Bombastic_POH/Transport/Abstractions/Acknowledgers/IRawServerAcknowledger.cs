@@ -15,6 +15,6 @@ namespace Transport.Abstractions.Acknowledgers
         /// </summary>
         /// <param name="ackData"> Данные клиента для его идентификации </param>
         /// <returns> null если клиент не признан, иначе хэндлер клиентской сессии </returns>
-        THandler TryAck(ByteArraySegment ackData, ILogger logger);
+        THandler TryAck(UnionDataList ackData, ILogger logger);
     }
 }

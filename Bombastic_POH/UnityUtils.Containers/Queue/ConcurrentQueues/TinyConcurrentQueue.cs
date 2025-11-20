@@ -2,7 +2,7 @@
 
 namespace Shared
 {
-    public class TinyConcurrentQueue<T> : IConcurrentQueue<T>
+    public class TinyConcurrentQueue<T> : IConcurrentQueue_old<T>
     {
         private Node _head;
         private Node _tail;

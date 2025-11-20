@@ -3,20 +3,6 @@ using Actuarius.Collections;
 
 namespace Shared
 {
-    /// <summary>
-    /// Многопоточный потребитель данных
-    /// </summary>
-    public interface IConcurrentConsumer<TData> : IConsumer<TData>
-    {
-    }
-
-    /// <summary>
-    /// Многопоточный источник данных
-    /// </summary>
-    public interface IConcurrentProducer<TData> : IProducer<TData>
-    {
-    }
-
     public static class Ext_IProducer
     {
         public static void ForAll<TData>(this IProducer<TData> self, System.Action<TData> processor)

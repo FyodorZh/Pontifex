@@ -1,4 +1,5 @@
 ﻿using System;
+using Actuarius.Memory;
 using Shared.ByteSinks;
 
 namespace Shared.Buffer

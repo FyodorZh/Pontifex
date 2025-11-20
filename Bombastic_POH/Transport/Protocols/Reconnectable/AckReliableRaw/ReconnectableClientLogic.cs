@@ -55,10 +55,12 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         #region IAckRawClientHandler
 
-        byte[] IAckHandler.GetAckData()
+        void IAckHandler.WriteAckData(UnionDataList ackData)
         {
-            byte[] ackData = AckUtils.AppendPrefix(mUserHandler.GetAckData(), mSessionId.Serialize());
-            return AckUtils.AppendPrefix(ackData, ReconnectableInfo.AckRequest);
+            mUserHandler.WriteAckData(ackData);
+            ackData.PutFirst(mSessionId.Generation);
+            ackData.PutFirst(mSessionId.Id);
+            ackData.PutFirst(ReconnectableInfo.AckRequest);
         }
 
         void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)

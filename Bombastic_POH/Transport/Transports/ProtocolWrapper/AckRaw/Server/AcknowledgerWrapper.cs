@@ -32,13 +32,13 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             mWrappedAcknowledger = wrappedAcknowledger;
         }
 
-        public IAckRawServerHandler TryAck(ByteArraySegment ackData, ILogger logger)
+        public IAckRawServerHandler TryAck(UnionDataList ackData, ILogger logger)
         {
             var wrapper = ConstructWrapper();
-            ByteArraySegment ack = wrapper.CheckAckData(ackData);
-            if (ack.IsValid)
+            bool isOK = wrapper.CheckAckData(ackData);
+            if (isOK)
             {
-                IAckRawServerHandler coreHandler = mWrappedAcknowledger.TryAck(ack, logger);
+                IAckRawServerHandler coreHandler = mWrappedAcknowledger.TryAck(ackData, logger);
                 if (coreHandler != null)
                 {
                     wrapper.Init(coreHandler.Test(mOnFail).GetSafe(e => mOnFail(e.ToString())));

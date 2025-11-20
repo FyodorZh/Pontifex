@@ -31,6 +31,13 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Archivarius, Version=0.2.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Archivarius.0.2.1-dev.7\lib\netstandard2.0\Archivarius.dll</HintPath>
+    </Reference>
+    <Reference Include="Archivarius.Tools, Version=0.2.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Archivarius.Tools.0.2.1-dev.5\lib\netstandard2.0\Archivarius.Tools.dll</HintPath>
+    </Reference>
+    <Reference Include="mscorlib" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Windows.Forms.DataVisualization" />
@@ -123,6 +130,7 @@
     <EmbeddedResource Include="Hosts\TransportServer.resx">
       <DependentUpon>TransportServer.cs</DependentUpon>
     </EmbeddedResource>
+    <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -137,9 +145,13 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Actuarius\Actuarius.Memoria\Actuarius.Memoria.csproj">
+    <ProjectReference Include="..\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj">
+      <Project>{69d4e7e4-7025-45c9-b431-0c3afe3b9e9c}</Project>
+      <Name>Actuarius.Collections</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj">
       <Project>{271752fc-19f2-4308-9f11-35b255f01155}</Project>
-      <Name>Actuarius.Memoria</Name>
+      <Name>Actuarius.Memory</Name>
     </ProjectReference>
     <ProjectReference Include="..\IDLib\IDLib.csproj">
       <Project>{3a2dc730-dd72-4f41-a265-3be0cfe43dbe}</Project>

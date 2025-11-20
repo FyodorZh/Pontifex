@@ -99,10 +99,9 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 
         #region IAckRawClientHandler (for internal usage)
 
-        byte[] IAckHandler.GetAckData()
+        void IAckHandler.WriteAckData(UnionDataList ackData)
         {
             Fail("GetAckData", "this method must not be called");
-            return new byte[0];
         }
 
         void IRawBaseHandler.OnDisconnected(StopReason reason)

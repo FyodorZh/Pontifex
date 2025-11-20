@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security;
+using Actuarius.Memory;
 using Shared;
 using Transport.Abstractions;
 using Transport.Abstractions.Controls;
@@ -22,7 +23,7 @@ namespace Transport.Transports.Udp
                 mEncoder = new MemoryChunkEncoder(capacity + 2 + 4);
             }
 
-            public bool TryPush(MessageId id, IByteArray data)
+            public bool TryPush(MessageId id, IReadOnlyBytes data)
             {
                 return mEncoder.TryPush(id, data);
             }
@@ -54,9 +55,9 @@ namespace Transport.Transports.Udp
         private readonly Action<SocketException> mOnSocketFailed;
         private readonly ITrafficCollectorSink mTrafficCollector;
 
-        private readonly IConcurrentQueue<SendTask> mQueueToSend = new LimitedConcurrentQueue<SendTask>(10000);
+        private readonly IConcurrentQueue_old<SendTask> mQueueToSend = new LimitedConcurrentQueue<SendTask>(10000);
 
-        private readonly IConcurrentQueue<SendTask> mTaskPool = new LimitedConcurrentQueue<SendTask>(10000);
+        private readonly IConcurrentQueue_old<SendTask> mTaskPool = new LimitedConcurrentQueue<SendTask>(10000);
 
         public UdpAsyncSender(Socket socket, int maxMessageSize, Action<SocketException> onSocketFailed, ITrafficCollectorSink trafficCollector)
             : base(5)
@@ -75,7 +76,7 @@ namespace Transport.Transports.Udp
                 try
                 {
                     var data = task.ShowData();
-                    var sent = mSocket.SendTo(data.Array, data.Offset, data.Count, SocketFlags.None, task.Address);
+                    var sent = mSocket.SendTo(data.ReadOnlyArray, data.Offset, data.Count, SocketFlags.None, task.Address);
                     mTrafficCollector.IncOutTraffic(sent);
                     if (sent != data.Count)
                     {

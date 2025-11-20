@@ -1,4 +1,4 @@
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared.Pooling
 {

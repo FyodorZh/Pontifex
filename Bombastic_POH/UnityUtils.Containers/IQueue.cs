@@ -10,11 +10,11 @@ namespace Shared
     {
     }
 
-    public interface ISingleReaderWriterConcurrentQueue<TData> : IQueue_old<TData>, ISingleReaderWriterConcurrentUnorderedCollection<TData>
+    public interface ISingleReaderWriterConcurrentQueue_old<TData> : IQueue_old<TData>, ISingleReaderWriterConcurrentUnorderedCollection<TData>
     {
     }
 
-    public interface IConcurrentQueue<TData> : ISingleReaderWriterConcurrentQueue<TData>, IConcurrentUnorderedCollection<TData>
+    public interface IConcurrentQueue_old<TData> : ISingleReaderWriterConcurrentQueue_old<TData>, IConcurrentUnorderedCollection<TData>
     {
     }
 }

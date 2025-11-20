@@ -44,7 +44,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils", "UnityUtils\Un
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Collections", "Actuarius\Actuarius.Collections\Actuarius.Collections.csproj", "{69D4E7E4-7025-45C9-B431-0C3AFE3B9E9C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Memoria", "Actuarius\Actuarius.Memoria\Actuarius.Memoria.csproj", "{271752FC-19F2-4308-9F11-35B255F01155}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Memory", "Actuarius\Actuarius.Memory\Actuarius.Memory.csproj", "{271752FC-19F2-4308-9F11-35B255F01155}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

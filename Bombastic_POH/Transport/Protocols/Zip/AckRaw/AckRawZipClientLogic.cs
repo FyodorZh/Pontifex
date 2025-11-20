@@ -1,4 +1,5 @@
-﻿using Transport.Abstractions;
+﻿using Shared;
+using Transport.Abstractions;
 using Transport.Transports.ProtocolWrapper.AckRaw;
 using Shared.Buffer;
 
@@ -16,9 +17,9 @@ namespace Transport.Protocols.Zip.AckRaw
         {
         }
 
-        public byte[] UpdateAckData(byte[] originalAck)
+        public void UpdateAckData(UnionDataList ackData)
         {
-            return AckUtils.AppendPrefix(originalAck, "zip");
+            ackData.PutFirst("zip");
         }
 
         public void OnConnected()

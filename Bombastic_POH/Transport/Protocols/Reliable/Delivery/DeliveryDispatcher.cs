@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 using Shared;
 using Shared.Pooling;
 using Transport.Abstractions;

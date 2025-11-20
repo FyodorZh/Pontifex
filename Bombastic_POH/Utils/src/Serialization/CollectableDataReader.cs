@@ -27,7 +27,7 @@ namespace Shared
             }
             mBytes = bytes;
 
-            mReader.Reader.Reset(mBytes.Array,mBytes.Offset, mBytes.Offset + mBytes.Count);
+            mReader.Reader.Reset(mBytes.ReadOnlyArray,mBytes.Offset, mBytes.Offset + mBytes.Count);
             mReader.Init(factory, allocator);
             return true;
         }

@@ -374,7 +374,9 @@ namespace Transport.Transports.Tcp
                     mSocket.SendTimeout = mDisconnectTimeout.MilliSeconds;
                     mSocket.NoDelay = true;
 
-                    byte[] ackData = AckUtils.AppendPrefix(Handler.GetAckData(), TcpInfo.AckRequest);
+                    UnionDataList ackData = new UnionDataList();
+                    Handler.WriteAckData(ackData);
+                    ackData.PutFirst(TcpInfo.AckRequest);
 
                     mSocket.BeginConnect(mRemoteEP, ConnectCallback, ackData);
 

@@ -1,4 +1,5 @@
-﻿using Shared;
+﻿using Archivarius.UnionDataListBackend;
+using Shared;
 using Transport.Transports.ProtocolWrapper.AckRaw;
 using Shared.Buffer;
 
@@ -11,9 +12,9 @@ namespace Transport.Protocols.Zip.AckRaw
         {
         }
 
-        public ByteArraySegment ProcessAckData(ByteArraySegment data)
+        public bool ProcessAckData(UnionDataList ackData)
         {
-            return AckUtils.CheckPrefix(data, "zip");
+            return ackData.Check("zip");
         }
 
         public void OnConnected()

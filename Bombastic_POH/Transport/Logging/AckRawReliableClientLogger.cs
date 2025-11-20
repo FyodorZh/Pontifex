@@ -130,10 +130,10 @@ namespace Transport
             mUserHandler.OnReceived(receivedBuffer);
         }
 
-        byte[] IAckHandler.GetAckData()
+        void IAckHandler.WriteAckData(UnionDataList ackData)
         {
             Log.i("UserHandler.GetAckData()");
-            return mUserHandler.GetAckData();
+            mUserHandler.WriteAckData(ackData);
         }
 
         void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using Archivarius.UnionDataListBackend;
 using Shared;
 using Transport.Transports.ProtocolWrapper.AckRaw;
 using Shared.Buffer;
@@ -31,9 +32,9 @@ namespace Transport.Protocols.Monitoring.AckRaw
 
         private PingInfo mTick;
         
-        ByteArraySegment IAckRawWrapperServerLogic.ProcessAckData(ByteArraySegment data)
+        bool IAckRawWrapperServerLogic.ProcessAckData(UnionDataList ackData)
         {
-            return AckUtils.CheckPrefix(data, "AckRawMonitoring");
+            return ackData.Check("AckRawMonitoring");
         }
 
         void IAckRawWrapperServerLogic.OnConnected()

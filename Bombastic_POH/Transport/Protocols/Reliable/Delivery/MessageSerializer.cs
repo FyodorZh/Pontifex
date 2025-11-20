@@ -1,4 +1,4 @@
-﻿using Actuarius.Memoria;
+﻿using Actuarius.Memory;
 using Serializer.BinarySerializer;
 using Serializer.Factory;
 using Shared;
@@ -6,7 +6,7 @@ using Shared.Buffer;
 
 namespace Transport.Protocols.Reliable.Delivery
 {
-    internal interface IMessage : IMultiRef
+    internal interface IMessage : IMultiRefResource
     {
         void WriteTo(IMemoryBuffer dst);
         bool ReadFrom(IMemoryBuffer dst);

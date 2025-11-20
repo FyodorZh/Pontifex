@@ -1,4 +1,5 @@
-﻿using Transport.Abstractions;
+﻿using Shared;
+using Transport.Abstractions;
 using Shared.Buffer;
 
 namespace Transport.Transports.ProtocolWrapper.AckRaw
@@ -9,7 +10,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 
         void OnConnected();
         void OnDisconnected();
-        byte[] UpdateAckData(byte[] originalAck);
+        void UpdateAckData(UnionDataList ackData);
         bool ProcessReceivedData(IMemoryBuffer receivedData);
         bool ProcessSentData(IMemoryBuffer sentData);
     }

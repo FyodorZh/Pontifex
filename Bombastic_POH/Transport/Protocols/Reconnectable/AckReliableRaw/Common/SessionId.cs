@@ -74,8 +74,8 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
             int id;
             int generation;
-            if (!new BufferElement(data.Array, ref pos, null).AsInt32(out id) ||
-                !new BufferElement(data.Array, ref pos, null).AsInt32(out generation))
+            if (!new BufferElement(data.ReadOnlyArray, ref pos, null).AsInt32(out id) ||
+                !new BufferElement(data.ReadOnlyArray, ref pos, null).AsInt32(out generation))
             {
                 return false;
             }

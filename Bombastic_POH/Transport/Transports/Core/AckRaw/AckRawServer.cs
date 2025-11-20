@@ -80,7 +80,7 @@ namespace Transport.Transports.Core
 
         public abstract int MessageMaxByteSize { get; }
 
-        protected IAckRawServerHandler TryConnectNewClient(ByteArraySegment ackData)
+        protected IAckRawServerHandler TryConnectNewClient(UnionDataList ackData)
         {
             if (!IsValid)
             {

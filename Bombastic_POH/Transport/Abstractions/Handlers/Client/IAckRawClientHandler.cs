@@ -77,9 +77,9 @@ namespace Transport.Abstractions.Handlers.Client
 //                }
 //            }
 
-            public byte[] GetAckData()
+            public void WriteAckData(UnionDataList ackData)
             {
-                return mCore.GetAckData();
+                mCore.WriteAckData(ackData);
             }
 
             public void OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)

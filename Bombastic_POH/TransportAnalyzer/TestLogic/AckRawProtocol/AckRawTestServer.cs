@@ -20,9 +20,9 @@ namespace TransportAnalyzer.TestLogic
             mOnDisconnected = onDisconnected;
         }
 
-        protected override AckRawServerProtocol ConstructSSP(ByteArraySegment ackData, ILogger logger)
+        protected override AckRawServerProtocol ConstructSSP(UnionDataList ackData, ILogger logger)
         {
-            if (AckUtils.CheckPrefix(ackData, "AckRawTestProtocol").IsValid)
+            if (ackData.Check("AckRawTestProtocol") && ackData.Elements.Count == 0)
             {
                 return new AckRawTestServer(mOnConnected, mOnDisconnected);
             }

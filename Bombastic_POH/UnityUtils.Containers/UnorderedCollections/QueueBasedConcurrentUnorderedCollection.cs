@@ -4,10 +4,10 @@ namespace Shared
 {
     public class QueueBasedConcurrentUnorderedCollection<TData> : IConcurrentUnorderedCollection<TData>
     {
-        private readonly IUnorderedCollection<LimitedConcurrentQueue<TData>> mFullSegments = new TrivialQueue<LimitedConcurrentQueue<TData>>();
+        private readonly IUnorderedCollection<LimitedConcurrentQueue<TData>> mFullSegments = new SystemQueue<LimitedConcurrentQueue<TData>>();
 
-        private IUnorderedCollection<LimitedConcurrentQueue<TData>> mEmptySegments = new TrivialQueue<LimitedConcurrentQueue<TData>>();
-        private IUnorderedCollection<LimitedConcurrentQueue<TData>> mTmpEmptySegmentList = new TrivialQueue<LimitedConcurrentQueue<TData>>();
+        private IUnorderedCollection<LimitedConcurrentQueue<TData>> mEmptySegments = new SystemQueue<LimitedConcurrentQueue<TData>>();
+        private IUnorderedCollection<LimitedConcurrentQueue<TData>> mTmpEmptySegmentList = new SystemQueue<LimitedConcurrentQueue<TData>>();
 
         private readonly int mSegmentSize;
 

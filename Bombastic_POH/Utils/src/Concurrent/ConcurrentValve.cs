@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Collections;
 
 namespace Shared.Concurrent
 {
@@ -91,27 +92,27 @@ namespace Shared.Concurrent
         }
     }
 
-    public class SingleReaderWriterConcurrentQueueValve<TData> : SingleReaderWriterConcurrentUnorderedCollectionValve<TData>, ISingleReaderWriterConcurrentQueue<TData>
+    public class SingleReaderWriterConcurrentQueueValve<TData> : SingleReaderWriterConcurrentUnorderedCollectionValve<TData>, ISingleReaderWriterConcurrentQueue_old<TData>
     {
-        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue<TData> collection, Action<TData> processor)
+        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue_old<TData> collection, Action<TData> processor)
             : base(collection, processor, processor)
         {
         }
 
-        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
+        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue_old<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
             : base(collection, unfinishedProcessor, rejectedProcessor)
         {
         }
     }
 
-    public class ConcurrentQueueValve<TData> : ConcurrentUnorderedCollectionValve<TData>, IConcurrentQueue<TData>
+    public class ConcurrentQueueValve<TData> : ConcurrentUnorderedCollectionValve<TData>, IConcurrentQueue_old<TData>
     {
-        public ConcurrentQueueValve(IConcurrentQueue<TData> collection, Action<TData> processor)
+        public ConcurrentQueueValve(IConcurrentQueue_old<TData> collection, Action<TData> processor)
             : base(collection, processor, processor)
         {
         }
 
-        public ConcurrentQueueValve(IConcurrentQueue<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
+        public ConcurrentQueueValve(IConcurrentQueue_old<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
             : base(collection, unfinishedProcessor, rejectedProcessor)
         {
         }

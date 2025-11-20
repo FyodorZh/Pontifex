@@ -80,14 +80,13 @@ namespace Transport.Transports.Direct
             }
         }
 
-        ByteArraySegment IClientDirectCtl.GetAckData()
+        void IClientDirectCtl.GetAckData(UnionDataList ackData)
         {
             var handler = Handler;
             if (handler != null)
             {
-                return new ByteArraySegment(handler.GetAckData());
+                handler.WriteAckData(ackData);
             }
-            return new ByteArraySegment();
         }
 
         void IAnyDirectCtl.OnReceived(IMemoryBufferHolder buffer)

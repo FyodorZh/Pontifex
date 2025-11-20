@@ -1,5 +1,6 @@
 ﻿using System;
 using Actuarius.Collections;
+using Actuarius.Memory;
 
 namespace Shared.Buffer
 {
@@ -76,7 +77,7 @@ namespace Shared.Buffer
                 int count = data.Count;
                 int offset = data.Offset;
                 int maxOffset = offset + count;
-                byte[] array = data.Array;
+                byte[] array = data.ReadOnlyArray;
 
                 if (!(data is ByteArraySegment)) // оптимизация боксинга
                 {

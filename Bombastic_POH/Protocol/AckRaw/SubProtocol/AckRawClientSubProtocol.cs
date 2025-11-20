@@ -15,11 +15,12 @@ namespace NewProtocol
             mProtocolName = typeof(TProtocol).ToString();
         }
 
-        protected abstract byte[] GetUserAckData();
+        protected abstract void WriteUserAckData(UnionDataList ackData);
 
-        protected sealed override byte[] GetAckData()
+        protected sealed override void WriteAckData(UnionDataList ackData)
         {
-            return AckUtils.AppendPrefix(GetUserAckData(), mProtocolName);
+            WriteUserAckData(ackData);
+            ackData.PutFirst(mProtocolName);
         }
     }
 }

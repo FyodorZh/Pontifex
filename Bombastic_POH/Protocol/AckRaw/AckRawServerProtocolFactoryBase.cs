@@ -17,7 +17,7 @@ namespace NewProtocol
 
         private readonly IModelsHashDB mHashModels;
 
-        protected abstract AckRawServerProtocol ConstructSSP(ByteArraySegment ackData, ILogger logger);
+        protected abstract AckRawServerProtocol ConstructSSP(UnionDataList ackData, ILogger logger);
 
         protected AckRawServerProtocolFactoryBase(IModelsHashDB protocolModelHashes, IAckRawServer transport, Action<int> onTickDelay = null)
         {
@@ -46,7 +46,7 @@ namespace NewProtocol
             return mTransport.Start(r => { }, logger);
         }
 
-        IAckRawServerHandler IRawServerAcknowledger<IAckRawServerHandler>.TryAck(ByteArraySegment ackData, ILogger logger)
+        IAckRawServerHandler IRawServerAcknowledger<IAckRawServerHandler>.TryAck(UnionDataList ackData, ILogger logger)
         {
             var ssp = ConstructSSP(ackData, logger);
             if (ssp != null)

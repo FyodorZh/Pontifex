@@ -1,6 +1,6 @@
 ﻿namespace Shared
 {
-    public class LimitedConcurrentQueue<T> : IConcurrentQueue<T>
+    public class LimitedConcurrentQueue<T> : IConcurrentQueue_old<T>
     {
         private struct Element
         {

@@ -1,4 +1,4 @@
-using Actuarius.Memoria;
+using Actuarius.Memory;
 using Shared.Concurrent;
 
 namespace Shared.FSM

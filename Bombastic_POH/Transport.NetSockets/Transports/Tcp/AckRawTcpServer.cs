@@ -78,7 +78,7 @@ namespace Transport.Transports.Tcp
                 }
             }
 
-            public void AddClient(Socket socket, Func<EndPoint, ByteArraySegment, IAckRawServerHandler> acknowledger, ILogger logger)
+            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler> acknowledger, ILogger logger)
             {
                 ServerSideSocket client = new ServerSideSocket(socket, OnDisconnected, acknowledger, logger);
                 mClientsToAdd.Put(client);
@@ -275,14 +275,13 @@ namespace Transport.Transports.Tcp
             Log.wtf("Server socket failed", ex);
         }
 
-        private IAckRawServerHandler TryAcknowledge(EndPoint ep, ByteArraySegment ackData)
+        private IAckRawServerHandler TryAcknowledge(EndPoint ep, UnionDataList ackData)
         {
             string remoteName;
             try { remoteName = ep.ToString(); }
             catch { remoteName = "invalid"; }
 
-            ackData = AckUtils.CheckPrefix(ackData, TcpInfo.AckRequest);
-            if (ackData.IsValid)
+            if (!ackData.Check(TcpInfo.AckRequest))
             {
                 var handler = TryConnectNewClient(ackData);
                 Log.i("ep[Ip={0}]: Acknowledging '{1}' by user logic", remoteName, handler != null ? "Succeeded" : "Failed");

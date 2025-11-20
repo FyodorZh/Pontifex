@@ -1,5 +1,5 @@
 using System;
-using Actuarius.Memoria;
+using Actuarius.Memory;
 
 namespace Shared
 {
@@ -7,21 +7,21 @@ namespace Shared
     /// Абстрактное тредобезопасное хранилище последовательности байт с контролем владения.
     /// Обещает быть иммутабельной!!!
     /// </summary>
-    public interface IMultiRefByteArray : IByteArray, IMultiRef
+    public interface IMultiRefByteArray : IReadOnlyBytes, IMultiRefResource
     {
     }
 
     public static class Ext_IMultiRefByteArray
     {
         public static MultiRefByteArrayOwner<TArray> Own<TArray>(this TArray array)
-            where TArray : class, IMultiRef, IByteArray
+            where TArray : class, IMultiRefResource, IReadOnlyBytes
         {
             return new MultiRefByteArrayOwner<TArray>(array);
         }
     }
 
     public struct MultiRefByteArrayOwner<TArray> : IDisposable
-        where TArray : class, IMultiRef, IByteArray
+        where TArray : class, IMultiRefResource, IReadOnlyBytes
     {
         private TArray mArray;
 

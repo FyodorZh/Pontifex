@@ -29,9 +29,9 @@ namespace TransportAnalyzer.TestLogic
             mLastTickId = lastTickId;
         }
 
-        public byte[] GetAckData()
+        public void WriteAckData(UnionDataList ackData)
         {
-            return Encoding.UTF8.GetBytes("stress");
+            ackData.PutFirst("stress");
         }
 
         public void OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)

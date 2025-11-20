@@ -1,4 +1,5 @@
 ﻿using System;
+using Actuarius.Memory;
 using Shared;
 namespace Shared.Buffer
 {
@@ -54,7 +55,7 @@ namespace Shared.Buffer
                 int len = bytes.Count;
                 mType = BuildTypeData(BufferElementType.Array, len < MaxParam - 1 ? len + 1 : MaxParam);
                 mIntValue = SetArray(bytes.Offset, len);
-                mObject = bytes.Array;
+                mObject = bytes.ReadOnlyArray;
             }
         }
 
@@ -496,7 +497,7 @@ namespace Shared.Buffer
         {
             try
             {
-                sink.Push(mType);
+                sink.Put(mType);
                 switch (Type)
                 {
                     case BufferElementType.Unknown:
@@ -506,7 +507,7 @@ namespace Shared.Buffer
                     case BufferElementType.Byte:
                         if (InternalParam == 0)
                         {
-                            sink.Push((byte)mIntValue);
+                            sink.Put((byte)mIntValue);
                         }
                         break;
                     case BufferElementType.UInt16:
@@ -514,11 +515,11 @@ namespace Shared.Buffer
                         {
                             case MaxParam:
                                 UInt16 value = (UInt16)mIntValue;
-                                sink.Push((byte)((value >> 0) & 0xFF));
-                                sink.Push((byte)((value >> 8) & 0xFF));
+                                sink.Put((byte)((value >> 0) & 0xFF));
+                                sink.Put((byte)((value >> 8) & 0xFF));
                                 break;
                             case MaxParam - 1:
-                                sink.Push((byte)mIntValue);
+                                sink.Put((byte)mIntValue);
                                 break;
                         }
                         break;
@@ -529,21 +530,21 @@ namespace Shared.Buffer
                                 case MaxParam:
                                     {
                                         UInt32 value = (UInt32)mIntValue;
-                                        sink.Push((byte)((value >> 0) & 0xFF));
-                                        sink.Push((byte)((value >> 8) & 0xFF));
-                                        sink.Push((byte)((value >> 16) & 0xFF));
-                                        sink.Push((byte)((value >> 24) & 0xFF));
+                                        sink.Put((byte)((value >> 0) & 0xFF));
+                                        sink.Put((byte)((value >> 8) & 0xFF));
+                                        sink.Put((byte)((value >> 16) & 0xFF));
+                                        sink.Put((byte)((value >> 24) & 0xFF));
                                     }
                                     break;
                                 case MaxParam - 1:
                                     {
                                         UInt16 value = unchecked((UInt16)(Int16)mIntValue);
-                                        sink.Push((byte)((value >> 0) & 0xFF));
-                                        sink.Push((byte)((value >> 8) & 0xFF));
+                                        sink.Put((byte)((value >> 0) & 0xFF));
+                                        sink.Put((byte)((value >> 8) & 0xFF));
                                     }
                                     break;
                                 case MaxParam - 2:
-                                    sink.Push(unchecked((byte)(sbyte)mIntValue));
+                                    sink.Put(unchecked((byte)(sbyte)mIntValue));
                                     break;
                             }
                         }
@@ -551,32 +552,32 @@ namespace Shared.Buffer
                     case BufferElementType.Single:
                         {
                             UInt32 value = (UInt32)mIntValue;
-                            sink.Push((byte)((value >> 0) & 0xFF));
-                            sink.Push((byte)((value >> 8) & 0xFF));
-                            sink.Push((byte)((value >> 16) & 0xFF));
-                            sink.Push((byte)((value >> 24) & 0xFF));
+                            sink.Put((byte)((value >> 0) & 0xFF));
+                            sink.Put((byte)((value >> 8) & 0xFF));
+                            sink.Put((byte)((value >> 16) & 0xFF));
+                            sink.Put((byte)((value >> 24) & 0xFF));
                         }
                         break;
                     case BufferElementType.Int64:
                     case BufferElementType.Double:
                         {
-                            sink.Push((byte)((mIntValue >> 0) & 0xFF));
-                            sink.Push((byte)((mIntValue >> 8) & 0xFF));
-                            sink.Push((byte)((mIntValue >> 16) & 0xFF));
-                            sink.Push((byte)((mIntValue >> 24) & 0xFF));
-                            sink.Push((byte)((mIntValue >> 32) & 0xFF));
-                            sink.Push((byte)((mIntValue >> 40) & 0xFF));
-                            sink.Push((byte)((mIntValue >> 48) & 0xFF));
-                            sink.Push((byte)((mIntValue >> 56) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 0) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 8) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 16) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 24) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 32) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 40) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 48) & 0xFF));
+                            sink.Put((byte)((mIntValue >> 56) & 0xFF));
                         }
                         break;
                     case BufferElementType.Buffer:
                         {
                             var buffer = ((IMemoryBufferHolder)mObject).ShowBufferUnsafe();
                             int len = buffer.Size;
-                            sink.Push((byte)((len >> 0) & 0xFF));
-                            sink.Push((byte)((len >> 8) & 0xFF));
-                            sink.Push((byte)((len >> 16) & 0xFF));
+                            sink.Put((byte)((len >> 0) & 0xFF));
+                            sink.Put((byte)((len >> 8) & 0xFF));
+                            sink.Put((byte)((len >> 16) & 0xFF));
 
                             if (!buffer.TryWriteTo(sink))
                             {
@@ -597,18 +598,18 @@ namespace Shared.Buffer
                                 case MaxParam:
                                     {
                                         int len = ArraySize();
-                                        sink.Push((byte)((len >> 0) & 0xFF));
-                                        sink.Push((byte)((len >> 8) & 0xFF));
-                                        sink.Push((byte)((len >> 16) & 0xFF));
+                                        sink.Put((byte)((len >> 0) & 0xFF));
+                                        sink.Put((byte)((len >> 8) & 0xFF));
+                                        sink.Put((byte)((len >> 16) & 0xFF));
 
                                         byte[] bytes = mObject as byte[];
                                         if (bytes != null)
                                         {
-                                            sink.Push(new ByteArraySegment(bytes, ArrayOffset(), len));
+                                            sink.PutMany(new ByteArraySegment(bytes, ArrayOffset(), len));
                                         }
                                         else
                                         {
-                                            sink.Push((IMultiRefByteArray)mObject);
+                                            sink.PutMany((IMultiRefByteArray)mObject);
                                         }
                                     }
                                     break;
@@ -618,11 +619,11 @@ namespace Shared.Buffer
                                         byte[] bytes = mObject as byte[];
                                         if (bytes != null)
                                         {
-                                            sink.Push(new ByteArraySegment(bytes, ArrayOffset(), len));
+                                            sink.PutMany(new ByteArraySegment(bytes, ArrayOffset(), len));
                                         }
                                         else
                                         {
-                                            sink.Push((IMultiRefByteArray)mObject);
+                                            sink.PutMany((IMultiRefByteArray)mObject);
                                         }
                                     }
                                     break;
