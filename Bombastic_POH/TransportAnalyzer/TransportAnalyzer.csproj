@@ -32,7 +32,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Archivarius, Version=0.2.1.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Archivarius.0.2.1-dev.7\lib\netstandard2.0\Archivarius.dll</HintPath>
+      <HintPath>..\packages\Archivarius.0.2.1-dev.8\lib\netstandard2.0\Archivarius.dll</HintPath>
     </Reference>
     <Reference Include="Archivarius.Tools, Version=0.2.1.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Archivarius.Tools.0.2.1-dev.5\lib\netstandard2.0\Archivarius.Tools.dll</HintPath>
@@ -184,6 +184,10 @@
     <ProjectReference Include="..\UnityUtils.Memory\UnityUtils.Memory.csproj">
       <Project>{d4232029-5946-4ae0-b257-0d8b27c79879}</Project>
       <Name>UnityUtils.Memory</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Utils.Good\Utils.Good.csproj">
+      <Project>{a8b3d1f3-9dd3-45c3-95f1-02418cf45435}</Project>
+      <Name>Utils.Good</Name>
     </ProjectReference>
     <ProjectReference Include="..\Utils\Utils.csproj">
       <Project>{6bc7af0d-f2f1-4330-b869-c1da69f980f1}</Project>

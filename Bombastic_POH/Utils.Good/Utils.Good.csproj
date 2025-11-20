@@ -2,9 +2,9 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
+        <RootNamespace>Shared</RootNamespace>
         <LangVersion>9</LangVersion>
-        <Nullable>disable</Nullable>
-        <RootNamespace>UnityUtils.Memory</RootNamespace>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -16,14 +16,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Logger\Log\Log.csproj" />
-      <ProjectReference Include="..\Serializer\Serializer.csproj" />
-      <ProjectReference Include="..\UnityUtils.LifeTime\UnityUtils.LifeTime.csproj" />
-      <ProjectReference Include="..\UnityUtils\UnityUtils.csproj" />
+      <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
+      <ProjectReference Include="..\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
+      <ProjectReference Include="..\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
     </ItemGroup>
 
 </Project>

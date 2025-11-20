@@ -46,6 +46,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Collections", "Ac
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Memory", "Actuarius\Actuarius.Memory\Actuarius.Memory.csproj", "{271752FC-19F2-4308-9F11-35B255F01155}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utils.Good", "Utils.Good\Utils.Good.csproj", "{A8B3D1F3-9DD3-45C3-95F1-02418CF45435}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -140,6 +142,10 @@ Global
 		{271752FC-19F2-4308-9F11-35B255F01155}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{271752FC-19F2-4308-9F11-35B255F01155}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{271752FC-19F2-4308-9F11-35B255F01155}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A8B3D1F3-9DD3-45C3-95F1-02418CF45435}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A8B3D1F3-9DD3-45C3-95F1-02418CF45435}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A8B3D1F3-9DD3-45C3-95F1-02418CF45435}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A8B3D1F3-9DD3-45C3-95F1-02418CF45435}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{144153ED-1E8A-48A3-A6F8-9E53BC84F788} = {6160EC40-963C-4242-87A9-7EF01E022570}
