@@ -183,7 +183,7 @@ namespace Shared.Utils
         private readonly Action<IWorkStory, WorkstoryState> mOnFinish;
         private readonly Action<IWorkStory, Thread> mOnHung;
 
-        private readonly IConcurrentQueue_old<KeyValuePair<IWorkStory, WorkstoryState>> mFinished = new TinyConcurrentQueue<KeyValuePair<IWorkStory, WorkstoryState>>();
+        private readonly IConcurrentQueue<KeyValuePair<IWorkStory, WorkstoryState>> mFinished = new TinyConcurrentQueue<KeyValuePair<IWorkStory, WorkstoryState>>();
 
         private volatile ILogicDriverCtl mDriver;
 

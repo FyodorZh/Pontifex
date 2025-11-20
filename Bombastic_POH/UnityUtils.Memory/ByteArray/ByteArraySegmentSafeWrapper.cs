@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Memory;
 
 namespace Shared
 {

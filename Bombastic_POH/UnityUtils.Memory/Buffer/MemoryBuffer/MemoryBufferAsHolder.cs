@@ -7,7 +7,7 @@ namespace Shared.Buffer
 {
     public class MemoryBufferAsHolder: MemoryBuffer, IMemoryBufferHolder, IMemoryBufferAccessor
     {
-        private class MultiRefImpl1 : MultiRefImpl
+        private class MultiRefImpl1 : MultiRefResource
         {
             private readonly MemoryBufferAsHolder mOwner;
             public MultiRefImpl1(MemoryBufferAsHolder owner)

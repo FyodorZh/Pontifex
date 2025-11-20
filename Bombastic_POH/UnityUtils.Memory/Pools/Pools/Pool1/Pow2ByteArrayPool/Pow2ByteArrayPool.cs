@@ -1,4 +1,6 @@
 using Actuarius;
+using Actuarius.Collections;
+using Actuarius.Memory;
 
 namespace Shared.Pooling
 {
@@ -13,7 +15,7 @@ namespace Shared.Pooling
         }
 
         public Pow2ByteArrayPool()
-            : base(new SubPoolCtor(), new TrivialDictionary<int, IPool<byte[]>>())
+            : base(new SubPoolCtor(), new SystemDictionary<int, IPool<byte[]>>())
         {
         }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Actuarius.Memory.Internal;
 using Shared.ByteSinks;
 
 namespace Shared.Buffer
@@ -19,18 +20,17 @@ namespace Shared.Buffer
             base.OnReleased();
         }
 
-        protected override void OnRefCountError(ErrorType error)
+        protected override void OnRefCountError(ResourceUsageErrorType error, ActionHistoryTracer tracer)
         {
-            if (error != ErrorType.Leak)
+            if (error != ResourceUsageErrorType.Leak)
             {
                 ((IMemoryBufferPool)mPool).Log.e("Wrong MemoryBuffer usage: '{0}'", error);
-                base.OnRefCountError(error);
             }
             else
             {
                 ((IMemoryBufferPool)mPool).Log.w("MemoryBuffer leak detected");
-                base.OnRefCountError(error);
             }
+            base.OnRefCountError(error, tracer);
         }
 
         void IDisposable.Dispose()

@@ -1,3 +1,5 @@
+using Actuarius.Memory;
+
 namespace Shared.Pooling
 {
     public class CollectableObjectPool<TObject> : IPool<TObject>

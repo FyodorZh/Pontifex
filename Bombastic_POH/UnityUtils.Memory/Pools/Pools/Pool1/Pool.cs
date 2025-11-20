@@ -1,4 +1,7 @@
-namespace Shared.Pooling
+using Actuarius.Collections;
+using Shared;
+
+namespace Actuarius.Memory
 {
     public abstract class Pool<TObject, TParam1> : IPool<TObject, TParam1>
         where TObject : class

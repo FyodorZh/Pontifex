@@ -1,3 +1,5 @@
+using Actuarius.Memory;
+
 namespace Shared.Pooling
 {
     public abstract class SingleRefCollectable<TSelf> : SingleRefImpl, INewCollectable<TSelf>

@@ -1,4 +1,5 @@
 using Actuarius.Collections;
+using Actuarius.Memory;
 
 namespace Shared.Pooling
 {
@@ -29,8 +30,7 @@ namespace Shared.Pooling
 
         public TObject Acquire()
         {
-            TObject obj;
-            if (mPool.TryPop(out obj))
+            if (mPool.TryPop(out var obj))
             {
                 return obj;
             }

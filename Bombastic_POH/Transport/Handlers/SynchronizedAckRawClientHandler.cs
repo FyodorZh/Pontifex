@@ -1,4 +1,5 @@
 ﻿using System;
+using Actuarius.Collections;
 using Shared;
 using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers;

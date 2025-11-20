@@ -7,7 +7,7 @@ namespace Shared
     /// Тривиальная обёртка над массивом.
     /// </summary>
     /// <typeparam name="TArray"></typeparam>
-    public class AbstractByteArraySegment<TArray> : MultiRefImpl, IMultiRefByteArray
+    public class AbstractByteArraySegment<TArray> : MultiRefResource, IMultiRefByteArray
         where TArray : IReadOnlyBytes, IReleasableResource
     {
         private readonly TArray mArray;

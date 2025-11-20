@@ -15,7 +15,7 @@ namespace Shared
     /// </summary>
     /// <typeparam name="TNode"></typeparam>
     /// <typeparam name="TNodeAttr"></typeparam>
-    public class TopologicalQueue<TNode, TNodeAttr>  : IQueue_old<TopologicalQueue<TNode, TNodeAttr>.NodeRecord>
+    public class TopologicalQueue<TNode, TNodeAttr>  : IQueue<TopologicalQueue<TNode, TNodeAttr>.NodeRecord>
         where TNode : class, ITopologicalGraphNode<TNode>
         where TNodeAttr : IComparable<TNodeAttr>
     {
@@ -54,6 +54,8 @@ namespace Shared
         }
 
         private readonly PriorityQueue<Key, NodeRecord> mQueue = new PriorityQueue<Key, NodeRecord>();
+        
+        public int Count => mQueue.Count;
 
         public bool Put(NodeRecord value)
         {

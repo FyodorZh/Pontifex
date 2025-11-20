@@ -1,6 +1,8 @@
+using Actuarius.Memory;
+
 namespace Shared
 {
-    public class PoolObjectSafeMultiUser<TPoolObject> : MultiRefImpl
+    public class PoolObjectSafeMultiUser<TPoolObject> : MultiRefResource
     {
         protected readonly IPoolSink<TPoolObject> mPool;
         protected TPoolObject mObject;

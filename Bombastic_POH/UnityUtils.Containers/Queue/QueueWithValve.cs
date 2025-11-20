@@ -3,7 +3,7 @@ using Actuarius.Collections;
 
 namespace Shared
 {
-    public class QueueWithValve<TData> : IQueue_old<TData>, ICountable
+    public class QueueWithValve<TData> : IQueue<TData>
     {
         private CycleQueue<TData> mQueue = new CycleQueue<TData>();
 

@@ -1,5 +1,7 @@
 using System;
 using System.Threading;
+using Actuarius.Memory;
+using Actuarius.Memory.Internal;
 using NUnit.Framework;
 using Shared;
 using Shared.Pooling;
@@ -25,15 +27,15 @@ namespace TransportAnalyzer.UTests
                 mState = 1;
             }
 
-            protected override void OnRefCountError(ErrorType error)
+            protected override void OnRefCountError(ResourceUsageErrorType error, ActionHistoryTracer? tracer)
             {
                 Assert.Fail(error.ToString());
-                base.OnRefCountError(error);
+                base.OnRefCountError(error, tracer);
             }
 
             ~Collectable()
             {
-                Assert.AreEqual(mState, 0);
+                Assert.That(mState, Is.EqualTo(0));
             }
         }
 

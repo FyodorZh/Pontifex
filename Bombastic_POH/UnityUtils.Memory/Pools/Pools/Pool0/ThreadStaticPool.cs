@@ -1,3 +1,5 @@
+using Actuarius.Memory;
+
 namespace Shared.Pooling
 {
     public class ThreadStaticPool<TObject> : ThreadSingleton<ThreadStaticPool<TObject>>, IPool<TObject>

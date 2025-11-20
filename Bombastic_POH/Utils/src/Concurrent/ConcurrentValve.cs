@@ -92,29 +92,41 @@ namespace Shared.Concurrent
         }
     }
 
-    public class SingleReaderWriterConcurrentQueueValve<TData> : SingleReaderWriterConcurrentUnorderedCollectionValve<TData>, ISingleReaderWriterConcurrentQueue_old<TData>
+    public class SingleReaderWriterConcurrentQueueValve<TData> : SingleReaderWriterConcurrentUnorderedCollectionValve<TData>, ISingleReaderWriterConcurrentQueue<TData>
     {
-        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue_old<TData> collection, Action<TData> processor)
+        private readonly ISingleReaderWriterConcurrentQueue<TData> _collection;
+
+        public int Count => _collection.Count;
+        
+        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue<TData> collection, Action<TData> processor)
             : base(collection, processor, processor)
         {
+            _collection = collection;
         }
 
-        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue_old<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
+        public SingleReaderWriterConcurrentQueueValve(ISingleReaderWriterConcurrentQueue<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
             : base(collection, unfinishedProcessor, rejectedProcessor)
         {
+            _collection = collection;
         }
     }
 
-    public class ConcurrentQueueValve<TData> : ConcurrentUnorderedCollectionValve<TData>, IConcurrentQueue_old<TData>
+    public class ConcurrentQueueValve<TData> : ConcurrentUnorderedCollectionValve<TData>, IConcurrentQueue<TData>
     {
-        public ConcurrentQueueValve(IConcurrentQueue_old<TData> collection, Action<TData> processor)
+        private readonly IConcurrentQueue<TData> _collection;
+
+        public int Count => _collection.Count;
+        
+        public ConcurrentQueueValve(IConcurrentQueue<TData> collection, Action<TData> processor)
             : base(collection, processor, processor)
         {
+            _collection = collection;
         }
 
-        public ConcurrentQueueValve(IConcurrentQueue_old<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
+        public ConcurrentQueueValve(IConcurrentQueue<TData> collection, Action<TData> unfinishedProcessor, Action<TData> rejectedProcessor)
             : base(collection, unfinishedProcessor, rejectedProcessor)
-        {
+        {         
+            _collection = collection;
         }
     }
 }

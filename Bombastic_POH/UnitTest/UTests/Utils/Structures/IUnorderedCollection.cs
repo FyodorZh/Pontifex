@@ -26,7 +26,7 @@ namespace TransportAnalyzer.UTests
         [Test]
         public void TestTinyConcurrentQueue()
         {
-            Test(new Shared.TinyConcurrentQueue<int>(), (int)1e6, 0.5001, id => ++id);
+            Test(new TinyConcurrentQueue<int>(), (int)1e6, 0.5001, id => ++id);
         }
 
         [Test]
@@ -92,8 +92,8 @@ namespace TransportAnalyzer.UTests
         [Test]
         public void TestTinyConcurrentQueue()
         {
-            Test1(new Shared.TinyConcurrentQueue<int>(), (int)1e5, 0.5001);
-            Test2(new Shared.TinyConcurrentQueue<int>(), 10, 100, 5.0);
+            Test1(new TinyConcurrentQueue<int>(), (int)1e5, 0.5001);
+            Test2(new TinyConcurrentQueue<int>(), 10, 100, 5.0);
         }
 
         [Test]

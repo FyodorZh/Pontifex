@@ -1,6 +1,9 @@
+using Actuarius.Memory;
+
 namespace Shared.Pooling
 {
-    public sealed class CollectableWrapper<TObject> : MultiRefCollectable<CollectableWrapper<TObject>>, IOwner<TObject>
+    public sealed class CollectableWrapper<TObject> : MultiRefCollectable<CollectableWrapper<TObject>>, IMultiRefResourceOwner<TObject>
+        where TObject : class
     {
         private TObject mValue;
 
@@ -13,7 +16,7 @@ namespace Shared.Pooling
             mValue = value;
         }
 
-        public TObject Value
+        public TObject Resource
         {
             get { return mValue; }
         }
@@ -26,6 +29,11 @@ namespace Shared.Pooling
         protected override void OnRestored()
         {
             // DO NOTHING
+        }
+
+        public ReleasableResourceAccessor<TObject> GetAccessor()
+        {
+            return new ReleasableResourceAccessor<TObject>(mValue, this.Acquire());
         }
     }
 }

@@ -1,3 +1,5 @@
+using Actuarius.Memory;
+
 namespace Shared.Pooling
 {
     public class ByteArraySegmentConcurrentPool : ByteArraySegmentPool, IConcurrentPool<ByteArraySegment, int>

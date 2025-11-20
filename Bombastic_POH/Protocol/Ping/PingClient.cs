@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Actuarius.Collections;
 using Shared;
 using Shared.Buffer;
 using Shared.Pooling;
@@ -50,7 +51,7 @@ namespace NewProtocol.Ping
         private ILogger Log = global::Log.StaticLogger;
 
         private readonly List<SentPacketInfo> mSentList = new List<SentPacketInfo>();
-        private readonly IConcurrentQueue_old<ReceivedPacketInfo> mReceiveList = new TinyConcurrentQueue<ReceivedPacketInfo>();
+        private readonly IConcurrentQueue<ReceivedPacketInfo> mReceiveList = new TinyConcurrentQueue<ReceivedPacketInfo>();
 
         private readonly MessageIdSource mMessageIdSource = new MessageIdSource();
 

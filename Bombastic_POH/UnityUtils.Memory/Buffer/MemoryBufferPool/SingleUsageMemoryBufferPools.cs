@@ -1,4 +1,6 @@
-﻿namespace Shared.Buffer
+﻿using Actuarius.Memory;
+
+namespace Shared.Buffer
 {
     public sealed class SingleUsageMemoryBufferPool : IMemoryBufferPool
     {

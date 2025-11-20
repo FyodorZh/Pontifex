@@ -1,3 +1,4 @@
+using Actuarius.Memory;
 using Serializer;
 
 namespace Shared.Serialization

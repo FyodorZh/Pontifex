@@ -9,14 +9,16 @@ namespace TransportAnalyzer.UTests
     [TestFixture]
     class ConcurrentQueueTest
     {
-        private class QueueLimiter<T> : IConcurrentQueue_old<T>
+        private class QueueLimiter<T> : IConcurrentQueue<T>
         {
-            private readonly IConcurrentQueue_old<T> mQueue;
+            private readonly IConcurrentQueue<T> mQueue;
 
             private readonly int mCapacity;
             private int mCount;
 
-            public QueueLimiter(IConcurrentQueue_old<T> queue, int capacity)
+            public int Count => mCount;
+
+            public QueueLimiter(IConcurrentQueue<T> queue, int capacity)
             {
                 mQueue = queue;
                 mCapacity = capacity;
@@ -51,7 +53,7 @@ namespace TransportAnalyzer.UTests
             public long Value;
         }
 
-        private void DoTest(IConcurrentQueue_old<Pair> queue, int writeConcurrency)
+        private void DoTest(IConcurrentQueue<Pair> queue, int writeConcurrency)
         {
             long[] table = new long[writeConcurrency];
 
@@ -125,7 +127,7 @@ namespace TransportAnalyzer.UTests
         [Test]
         public void TinyConcurrentQueueTest()
         {
-            DoTest(new QueueLimiter<Pair>(new Shared.TinyConcurrentQueue<Pair>(), 10000), 3);
+            DoTest(new QueueLimiter<Pair>(new TinyConcurrentQueue<Pair>(), 10000), 3);
         }
 
         [Test]

@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security;
+using Actuarius.Collections;
 using Actuarius.Memory;
 using Shared;
 using Transport.Abstractions;
@@ -55,9 +56,9 @@ namespace Transport.Transports.Udp
         private readonly Action<SocketException> mOnSocketFailed;
         private readonly ITrafficCollectorSink mTrafficCollector;
 
-        private readonly IConcurrentQueue_old<SendTask> mQueueToSend = new LimitedConcurrentQueue<SendTask>(10000);
+        private readonly IConcurrentQueue<SendTask> mQueueToSend = new LimitedConcurrentQueue<SendTask>(10000);
 
-        private readonly IConcurrentQueue_old<SendTask> mTaskPool = new LimitedConcurrentQueue<SendTask>(10000);
+        private readonly IConcurrentQueue<SendTask> mTaskPool = new LimitedConcurrentQueue<SendTask>(10000);
 
         public UdpAsyncSender(Socket socket, int maxMessageSize, Action<SocketException> onSocketFailed, ITrafficCollectorSink trafficCollector)
             : base(5)

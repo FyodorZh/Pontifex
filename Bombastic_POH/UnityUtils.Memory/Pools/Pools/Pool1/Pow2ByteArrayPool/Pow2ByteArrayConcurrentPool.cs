@@ -1,4 +1,5 @@
 using Actuarius;
+using Actuarius.Memory;
 
 namespace Shared.Pooling
 {

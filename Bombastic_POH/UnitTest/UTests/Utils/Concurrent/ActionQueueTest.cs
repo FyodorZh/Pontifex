@@ -1,4 +1,5 @@
 using System.Threading;
+using Actuarius.Collections;
 using NUnit.Framework;
 using Shared;
 using Shared.Concurrent;

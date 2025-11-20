@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using Actuarius.Memory;
 using Ionic.Zlib;
 using Shared;
 using Shared.Buffer;

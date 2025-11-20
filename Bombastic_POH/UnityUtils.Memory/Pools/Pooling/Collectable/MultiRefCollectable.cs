@@ -1,6 +1,8 @@
+using Actuarius.Memory;
+
 namespace Shared.Pooling
 {
-    public abstract class MultiRefCollectable<TSelf> : MultiRefImpl, INewCollectable<TSelf>
+    public abstract class MultiRefCollectable<TSelf> : MultiRefResource, INewCollectable<TSelf>
         where TSelf : MultiRefCollectable<TSelf>
     {
         private IPoolSink<TSelf> mOwner;

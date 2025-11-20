@@ -1,4 +1,5 @@
-﻿using Shared;
+﻿using Actuarius.Collections;
+using Shared;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {
