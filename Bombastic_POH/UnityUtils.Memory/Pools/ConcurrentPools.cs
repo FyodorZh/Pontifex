@@ -5,18 +5,18 @@ namespace Shared
 {
     public static class ConcurrentPools
     {
-        public static readonly IConcurrentPool<byte[], int> Pow2ByteArrays = new Pow2ByteArrayConcurrentPool(1000);
+        public static readonly IConcurrentPool<byte[], int> Pow2ByteArrays = new RawByteArrayConcurrentPool(1000);
         public static readonly IConcurrentPool<ByteArraySegment, int> ByteArraySegments = new ByteArraySegmentConcurrentPool(Pow2ByteArrays);
 
         private static class CollectablePoolSingleton<TObject>
-            where TObject : class, INewCollectable<TObject>, IReleasableResource, new()
+            where TObject : class, ICollectable<TObject>, IReleasableResource, new()
         {
             public static readonly IConcurrentPool<TObject> Instance =
                 new CollectableObjectConcurrentPool<TObject>(new SmallObjectBufferedPool<TObject>(DefaultConstructor<TObject>.Instance));
         }
 
         public static TObject Acquire<TObject>()
-            where TObject : class, INewCollectable<TObject>, IReleasableResource, new()
+            where TObject : class, ICollectable<TObject>, IReleasableResource, new()
         {
             return CollectablePoolSingleton<TObject>.Instance.Acquire();
         }

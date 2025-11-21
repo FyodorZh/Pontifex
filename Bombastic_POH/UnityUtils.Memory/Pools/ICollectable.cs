@@ -2,7 +2,7 @@ using Actuarius.Memory;
 
 namespace Shared.Pooling
 {
-    public interface INewCollectable<TObject>
+    public interface ICollectable<out TResource>
     {
         /// <summary>
         /// Вызывается всякий раз при записи объекта в пулл. Объект может выгрузить часть своих данных
@@ -14,6 +14,6 @@ namespace Shared.Pooling
         /// Вызывается при изъятии объекта из пула. Объект подготавливается к использованию.
         /// </summary>
         /// <param name="pool"> Пул владелец </param>
-        void Restored(IPoolSink<TObject> pool);
+        void Restored(IPoolSink<TResource> pool);
     }
 }

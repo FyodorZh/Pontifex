@@ -14,7 +14,7 @@ namespace Shared.Buffer
 
         public ConcurrentUsageMemoryBufferPool(IConcurrentUnorderedCollection<IMemoryBuffer> storage, ILogger logger)
         {
-            mPool = new ConcurrentPool<IMemoryBuffer>(MemoryBufferConstructor.Instance, storage);
+            mPool = new ConcurrentDelegatePool<IMemoryBuffer>(MemoryBufferConstructor.Instance.Construct, storage);
             mLogger = logger;
         }
 

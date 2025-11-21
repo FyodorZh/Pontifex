@@ -71,7 +71,7 @@ namespace Transport.Protocols.Reliable.Delivery
         private readonly int mCapacity;
 
         private readonly PriorityQueue<DateTime, DeliveryTask> mDeliveryQueue = new PriorityQueue<DateTime, DeliveryTask>();
-        private readonly IPool<DeliveryTask> mDeliveryTasksPool = new Pool<DeliveryTask>(DefaultConstructor<DeliveryTask>.Instance);
+        private readonly IPool<DeliveryTask> mDeliveryTasksPool = new DefaultPool<DeliveryTask>();
 
         private readonly HashSet<DeliveryInfo> mUnfinishedDeliveries = new HashSet<DeliveryInfo>();
         private readonly Dictionary<DeliveryId, int> mUnfinishedLogicDeliveries = new Dictionary<DeliveryId, int>();

@@ -3,12 +3,12 @@ using Actuarius.Memory;
 namespace Shared.Pooling
 {
     public class CollectableObjectPool<TObject> : IPool<TObject>
-        where TObject : class, INewCollectable<TObject>
+        where TObject : class, ICollectable<TObject>
     {
         private readonly IPool<TObject> mPool;
 
         public CollectableObjectPool(IConstructor<TObject> ctor)
-            : this(new Pool<TObject>(ctor))
+            : this(new DelegatePool<TObject>(ctor.Construct))
         {
         }
 

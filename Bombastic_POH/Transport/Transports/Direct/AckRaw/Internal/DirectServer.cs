@@ -12,7 +12,7 @@ namespace Transport.Transports.Direct
         private readonly IEndPoint mServerEp;
         private readonly Func<UnionDataList, IServerDirectCtl> mOnConnecting;
 
-        private readonly IConcurrentMap<IEndPoint, DirectTransport> mConnectedClients = new TrivialConcurrentDictionary<IEndPoint, DirectTransport>();
+        private readonly IConcurrentMap<IEndPoint, DirectTransport> mConnectedClients = new SynchronizedConcurrentDictionary<IEndPoint, DirectTransport>();
 
         public DirectServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl> onConnecting)
         {

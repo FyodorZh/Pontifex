@@ -2,7 +2,7 @@ using Actuarius.Memory;
 
 namespace Shared.Pooling
 {
-    public abstract class MultiRefCollectable<TSelf> : MultiRefResource, INewCollectable<TSelf>
+    public abstract class MultiRefCollectable<TSelf> : MultiRefResource, ICollectable<TSelf>
         where TSelf : MultiRefCollectable<TSelf>
     {
         private IPoolSink<TSelf> mOwner;
@@ -20,14 +20,14 @@ namespace Shared.Pooling
             mOwner.Release((TSelf)this); // Чтобы убрать этот каст надо использовать ко и контрвариантность
         }
 
-        bool INewCollectable<TSelf>.Collected()
+        bool ICollectable<TSelf>.Collected()
         {
             OnCollected();
             mOwner = null;
             return true;
         }
 
-        void INewCollectable<TSelf>.Restored(IPoolSink<TSelf> pool)
+        void ICollectable<TSelf>.Restored(IPoolSink<TSelf> pool)
         {
             mOwner = pool;
             Revive();

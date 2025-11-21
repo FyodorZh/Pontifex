@@ -7,7 +7,7 @@ namespace Shared.Pooling
     {
         public new static readonly IPool<TObject> Instance = new ThreadStaticPool<TObject>();
 
-        private readonly Pool<TObject> mPool = new Pool<TObject>(DefaultConstructor<TObject>.Instance);
+        private readonly DefaultPool<TObject> mPool = new DefaultPool<TObject>();
 
         public static TObject Acquire()
         {

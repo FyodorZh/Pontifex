@@ -11,7 +11,7 @@ namespace Transport.Transports.Direct
     {
         public static readonly DirectTransportManager Instance = new DirectTransportManager();
 
-        private readonly IConcurrentMap<IEndPoint, DirectServer> mServers = new TrivialConcurrentDictionary<IEndPoint, DirectServer>();
+        private readonly IConcurrentMap<IEndPoint, DirectServer> mServers = new SynchronizedConcurrentDictionary<IEndPoint, DirectServer>();
 
         public DirectServer StartServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl> onConnecting)
         {
