@@ -185,10 +185,6 @@
       <Project>{d4232029-5946-4ae0-b257-0d8b27c79879}</Project>
       <Name>UnityUtils.Memory</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Utils.Good\Utils.Good.csproj">
-      <Project>{a8b3d1f3-9dd3-45c3-95f1-02418cf45435}</Project>
-      <Name>Utils.Good</Name>
-    </ProjectReference>
     <ProjectReference Include="..\Utils\Utils.csproj">
       <Project>{6bc7af0d-f2f1-4330-b869-c1da69f980f1}</Project>
       <Name>Utils</Name>

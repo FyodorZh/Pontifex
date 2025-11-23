@@ -3,14 +3,6 @@ using Actuarius.Memory;
 
 namespace Shared
 {
-    /// <summary>
-    /// Абстрактное тредобезопасное хранилище последовательности байт с контролем владения.
-    /// Обещает быть иммутабельной!!!
-    /// </summary>
-    public interface IMultiRefByteArray : IReadOnlyBytes, IMultiRefResource
-    {
-    }
-
     public static class Ext_IMultiRefByteArray
     {
         public static MultiRefByteArrayOwner<TArray> Own<TArray>(this TArray array)

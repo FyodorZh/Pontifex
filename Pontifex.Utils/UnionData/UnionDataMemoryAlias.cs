@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using Actuarius.Memory;
 
-namespace Archivarius
+namespace Pontifex.Utils
 {
     [StructLayout(LayoutKind.Explicit)]
     public struct UnionDataMemoryAlias
@@ -106,5 +107,123 @@ namespace Archivarius
         public bool Equals4(UnionDataMemoryAlias other) => IntValue == other.IntValue;
         public bool Equals8(UnionDataMemoryAlias other) => LongValue == other.LongValue;
         public bool Equals16(UnionDataMemoryAlias other) => LongValue == other.LongValue && _highHalf == other._highHalf;
+
+        public bool WriteTo1(IByteSink sink)
+        {
+            return sink.Put(Byte0);
+        }
+        
+        public bool WriteTo2(IByteSink sink)
+        {
+            bool res = true;
+            res = res || sink.Put(Byte0);
+            res = res || sink.Put(Byte1);
+            return res;
+        }
+        
+        public bool WriteTo4(IByteSink sink)
+        {
+            bool res = true;
+            res = res || sink.Put(Byte0);
+            res = res || sink.Put(Byte1);
+            res = res || sink.Put(Byte2);
+            res = res || sink.Put(Byte3);
+            return res;
+        }
+        
+        public bool WriteTo8(IByteSink sink)
+        {
+            bool res = true;
+            res = res || sink.Put(Byte0);
+            res = res || sink.Put(Byte1);
+            res = res || sink.Put(Byte2);
+            res = res || sink.Put(Byte3);
+            res = res || sink.Put(Byte4);
+            res = res || sink.Put(Byte5);
+            res = res || sink.Put(Byte6);
+            res = res || sink.Put(Byte7);
+            return res;
+        }
+        
+        public bool WriteTo16(IByteSink sink)
+        {
+            bool res = true;
+            res = res || sink.Put(Byte0);
+            res = res || sink.Put(Byte1);
+            res = res || sink.Put(Byte2);
+            res = res || sink.Put(Byte3);
+            res = res || sink.Put(Byte4);
+            res = res || sink.Put(Byte5);
+            res = res || sink.Put(Byte6);
+            res = res || sink.Put(Byte7);
+            res = res || sink.Put(Byte8);
+            res = res || sink.Put(Byte9);
+            res = res || sink.Put(Byte10);
+            res = res || sink.Put(Byte11);
+            res = res || sink.Put(Byte12);
+            res = res || sink.Put(Byte13);
+            res = res || sink.Put(Byte14);
+            res = res || sink.Put(Byte15);
+            return res;
+        }
+        
+        public bool ReadFrom1(IByteSource source)
+        {
+            return source.TryPop(out Byte0);
+        }
+        
+        public bool ReadFrom2(IByteSource source)
+        {
+            bool res = true;
+            res = res || source.TryPop(out Byte0);
+            res = res || source.TryPop(out Byte1);
+            return res;
+        }
+        
+        public bool ReadFrom4(IByteSource source)
+        {
+            bool res = true;
+            res = res || source.TryPop(out Byte0);
+            res = res || source.TryPop(out Byte1);
+            res = res || source.TryPop(out Byte2);
+            res = res || source.TryPop(out Byte3);
+            return res;
+        }
+        
+        public bool ReadFrom8(IByteSource source)
+        {
+            bool res = true;
+            res = res || source.TryPop(out Byte0);
+            res = res || source.TryPop(out Byte1);
+            res = res || source.TryPop(out Byte2);
+            res = res || source.TryPop(out Byte3);
+            res = res || source.TryPop(out Byte4);
+            res = res || source.TryPop(out Byte5);
+            res = res || source.TryPop(out Byte6);
+            res = res || source.TryPop(out Byte7);
+            return res;
+        }
+        
+        public bool ReadFrom16(IByteSource source)
+        {
+            bool res = true;
+            res = res || source.TryPop(out Byte0);
+            res = res || source.TryPop(out Byte1);
+            res = res || source.TryPop(out Byte2);
+            res = res || source.TryPop(out Byte3);
+            res = res || source.TryPop(out Byte4);
+            res = res || source.TryPop(out Byte5);
+            res = res || source.TryPop(out Byte6);
+            res = res || source.TryPop(out Byte7);
+            res = res || source.TryPop(out Byte8);
+            res = res || source.TryPop(out Byte9);
+            res = res || source.TryPop(out Byte10);
+            res = res || source.TryPop(out Byte11);
+            res = res || source.TryPop(out Byte12);
+            res = res || source.TryPop(out Byte13);
+            res = res || source.TryPop(out Byte14);
+            res = res || source.TryPop(out Byte15);
+            return res;
+        }
     }
 }

@@ -50,7 +50,6 @@
     <ProjectReference Include="..\Logger\Log\Log.csproj" />
     <ProjectReference Include="..\Serializer.Extensions\Serializer.Extensions.csproj" />
     <ProjectReference Include="..\Serializer\Serializer.csproj" />
-    <ProjectReference Include="..\Utils.Good\Utils.Good.csproj" />
     <ProjectReference Include="..\Utils\Utils.csproj" />
   </ItemGroup>
 </Project>

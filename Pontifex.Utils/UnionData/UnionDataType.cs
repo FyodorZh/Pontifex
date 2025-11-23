@@ -1,4 +1,4 @@
-﻿namespace Archivarius
+﻿namespace Pontifex.Utils
 {
     public enum UnionDataType : byte
     {
@@ -15,8 +15,7 @@
         Float,
         Double,
         Decimal,
-        String,
         Array,
-        DataStruct
+        NullArray,
     }
 }

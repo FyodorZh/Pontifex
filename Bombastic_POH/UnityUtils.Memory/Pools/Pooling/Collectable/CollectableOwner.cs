@@ -50,12 +50,7 @@ namespace Shared.Pooling
             // DO NOTHING
         }
 
-        public ReleasableResourceAccessor<TObject> GetAccessor()
-        {
-            return new ReleasableResourceAccessor<TObject>(mValue, this.Acquire());
-        }
-
-        public TObject ShowUnsafe()
+        public TObject ShowResourceUnsafe()
         {
             return Resource;
         }

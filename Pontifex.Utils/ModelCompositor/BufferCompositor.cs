@@ -1,16 +1,19 @@
 ﻿using System;
+using Actuarius.Memory;
 
-namespace Archivarius.Tools
+namespace Pontifex.Utils
 {
-    public class BufferCompositor
+    public class BufferCompositor : IDisposable
     {
+        private readonly IPool<IMultiRefByteArray, int> _arrayPool;
+        
         private readonly int _maxPacketSize;
         private readonly BufferProcessorDelegate _bufferProcessor;
         
         private UnionDataMemoryAlias _packetSize = 0;
-        private byte[] _packetData = Array.Empty<byte>();
+        private IMultiRefByteArray? _packetData;
         
-        private int _copiedCount = 0;
+        private int _copiedCount;
 
         private Stage _stage = Stage.FillSize;
 
@@ -21,13 +24,20 @@ namespace Archivarius.Tools
             FillBuffer
         }
 
-        public delegate void BufferProcessorDelegate(byte[] bytes, int count);
+        public delegate void BufferProcessorDelegate(IMultiRefByteArray bytes);
 
-        public BufferCompositor(BufferProcessorDelegate bufferProcessor, int maxPacketSize = 1024 * 1024)
+        public BufferCompositor(BufferProcessorDelegate bufferProcessor, IConcurrentPool<IMultiRefByteArray, int> arrayPool, int maxPacketSize = 1024 * 1024)
         {
+            _arrayPool = arrayPool;
             _maxPacketSize = maxPacketSize;
             _bufferProcessor =  bufferProcessor;
-        }   
+        }
+
+        public void Dispose()
+        {
+            _packetData?.Release();
+            _packetData = null!;
+        }
         
         public void PushData(byte[] bytes, int start, int count)
         {
@@ -59,10 +69,8 @@ namespace Archivarius.Tools
                         {
                             throw new Exception($"ModelCompositor: packet size is too large ({_packetSize.IntValue})");
                         }
-                        if (_packetData.Length < _packetSize.IntValue)
-                        {
-                            _packetData = new byte[_packetSize.IntValue * 2];
-                        }
+                        
+                        _packetData = _arrayPool.Acquire(_packetSize.IntValue);
                         _copiedCount = 0;
                         _stage = Stage.FillBuffer;
                         break;
@@ -72,7 +80,10 @@ namespace Archivarius.Tools
                         int bytesToCopy = Math.Min(_packetSize.IntValue - _copiedCount, count);
                         if (bytesToCopy > 0)
                         {
-                            Buffer.BlockCopy(bytes, start, _packetData, _copiedCount, bytesToCopy);
+                            if (!_packetData?.CopyFrom(bytes, start, _copiedCount, bytesToCopy) ?? false)
+                            {
+                                throw new Exception();
+                            }
                             _copiedCount += bytesToCopy;
                             count -= bytesToCopy;
                             start += bytesToCopy;
@@ -82,11 +93,12 @@ namespace Archivarius.Tools
                         {
                             try
                             {
-                                _bufferProcessor(_packetData, _copiedCount);
+                                _bufferProcessor(_packetData!);
                             }
                             finally
                             {
                                 _copiedCount = 0;
+                                _packetData = null;
                                 _stage = Stage.FillSize;
                             }
                             break;

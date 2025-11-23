@@ -1,124 +1,109 @@
 ﻿using System;
 using System.Globalization;
-using System.Linq;
+using Actuarius.Collections;
+using Actuarius.Memory;
 
-namespace Archivarius
+namespace Pontifex.Utils
 {
-    public struct UnionData : IDataStruct, IEquatable<UnionData>
+    public struct UnionData : IEquatable<UnionData>
     {
         private UnionDataType _type;
         private UnionDataMemoryAlias _alias;
-        private object? _object;
+        private IMultiRefByteArray? _bytes;
         
         public UnionDataType Type => _type;
         public UnionDataMemoryAlias Alias => _alias;
-        public string? Text => _object as string;
-        public byte[]? Bytes => _object as byte[];
-        public IDataStruct? DataStruct => _object as IDataStruct;
+        public IMultiRefByteArray? Bytes => _bytes;
         
         public UnionData(bool value) 
         {
             _type = UnionDataType.Bool;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
         
         public UnionData(byte value)
         {
             _type = UnionDataType.Byte;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
 
         public UnionData(Char value)
         {
             _type = UnionDataType.Char;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
 
         public UnionData(short value)
         {
             _type = UnionDataType.Short;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
         
         public UnionData(ushort value)
         {
             _type = UnionDataType.UShort;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
 
         public UnionData(int value)
         {
             _type = UnionDataType.Int;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
         
         public UnionData(uint value)
         {
             _type = UnionDataType.UInt;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
 
         public UnionData(long value)
         {
             _type = UnionDataType.Long;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
         
         public UnionData(ulong value)
         {
             _type = UnionDataType.ULong;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
 
         public UnionData(float value)
         {
             _type = UnionDataType.Float;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
 
         public UnionData(double value)
         {
             _type = UnionDataType.Double;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
         
         public UnionData(decimal value)
         {
             _type = UnionDataType.Decimal;
             _alias = value;
-            _object = null;
+            _bytes = null;
         }
 
-        public UnionData(string? value)
+        public UnionData(IMultiRefByteArray? value)
         {
-            _type = UnionDataType.String;
+            _type = value != null ? UnionDataType.Array : UnionDataType.NullArray;
             _alias = 0;
-            _object = value;
-        }
-        
-        public UnionData(byte[]? value)
-        {
-            _type = UnionDataType.Array;
-            _alias = 0;
-            _object = value;
-        }
-        
-        public UnionData(IDataStruct? value)
-        {
-            _type = UnionDataType.DataStruct;
-            _alias = 0;
-            _object = value;
+            _bytes = value;
         }
         
         public static implicit operator UnionData(bool value)
@@ -169,152 +154,14 @@ namespace Archivarius
         {
             return new UnionData(value);
         }
-        public static implicit operator UnionData(string? value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(byte[]? value)
-        {
-            return new UnionData(value);
-        }
-
-        private void WriteTo(ILowLevelWriter writer)
-        {
-            switch (_type)
-            {
-                case UnionDataType.Bool:
-                    writer.WriteBool(_alias.BoolValue);
-                    break;
-                case UnionDataType.Byte:
-                    writer.WriteByte(_alias.ByteValue);
-                    break;
-                case UnionDataType.Char:
-                    writer.WriteChar(_alias.CharValue);
-                    break;
-                case UnionDataType.Short:
-                    writer.WriteShort(_alias.ShortValue);
-                    break;
-                case UnionDataType.UShort:
-                    writer.WriteUShort(_alias.UShortValue);
-                    break;
-                case UnionDataType.Int:
-                    writer.WriteInt(_alias.IntValue);
-                    break;
-                case UnionDataType.UInt:
-                    writer.WriteUInt(_alias.UIntValue);
-                    break;
-                case UnionDataType.Long:
-                    writer.WriteLong(_alias.LongValue);
-                    break;
-                case UnionDataType.ULong:
-                    writer.WriteULong(_alias.ULongValue);
-                    break;
-                case UnionDataType.Float:
-                    writer.WriteFloat(_alias.FloatValue);
-                    break;
-                case UnionDataType.Double:
-                    writer.WriteDouble(_alias.DoubleValue);
-                    break;
-                case UnionDataType.Decimal:
-                    writer.WriteDecimal(_alias.DecimalValue);
-                    break;
-                case UnionDataType.String:
-                    writer.WriteString(Text);
-                    break;
-                case UnionDataType.Array:
-                    writer.WriteBytes(Bytes);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-        }
-
-        private void ReadFrom(UnionDataType type, ILowLevelReader reader)
-        {
-            switch (type)
-            {
-                case UnionDataType.Bool:
-                    this = new UnionData(reader.ReadBool());
-                    break;
-                case UnionDataType.Byte:
-                    this = new UnionData(reader.ReadByte());
-                    return;
-                case UnionDataType.Char:
-                    this = new UnionData(reader.ReadChar());
-                    return;
-                case UnionDataType.Short:
-                    this = new UnionData(reader.ReadShort());
-                    return;
-                case UnionDataType.UShort:
-                    this = new UnionData(reader.ReadUShort());
-                    return;
-                case UnionDataType.Int:
-                    this = new UnionData(reader.ReadInt());
-                    return;
-                case UnionDataType.UInt:
-                    this = new UnionData(reader.ReadUInt());
-                    return;
-                case UnionDataType.Long:
-                    this = new UnionData(reader.ReadLong());
-                    return;
-                case UnionDataType.ULong:
-                    this = new UnionData(reader.ReadULong());
-                    return;
-                case UnionDataType.Float:
-                    this = new UnionData(reader.ReadFloat());
-                    return;
-                case UnionDataType.Double:
-                    this = new UnionData(reader.ReadDouble());
-                    return;
-                case UnionDataType.Decimal:
-                    this = new UnionData(reader.ReadDecimal());
-                    return;
-                case UnionDataType.String:
-                    this = new UnionData(reader.ReadString());
-                    return;
-                case UnionDataType.Array:
-                    this = new UnionData(reader.ReadBytes());
-                    return;
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-        }
-        
-        public void Serialize(ISerializer serializer)
-        {
-            if (serializer.IsWriter)
-            {
-                serializer.Writer.WriteByte((byte)_type);
-                if (_type == UnionDataType.DataStruct)
-                {
-                    IDataStruct? dataStruct = _object as IDataStruct;
-                    serializer.AddClass(ref dataStruct);
-                }
-                else
-                {
-                    WriteTo(serializer.Writer);
-                }
-            }
-            else
-            {
-                var reader = serializer.Reader;
-                UnionDataType type = (UnionDataType)reader.ReadByte();
-                if (type == UnionDataType.DataStruct)
-                {
-                    IDataStruct? dataStruct = null;
-                    serializer.AddClass(ref dataStruct);
-                    _object = dataStruct;
-                    _type = type;
-                }
-                else
-                {
-                    ReadFrom(type, reader);    
-                }
-            }
-        }
         
         public bool Equals(UnionData other)
         {
+            if (_type != other._type)
+            {
+                return false;
+            }
+            
             switch (_type)
             {
                 case UnionDataType.Bool:
@@ -334,29 +181,156 @@ namespace Archivarius
                     return _alias.Equals8(other._alias);
                 case UnionDataType.Decimal: 
                     return _alias.Equals16(other._alias);
-                case UnionDataType.String:
-                    return Text == other.Text;
                 case UnionDataType.Array:
-                {
-                    if ((Bytes == null) != (other.Bytes == null))
-                    {
-                        return false;
-                    }
-                    if (Bytes == null)
-                    {
-                        return true;
-                    }
-                    return Bytes.SequenceEqual(other.Bytes!);
-                }
-                case UnionDataType.DataStruct:
-                {
-                    if (ReferenceEquals(DataStruct, other.DataStruct)) 
-                        return true;
-                    throw new InvalidOperationException("IDataStruct comparison not supported");
-                }
+                    return Bytes.EqualByContent(other.Bytes!);
+                case UnionDataType.NullArray:
+                    return true;
                 default: 
                     return false;
             }
+        }
+        
+        public int GetDataSize()
+        {
+            switch (_type)
+            {
+                case UnionDataType.Bool:
+                case UnionDataType.Byte:
+                    return 1 + 1;
+                case UnionDataType.Char:
+                case UnionDataType.Short:
+                case UnionDataType.UShort:
+                    return 1 + 2;
+                case UnionDataType.Int:
+                case UnionDataType.UInt:
+                case UnionDataType.Float:
+                    return 1 + 4;
+                case UnionDataType.Long:
+                case UnionDataType.ULong:
+                case UnionDataType.Double:
+                    return 1 + 8;
+                case UnionDataType.Decimal:
+                    return 1 + 16;
+                case UnionDataType.Array:
+                    return 1 + 4 + Bytes!.Count;
+                case UnionDataType.NullArray:
+                    return 0;
+                default:
+                    throw new InvalidOperationException();
+            }
+        }
+        
+        public void WriteTo(IByteSink byteSink)
+        {
+            byteSink.Put((byte)_type);
+            switch (_type)
+            {
+                case UnionDataType.Bool:
+                case UnionDataType.Byte:
+                    byteSink.Put(_alias.Byte0);
+                    return;
+                case UnionDataType.Char:
+                case UnionDataType.Short:
+                case UnionDataType.UShort:
+                    _alias.WriteTo2(byteSink);
+                    return;
+                case UnionDataType.Int:
+                case UnionDataType.UInt:
+                case UnionDataType.Float:
+                    _alias.WriteTo4(byteSink);
+                    return;
+                case UnionDataType.Long:
+                case UnionDataType.ULong:
+                case UnionDataType.Double:
+                    _alias.WriteTo8(byteSink);
+                    return;
+                case UnionDataType.Decimal:
+                    _alias.WriteTo16(byteSink);
+                    return;
+                case UnionDataType.Array:
+                    byteSink.PutMany(_bytes!.ShowResourceUnsafe());                    
+                    return;
+                case UnionDataType.NullArray:
+                    return;
+                default:
+                    throw new InvalidOperationException();
+            }
+        }
+
+        public static bool ReadFrom(IByteSource bytes, IPool<IMultiRefByteArray, int> pool, out UnionData unionData)
+        {
+            unionData = new UnionData();
+            if (!bytes.TryPop(out var typeByte))
+                return false;
+            unionData._type = (UnionDataType)typeByte;
+            UnionDataMemoryAlias alias = new();
+            switch (unionData._type)
+            {
+                case UnionDataType.Bool:
+                case UnionDataType.Byte:
+                    if (alias.ReadFrom1(bytes))
+                    {
+                        unionData._alias = alias;
+                        return true;
+                    }
+                    return false;
+                case UnionDataType.Char:
+                case UnionDataType.Short:
+                case UnionDataType.UShort:
+                    if (alias.ReadFrom2(bytes))
+                    {
+                        unionData._alias = alias;
+                        return true;
+                    }
+                    return false;
+                case UnionDataType.Int:
+                case UnionDataType.UInt:
+                case UnionDataType.Float:
+                    if (alias.ReadFrom4(bytes))
+                    {
+                        unionData._alias = alias;
+                        return true;
+                    }
+                    return false;
+                case UnionDataType.Long:
+                case UnionDataType.ULong:
+                case UnionDataType.Double:
+                    if (alias.ReadFrom8(bytes))
+                    {
+                        unionData._alias = alias;
+                        return true;
+                    }
+                    return false;
+                case UnionDataType.Decimal:
+                    if (alias.ReadFrom16(bytes))
+                    {
+                        unionData._alias = alias;
+                        return true;
+                    }
+                    return false;
+                case UnionDataType.Array:
+                {
+                    UnionDataMemoryAlias size = new();
+                    if (!size.ReadFrom4(bytes))
+                    {
+                        return false;
+                    }
+
+                    var buffer = pool.Acquire(size.IntValue);
+                    if (!bytes.TakeMany(buffer))
+                    {
+                        return false;
+                    }
+
+                    unionData._bytes = buffer;
+                    return true;
+                }
+                case UnionDataType.NullArray:
+                    return true;
+                default:
+                    return false;
+            }
+            
         }
         
         public string ValueToString()
@@ -372,9 +346,8 @@ namespace Archivarius
                 case UnionDataType.Float: return _alias.FloatValue.ToString(CultureInfo.InvariantCulture);
                 case UnionDataType.Double: return _alias.DoubleValue.ToString(CultureInfo.InvariantCulture);
                 case UnionDataType.Decimal: return _alias.DecimalValue.ToString(CultureInfo.InvariantCulture);
-                case UnionDataType.String: return Text ?? "null";
-                case UnionDataType.Array: return Bytes != null ? ("[" + string.Join(",", Bytes) + "]") : "null";
-                case UnionDataType.DataStruct: return _object?.GetType().FullName ?? "null";
+                case UnionDataType.Array: return Bytes != null ? ("[" + string.Join(",", Bytes.Enumerate()) + "]") : "null";
+                case UnionDataType.NullArray: return "null";
                 default: return "INVALID";
             }
         }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using Actuarius.Collections;
 using Shared;
 using Shared.Utils;
 using Transport.Abstractions;
