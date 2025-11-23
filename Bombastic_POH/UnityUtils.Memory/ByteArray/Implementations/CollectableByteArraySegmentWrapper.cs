@@ -7,7 +7,7 @@ namespace Shared
     /// Специализация CollectableAbstractByteArraySegment на случай ByteArraySegment структуры.
     /// Контроль владения. Автоматическое владение.
     /// </summary>
-    public sealed class CollectableByteArraySegmentWrapper: MultiRefCollectable<CollectableByteArraySegmentWrapper>, IMultiRefLowLevelByteArray
+    public sealed class CollectableByteArraySegmentWrapper: MultiRefCollectableResource<CollectableByteArraySegmentWrapper>, IMultiRefLowLevelByteArray
     {
         private ByteArraySegment mArray;
 

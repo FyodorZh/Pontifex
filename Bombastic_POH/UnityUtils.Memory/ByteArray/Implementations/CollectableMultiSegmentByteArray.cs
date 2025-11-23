@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
+using Actuarius.Memory;
 using Shared.Pooling;
 
 namespace Shared
 {
-    public class CollectableMultiSegmentByteArray: MultiRefCollectable<CollectableMultiSegmentByteArray>, IMultiRefByteArray
+    public class CollectableMultiSegmentByteArray: MultiRefCollectableResource<CollectableMultiSegmentByteArray>, IMultiRefByteArray
     {
         private readonly List<IMultiRefByteArray> mArrays = new List<IMultiRefByteArray>();
         private int mSize;

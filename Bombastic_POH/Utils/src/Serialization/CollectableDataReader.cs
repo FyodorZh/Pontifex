@@ -1,10 +1,11 @@
+using Actuarius.Memory;
 using Serializer.BinarySerializer;
 using Serializer.Factory;
 using Shared.Pooling;
 
 namespace Shared
 {
-    public class CollectableDataReader : MultiRefCollectable<CollectableDataReader>
+    public class CollectableDataReader : MultiRefCollectableResource<CollectableDataReader>
     {
         private readonly DataReader<ManagedReader> mReader;
         private IMultiRefLowLevelByteArray mBytes;

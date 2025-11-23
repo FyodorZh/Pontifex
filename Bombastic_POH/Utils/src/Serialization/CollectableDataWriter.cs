@@ -6,7 +6,7 @@ using Shared.Serialization;
 
 namespace Shared
 {
-    public class CollectableDataWriter : MultiRefCollectable<CollectableDataWriter>, IReadOnlyBytes
+    public class CollectableDataWriter : MultiRefCollectableResource<CollectableDataWriter>, IReadOnlyBytes
     {
         private readonly DataWriter<ManagedWriter<AllocatorFromPool>> mWriter;
 

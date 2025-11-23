@@ -9,14 +9,14 @@ namespace Shared
         public static readonly IConcurrentPool<ByteArraySegment, int> ByteArraySegments = new ByteArraySegmentConcurrentPool(Pow2ByteArrays);
 
         private static class CollectablePoolSingleton<TObject>
-            where TObject : class, ICollectable<TObject>, IReleasableResource, new()
+            where TObject : class, ICollectableResource<TObject>, IReleasableResource, new()
         {
             public static readonly IConcurrentPool<TObject> Instance =
                 new CollectableObjectConcurrentPool<TObject>(new SmallObjectBufferedPool<TObject>(DefaultConstructor<TObject>.Instance));
         }
 
         public static TObject Acquire<TObject>()
-            where TObject : class, ICollectable<TObject>, IReleasableResource, new()
+            where TObject : class, ICollectableResource<TObject>, IReleasableResource, new()
         {
             return CollectablePoolSingleton<TObject>.Instance.Acquire();
         }

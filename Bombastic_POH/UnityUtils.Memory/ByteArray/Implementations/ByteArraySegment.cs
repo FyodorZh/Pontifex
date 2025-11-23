@@ -39,7 +39,8 @@ namespace Shared
 
         public byte this[int id]
         {
-            get { return mArray[mOffset + id]; }
+            get => mArray[mOffset + id];
+            set => mArray[mOffset + id] = value;
         }
 
         public byte[] ReadOnlyArray
@@ -101,6 +102,11 @@ namespace Shared
 
             count = System.Math.Min(count, mCount - offset);
             return new ByteArraySegment(mArray, mOffset + offset, count);
+        }
+
+        public IByteArray ShowResourceUnsafe()
+        {
+            return this;
         }
 
         public override bool Equals(object obj)
@@ -263,5 +269,7 @@ namespace Shared
         {
             // DO NOTHING
         }
+
+        public byte[] Array => mArray;
     }
 }

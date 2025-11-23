@@ -13,7 +13,7 @@ namespace Transport.Protocols.Reliable.Delivery
         IMultiRefByteArray Data { get; }
     }
 
-    internal abstract class UserMessage<TSelf> : MultiRefCollectable<TSelf>, IUserMessage
+    internal abstract class UserMessage<TSelf> : MultiRefCollectableResource<TSelf>, IUserMessage
         where TSelf : UserMessage<TSelf>
     {
         private DeliveryId mId;

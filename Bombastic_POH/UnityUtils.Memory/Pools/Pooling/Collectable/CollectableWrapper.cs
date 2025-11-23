@@ -2,7 +2,7 @@ using Actuarius.Memory;
 
 namespace Shared.Pooling
 {
-    public sealed class CollectableWrapper<TObject> : MultiRefCollectable<CollectableWrapper<TObject>>, IMultiRefResourceOwner<TObject>
+    public sealed class CollectableWrapper<TObject> : MultiRefCollectableResource<CollectableWrapper<TObject>>, IMultiRefResourceOwner<TObject>
         where TObject : class
     {
         private TObject mValue;

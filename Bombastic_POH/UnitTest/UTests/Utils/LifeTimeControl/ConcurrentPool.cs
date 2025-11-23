@@ -11,7 +11,7 @@ namespace TransportAnalyzer.UTests
     [TestFixture]
     public class ConcurrentPool
     {
-        private class Collectable : MultiRefCollectable<Collectable>
+        private class Collectable : MultiRefCollectableResource<Collectable>
         {
             private volatile int mState = 1;
 

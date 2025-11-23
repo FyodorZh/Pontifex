@@ -4,7 +4,7 @@ using Actuarius.Memory;
 namespace Shared.Pooling
 {
     public class CollectableObjectConcurrentPool<TObject> : CollectableObjectPool<TObject>, IConcurrentPool<TObject>
-        where TObject : class, ICollectable<TObject>, new()
+        where TObject : class, ICollectableResource<TObject>, new()
     {
         public CollectableObjectConcurrentPool(int chunkCapacity)
             : base(new DefaultConcurrentPool<TObject>(new QueueBasedConcurrentUnorderedCollection<TObject>(chunkCapacity)))

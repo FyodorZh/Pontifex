@@ -4,7 +4,7 @@ using Actuarius.Memory;
 
 namespace Shared.Pooling
 {
-    public sealed class CollectableMacroOwner<TObject> : MultiRefCollectable<CollectableMacroOwner<TObject>>, IMacroOwner<TObject>, IConsumer<TObject>
+    public sealed class CollectableMacroOwner<TObject> : MultiRefCollectableResource<CollectableMacroOwner<TObject>>, IMacroOwner<TObject>, IConsumer<TObject>
         where TObject : IReleasableResource
     {
         private readonly List<TObject> mObjects = new List<TObject>();

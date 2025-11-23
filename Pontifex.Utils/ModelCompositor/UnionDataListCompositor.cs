@@ -5,13 +5,16 @@ namespace Pontifex.Utils
 {
     public class UnionDataListCompositor : IDisposable
     {
-        private readonly IConcurrentPool<IMultiRefByteArray, int> _pool;
+        private readonly ICollectablePool _collectablePool;
+        private readonly IConcurrentPool<IMultiRefByteArray, int> _bytesPool;
         private readonly BufferCompositor  _bufferCompositor;
         private readonly Action<UnionDataList?> _processor;
 
-        public UnionDataListCompositor(Action<UnionDataList?> processor, IConcurrentPool<IMultiRefByteArray, int> pool, int maxPacketSize = 1024 * 1024)
+        public UnionDataListCompositor(Action<UnionDataList?> processor, ICollectablePool collectablePool, IConcurrentPool<IMultiRefByteArray, int> bytesPool, int maxPacketSize = 1024 * 1024)
         {
-            _bufferCompositor = new BufferCompositor(BufferProcessor, pool, maxPacketSize);
+            _collectablePool = collectablePool;
+            _bytesPool = bytesPool;
+            _bufferCompositor = new BufferCompositor(BufferProcessor, bytesPool, maxPacketSize);
             _processor = processor;
         }
         
@@ -24,7 +27,7 @@ namespace Pontifex.Utils
         {
             try
             {
-                var buffer = data.Serialize(_pool);
+                var buffer = data.Serialize(_collectablePool, _bytesPool);
                 return buffer;
 
             }
@@ -36,13 +39,16 @@ namespace Pontifex.Utils
 
         private void BufferProcessor(IMultiRefByteArray buffer)
         {
+            var source = _collectablePool.Acquire<ByteSourceFromArray>();
             try
             {
                 UnionDataList list = new UnionDataList();
-                list.Deserialize(new ByteSourceFromArray(buffer, 0), _pool);
+                source.Reset(buffer, 0);
+                list.Deserialize(source, _bytesPool);
             }
             finally
             {
+                source.Release();
                 buffer.Release();
             }
         }

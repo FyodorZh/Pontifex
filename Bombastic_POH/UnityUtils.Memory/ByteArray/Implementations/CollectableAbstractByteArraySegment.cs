@@ -1,3 +1,4 @@
+using Actuarius.Memory;
 using Shared.Pooling;
 
 namespace Shared
@@ -7,7 +8,7 @@ namespace Shared
     /// Позволяет определить поддиапазон.
     /// Контроль владения и автоматическое пулирование
     /// </summary>
-    public abstract class CollectableAbstractByteArraySegment<T, TByteArray> : MultiRefCollectable<T>, IMultiRefByteArray
+    public abstract class CollectableAbstractByteArraySegment<T, TByteArray> : MultiRefCollectableResource<T>, IMultiRefByteArray
         where TByteArray : class, IMultiRefByteArray
         where T : CollectableAbstractByteArraySegment<T, TByteArray>
     {

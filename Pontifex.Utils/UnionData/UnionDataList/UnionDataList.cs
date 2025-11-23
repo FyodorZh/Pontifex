@@ -35,7 +35,7 @@ namespace Pontifex.Utils
             return _data.TryPop(out value);
         }
 
-        public IMultiRefByteArray Serialize(IPool<IMultiRefByteArray, int> pool)
+        public IMultiRefByteArray Serialize(ICollectablePool collectablePool, IPool<IMultiRefByteArray, int> bytesPool)
         {
             int count = 4;
             foreach (var element in _data.Enumerate())
@@ -43,15 +43,16 @@ namespace Pontifex.Utils
                 count += element.GetDataSize();
             }
 
-            var buffer = pool.Acquire(count);
+            var buffer = bytesPool.Acquire(count);
+            using var sink = collectablePool.Acquire<ByteSinkFromArray>().AsDisposable();
+            sink.Value.Reset(buffer, 0);
 
-            IByteSink sink = new ByteSinkFromArray(buffer, 0);
             UnionDataMemoryAlias alias = count;
-            alias.WriteTo4(sink);
+            alias.WriteTo4(sink.Value);
             
             foreach (var element in _data.Enumerate())
             {
-                element.WriteTo(sink);
+                element.WriteTo(sink.Value);
             }
 
             return buffer;
