@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Shared;
-using Shared.Buffer;
+using Pontifex.Utils;
 using Transport.Abstractions;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Endpoints;

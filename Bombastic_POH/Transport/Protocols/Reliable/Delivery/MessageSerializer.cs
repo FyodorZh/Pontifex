@@ -1,8 +1,5 @@
 ﻿using Actuarius.Memory;
-using Serializer.BinarySerializer;
 using Serializer.Factory;
-using Shared;
-using Shared.Buffer;
 
 namespace Transport.Protocols.Reliable.Delivery
 {

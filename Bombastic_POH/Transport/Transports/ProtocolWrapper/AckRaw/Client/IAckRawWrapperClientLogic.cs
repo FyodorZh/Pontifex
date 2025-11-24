@@ -1,6 +1,5 @@
-﻿using Shared;
+﻿using Pontifex.Utils;
 using Transport.Abstractions;
-using Shared.Buffer;
 
 namespace Transport.Transports.ProtocolWrapper.AckRaw
 {

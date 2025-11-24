@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using Pontifex.Utils;
 using Serializer.BinarySerializer;
 using Serializer.Factory;
 using Shared;

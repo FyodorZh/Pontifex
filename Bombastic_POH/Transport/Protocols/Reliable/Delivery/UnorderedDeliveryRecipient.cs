@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using Actuarius.Memory;
 using Shared;
+using IMultiRefByteArray = Actuarius.Memory.IMultiRefByteArray;
 using TimeSpan = System.TimeSpan;
 
 namespace Transport.Protocols.Reliable.Delivery

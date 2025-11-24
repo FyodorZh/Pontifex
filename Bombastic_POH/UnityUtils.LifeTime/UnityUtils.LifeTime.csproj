@@ -21,4 +21,8 @@
       <ProjectReference Include="..\UnityUtils.Containers\UnityUtils.Containers.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Owner\" />
+    </ItemGroup>
+
 </Project>

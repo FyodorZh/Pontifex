@@ -6,6 +6,7 @@ using Shared;
 using Shared.Pooling;
 using Transport.Abstractions;
 using Transport.Abstractions.Controls;
+using IMultiRefByteArray = Actuarius.Memory.IMultiRefByteArray;
 using TimeSpan = System.TimeSpan;
 
 namespace Transport.Protocols.Reliable.Delivery

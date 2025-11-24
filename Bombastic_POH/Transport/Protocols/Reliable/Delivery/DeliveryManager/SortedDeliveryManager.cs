@@ -1,6 +1,7 @@
 using System;
 using Shared;
 using Transport.Abstractions;
+using IMultiRefByteArray = Actuarius.Memory.IMultiRefByteArray;
 
 namespace Transport.Protocols.Reliable.Delivery
 {

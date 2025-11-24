@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using Actuarius.Collections;
-using Shared.Concurrent;
 
 namespace Shared.Utils
 {

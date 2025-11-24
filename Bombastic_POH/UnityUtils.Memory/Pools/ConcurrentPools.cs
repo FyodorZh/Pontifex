@@ -6,8 +6,8 @@ namespace Shared
     public static class ConcurrentPools
     {
         public static readonly IConcurrentPool<byte[], int> Pow2ByteArrays = new RawByteArrayConcurrentPool(1000);
-        public static readonly IConcurrentPool<ByteArraySegment, int> ByteArraySegments = new ByteArraySegmentConcurrentPool(Pow2ByteArrays);
-
+        public static readonly IConcurrentPool<IMultiRefByteArray, int> ByteArraySegments = new ByteArrayConcurrentPool(Pow2ByteArrays);
+        
         private static class CollectablePoolSingleton<TObject>
             where TObject : class, ICollectableResource<TObject>, IReleasableResource, new()
         {

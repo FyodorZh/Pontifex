@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Serializer.Factory;
-using Shared.Buffer;
 using Shared.Pooling;
 using Transport.Abstractions;
 using Transport.Abstractions.Controls;
+using IMultiRefByteArray = Actuarius.Memory.IMultiRefByteArray;
 
 namespace Transport.Protocols.Reliable.Delivery
 {

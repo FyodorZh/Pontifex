@@ -1,6 +1,4 @@
 ﻿using Actuarius.Collections;
-using Shared;
-using Shared.Buffer;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {

@@ -1,7 +1,7 @@
 using Actuarius.Collections;
+using Pontifex.Utils;
 using Shared;
 using Shared.Buffer;
-using Shared.Concurrent;
 using Transport.Abstractions;
 using Transport.Abstractions.Endpoints;
 using Transport.Abstractions.Endpoints.Client;

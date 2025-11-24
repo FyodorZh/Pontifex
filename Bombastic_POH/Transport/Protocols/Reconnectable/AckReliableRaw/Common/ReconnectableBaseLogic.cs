@@ -1,12 +1,11 @@
 ﻿using System;
 using Actuarius.Collections;
+using Pontifex.Utils;
 using Shared;
 using Shared.Utils;
 using Transport.Abstractions;
 using Transport.Abstractions.Endpoints;
 using Transport.Abstractions.Handlers;
-using Shared.Buffer;
-using Shared.Concurrent;
 using TimeSpan = System.TimeSpan;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
@@ -126,8 +125,8 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         private StopReason mCurrentStopReason = StopReason.Void;
 
         private readonly TinyConcurrentQueue<IIntention> mIntentions = new TinyConcurrentQueue<IIntention>();
-        private readonly Shared.Concurrent.ConcurrentQueueValve<IMemoryBufferHolder> mReceivedMessages;
-        private readonly Shared.Concurrent.ConcurrentQueueValve<IMemoryBufferHolder> mSentMessages;
+        private readonly ConcurrentQueueValve<IMemoryBufferHolder> mReceivedMessages;
+        private readonly ConcurrentQueueValve<IMemoryBufferHolder> mSentMessages;
 
         // Полный доступ из треда IPeriodicLogic
         private volatile State mState = State.BeforeReconnecting;

@@ -1,5 +1,5 @@
-﻿using Shared;
-using Shared.Buffer;
+﻿using Actuarius.Memory;
+using Shared;
 
 namespace Transport.Protocols.Reliable.Delivery
 {

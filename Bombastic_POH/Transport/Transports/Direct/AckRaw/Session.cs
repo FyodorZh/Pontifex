@@ -1,5 +1,4 @@
 using System;
-using Shared.Buffer;
 using Transport.Abstractions.Endpoints.Server;
 using Transport.Abstractions.Handlers.Server;
 using Transport.StopReasons;

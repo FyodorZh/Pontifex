@@ -6,6 +6,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Memory", "Bombast
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Utils", "Pontifex.Utils\Pontifex.Utils.csproj", "{264B635A-DAFC-4040-96B3-8AAA0DE6C3FC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Transport", "Bombastic_POH\Transport\Transport.csproj", "{5445502D-9EBD-4EFF-9507-06A3756AC84C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utils", "Bombastic_POH\Utils\Utils.csproj", "{1FB31187-84D8-4B64-A3D1-A6CC7D836329}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Log", "Bombastic_POH\Logger\Log\Log.csproj", "{DCDA4306-D696-4BD4-9065-8AA2E81964C3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils.Memory", "Bombastic_POH\UnityUtils.Memory\UnityUtils.Memory.csproj", "{FDFA3F82-98E0-40C3-9182-BA9615A006B2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport", "Pontifex.Transport\Pontifex.Transport.csproj", "{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.ConcurrentPrimitives", "Bombastic_POH\Actuarius\Actuarius.ConcurrentPrimitives\Actuarius.ConcurrentPrimitives.csproj", "{1DB15123-83FE-4C1E-A7FC-D0148386D3AE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +36,29 @@ Global
 		{264B635A-DAFC-4040-96B3-8AAA0DE6C3FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{264B635A-DAFC-4040-96B3-8AAA0DE6C3FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{264B635A-DAFC-4040-96B3-8AAA0DE6C3FC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5445502D-9EBD-4EFF-9507-06A3756AC84C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5445502D-9EBD-4EFF-9507-06A3756AC84C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5445502D-9EBD-4EFF-9507-06A3756AC84C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5445502D-9EBD-4EFF-9507-06A3756AC84C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1FB31187-84D8-4B64-A3D1-A6CC7D836329}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1FB31187-84D8-4B64-A3D1-A6CC7D836329}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1FB31187-84D8-4B64-A3D1-A6CC7D836329}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1FB31187-84D8-4B64-A3D1-A6CC7D836329}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DCDA4306-D696-4BD4-9065-8AA2E81964C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DCDA4306-D696-4BD4-9065-8AA2E81964C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DCDA4306-D696-4BD4-9065-8AA2E81964C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DCDA4306-D696-4BD4-9065-8AA2E81964C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FDFA3F82-98E0-40C3-9182-BA9615A006B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FDFA3F82-98E0-40C3-9182-BA9615A006B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FDFA3F82-98E0-40C3-9182-BA9615A006B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FDFA3F82-98E0-40C3-9182-BA9615A006B2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1DB15123-83FE-4C1E-A7FC-D0148386D3AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1DB15123-83FE-4C1E-A7FC-D0148386D3AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1DB15123-83FE-4C1E-A7FC-D0148386D3AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1DB15123-83FE-4C1E-A7FC-D0148386D3AE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

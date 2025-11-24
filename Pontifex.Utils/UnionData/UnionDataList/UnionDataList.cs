@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Actuarius.Collections;
 using Actuarius.Memory;
 
@@ -17,17 +18,21 @@ namespace Pontifex.Utils
         
         protected override void OnReleased()
         {
-            throw new System.NotImplementedException();
+            foreach (var element in _data.Enumerate())
+            {
+                element.Bytes?.Release();
+            }
+            _data.Clear();
         }
 
-        public void PutFirst(UnionData value)
+        public bool PutFirst(UnionData value)
         {
-            _data.PutToHead(value);
+            return _data.PutToHead(value);
         }
 
-        public void PutLast(UnionData value)
+        public bool PutLast(UnionData value)
         {
-            _data.Put(value);
+            return _data.Put(value);
         }
          
         public bool TryGetFirst([MaybeNullWhen(false)] out UnionData value)
@@ -85,10 +90,14 @@ namespace Pontifex.Utils
 
     public static class UnionDataList_Ext
     {
-        // public static bool Check(this UnionDataList data, string value)
-        // {
-        //     return data.TryGetFirst(out var r) && r.Type == UnionDataType.String && r.Text == value;
-        // }
+        public static bool PutFirst(this UnionDataList data, string value)
+        {
+            return data.PutFirst(new UnionData(new MultiRefByteArray(Encoding.UTF8.GetBytes(value))));
+        }
+        public static bool Check(this UnionDataList data, string value)
+        {
+            return data.TryGetFirst(out var r) && r.Type == UnionDataType.Array && Encoding.UTF8.GetString(r.Bytes!.ToArray(null)!) == value;
+        }
 
         public static bool EqualByContent(this UnionDataList d1, UnionDataList d2)
         {

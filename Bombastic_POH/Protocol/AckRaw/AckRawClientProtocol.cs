@@ -8,6 +8,7 @@ using Transport.Abstractions.Handlers;
 using Transport.Abstractions.Handlers.Client;
 using Transport.Handlers;
 using NewProtocol.Client;
+using Pontifex.Utils;
 using Shared.Concurrent;
 using Shared.FSM;
 using Transport.Abstractions;

@@ -1,6 +1,6 @@
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Shared.Concurrent;
+using Pontifex.Utils;
 
 namespace Shared.FSM
 {

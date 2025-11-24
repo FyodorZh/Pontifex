@@ -1,10 +1,10 @@
 ﻿using System;
 using Actuarius.Collections;
+using Pontifex.Utils;
 using Shared;
 using Transport.Abstractions;
 using Transport.Abstractions.Controls;
 using Transport.Transports.ProtocolWrapper.AckRaw;
-using Shared.Buffer;
 using TimeSpan = System.TimeSpan;
 
 namespace Transport.Protocols.Monitoring.AckRaw

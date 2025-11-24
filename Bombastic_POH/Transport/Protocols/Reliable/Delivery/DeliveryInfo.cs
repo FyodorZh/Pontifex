@@ -1,6 +1,5 @@
 ﻿using System;
 using Serializer.BinarySerializer;
-using Shared.Buffer;
 
 namespace Transport.Protocols.Reliable.Delivery
 {

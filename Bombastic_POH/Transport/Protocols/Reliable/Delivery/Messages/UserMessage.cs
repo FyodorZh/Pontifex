@@ -1,7 +1,5 @@
 ﻿using Actuarius.Memory;
-using Shared;
-using Shared.Buffer;
-using Shared.Pooling;
+using IMultiRefByteArray = Actuarius.Memory.IMultiRefByteArray;
 
 namespace Transport.Protocols.Reliable.Delivery
 {

@@ -1,7 +1,5 @@
 ﻿using System.Collections.Generic;
 using Actuarius.Memory;
-using Shared.Pooling;
-using Shared.Buffer;
 
 namespace Transport.Protocols.Reliable.Delivery
 {
