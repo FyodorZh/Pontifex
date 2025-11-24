@@ -9,8 +9,8 @@ using Transport.Abstractions.Handlers.Client;
 using Transport.Handlers;
 using NewProtocol.Client;
 using Pontifex.Utils;
+using Pontifex.Utils.FSM;
 using Shared.Concurrent;
-using Shared.FSM;
 using Transport.Abstractions;
 using Transport.StopReasons;
 

@@ -16,9 +16,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Logger\Log\Log.csproj" />
+      <ProjectReference Include="..\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
       <ProjectReference Include="..\Serializer\Serializer.csproj" />
-      <ProjectReference Include="..\UnityUtils.LifeTime\UnityUtils.LifeTime.csproj" />
       <ProjectReference Include="..\UnityUtils\UnityUtils.csproj" />
     </ItemGroup>
 

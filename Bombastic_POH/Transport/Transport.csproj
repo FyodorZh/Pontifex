@@ -49,7 +49,6 @@
     <ProjectReference Include="..\..\Pontifex.Transport\Pontifex.Transport.csproj" />
     <ProjectReference Include="..\..\Pontifex.Utils\Pontifex.Utils.csproj" />
     <ProjectReference Include="..\Ionic\IOnic.Zlib.NETStandard\Ionic.Zlib.NETStandard.csproj" />
-    <ProjectReference Include="..\Logger\Log\Log.csproj" />
     <ProjectReference Include="..\Utils\Utils.csproj" />
   </ItemGroup>
   <ItemGroup>

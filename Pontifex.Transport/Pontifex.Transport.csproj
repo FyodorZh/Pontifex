@@ -17,7 +17,7 @@
     <ItemGroup>
       <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
       <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
-      <ProjectReference Include="..\Bombastic_POH\Logger\Log\Log.csproj" />
+      <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj" />
       <ProjectReference Include="..\Pontifex.Utils\Pontifex.Utils.csproj" />
     </ItemGroup>
 

@@ -36,8 +36,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TMP", "TMP", "{6160EC40-963
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils.Memory", "UnityUtils.Memory\UnityUtils.Memory.csproj", "{D4232029-5946-4AE0-B257-0D8B27C79879}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils.LifeTime", "UnityUtils.LifeTime\UnityUtils.LifeTime.csproj", "{D4807890-9809-4E2C-964B-A4A7404D4566}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils.Containers", "UnityUtils.Containers\UnityUtils.Containers.csproj", "{52149AB6-91DD-4F7C-85AE-6B2C2EB14115}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityUtils", "UnityUtils\UnityUtils.csproj", "{7B8705E5-FF72-4835-A039-050994E81E11}"
@@ -122,10 +120,6 @@ Global
 		{D4232029-5946-4AE0-B257-0D8B27C79879}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D4232029-5946-4AE0-B257-0D8B27C79879}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D4232029-5946-4AE0-B257-0D8B27C79879}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D4807890-9809-4E2C-964B-A4A7404D4566}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D4807890-9809-4E2C-964B-A4A7404D4566}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D4807890-9809-4E2C-964B-A4A7404D4566}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D4807890-9809-4E2C-964B-A4A7404D4566}.Release|Any CPU.Build.0 = Release|Any CPU
 		{52149AB6-91DD-4F7C-85AE-6B2C2EB14115}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{52149AB6-91DD-4F7C-85AE-6B2C2EB14115}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{52149AB6-91DD-4F7C-85AE-6B2C2EB14115}.Release|Any CPU.ActiveCfg = Release|Any CPU
