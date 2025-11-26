@@ -9,9 +9,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Pontifex.Utils\Pontifex.Utils.csproj" />
     <ProjectReference Include="..\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
+    <ProjectReference Include="..\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj" />
     <ProjectReference Include="..\IDLib\IDLib.csproj" />
     <ProjectReference Include="..\Serializer\Serializer.csproj" />
     <ProjectReference Include="..\UnityUtils.Memory\UnityUtils.Memory.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Scriba" Version="0.1.0-dev.1" />
   </ItemGroup>
 
 </Project>

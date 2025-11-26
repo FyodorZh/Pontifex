@@ -6,29 +6,29 @@ namespace Transport.Transports.Direct
 {
     public class AckRawDirectServer : AckRawServer
     {
-        private readonly StringEndPoint mLocalEp;
-        private DirectServer? mServer;
+        private readonly StringEndPoint _localEp;
+        private DirectServer? _server;
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
         public AckRawDirectServer(string serverName)
             : base(DirectInfo.TransportName)
         {
-            mLocalEp = new StringEndPoint(serverName);
+            _localEp = new StringEndPoint(serverName);
         }
 
         protected override bool TryStart()
         {
-            mServer = DirectTransportManager.Instance.StartServer(mLocalEp, OnConnecting);
-            return mServer != null;
+            _server = DirectTransportManager.Instance.StartServer(_localEp, OnConnecting);
+            return _server != null;
         }
 
         protected override void OnStopped(StopReason reason)
         {
-            var server = mServer;
+            var server = _server;
             if (server != null)
             {
-                mServer = null;
+                _server = null;
                 server.Stop();
             }
         }
@@ -38,7 +38,7 @@ namespace Transport.Transports.Direct
             var handler = TryConnectNewClient(ackData);
             if (handler != null)
             {
-                return new Session(handler);
+                return new Session(handler, Memory);
             }
 
             return null;

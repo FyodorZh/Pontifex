@@ -1,4 +1,6 @@
 using System;
+using Actuarius.Collections;
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Pontifex.Utils.FSM;
 using Transport.Endpoints;
@@ -17,21 +19,21 @@ namespace Transport.Transports.Direct
             Disconnected
         }
 
-        private readonly StringEndPoint mServerEp;
+        private readonly StringEndPoint _serverEp;
 
-        private readonly IConcurrentFSM<State> mState;
+        private readonly IConcurrentFSM<State> _state;
 
-        private DirectTransport? mTransport;
+        private DirectTransport? _transport;
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
         public AckRawDirectClient(string serverName)
             : base(DirectInfo.TransportName)
         {
-            mServerEp = new StringEndPoint(serverName);
+            _serverEp = new StringEndPoint(serverName);
 
             var fsm = new RatchetFSM<State>((a, b) => ((int)a).CompareTo((int)b), State.Constructed);
-            mState = new ConcurrentFSM<State>(fsm);
+            _state = new ConcurrentFSM<State>(fsm);
         }
 
         protected override bool BeginConnect()
@@ -42,14 +44,14 @@ namespace Transport.Transports.Direct
                 GuidEndPoint localEp = new GuidEndPoint(Guid.NewGuid());
 
                 var transport = DirectTransportManager.Instance.NewTransport(
-                    mServerEp,
+                    _serverEp,
                     localEp,
                     (IClientDirectCtl)this);
 
                 if (transport != null)
                 {
-                    mTransport = transport;
-                    mState.SetState(State.Connecting);
+                    _transport = transport;
+                    _state.SetState(State.Connecting);
                     return true;
                 }
             }
@@ -58,17 +60,17 @@ namespace Transport.Transports.Direct
 
         protected override void OnReadyToConnect()
         {
-            mTransport.FinishConnection();
+            _transport!.FinishConnection();
         }
 
         protected override void DestroyTransport(StopReason reason)
         {
-            mState.SetState(State.Disconnected);
+            _state.SetState(State.Disconnected);
 
-            var transport = mTransport;
+            var transport = _transport;
             if (transport != null)
             {
-                mTransport = null;
+                _transport = null;
                 transport.Disconnect(reason);
             }
         }
@@ -82,17 +84,14 @@ namespace Transport.Transports.Direct
         {
             try
             {
-                switch (mState.State)
+                switch (_state.State)
                 {
                     case State.Connecting:
                     {
-                        ByteArraySegment ackResponse;
-                        bufferAccessor.Buffer.PopFirst().AsArray(out ackResponse);
-                        ackResponse = AckUtils.CheckPrefix(ackResponse, DirectInfo.AckOKResponse);
-                        if (ackResponse.IsValid)
+                        if (buffer.PopFirstAsArray(out var ackOk) && ackOk.EqualByContent(DirectInfo.AckOKResponse))  
                         {
-                            mState.SetState(State.Connected);
-                            ConnectionFinished(mTransport.ClientSide, ackResponse);
+                            _state.SetState(State.Connected);
+                            ConnectionFinished(_transport!.ClientSide, buffer.Acquire());
                         }
                         else
                         {
@@ -102,11 +101,7 @@ namespace Transport.Transports.Direct
                     }
                         break;
                     case State.Connected:
-                        var handler = Handler;
-                        if (handler != null)
-                        {
-                            handler.OnReceived(bufferAccessor.Acquire());
-                        }
+                        Handler.OnReceived(buffer.Acquire());
                         break;
                     default:
                         Fail(new TextFail("direct-client", "Wrong state"));

@@ -1,7 +1,5 @@
 ﻿using System;
 using Actuarius.ConcurrentPrimitives;
-using Actuarius.Memory;
-using Pontifex;
 using Pontifex.Utils;
 using Transport.Abstractions.Endpoints.Server;
 
@@ -9,7 +7,7 @@ namespace Transport.Abstractions.Handlers.Server
 {
     public interface IAckRawServerHandler : IRawBaseHandler
     {
-        byte[] GetAckResponse();
+        void GetAckResponse(UnionDataList ackData);
 
         /// <summary>
         /// Логический коннект. Информирует бизнесс-логику, что всё в транспорте настроено, можно им пользоваться.
@@ -70,9 +68,9 @@ namespace Transport.Abstractions.Handlers.Server
                 }
             }
 
-            public byte[] GetAckResponse()
+            public void GetAckResponse(UnionDataList ackData)
             {
-                return _handler.GetAckResponse();
+                _handler.GetAckResponse(ackData);
             }
 
             public void OnConnected(IAckRawClientEndpoint endPoint)
@@ -90,14 +88,14 @@ namespace Transport.Abstractions.Handlers.Server
                 Disconnected
             }
 
-            private readonly IAckRawServerHandler mCore;
+            private readonly IAckRawServerHandler _core;
 
-            private int mReceiveDepth = 0;
+            private int _receiveDepth = 0;
 
             public TestWrapper(IAckRawServerHandler core, Action<string> onFail)
                 : base(HandlerState.Constructed, onFail)
             {
-                mCore = core;
+                _core = core;
             }
 
             protected override int FromState(HandlerState state)
@@ -112,7 +110,7 @@ namespace Transport.Abstractions.Handlers.Server
 
             public override string ToString()
             {
-                return string.Format("'{0}' - '{1}'", mCore, mCore.GetType());
+                return string.Format("'{0}' - '{1}'", _core, _core.GetType());
             }
 
 //            ~Wrapper()
@@ -123,26 +121,26 @@ namespace Transport.Abstractions.Handlers.Server
 //                }
 //            }
 
-            byte[] IAckRawServerHandler.GetAckResponse()
+            void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
             {
-                return mCore.GetAckResponse();
+                _core.GetAckResponse(ackData);
             }
 
             void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
             {
                 ChangeState(HandlerState.Constructed, HandlerState.Connected);
-                mCore.OnConnected(endPoint);
+                _core.OnConnected(endPoint);
             }
 
             void IRawBaseHandler.OnDisconnected(StopReason reason)
             {
                 ChangeState(HandlerState.Connected, HandlerState.Disconnected);
-                mCore.OnDisconnected(reason);
+                _core.OnDisconnected(reason);
             }
 
             void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
             {
-                BeginCriticalSection(ref mReceiveDepth);
+                BeginCriticalSection(ref _receiveDepth);
 
                 var curState = State;
                 if (curState < HandlerState.Connected)
@@ -150,9 +148,9 @@ namespace Transport.Abstractions.Handlers.Server
                     Fail(curState.ToString());
                 }
 
-                mCore.OnReceived(receivedBuffer);
+                _core.OnReceived(receivedBuffer);
 
-                EndCriticalSection(ref mReceiveDepth);
+                EndCriticalSection(ref _receiveDepth);
             }
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Transport.Abstractions.Handlers.Server;
 using Transport.StopReasons;
@@ -7,44 +8,49 @@ namespace Transport.Transports.Direct
 {
     internal class Session : IServerDirectCtl//, IAckRawClientEndpoint
     {
-        private readonly IAckRawServerHandler mHandler;
-        private DirectTransport mTransport;
+        private readonly IAckRawServerHandler _handler;
+        private readonly IMemoryRental _memory;
+        
+        private DirectTransport _transport = null!;
 
-        public Session(IAckRawServerHandler handler)
+        public Session(IAckRawServerHandler handler, IMemoryRental memory)
         {
-            mHandler = handler;
+            _handler = handler;
+            _memory = memory;
         }
 
         void IServerDirectCtl.Init(DirectTransport transport)
         {
-            mTransport = transport;
+            _transport = transport;
         }
 
         void IServerDirectCtl.OnClientPrepared()
         {
-            byte[] ackResponse = AckUtils.AppendPrefix(mHandler.GetAckResponse(), DirectInfo.AckOKResponse);
+            UnionDataList ackResponse = _memory.CollectablePool.Acquire<UnionDataList>();
+            _handler.GetAckResponse(ackResponse);
+            ackResponse.PutFirst(new UnionData(DirectInfo.AckOKResponse));
 
-            mTransport.ServerSide.Send(ConcurrentUsageMemoryBufferPool.Instance.AllocateAndPush(ackResponse));
+            _transport.ServerSide.Send(ackResponse);
 
             try
             {
-                mHandler.OnConnected(mTransport.ServerSide);
+                _handler.OnConnected(_transport.ServerSide);
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                mTransport.Disconnect(new ExceptionFail("direct-server", ex));
+                _transport.Disconnect(new ExceptionFail("direct-server", ex));
             }
         }
 
         void IAnyDirectCtl.OnReceived(UnionDataList buffer)
         {
-            mHandler.OnReceived(buffer);
+            _handler.OnReceived(buffer);
         }
 
         void IAnyDirectCtl.OnDisconnected(StopReason reason)
         {
-            mHandler.OnDisconnected(reason);
+            _handler.OnDisconnected(reason);
         }
     }
 }

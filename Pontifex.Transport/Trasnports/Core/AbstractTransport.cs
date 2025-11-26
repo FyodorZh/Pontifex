@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Actuarius.Memory;
 using Transport.Abstractions;
 using Transport.Utils;
 
@@ -17,6 +18,8 @@ namespace Transport.Transports.Core
         private IControlProvider _controlProvider = new VoidControlProvider();
 
         public ILogger Log { get; protected set; } = global::Log.VoidLogger;
+
+        public IMemoryRental Memory { get; } = MemoryRental.Shared;
 
         /// <summary>
         /// Попытка запустить протокольный транспорт.

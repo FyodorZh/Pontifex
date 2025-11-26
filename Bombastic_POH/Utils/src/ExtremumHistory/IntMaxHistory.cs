@@ -1,3 +1,5 @@
+using Actuarius.PeriodicLogic;
+
 namespace Shared
 {
     public class IntMaxHistory : ExtremumHistory<int>

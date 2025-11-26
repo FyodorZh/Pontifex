@@ -9,11 +9,11 @@ namespace Pontifex.Utils
     {
         private UnionDataType _type;
         private UnionDataMemoryAlias _alias;
-        private IMultiRefByteArray? _bytes;
+        private IMultiRefReadOnlyByteArray? _bytes;
         
         public UnionDataType Type => _type;
         public UnionDataMemoryAlias Alias => _alias;
-        public IMultiRefByteArray? Bytes => _bytes;
+        public IMultiRefReadOnlyByteArray? Bytes => _bytes;
         
         public UnionData(bool value) 
         {
@@ -99,7 +99,7 @@ namespace Pontifex.Utils
             _bytes = null;
         }
 
-        public UnionData(IMultiRefByteArray? value)
+        public UnionData(IMultiRefReadOnlyByteArray? value)
         {
             _type = value != null ? UnionDataType.Array : UnionDataType.NullArray;
             _alias = 0;
@@ -248,7 +248,7 @@ namespace Pontifex.Utils
                     _alias.WriteTo16(byteSink);
                     return;
                 case UnionDataType.Array:
-                    byteSink.PutMany(_bytes!.ShowResourceUnsafe());                    
+                    byteSink.PutMany(_bytes!.ShowResourceUnsafe(out IReadOnlyBytes _));                    
                     return;
                 case UnionDataType.NullArray:
                     return;

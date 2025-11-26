@@ -5,24 +5,24 @@ using Actuarius.Memory;
 
 namespace Pontifex.Utils
 {
-    public class UnionDataList : MultiRefResource
+    public class UnionDataList : MultiRefCollectableResource<UnionDataList>
     {
         private readonly CycleQueue<UnionData> _data = new();
 
         public IReadOnlyArray<UnionData> Elements => _data;
         
-        public UnionDataList() 
-            : base(false)
-        {
-        }
-        
-        protected override void OnReleased()
+        protected override void OnCollected()
         {
             foreach (var element in _data.Enumerate())
             {
                 element.Bytes?.Release();
             }
             _data.Clear();
+        }
+
+        protected override void OnRestored()
+        {
+            // DO NOTHING
         }
 
         public bool PutFirst(UnionData value)
@@ -96,7 +96,19 @@ namespace Pontifex.Utils
         }
         public static bool Check(this UnionDataList data, string value)
         {
-            return data.TryGetFirst(out var r) && r.Type == UnionDataType.Array && Encoding.UTF8.GetString(r.Bytes!.ToArray(null)!) == value;
+            return data.TryGetFirst(out var d) && d.Type == UnionDataType.Array && Encoding.UTF8.GetString(d.Bytes!.ToArray(null)!) == value;
+        }
+
+        public static bool PopFirstAsArray(this UnionDataList data, [MaybeNullWhen(false)] out IMultiRefReadOnlyByteArray buffer)
+        {
+            if (!data.TryGetFirst(out var d) && d.Type == UnionDataType.Array)
+            {
+                buffer = d.Bytes!;
+                return true;
+            }
+
+            buffer = null;
+            return false;
         }
 
         public static bool EqualByContent(this UnionDataList d1, UnionDataList d2)

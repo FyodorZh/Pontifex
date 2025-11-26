@@ -1,4 +1,6 @@
-﻿namespace Transport.Abstractions
+﻿using Actuarius.Memory;
+
+namespace Transport.Abstractions
 {
     public interface ITransport : IControlProvider
     {
@@ -38,5 +40,7 @@
         bool Stop(StopReason? reason = null);
 
         ILogger Log { get; }
+        
+        IMemoryRental Memory { get; }
     }
 }

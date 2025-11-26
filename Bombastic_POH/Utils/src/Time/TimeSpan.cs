@@ -1,4 +1,5 @@
-﻿using Serializer.BinarySerializer;
+﻿using Actuarius.PeriodicLogic;
+using Serializer.BinarySerializer;
 
 namespace Shared
 {

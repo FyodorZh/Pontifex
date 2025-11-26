@@ -1,3 +1,5 @@
+using Actuarius.Memory;
+
 namespace Transport.Transports.Direct
 {
     public static class DirectInfo
@@ -7,6 +9,6 @@ namespace Transport.Transports.Direct
 
         public const int BufferCapacity = 500;
 
-        public static readonly byte[] AckOKResponse = System.Text.Encoding.UTF8.GetBytes("Direct-Ack-OK");
+        public static readonly IMultiRefReadOnlyByteArray AckOKResponse = new MultiRefByteArray(System.Text.Encoding.UTF8.GetBytes("Direct-Ack-OK"));
     }
 }
