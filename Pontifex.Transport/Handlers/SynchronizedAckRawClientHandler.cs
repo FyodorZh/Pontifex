@@ -1,6 +1,7 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.ConcurrentPrimitives;
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers;
@@ -126,6 +127,11 @@ namespace Transport.Handlers
                 _handler.OnStopped(_stopReason!);
                 _stopServiced = true;
             }
+        }
+
+        public void Setup(IMemoryRental memory, ILogger logger)
+        {
+            _handler.Setup(memory, logger);
         }
     }
 }

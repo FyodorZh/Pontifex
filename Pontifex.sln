@@ -18,6 +18,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.ConcurrentPrimiti
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.PeriodicLogic", "Bombastic_POH\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj", "{800DB99A-37BD-4C33-8CF8-725544BE4D10}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Test", "Pontifex.Test\Pontifex.Test.csproj", "{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Protocol", "Bombastic_POH\Protocol\Protocol.csproj", "{77BD9C73-E2DD-4B23-8CFA-6A0CEEC98F51}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Protocol", "Pontifex.Protocol\Pontifex.Protocol.csproj", "{ED74A46F-A6C4-4A1A-8DD6-60359C29B876}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,5 +66,17 @@ Global
 		{800DB99A-37BD-4C33-8CF8-725544BE4D10}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{800DB99A-37BD-4C33-8CF8-725544BE4D10}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{800DB99A-37BD-4C33-8CF8-725544BE4D10}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{77BD9C73-E2DD-4B23-8CFA-6A0CEEC98F51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77BD9C73-E2DD-4B23-8CFA-6A0CEEC98F51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77BD9C73-E2DD-4B23-8CFA-6A0CEEC98F51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77BD9C73-E2DD-4B23-8CFA-6A0CEEC98F51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED74A46F-A6C4-4A1A-8DD6-60359C29B876}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED74A46F-A6C4-4A1A-8DD6-60359C29B876}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED74A46F-A6C4-4A1A-8DD6-60359C29B876}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED74A46F-A6C4-4A1A-8DD6-60359C29B876}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

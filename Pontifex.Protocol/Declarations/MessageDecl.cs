@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Serializer.BinarySerializer;
-using Shared.Buffer;
+using Archivarius;
 
 namespace NewProtocol
 {
@@ -18,12 +17,12 @@ namespace NewProtocol
     public abstract class MessageDecl<TMessage> : Declaration, ISender<TMessage>, IReceiver<TMessage>
         where TMessage : IDataStruct, new()
     {
-        private readonly Type[] mTypesToRegister;
-        private Action<TMessage> mProcessor;
+        private readonly Type[]? mTypesToRegister;
+        private Action<TMessage>? mProcessor;
 
         private bool mStopped;
 
-        protected MessageDecl(Type[] typesToRegister = null)
+        protected MessageDecl(Type[]? typesToRegister = null)
         {
             mTypesToRegister = typesToRegister;
         }

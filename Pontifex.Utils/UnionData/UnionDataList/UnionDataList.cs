@@ -101,7 +101,7 @@ namespace Pontifex.Utils
 
         public static bool PopFirstAsArray(this UnionDataList data, [MaybeNullWhen(false)] out IMultiRefReadOnlyByteArray buffer)
         {
-            if (!data.TryGetFirst(out var d) && d.Type == UnionDataType.Array)
+            if (data.TryGetFirst(out var d) && d.Type == UnionDataType.Array)
             {
                 buffer = d.Bytes!;
                 return true;

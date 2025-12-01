@@ -38,6 +38,9 @@
       <HintPath>..\packages\Archivarius.Tools.0.2.1-dev.5\lib\netstandard2.0\Archivarius.Tools.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
+    <Reference Include="Pontifex.Transport">
+      <HintPath>..\..\Pontifex.Transport\bin\Debug\netstandard2.0\Pontifex.Transport.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Windows.Forms.DataVisualization" />

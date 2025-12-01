@@ -1,4 +1,5 @@
-﻿using Pontifex.Utils;
+﻿using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Transport.Abstractions.Acknowledgers
 {
@@ -8,6 +9,8 @@ namespace Transport.Abstractions.Acknowledgers
     public interface IRawServerAcknowledger<out THandler>
         where THandler : Handlers.Server.IAckRawServerHandler
     {
+        void Setup(IMemoryRental memory, ILogger logger);
+        
         /// <summary>
         /// Идентифицирует входящего клиента.
         /// Создаёт новую сессию для взаимодействия с ним.
@@ -16,6 +19,6 @@ namespace Transport.Abstractions.Acknowledgers
         /// <param name="ackData"> Данные клиента для его идентификации </param>
         /// <param name="logger"></param>
         /// <returns> null если клиент не признан, иначе хэндлер клиентской сессии </returns>
-        THandler? TryAck(UnionDataList ackData, ILogger logger);
+        THandler? TryAck(UnionDataList ackData);
     }
 }

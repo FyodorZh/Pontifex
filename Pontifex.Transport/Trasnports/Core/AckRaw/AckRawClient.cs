@@ -76,13 +76,13 @@ namespace Transport.Transports.Core
             {
                 if (IsValid)
                 {
-                    handler = handler.Test(text => Log.e(text));
-
                     var processedHandler = SetupHandler(handler);
                     if (processedHandler != null)
                     {
                         if (!IsStarted && _state == State.Constructed)
                         {
+                            processedHandler.Setup(Memory, Log);
+                            processedHandler = processedHandler.Test(text => Log.e(text));
                             _handler = processedHandler;
                             _state = State.Initialized;
                             return true;

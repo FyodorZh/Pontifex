@@ -4,22 +4,6 @@ using System.Collections.Generic;
 
 namespace NewProtocol
 {
-    public interface IModelsHashDB
-    {
-        bool TryGetHash(Type type, out string hash);
-    }
-
-    public class VoidHashDB : IModelsHashDB
-    {
-        public static readonly VoidHashDB Instance = new VoidHashDB();
-
-        public bool TryGetHash(Type type, out string hash)
-        {
-            hash = "";
-            return true;
-        }
-    }
-
     public sealed class ModelsHashDB : IModelsHashDB, IEnumerable<KeyValuePair<string, string>>
     {
         private readonly Dictionary<string, string> mHashes = new Dictionary<string, string>();

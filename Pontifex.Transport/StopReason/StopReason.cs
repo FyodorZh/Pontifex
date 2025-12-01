@@ -1,4 +1,6 @@
-﻿using Transport.StopReasons;
+﻿using System.IO;
+using System.Text;
+using Transport.StopReasons;
 
 namespace Transport
 {
@@ -50,6 +52,15 @@ namespace Transport
             JsonFactory.ExternalJsons.JsonObjectAsExternalJson wrap = new JsonFactory.ExternalJsons.JsonObjectAsExternalJson();
             PrintTo(wrap.Root);
             return wrap;
+        }
+
+        public override string ToString()
+        {
+            var json = Print();
+            StringWriter sw = new StringWriter();
+            json.WriteTo(sw);
+            json.Release();
+            return sw.ToString();
         }
     }
 }

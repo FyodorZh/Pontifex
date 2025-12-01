@@ -45,6 +45,7 @@ namespace Transport.Transports.Core
                         var processedAcknowledger = SetupAcknowledger(acknowledger);
                         if (processedAcknowledger != null)
                         {
+                            processedAcknowledger.Setup(Memory, Log);
                             _acknowledger = processedAcknowledger;
                             _isInitialized = true;
                             return true;
@@ -84,11 +85,9 @@ namespace Transport.Transports.Core
             var acknowledger = _acknowledger;
             if (acknowledger != null)
             {
-                var handler = acknowledger.TryAck(ackData, Log);
-                if (handler != null)
-                {
-                    handler = handler.Test(text => Log.e(text)).GetSafe(e => Log.e(e.ToString()));
-                }
+                var handler = acknowledger.TryAck(ackData);
+                handler = handler?.Test(text => Log.e(text)).GetSafe(e => Log.e(e.ToString()));
+                handler?.Setup(Memory, Log);
                 return handler;
             }
             return null;

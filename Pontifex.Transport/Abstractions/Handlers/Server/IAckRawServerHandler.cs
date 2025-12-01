@@ -1,5 +1,6 @@
 ﻿using System;
 using Actuarius.ConcurrentPrimitives;
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Transport.Abstractions.Endpoints.Server;
 
@@ -77,6 +78,11 @@ namespace Transport.Abstractions.Handlers.Server
             {
                 _handler.OnConnected(endPoint);
             }
+
+            public void Setup(IMemoryRental memory, ILogger logger)
+            {
+                _handler.Setup(memory, logger);
+            }
         }
 
         private class TestWrapper : InvariantChecker<TestWrapper.HandlerState>, IAckRawServerHandler
@@ -110,10 +116,15 @@ namespace Transport.Abstractions.Handlers.Server
 
             public override string ToString()
             {
-                return string.Format("'{0}' - '{1}'", _core, _core.GetType());
+                return $"'{_core}' - '{_core.GetType()}'";
             }
 
-//            ~Wrapper()
+            public void Setup(IMemoryRental memory, ILogger logger)
+            {
+                _core.Setup(memory, logger);
+            }
+
+            //            ~Wrapper()
 //            {
 //                if (State != HandlerState.Disconnected)
 //                {

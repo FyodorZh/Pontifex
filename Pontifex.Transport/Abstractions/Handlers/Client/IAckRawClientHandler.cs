@@ -71,7 +71,12 @@ namespace Transport.Abstractions.Handlers.Client
                 return $"'{_core}' - '{_core.GetType()}'";
             }
 
-//            ~Wrapper()
+            public void Setup(IMemoryRental memory, ILogger logger)
+            {
+                _core.Setup(memory, logger);
+            }
+
+            //            ~Wrapper()
 //            {
 //                if (State != HandlerState.Stopped)
 //                {
