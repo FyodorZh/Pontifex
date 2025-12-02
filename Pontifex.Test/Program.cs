@@ -1,6 +1,7 @@
 ﻿using LogConsumers;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Servers;
+using Transport.Protocols.Monitoring.AckRaw;
 using Transport.Transports.Direct;
 using TransportAnalyzer.TestLogic;
 
@@ -19,8 +20,10 @@ namespace Pontifex.Test
             Console.WriteLine("Hello, World!");
 
             bool work = true;
+
+            string url = "log|direct|dir123";
             
-            var server = mServerFactory.Construct("direct|dir123");
+            var server = mServerFactory.Construct(url);
             ((IAckRawServer)server).Init(new AckRawServerLogic());
             server.Start(r =>
             {
@@ -28,8 +31,8 @@ namespace Pontifex.Test
                 work = false;
             }, Log.StaticLogger);
             
-            var client = mClientFactory.Construct("direct|dir123");
-            ((IAckRawClient)client).Init(new AckRawClientLogic(1));
+            var client = mClientFactory.Construct(url);
+            ((IAckRawClient)client).Init(new AckRawClientLogic(10, 1000));
             client.Start(r =>
             {
                 Console.WriteLine("Client stopped " + r);
@@ -75,9 +78,9 @@ namespace Pontifex.Test
             //
             // mClientFactory.Register(new AckRawReconnectableClientProducer());
             // mServerFactory.Register(new AckRawReconnectableServerProducer());
-            //
-            // mClientFactory.Register(new AckRawLoggerClientProducer());
-            // mServerFactory.Register(new AckRawLoggerServerProducer());
+            
+            mClientFactory.Register(new AckRawLoggerClientProducer());
+            mServerFactory.Register(new AckRawLoggerServerProducer());
         }
     }
 }

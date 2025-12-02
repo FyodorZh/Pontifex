@@ -63,11 +63,15 @@ namespace TransportAnalyzer.TestLogic
                 var id = Interlocked.Increment(ref _receiveId);
                 if (!receivedBuffer.PopFirstAsArray(out var buffer) || !CheckBuffer(id, buffer) || id == _lastTickId)
                 {
-                    Log.e("Message check failed #" + id);
-                    var endpoint = _endpoint;
-                    if (endpoint != null)
+                    if (id == _lastTickId)
                     {
-                        endpoint.Disconnect(new Transport.StopReasons.UserFail("Message check failed #" + id));
+                        Log.i("Last tick received");
+                        _endpoint?.Disconnect(new Transport.StopReasons.UserIntention("Last tick id encountered " + id));
+                    }
+                    else
+                    {
+                        Log.e("Message check failed #" + id);
+                        _endpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check failed #" + id));
                     }
                 }
             }
@@ -83,7 +87,7 @@ namespace TransportAnalyzer.TestLogic
             {
                 var endpoint = _endpoint;
 
-                if (_sendId - _receiveId < _unconfirmedTicks)
+                while (_sendId - _receiveId < _unconfirmedTicks)
                 {
                     var buffer = GenBuffer(Interlocked.Increment(ref _sendId));
                     var dataToSend = Memory.CollectablePool.Acquire<UnionDataList>();

@@ -22,6 +22,8 @@ namespace Transport.Transports.Core
         private IAckRawClientHandler? _handler;
 
         public sealed override string Type { get; }
+        
+        protected IAckRawClientHandler? Handler =>  _handler;
 
         protected AckRawClient(string typeName)
         {
@@ -67,8 +69,6 @@ namespace Transport.Transports.Core
                 }
             }
         }
-
-        protected IAckRawClientHandler Handler => _handler ?? throw new Exception("Handler is null");
 
         public bool Init(IAckRawClientHandler handler)
         {

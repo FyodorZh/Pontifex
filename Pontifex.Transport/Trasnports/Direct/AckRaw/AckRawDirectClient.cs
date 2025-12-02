@@ -3,13 +3,14 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Pontifex.Utils.FSM;
+using Transport.Abstractions.Clients;
 using Transport.Endpoints;
 using Transport.StopReasons;
 using Transport.Transports.Core;
 
 namespace Transport.Transports.Direct
 {
-    public class AckRawDirectClient : AckRawClient, IClientDirectCtl
+    public class AckRawDirectClient : AckRawClient, IAckReliableRawClient, IClientDirectCtl
     {
         private enum State
         {
@@ -77,7 +78,7 @@ namespace Transport.Transports.Direct
 
         void IClientDirectCtl.GetAckData(UnionDataList ackData)
         {
-            Handler.WriteAckData(ackData);
+            Handler?.WriteAckData(ackData);
         }
 
         void IAnyDirectCtl.OnReceived(UnionDataList buffer)
@@ -101,7 +102,7 @@ namespace Transport.Transports.Direct
                     }
                         break;
                     case State.Connected:
-                        Handler.OnReceived(buffer.Acquire());
+                        Handler?.OnReceived(buffer.Acquire());
                         break;
                     default:
                         Fail(new TextFail("direct-client", "Wrong state"));

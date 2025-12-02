@@ -1,10 +1,11 @@
 using Pontifex.Utils;
+using Transport.Abstractions.Servers;
 using Transport.Endpoints;
 using Transport.Transports.Core;
 
 namespace Transport.Transports.Direct
 {
-    public class AckRawDirectServer : AckRawServer
+    public class AckRawDirectServer : AckRawServer, IAckReliableRawServer
     {
         private readonly StringEndPoint _localEp;
         private DirectServer? _server;

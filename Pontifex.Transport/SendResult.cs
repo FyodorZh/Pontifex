@@ -1,6 +1,6 @@
 ﻿namespace Transport
 {
-    public enum SendResult
+    public enum SendResult : byte
     {
         /// <summary>
         /// Отправка данных удалась, о факте доставки ничего не известно
