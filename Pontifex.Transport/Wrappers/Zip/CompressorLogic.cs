@@ -7,8 +7,8 @@ namespace Transport.Protocols.Zip
 {
     public abstract class CompressorLogic : AckRawWrapperLogic, IReleasableResource
     {
-        private ZLibCompressor? mCompressor;
-        private ZLibDecompressor? mDecompressor;
+        private ZLibCompressor? _compressor;
+        private ZLibDecompressor? _decompressor;
 
         public CompressorLogic(int compressionLvl)
         {
@@ -21,13 +21,13 @@ namespace Transport.Protocols.Zip
                 compressionLvl = 9;
             }
 
-            mCompressor = ZLibCompressor.Acquire((CompressionLevel)compressionLvl);
-            mDecompressor = ZLibDecompressor.Acquire((CompressionLevel)compressionLvl);
+            _compressor = ZLibCompressor.Acquire((CompressionLevel)compressionLvl);
+            _decompressor = ZLibDecompressor.Acquire((CompressionLevel)compressionLvl);
         }
 
         protected bool Compress(UnionDataList data)
         {
-            var compressor = mCompressor;
+            var compressor = _compressor;
             if (compressor != null)
             {
                 try
@@ -36,7 +36,7 @@ namespace Transport.Protocols.Zip
                 }
                 catch
                 {
-                    mCompressor = null;
+                    _compressor = null;
                     throw;
                 }
             }
@@ -46,7 +46,7 @@ namespace Transport.Protocols.Zip
 
         protected bool Decompress(UnionDataList data)
         {
-            var decompressor = mDecompressor;
+            var decompressor = _decompressor;
             if (decompressor != null)
             {
                 try
@@ -55,7 +55,7 @@ namespace Transport.Protocols.Zip
                 }
                 catch
                 {
-                    mDecompressor = null;
+                    _decompressor = null;
                     throw;
                 }
             }
@@ -65,13 +65,13 @@ namespace Transport.Protocols.Zip
 
         public void Release()
         {
-            var compressor = System.Threading.Interlocked.Exchange(ref mCompressor, null);
+            var compressor = System.Threading.Interlocked.Exchange(ref _compressor, null);
             if (compressor != null)
             {
                 ZLibCompressor.Release(compressor);
             }
 
-            var decompressor = System.Threading.Interlocked.Exchange(ref mDecompressor, null);
+            var decompressor = System.Threading.Interlocked.Exchange(ref _decompressor, null);
             if (decompressor != null)
             {
                 ZLibDecompressor.Release(decompressor);

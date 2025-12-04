@@ -7,14 +7,14 @@ namespace Transport.Protocols.Zip
 {
     public class ZLibCompressor
     {
-        private static readonly IConcurrentPool<ZLibCompressor>[] mCompressors = new IConcurrentPool<ZLibCompressor>[10];
+        private static readonly IConcurrentPool<ZLibCompressor>[] _compressors = new IConcurrentPool<ZLibCompressor>[10];
 
         static ZLibCompressor()
         {
             for (CompressionLevel cLvl  = CompressionLevel.Level0; cLvl <= CompressionLevel.Level9; cLvl += 1)
             {
                 var lvl = cLvl;
-                mCompressors[(int)cLvl] = new LargeObjectBufferedPool<ZLibCompressor>(() => new ZLibCompressor(lvl));
+                _compressors[(int)cLvl] = new LargeObjectBufferedPool<ZLibCompressor>(() => new ZLibCompressor(lvl));
             }
         }
 
@@ -24,25 +24,25 @@ namespace Transport.Protocols.Zip
         }
         public static ZLibCompressor Acquire(CompressionLevel compressionLvl)
         {
-            var compressor = mCompressors[(int) compressionLvl].Acquire();
+            var compressor = _compressors[(int) compressionLvl].Acquire();
             compressor.Reset();
             return compressor;
         }
 
         public static void Release(ZLibCompressor compressor)
         {
-            mCompressors[(int)compressor.mCompressionLevel].Release(compressor);
+            _compressors[(int)compressor._compressionLevel].Release(compressor);
         }
 
-        private readonly MemoryStream mPackedStream;
-        private readonly DeflateStream mCompressor;
-        private readonly CompressionLevel mCompressionLevel;
+        private readonly MemoryStream _packedStream;
+        private readonly DeflateStream _compressor;
+        private readonly CompressionLevel _compressionLevel;
 
         private ZLibCompressor(CompressionLevel compressionLvl)
         {
-            mCompressionLevel = compressionLvl;
-            mPackedStream = new MemoryStream();
-            mCompressor = new DeflateStream(mPackedStream, CompressionMode.Compress, compressionLvl, true);
+            _compressionLevel = compressionLvl;
+            _packedStream = new MemoryStream();
+            _compressor = new DeflateStream(_packedStream, CompressionMode.Compress, compressionLvl, true);
             Reset();
         }
 
@@ -52,18 +52,18 @@ namespace Transport.Protocols.Zip
             var buffer = bufferHodler.Value;
 
             // Упаковываем
-            mPackedStream.Position = 0;
-            mCompressor.Write(buffer.Array, buffer.Offset, buffer.Count);
-            mCompressor.Flush();
+            _packedStream.Position = 0;
+            _compressor.Write(buffer.Array, buffer.Offset, buffer.Count);
+            _compressor.Flush();
 
             // Аллоцируем буфер для записи
-            int compressedSize = (int)mPackedStream.Position;
+            int compressedSize = (int)_packedStream.Position;
             using var compressedBufferHolder = bytesPool.Acquire(compressedSize).AsDisposable();
             var compressedBuffer = compressedBufferHolder.Value;            
 
             // Записываем упакованные данные буфер
-            mPackedStream.Position = 0;
-            if (mPackedStream.Read(compressedBuffer.Array, compressedBuffer.Offset, compressedSize) != compressedSize)
+            _packedStream.Position = 0;
+            if (_packedStream.Read(compressedBuffer.Array, compressedBuffer.Offset, compressedSize) != compressedSize)
             {
                 return false;
             }
@@ -77,11 +77,11 @@ namespace Transport.Protocols.Zip
 
         public void Reset()
         {
-            mCompressor.FlushMode = FlushType.Full;
-            mCompressor.WriteByte(123); // any byte
-            mCompressor.Flush();
-            mCompressor.FlushMode = FlushType.Sync;
-            mPackedStream.Position = 0;
+            _compressor.FlushMode = FlushType.Full;
+            _compressor.WriteByte(123); // any byte
+            _compressor.Flush();
+            _compressor.FlushMode = FlushType.Sync;
+            _packedStream.Position = 0;
         }
     }
 
@@ -110,21 +110,21 @@ namespace Transport.Protocols.Zip
 
         public static void Release(ZLibDecompressor decompressor)
         {
-            mDecompressors[(int)decompressor.mCompressionLevel].Release(decompressor);
+            mDecompressors[(int)decompressor._compressionLevel].Release(decompressor);
         }
 
 
-        private readonly MemoryStream mUnpackedStream;
-        private readonly DeflateStream mDecompressor;
-        private readonly CompressionLevel mCompressionLevel;
+        private readonly MemoryStream _unpackedStream;
+        private readonly DeflateStream _decompressor;
+        private readonly CompressionLevel _compressionLevel;
         
         private readonly ByteSourceFromStream _byteSource = new ByteSourceFromStream();
 
         private ZLibDecompressor(CompressionLevel compressionLvl)
         {
-            mCompressionLevel = compressionLvl;
-            mUnpackedStream = new MemoryStream();
-            mDecompressor = new DeflateStream(mUnpackedStream, CompressionMode.Decompress);
+            _compressionLevel = compressionLvl;
+            _unpackedStream = new MemoryStream();
+            _decompressor = new DeflateStream(_unpackedStream, CompressionMode.Decompress);
         }
 
         public bool Unpack(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
@@ -140,12 +140,12 @@ namespace Transport.Protocols.Zip
                 return false;
             }
             
-            mUnpackedStream.SetLength(0);
-            mDecompressor.Write(compressedBytes.ReadOnlyArray, compressedBytes.Offset, compressedBytes.Count);
-            mDecompressor.Flush();
+            _unpackedStream.SetLength(0);
+            _decompressor.Write(compressedBytes.ReadOnlyArray, compressedBytes.Offset, compressedBytes.Count);
+            _decompressor.Flush();
             
-            mUnpackedStream.Position = 0;
-            _byteSource.Reset(mUnpackedStream);
+            _unpackedStream.Position = 0;
+            _byteSource.Reset(_unpackedStream);
             if (!data.Deserialize(_byteSource, bytesPool))
             {
                 return false;
