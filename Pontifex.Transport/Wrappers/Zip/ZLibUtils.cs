@@ -1,10 +1,7 @@
 ﻿using System.IO;
 using Actuarius.Memory;
 using Ionic.Zlib;
-using Shared;
-using Shared.Buffer;
-using Shared.ByteSinks;
-using Shared.Pooling;
+using Pontifex.Utils;
 
 namespace Transport.Protocols.Zip
 {
@@ -17,7 +14,7 @@ namespace Transport.Protocols.Zip
             for (CompressionLevel cLvl  = CompressionLevel.Level0; cLvl <= CompressionLevel.Level9; cLvl += 1)
             {
                 var lvl = cLvl;
-                mCompressors[(int)cLvl] = new LargeObjectBufferedPool<ZLibCompressor>(new LambdaConstructor<ZLibCompressor>(() => new ZLibCompressor(lvl)));
+                mCompressors[(int)cLvl] = new LargeObjectBufferedPool<ZLibCompressor>(() => new ZLibCompressor(lvl));
             }
         }
 
@@ -37,12 +34,9 @@ namespace Transport.Protocols.Zip
             mCompressors[(int)compressor.mCompressionLevel].Release(compressor);
         }
 
-
         private readonly MemoryStream mPackedStream;
         private readonly DeflateStream mCompressor;
         private readonly CompressionLevel mCompressionLevel;
-
-        private byte[] mBuffer = new byte[256];
 
         private ZLibCompressor(CompressionLevel compressionLvl)
         {
@@ -52,37 +46,31 @@ namespace Transport.Protocols.Zip
             Reset();
         }
 
-        public bool Pack(IMemoryBuffer data)
+        public bool Pack(UnionDataList data, ICollectablePool collectablePool, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
         {
-            int len = data.Size;
-            if (mBuffer.Length < len)
-            {
-                mBuffer = new byte[len * 4];
-            }
-
-            var sink = ByteArraySink.ThreadInstance(mBuffer);
-            if (!data.TryWriteTo(sink))
-            {
-                return false;
-            }
+            using var bufferHodler = data.Serialize(collectablePool, bytesPool).AsDisposable();
+            var buffer = bufferHodler.Value;
 
             // Упаковываем
             mPackedStream.Position = 0;
-            mCompressor.Write(mBuffer, 0, len);
+            mCompressor.Write(buffer.Array, buffer.Offset, buffer.Count);
             mCompressor.Flush();
 
             // Аллоцируем буфер для записи
             int compressedSize = (int)mPackedStream.Position;
-            CollectableByteArraySegmentWrapper compressedBuffer = CollectableByteArraySegmentWrapper.Construct(compressedSize);
-            ByteArraySegment internalBuffer = compressedBuffer.ShowByteArray();
+            using var compressedBufferHolder = bytesPool.Acquire(compressedSize).AsDisposable();
+            var compressedBuffer = compressedBufferHolder.Value;            
 
             // Записываем упакованные данные буфер
             mPackedStream.Position = 0;
-            mPackedStream.Read(internalBuffer.ReadOnlyArray, internalBuffer.Offset, compressedBuffer.Count);
+            if (mPackedStream.Read(compressedBuffer.Array, compressedBuffer.Offset, compressedSize) != compressedSize)
+            {
+                return false;
+            }
 
             // Заменяем исходные данные на сжатый буфер
             data.Clear();
-            data.PushAbstractArray(compressedBuffer);
+            data.PutFirst(new UnionData(compressedBuffer.Acquire()));
 
             return true;
         }
@@ -106,7 +94,7 @@ namespace Transport.Protocols.Zip
             for (CompressionLevel cLvl  = CompressionLevel.Level0; cLvl <= CompressionLevel.Level9; cLvl += 1)
             {
                 var lvl = cLvl;
-                mDecompressors[(int)cLvl] = new LargeObjectBufferedPool<ZLibDecompressor>(new LambdaConstructor<ZLibDecompressor>(() => new ZLibDecompressor(lvl)));
+                mDecompressors[(int)cLvl] = new LargeObjectBufferedPool<ZLibDecompressor>(() => new ZLibDecompressor(lvl));
             }
         }
 
@@ -129,6 +117,8 @@ namespace Transport.Protocols.Zip
         private readonly MemoryStream mUnpackedStream;
         private readonly DeflateStream mDecompressor;
         private readonly CompressionLevel mCompressionLevel;
+        
+        private readonly ByteSourceFromStream _byteSource = new ByteSourceFromStream();
 
         private ZLibDecompressor(CompressionLevel compressionLvl)
         {
@@ -137,39 +127,31 @@ namespace Transport.Protocols.Zip
             mDecompressor = new DeflateStream(mUnpackedStream, CompressionMode.Decompress);
         }
 
-        public bool Unpack(IMemoryBuffer @from, IMemoryBuffer to)
+        public bool Unpack(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
         {
-            IMultiRefByteArray compressedBytes;
-
-            var element = @from.PopFirst();
-            if (!element.AsAbstractArray(out compressedBytes))
+            if (!data.PopFirstAsArray(out var compressedBytes) || data.Elements.Count != 0)
             {
                 return false;
             }
-
-            IMultiRefLowLevelByteArray lowLevelCompressedBytes = compressedBytes.ToLowLevelByteArray();
-            compressedBytes.Release();
-
-            if (!lowLevelCompressedBytes.IsValid)
+            using var compressedBytesDisposer = compressedBytes.AsDisposable();
+            
+            if (!compressedBytes.IsValid)
             {
-                lowLevelCompressedBytes.Release();
                 return false;
             }
-
-            mDecompressor.Write(lowLevelCompressedBytes.ReadOnlyArray, lowLevelCompressedBytes.Offset, lowLevelCompressedBytes.Count);
+            
+            mUnpackedStream.SetLength(0);
+            mDecompressor.Write(compressedBytes.ReadOnlyArray, compressedBytes.Offset, compressedBytes.Count);
             mDecompressor.Flush();
-
-            lowLevelCompressedBytes.Release();
-
-            IMultiRefLowLevelByteArray unpackedBytes = CollectableByteArraySegmentWrapper.Construct((int)mUnpackedStream.Position);
-
+            
             mUnpackedStream.Position = 0;
-            mUnpackedStream.Read(unpackedBytes.ReadOnlyArray, unpackedBytes.Offset, unpackedBytes.Count);
-            mUnpackedStream.Position = 0;
+            _byteSource.Reset(mUnpackedStream);
+            if (!data.Deserialize(_byteSource, bytesPool))
+            {
+                return false;
+            }
 
-            var res = to.ReadFrom(unpackedBytes);
-            unpackedBytes.Release();
-            return res;
+            return true;
         }
     }
 }

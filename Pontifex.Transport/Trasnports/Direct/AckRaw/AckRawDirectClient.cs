@@ -47,7 +47,7 @@ namespace Transport.Transports.Direct
                 var transport = DirectTransportManager.Instance.NewTransport(
                     _serverEp,
                     localEp,
-                    (IClientDirectCtl)this);
+                    this);
 
                 if (transport != null)
                 {

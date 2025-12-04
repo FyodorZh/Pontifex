@@ -12,7 +12,7 @@ namespace Shared
             where TObject : class, ICollectableResource<TObject>, IReleasableResource, new()
         {
             public static readonly IConcurrentPool<TObject> Instance =
-                new CollectableObjectConcurrentPool<TObject>(new SmallObjectBufferedPool<TObject>(DefaultConstructor<TObject>.Instance));
+                new CollectableObjectConcurrentPool<TObject>(new SmallObjectBufferedPool<TObject>(() => new TObject()));
         }
 
         public static TObject Acquire<TObject>()
@@ -24,13 +24,13 @@ namespace Shared
         public static class UnsafePool<TObject>
             where TObject : class, new()
         {
-            public static readonly IConcurrentPool<TObject> Instance = new SmallObjectBufferedPool<TObject>(DefaultConstructor<TObject>.Instance);
+            public static readonly IConcurrentPool<TObject> Instance = new SmallObjectBufferedPool<TObject>(() => new TObject());
         }
 
         public static class UnsafePoolLarge<TObject>
             where TObject : class, new()
         {
-            public static readonly IConcurrentPool<TObject> Instance = new LargeObjectBufferedPool<TObject>(DefaultConstructor<TObject>.Instance);
+            public static readonly IConcurrentPool<TObject> Instance = new LargeObjectBufferedPool<TObject>(() => new TObject());
         }
     }
 }

@@ -10,14 +10,19 @@ namespace Pontifex.Utils
         private readonly CycleQueue<UnionData> _data = new();
 
         public IReadOnlyArray<UnionData> Elements => _data;
-        
-        protected override void OnCollected()
+
+        public void Clear()
         {
             foreach (var element in _data.Enumerate())
             {
                 element.Bytes?.Release();
             }
             _data.Clear();
+        }
+        
+        protected override void OnCollected()
+        {
+            Clear();
         }
 
         protected override void OnRestored()
@@ -52,7 +57,7 @@ namespace Pontifex.Utils
             using var sink = collectablePool.Acquire<ByteSinkFromArray>().AsDisposable();
             sink.Value.Reset(buffer, 0);
 
-            UnionDataMemoryAlias alias = count;
+            UnionDataMemoryAlias alias = _data.Count;
             alias.WriteTo4(sink.Value);
             
             foreach (var element in _data.Enumerate())
@@ -65,7 +70,7 @@ namespace Pontifex.Utils
 
         public bool Deserialize(IByteSource source, IPool<IMultiRefByteArray, int> pool)
         {
-            _data.Clear();
+            Clear();
             
             UnionDataMemoryAlias alias = new();
             if (!alias.ReadFrom4(source))
@@ -85,6 +90,11 @@ namespace Pontifex.Utils
             }
 
             return true;
+        }
+
+        public override string ToString()
+        {
+            return "[" + string.Join(",", _data.Enumerate()) + "]";
         }
     }
 

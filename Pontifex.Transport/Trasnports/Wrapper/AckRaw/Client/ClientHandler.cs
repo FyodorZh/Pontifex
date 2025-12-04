@@ -1,12 +1,11 @@
 ﻿using System;
+using Actuarius.Memory;
 using Pontifex.Utils;
-using Shared;
 using Transport.Abstractions;
 using Transport.Abstractions.Endpoints;
 using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers;
 using Transport.Abstractions.Handlers.Client;
-using Shared.Buffer;
 using Transport.Endpoints;
 
 namespace Transport.Transports.ProtocolWrapper.AckRaw
@@ -17,7 +16,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
         private readonly IAckRawWrapperClientLogic mWrapperLogic;
         private readonly IAckRawClientHandler mUserHandler;
 
-        private volatile IAckRawServerEndpoint mTransportEndpoint;
+        private volatile IAckRawServerEndpoint? mTransportEndpoint;
 
         private readonly object mSendCallSerializer = new object();
 
@@ -34,7 +33,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             mWrapperLogic.UpdateAckData(ackData);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
         {
             mTransportEndpoint = endPoint;
             try
@@ -70,23 +69,25 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             mTransport.Stop(reason);
         }
 
-        void IRawBaseHandler.OnReceived(IMemoryBufferHolder receivedBuffer)
+        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             try
             {
-                using (var bufferAccessor = receivedBuffer.ExposeAccessorOnce())
+                if (mWrapperLogic.ProcessReceivedData(receivedBuffer))
                 {
-                    if (mWrapperLogic.ProcessReceivedData(bufferAccessor.Buffer))
-                    {
-                        mUserHandler.OnReceived(bufferAccessor.Acquire());
-                        return;
-                    }
-                    mTransport.Fail("IAckRawClientHandler.OnReceived", "Failed to process incomming data");
+                    mUserHandler.OnReceived(receivedBuffer.Acquire());
+                    return;
                 }
+
+                mTransport.Fail("IAckRawClientHandler.OnReceived", "Failed to process incoming data");
             }
             catch (Exception ex)
             {
                 mTransport.FailException("IAckRawClientHandler.OnReceived", ex, "Failed to process received data");
+            }
+            finally
+            {
+                receivedBuffer.Release();
             }
         }
 
@@ -139,20 +140,20 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             }
         }
 
-        SendResult IAckRawBaseEndpoint.Send(IMemoryBufferHolder bufferToSend)
+        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             lock (mSendCallSerializer)
             {
-                using (var bufferAccessor = bufferToSend.ExposeAccessorOnce())
+                try
                 {
                     var endpoint = mTransportEndpoint;
                     if (endpoint != null)
                     {
                         try
                         {
-                            if (mWrapperLogic.ProcessSentData(bufferAccessor.Buffer))
+                            if (mWrapperLogic.ProcessSentData(bufferToSend))
                             {
-                                return endpoint.Send(bufferAccessor.Acquire());
+                                return endpoint.Send(bufferToSend.Acquire());
                             }
 
                             return SendResult.Error;
@@ -162,9 +163,19 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
                             Log.wtf(ex);
                         }
                     }
+
                     return SendResult.Error;
                 }
+                finally
+                {
+                    bufferToSend.Release();
+                }
             }
+        }
+
+        public void Setup(IMemoryRental memory, ILogger logger)
+        {
+            mUserHandler.Setup(memory, logger);
         }
     }
 }

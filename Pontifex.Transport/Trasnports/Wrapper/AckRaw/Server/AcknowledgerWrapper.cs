@@ -1,6 +1,6 @@
 ﻿using System;
+using Actuarius.Memory;
 using Pontifex.Utils;
-using Shared;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Handlers.Server;
 
@@ -9,40 +9,45 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
     public class AcknowledgerWrapper<THandlerWrapper> : AcknowledgerWrapper
         where THandlerWrapper : IHandlerWrapper
     {
-        private readonly IConstructor<THandlerWrapper> mCtor;
+        private readonly Func<THandlerWrapper> _ctor;
 
-        public AcknowledgerWrapper(IConstructor<THandlerWrapper> constructor)
+        public AcknowledgerWrapper(Func<THandlerWrapper> constructor)
         {
-            mCtor = constructor;
+            _ctor = constructor;
         }
 
         protected override IHandlerWrapper ConstructWrapper()
         {
-            return mCtor.Construct();
+            return _ctor.Invoke();
         }
     }
 
     public abstract class AcknowledgerWrapper : IRawServerAcknowledger<IAckRawServerHandler>
     {
-        private Action<string> mOnFail;
-        private volatile IRawServerAcknowledger<IAckRawServerHandler> mWrappedAcknowledger;
+        private Action<string> _onFail = null!;
+        private IRawServerAcknowledger<IAckRawServerHandler> _wrappedAcknowledger = null!;
 
         public void Init(IRawServerAcknowledger<IAckRawServerHandler> wrappedAcknowledger, Action<string> onFail)
         {
-            mOnFail = onFail;
-            mWrappedAcknowledger = wrappedAcknowledger;
+            _onFail = onFail;
+            _wrappedAcknowledger = wrappedAcknowledger;
         }
 
-        public IAckRawServerHandler TryAck(UnionDataList ackData, ILogger logger)
+        public void Setup(IMemoryRental memory, ILogger logger)
+        {
+            _wrappedAcknowledger.Setup(memory, logger);
+        }
+
+        public IAckRawServerHandler? TryAck(UnionDataList ackData)
         {
             var wrapper = ConstructWrapper();
             bool isOK = wrapper.CheckAckData(ackData);
             if (isOK)
             {
-                IAckRawServerHandler coreHandler = mWrappedAcknowledger.TryAck(ackData, logger);
+                IAckRawServerHandler? coreHandler = _wrappedAcknowledger.TryAck(ackData);
                 if (coreHandler != null)
                 {
-                    wrapper.Init(coreHandler.Test(mOnFail).GetSafe(e => mOnFail(e.ToString())));
+                    wrapper.Init(coreHandler.Test(_onFail).GetSafe(e => _onFail(e.ToString())));
                     return wrapper;
                 }
             }

@@ -1,15 +1,14 @@
 ﻿using Actuarius.Memory;
 using Ionic.Zlib;
-using Shared;
-using Shared.Buffer;
-using Shared.Pooling;
+using Pontifex.Utils;
+using Transport.Transports.ProtocolWrapper.AckRaw;
 
 namespace Transport.Protocols.Zip
 {
-    public class CompressorLogic : IReleasableResource
+    public abstract class CompressorLogic : AckRawWrapperLogic, IReleasableResource
     {
-        private ZLibCompressor mCompressor;
-        private ZLibDecompressor mDecompressor;
+        private ZLibCompressor? mCompressor;
+        private ZLibDecompressor? mDecompressor;
 
         public CompressorLogic(int compressionLvl)
         {
@@ -26,13 +25,14 @@ namespace Transport.Protocols.Zip
             mDecompressor = ZLibDecompressor.Acquire((CompressionLevel)compressionLvl);
         }
 
-        protected bool Compress(IMemoryBuffer data)
+        protected bool Compress(UnionDataList data)
         {
-            if (mCompressor != null)
+            var compressor = mCompressor;
+            if (compressor != null)
             {
                 try
                 {
-                    return mCompressor.Pack(data);
+                    return compressor.Pack(data, Memory.CollectablePool,  Memory.ByteArraysPool);
                 }
                 catch
                 {
@@ -44,13 +44,14 @@ namespace Transport.Protocols.Zip
             return false;
         }
 
-        protected bool Decompress(IMemoryBuffer data)
+        protected bool Decompress(UnionDataList data)
         {
-            if (mDecompressor != null)
+            var decompressor = mDecompressor;
+            if (decompressor != null)
             {
                 try
                 {
-                    return mDecompressor.Unpack(data, data);
+                    return decompressor.Unpack(data, Memory.ByteArraysPool);
                 }
                 catch
                 {

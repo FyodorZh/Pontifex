@@ -13,13 +13,12 @@ using Transport.Endpoints;
 
 namespace Transport
 {
-    public class AckRawReliableServerLogger : IAckReliableRawServer, IRawServerAcknowledger<IAckRawServerHandler>, IAckRawServerHandler, IAckRawClientEndpoint
+    public class AckRawReliableServerLogger : IAckReliableRawServer, IRawServerAcknowledger<IAckRawServerHandler>, IAckRawServerHandler
     {
         private readonly IAckReliableRawServer _core;
 
         private IRawServerAcknowledger<IAckRawServerHandler>? _userAcknowledger;
         private IAckRawServerHandler? _userHandler;
-        private IAckRawClientEndpoint? _endPoint;
 
         public ILogger Log => _core.Log;
 
@@ -71,31 +70,6 @@ namespace Transport
             return _core.Init(this);
         }
 
-        IEndPoint IAckRawBaseEndpoint.RemoteEndPoint => _endPoint?.RemoteEndPoint ?? VoidEndPoint.Instance;
-
-        bool IAckRawBaseEndpoint.IsConnected => _endPoint?.IsConnected ?? false;
-
-        int IAckRawBaseEndpoint.MessageMaxByteSize => _endPoint?.MessageMaxByteSize ?? 0;
-
-        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
-        {
-            Log.i("EndPoint.Send(" + bufferToSend + ")");
-            var endpoint = _endPoint;
-            if (endpoint == null)
-            {
-                return SendResult.Error;
-            }
-            var res = endpoint.Send(bufferToSend);
-            Log.i("Result: " + res);
-            return res;
-        }
-
-        bool IAckRawBaseEndpoint.Disconnect(StopReason reason)
-        {
-            Log.i("EndPoint.Disconnect(" + reason + ")");
-            return _endPoint?.Disconnect(reason) ?? false;
-        }
-
         int IAckRawServer.MessageMaxByteSize => _core.MessageMaxByteSize;
 
         void IRawServerAcknowledger<IAckRawServerHandler>.Setup(IMemoryRental memory, ILogger logger)
@@ -141,8 +115,23 @@ namespace Transport
         void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
         {
             Log.i("UserHandler.OnConnected()");
-            _endPoint = endPoint;
-            _userHandler?.OnConnected(this);
+            var endPointWrapper = new AckRawClientEndpointWrapper(endPoint, (endpoint, dataToSend) =>
+            {
+                Log.i("EndPoint.Send(" + dataToSend + ")");
+                if (endpoint == null)
+                {
+                    return SendResult.Error;
+                }
+
+                var res = endpoint.Send(dataToSend);
+                Log.i("Result: " + res);
+                return res;
+            }, (endpoint, disconnectReason) =>
+            {
+                Log.i("EndPoint.Disconnect(" + disconnectReason + ")");
+                return endpoint?.Disconnect(disconnectReason) ?? false;
+            });
+            _userHandler?.OnConnected(endPointWrapper);
         }
 
         void IHandler.Setup(IMemoryRental memory, ILogger logger)

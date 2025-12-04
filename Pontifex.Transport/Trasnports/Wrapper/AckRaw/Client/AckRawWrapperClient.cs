@@ -1,5 +1,6 @@
-﻿using Pontifex.Utils;
-using Shared;
+﻿using System;
+using Actuarius.Memory;
+using Pontifex.Utils;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers;
@@ -8,24 +9,26 @@ using Transport.Transports.Core;
 
 namespace Transport.Transports.ProtocolWrapper.AckRaw
 {
-    public class AckRawWrapperClient<Logic> : AckRawWrapperClient
-        where Logic : IAckRawWrapperClientLogic
+    public class AckRawWrapperClient<TLogic> : AckRawWrapperClient
+        where TLogic : IAckRawWrapperClientLogic
     {
-        public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap, IConstructor<Logic> constructor)
+        public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap, Func<TLogic> constructor)
             : base(typeName, transportToWrap)
         {
-            SetupLogic(constructor.Construct());
+            SetupLogic(constructor.Invoke());
         }
     }
 
     public class AckRawWrapperClient : AckRawClient, IAckRawClientHandler
     {
         private readonly IAckRawClient mBaseTransport;
-        private IAckRawWrapperClientLogic mLogic;
+        private IAckRawWrapperClientLogic mLogic = null!;
 
         private bool mInConnectionProcess;
 
-        private ClientHandler mClientHandler;
+        private ClientHandler? mClientHandler;
+        
+        public override int MessageMaxByteSize => mBaseTransport.MessageMaxByteSize;
 
         public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap)
             : base(typeName)
@@ -34,18 +37,13 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             AppendControl(transportToWrap);
         }
 
-        public override int MessageMaxByteSize
-        {
-            get
-            {
-                return mBaseTransport.MessageMaxByteSize;
-            }
-        }
-
         protected void SetupLogic(IAckRawWrapperClientLogic logic)
         {
             mLogic = logic;
-            AppendControl(logic.Controls);
+            if (logic.Controls != null)
+            {
+                AppendControl(logic.Controls);
+            }
         }
 
         protected override IAckRawClientHandler SetupHandler(IAckRawClientHandler handler)
@@ -82,7 +80,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             mBaseTransport.Stop();
         }
 
-        internal void ConnectionFinished_Internal(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)
+        internal void ConnectionFinished_Internal(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
         {
             if (mInConnectionProcess)
             {
@@ -93,33 +91,36 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 
         public override string ToString()
         {
-            string coreName = mBaseTransport != null ? mBaseTransport.ToString() : "null-core";
-            return string.Format("{0}<{1}>", Type, coreName);
+            string coreName = mBaseTransport.ToString();
+            return $"{Type}<{coreName}>";
+        }
+
+        public void Setup(IMemoryRental memory, ILogger logger)
+        {
+            mClientHandler!.Setup(memory, logger);
         }
 
         #region IAckRawClientHandler (for internal usage)
 
         void IAckHandler.WriteAckData(UnionDataList ackData)
         {
-            Fail("GetAckData", "this method must not be called");
+            ackData.Release();
+            Fail("WriteAckData", "this method must not be called");
         }
 
         void IRawBaseHandler.OnDisconnected(StopReason reason)
         {
-            IAckRawServerEndpoint ep = mClientHandler;
-            if (ep != null)
-            {
-                ep.Disconnect(reason);
-            }
+            IAckRawServerEndpoint? ep = mClientHandler;
+            ep?.Disconnect(reason);
         }
 
-        void IRawBaseHandler.OnReceived(IMemoryBufferHolder receivedBuffer)
+        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             receivedBuffer.Release();
             Fail("OnReceived", "this method must not be called");
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
         {
             // DO NOTHING
         }

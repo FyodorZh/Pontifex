@@ -23,7 +23,12 @@
 
     <ItemGroup>
       <Folder Include="Trasnports\" />
+      <Folder Include="Trasnports\Wrapper\" />
       <Folder Include="Wrappers\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Ionic.Zlib.Core" Version="1.0.0" />
     </ItemGroup>
 
 </Project>

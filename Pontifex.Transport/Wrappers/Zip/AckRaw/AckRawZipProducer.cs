@@ -1,5 +1,4 @@
-﻿using Shared;
-using Shared.Utils;
+﻿using Actuarius.PeriodicLogic;
 using Transport.Abstractions;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Servers;
@@ -9,14 +8,11 @@ namespace Transport.Protocols.Zip.AckRaw
 {
     public abstract class AckRawZipProducer
     {
-        public string Name
-        {
-            get { return ZipInfo.TransportName; }
-        }
+        public string Name => ZipInfo.TransportName;
 
         protected bool Parse(string @params, out int compressionLevel, out string nestedAddress)
         {
-            if (@params != null && @params.Length >= 3 && @params[1] == ':')
+            if (@params.Length >= 3 && @params[1] == ':')
             {
                 if (@params[0] >= '0' && @params[0] <= '9')
                 {
@@ -40,19 +36,16 @@ namespace Transport.Protocols.Zip.AckRaw
         private class ZipClient : AckRawWrapperClient<AckRawZipClientLogic>, IAckReliableRawClient
         {
             public ZipClient(IAckRawClient transportToWrap, int compressionLevel)
-                : base(ZipInfo.TransportName, transportToWrap, new LambdaConstructor<AckRawZipClientLogic>(() => new AckRawZipClientLogic(compressionLevel)))
+                : base(ZipInfo.TransportName, transportToWrap, () => new AckRawZipClientLogic(compressionLevel))
             {
             }
         }
 
-        public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner? logicRunner)
         {
-            int compressionLevel;
-            string nestedAddress;
-            if (Parse(@params, out compressionLevel, out nestedAddress))
+            if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {
-                IAckRawClient client = factory.Construct(nestedAddress, logicRunner) as IAckRawClient;
-                if (client != null)
+                if (factory.Construct(nestedAddress, logicRunner) is IAckRawClient client)
                 {
                     return new ZipClient(client, compressionLevel);
                 }
@@ -69,24 +62,18 @@ namespace Transport.Protocols.Zip.AckRaw
                 : base(
                     ZipInfo.TransportName,
                     transportToWrap,
-                    new LambdaConstructor<AcknowledgerWrapper<HandlerWrapper<AckRawZipServerLogic>>>(
-                        () => new AcknowledgerWrapper<HandlerWrapper<AckRawZipServerLogic>>(
-                            new LambdaConstructor<HandlerWrapper<AckRawZipServerLogic>>(
-                                () => new HandlerWrapper<AckRawZipServerLogic>(
-                                    new LambdaConstructor<AckRawZipServerLogic>(
-                                        () => new AckRawZipServerLogic(compressionLevel)))))))
+                    () => new AcknowledgerWrapper<HandlerWrapper<AckRawZipServerLogic>>(
+                        () => new HandlerWrapper<AckRawZipServerLogic>(
+                            () => new AckRawZipServerLogic(compressionLevel))))
             {
             }
         }
 
-        public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner? logicRunner)
         {
-            int compressionLevel;
-            string nestedAddress;
-            if (Parse(@params, out compressionLevel, out nestedAddress))
+            if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {
-                IAckRawServer server = factory.Construct(nestedAddress, logicRunner) as IAckRawServer;
-                if (server != null)
+                if (factory.Construct(nestedAddress, logicRunner) is IAckRawServer server)
                 {
                     return new ZipServer(server, compressionLevel);
                 }

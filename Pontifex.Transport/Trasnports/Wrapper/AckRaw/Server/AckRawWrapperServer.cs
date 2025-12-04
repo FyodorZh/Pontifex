@@ -1,4 +1,4 @@
-﻿using Shared;
+﻿using System;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Handlers.Server;
 using Transport.Abstractions.Servers;
@@ -9,14 +9,14 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
     public class AckRawWrapperServer<TAcknowledgerWrapper> : AckRawServer
         where TAcknowledgerWrapper : AcknowledgerWrapper
     {
-        private readonly IAckRawServer mCore;
+        private readonly IAckRawServer _core;
 
-        private readonly IConstructor<TAcknowledgerWrapper> mWrapperConstructor;
+        private readonly Func<TAcknowledgerWrapper> mWrapperConstructor;
 
-        public AckRawWrapperServer(string typeName, IAckRawServer core, IConstructor<TAcknowledgerWrapper> wrapperConstructor)
+        public AckRawWrapperServer(string typeName, IAckRawServer core, Func<TAcknowledgerWrapper> wrapperConstructor)
             : base(typeName)
         {
-            mCore = core;
+            _core = core;
             mWrapperConstructor = wrapperConstructor;
             AppendControl(core);
         }
@@ -25,13 +25,13 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
         {
             get
             {
-                return mCore.MessageMaxByteSize;
+                return _core.MessageMaxByteSize;
             }
         }
 
         protected override bool TryStart()
         {
-            return mCore.Start(r =>
+            return _core.Start(r =>
             {
                 if (IsStarted)
                 {
@@ -42,14 +42,14 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 
         protected override void OnStopped(StopReason reason)
         {
-            mCore.Stop(reason);
+            _core.Stop(reason);
         }
 
-        protected override IRawServerAcknowledger<IAckRawServerHandler> SetupAcknowledger(IRawServerAcknowledger<IAckRawServerHandler> baseAcknowledger)
+        protected override IRawServerAcknowledger<IAckRawServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IAckRawServerHandler> baseAcknowledger)
         {
-            var acknowledger = mWrapperConstructor.Construct();
+            var acknowledger = mWrapperConstructor.Invoke();
             acknowledger.Init(baseAcknowledger, text => Log.e(text));
-            if (mCore.Init(acknowledger))
+            if (_core.Init(acknowledger))
             {
                 return acknowledger;
             }
@@ -59,8 +59,8 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 
         public override string ToString()
         {
-            string coreName = mCore != null ? mCore.ToString() : "null-core";
-            return string.Format("{0}<{1}>", Type, coreName);
+            string coreName = _core.ToString();
+            return $"{Type}<{coreName}>";
         }
     }
 }

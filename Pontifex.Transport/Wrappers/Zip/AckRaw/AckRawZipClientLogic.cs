@@ -6,10 +6,7 @@ namespace Transport.Protocols.Zip.AckRaw
 {
     class AckRawZipClientLogic : CompressorLogic, IAckRawWrapperClientLogic
     {
-        public IControlProvider Controls
-        {
-            get { return null; }
-        }
+        public IControlProvider? Controls => null;
 
         public AckRawZipClientLogic(int compressionLvl)
             : base(compressionLvl)
@@ -21,22 +18,22 @@ namespace Transport.Protocols.Zip.AckRaw
             ackData.PutFirst("zip");
         }
 
-        public void OnConnected()
+        public override void OnConnected()
         {
             // DO NOTHING
         }
 
-        public void OnDisconnected()
+        public override void OnDisconnected()
         {
             Release();
         }
 
-        public bool ProcessReceivedData(IMemoryBuffer receivedData)
+        public override bool ProcessReceivedData(UnionDataList receivedData)
         {
             return Decompress(receivedData);
         }
 
-        public bool ProcessSentData(IMemoryBuffer sentData)
+        public override bool ProcessSentData(UnionDataList sentData)
         {
             return Compress(sentData);
         }

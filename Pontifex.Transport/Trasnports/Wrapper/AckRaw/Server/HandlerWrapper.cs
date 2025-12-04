@@ -1,11 +1,11 @@
-﻿using Pontifex.Utils;
-using Shared;
+﻿using System;
+using Actuarius.Memory;
+using Pontifex.Utils;
 using Transport.Abstractions;
 using Transport.Abstractions.Endpoints;
 using Transport.Abstractions.Endpoints.Server;
 using Transport.Abstractions.Handlers;
 using Transport.Abstractions.Handlers.Server;
-using Shared.Buffer;
 using Transport.Endpoints;
 
 namespace Transport.Transports.ProtocolWrapper.AckRaw
@@ -20,72 +20,76 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
     public class HandlerWrapper<TLogic> : HandlerWrapper
         where TLogic : IAckRawWrapperServerLogic
     {
-        public HandlerWrapper(IConstructor<TLogic> constructor)
-            : base(constructor.Construct())
+        public HandlerWrapper(Func<TLogic> constructor)
+            : base(constructor.Invoke())
         {
         }
     }
 
     public abstract class HandlerWrapper : IHandlerWrapper, IAckRawClientEndpoint
     {
-        private readonly IAckRawWrapperServerLogic mLogic;
+        private readonly IAckRawWrapperServerLogic _logic;
 
-        private volatile IAckRawServerHandler mWrappedHandler;
+        private volatile IAckRawServerHandler _wrappedHandler = null!;
 
-        private volatile IAckRawClientEndpoint mWrappedEndpoint;
+        private volatile IAckRawClientEndpoint? _wrappedEndpoint;
 
-        private readonly object mSendCallSerializer = new object();
+        private readonly object mSendCallSerializer = new ();
 
         protected HandlerWrapper(IAckRawWrapperServerLogic logic)
         {
-            mLogic = logic;
+            _logic = logic;
         }
 
         public void Init(IAckRawServerHandler wrappedHandler)
         {
-            mWrappedHandler = wrappedHandler;
+            _wrappedHandler = wrappedHandler;
         }
 
         public bool CheckAckData(UnionDataList ackData)
         {
-            return mLogic.ProcessAckData(ackData);
+            return _logic.ProcessAckData(ackData);
         }
 
-        byte[] IAckRawServerHandler.GetAckResponse()
+        void IAckRawServerHandler.GetAckResponse(UnionDataList ackResponse)
         {
-            return mWrappedHandler.GetAckResponse();
+            _wrappedHandler.GetAckResponse(ackResponse);
         }
 
         void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
         {
-            mWrappedEndpoint = endPoint;
-            mWrappedHandler.OnConnected(this);
-            mLogic.OnConnected();
+            _wrappedEndpoint = endPoint;
+            _wrappedHandler.OnConnected(this);
+            _logic.OnConnected();
         }
 
         void IRawBaseHandler.OnDisconnected(StopReason reason)
         {
-            mLogic.OnDisconnected();
-            mWrappedHandler.OnDisconnected(reason);
-            mWrappedEndpoint = null;
+            _logic.OnDisconnected();
+            _wrappedHandler.OnDisconnected(reason);
+            _wrappedEndpoint = null;
         }
 
-        void IRawBaseHandler.OnReceived(IMemoryBufferHolder receivedBuffer)
+        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
-            using (var bufferAccessor = receivedBuffer.ExposeAccessorOnce())
+            try
             {
-                if (mLogic.ProcessReceivedData(bufferAccessor.Buffer))
+                if (_logic.ProcessReceivedData(receivedBuffer))
                 {
-                    mWrappedHandler.OnReceived(bufferAccessor.Acquire());
+                    _wrappedHandler.OnReceived(receivedBuffer.Acquire());
                     return; // OK
                 }
 
                 // Failed
-                var endpoint = mWrappedEndpoint;
+                var endpoint = _wrappedEndpoint;
                 if (endpoint != null)
                 {
                     endpoint.Disconnect(new StopReasons.TextFail("???", "Failed to process received data"));
                 }
+            }
+            finally
+            {
+                receivedBuffer.Release();
             }
         }
 
@@ -93,7 +97,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
         {
             get
             {
-                var endpoint = mWrappedEndpoint;
+                var endpoint = _wrappedEndpoint;
                 if (endpoint != null)
                 {
                     return endpoint.RemoteEndPoint;
@@ -106,7 +110,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
         {
             get
             {
-                var endpoint = mWrappedEndpoint;
+                var endpoint = _wrappedEndpoint;
                 if (endpoint != null)
                 {
                     return endpoint.IsConnected;
@@ -119,7 +123,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
         {
             get
             {
-                var endpoint = mWrappedEndpoint;
+                var endpoint = _wrappedEndpoint;
                 if (endpoint != null)
                 {
                     return endpoint.MessageMaxByteSize;
@@ -128,33 +132,43 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             }
         }
 
-        SendResult IAckRawBaseEndpoint.Send(IMemoryBufferHolder bufferToSend)
+        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             lock (mSendCallSerializer)
             {
-                using (var bufferAccessor = bufferToSend.ExposeAccessorOnce())
+                try
                 {
-                    var endpoint = mWrappedEndpoint;
+                    var endpoint = _wrappedEndpoint;
                     if (endpoint != null)
                     {
-                        if (mLogic.ProcessSentData(bufferAccessor.Buffer))
+                        if (_logic.ProcessSentData(bufferToSend))
                         {
-                            return endpoint.Send(bufferAccessor.Acquire());
+                            return endpoint.Send(bufferToSend.Acquire());
                         }
                     }
+
                     return SendResult.Error;
+                }
+                finally
+                {
+                    bufferToSend.Release();
                 }
             }
         }
 
         bool IAckRawBaseEndpoint.Disconnect(StopReason reason)
         {
-            var endpoint = mWrappedEndpoint;
+            var endpoint = _wrappedEndpoint;
             if (endpoint != null)
             {
                 return endpoint.Disconnect(reason);
             }
             return false;
+        }
+
+        public void Setup(IMemoryRental memory, ILogger logger)
+        {
+            _wrappedHandler.Setup(memory, logger);
         }
     }
 }
