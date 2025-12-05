@@ -1,10 +1,13 @@
 ﻿using System;
+using Actuarius.Collections;
+using Actuarius.Memory;
+using Actuarius.PeriodicLogic;
 using Pontifex.Utils;
-using Shared;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers;
 using Transport.Abstractions.Handlers.Client;
+using Transport.StopReasons;
 using TimeSpan = System.TimeSpan;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
@@ -16,12 +19,9 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         private readonly ThreadSafeDateTime mNextReconnectionTime = new ThreadSafeDateTime();
 
-        public event Action<IAckRawServerEndpoint, ByteArraySegment> OnConnected;
+        public event Action<IAckRawServerEndpoint, UnionDataList> OnConnected;
 
-        public SessionId SessionId
-        {
-            get { return mSessionId; }
-        }
+        public SessionId SessionId => mSessionId;
 
         public ReconnectableClientLogic(Func<IAckReliableRawClient> transportFactory, IAckRawClientHandler userHandler, TimeSpan disconnectTimeout)
             : base(userHandler, disconnectTimeout)
@@ -61,13 +61,26 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             mUserHandler.WriteAckData(ackData);
             ackData.PutFirst(mSessionId.Generation);
             ackData.PutFirst(mSessionId.Id);
-            ackData.PutFirst(ReconnectableInfo.AckRequest);
+            ackData.PutFirst(new UnionData(ReconnectableInfo.AckRequest));
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, ByteArraySegment ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
         {
-            ackResponse = AckUtils.CheckPrefix(ackResponse, ReconnectableInfo.AckOKResponse);
-            if (ackResponse.IsValid && ackResponse.Count > 1)
+            using var ackResponseDisposer = ackResponse.AsDisposable();
+            if (!ackResponse.PopFirstAsArray(out var ackBytes))
+            {
+                Fail("Disconnecting due to wrong transport ack response format");
+                return;
+            }
+
+            using var ackDisposer = ackBytes.AsDisposable();
+            if (!ackBytes.EqualByContent(ReconnectableInfo.AckOKResponse))
+            {
+                Fail("Disconnecting due to wrong transport ack response");
+                return;
+            }
+
+            if (ackResponse.Elements.Count > 1)
             {
                 ByteArraySegment sessionIdBytes;
                 ackResponse = AckUtils.GetPrefix(ackResponse, ackResponse[0], out sessionIdBytes);
@@ -79,8 +92,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                     {
                         mSessionId = sessionId;
 
-                        bool isFirstConnection;
-                        Connect(endPoint, out isFirstConnection);
+                        Connect(endPoint, out var isFirstConnection);
 
                         if (isFirstConnection)
                         {
@@ -94,7 +106,8 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
                         return;
                     }
-                    Fail(string.Format("Disconnecting due to session id mismatch. Expected {0}, received {1}", mSessionId, sessionId));
+
+                    Fail($"Disconnecting due to session id mismatch. Expected {mSessionId}, received {sessionId}");
                 }
                 else
                 {
@@ -114,8 +127,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         void IAckRawClientHandler.OnStopped(StopReason reason)
         {
-            StopReasons.Induced r = reason as StopReasons.Induced;
-            if (r != null && r.Cause is StopReasons.AckRejected)
+            if (reason is Induced { Cause: AckRejected })
             {
                 Stop(reason);
             }

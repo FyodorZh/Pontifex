@@ -1,3 +1,4 @@
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Handlers.Server;
@@ -70,6 +71,7 @@ namespace Transport.Transports.Core
 
         protected IAckRawServerHandler? TryConnectNewClient(UnionDataList ackData)
         {
+            using var ackDataDisposer = ackData.AsDisposable();
             if (!IsValid)
             {
                 Fail("TryConnectNewClient", "Transport is not valid");
@@ -85,7 +87,7 @@ namespace Transport.Transports.Core
             var acknowledger = _acknowledger;
             if (acknowledger != null)
             {
-                var handler = acknowledger.TryAck(ackData);
+                var handler = acknowledger.TryAck(ackData.Acquire());
                 handler = handler?.Test(text => Log.e(text)).GetSafe(e => Log.e(e.ToString()));
                 handler?.Setup(Memory, Log);
                 return handler;

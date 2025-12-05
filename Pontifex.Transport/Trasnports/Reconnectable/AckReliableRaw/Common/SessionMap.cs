@@ -1,5 +1,4 @@
 ﻿using Actuarius.Collections;
-using Shared;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {
@@ -13,7 +12,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         private volatile TSession[] mSessions;
         private volatile int[] mGenerations;
 
-        private int mNextFreeId = 0;
+        private int mNextFreeId;
 
         public SessionMap(int capacity)
         {
@@ -24,8 +23,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         public SessionId AddSession(TSession session)
         {
-            SessionId freeId;
-            if (!mFreeSessions.TryPop(out freeId))
+            if (!mFreeSessions.TryPop(out var freeId))
             {
                 int id = System.Threading.Interlocked.Increment(ref mNextFreeId) - 1;
                 if (id >= mCapacity)
@@ -49,7 +47,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                 int generation = System.Threading.Interlocked.CompareExchange(ref mGenerations[id.Id], 0, id.Generation);
                 if (generation == id.Generation)
                 {
-                    mSessions[id.Id] = default(TSession);
+                    mSessions[id.Id] = null!;
                     mFreeSessions.Put(new SessionId(id.Id, id.Generation + 1));
                     return true;
                 }
@@ -57,7 +55,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             return false;
         }
 
-        public TSession Find(SessionId id)
+        public TSession? Find(SessionId id)
         {
             if (id.Id >= 0 && id.Id < mCapacity)
             {
@@ -70,7 +68,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                     }
                 }
             }
-            return default(TSession);
+            return null;
         }
     }
 }

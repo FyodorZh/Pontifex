@@ -17,9 +17,9 @@ namespace Transport.Transports.Core
 
         private IControlProvider _controlProvider = new VoidControlProvider();
 
-        public ILogger Log { get; protected set; } = global::Log.VoidLogger;
+        public ILogger Log { get; private set; } = global::Log.VoidLogger;
 
-        public IMemoryRental Memory { get; } = MemoryRental.Shared;
+        public IMemoryRental Memory { get; private set; } = MemoryRental.Shared;
 
         /// <summary>
         /// Попытка запустить протокольный транспорт.

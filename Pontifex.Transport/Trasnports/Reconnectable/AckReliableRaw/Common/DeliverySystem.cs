@@ -1,4 +1,7 @@
-﻿using Actuarius.Collections;
+﻿using System;
+using Actuarius.Collections;
+using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {
@@ -16,7 +19,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         public struct Delivery
         {
             public DeliveryId Id;
-            public IMemoryBufferHolder Buffer;
+            public UnionDataList Buffer;
         }
 
         private volatile bool mIsValid = true;
@@ -51,7 +54,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             mLastReceivedMessageId = DeliveryId.Zero;
         }
 
-        public OpResult ScheduleToSend(IMemoryBufferHolder bufferToSend)
+        public OpResult ScheduleToSend(UnionDataList bufferToSend)
         {
             using (IMemoryBufferAccessor bufferAccessor = bufferToSend.ExposeAccessorOnce())
             {
@@ -88,17 +91,18 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             }
         }
 
-        public IMemoryBufferHolder[] ScheduledBuffers()
+        public IMultiRefResourceOwner<UnionDataList[]> ScheduledBuffers(IGenericConcurrentPool<Array, int> arrayPool)
         {
             lock (mPendingToDeliver)
             {
                 int count = mPendingToDeliver.Count;
-                IMemoryBufferHolder[] buffers = new IMemoryBufferHolder[count];
+                var list = arrayPool.Acquire<UnionDataList[]>(count).AsOwner();
+                var array = list.ExposeResourceUnsafe(out _);
                 for (int i = 0; i < count; ++i)
                 {
-                    buffers[i] = mPendingToDeliver[i].Buffer.Acquire();
+                    array[i] = mPendingToDeliver[i].Buffer.Acquire();
                 }
-                return buffers;
+                return list;
             }
         }
 
@@ -118,7 +122,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         /// </summary>
         /// <param name="receivedBuffer"></param>
         /// <returns> TRUE если мессадж пришёл первый раз и его надо показывать бизнеслогике </returns>
-        public OpResult Received(IMemoryBufferHolder receivedBuffer)
+        public OpResult Received(UnionDataList receivedBuffer)
         {
             using (IMemoryBufferAccessor bufferAccessor = receivedBuffer.ExposeAccessorOnce())
             {
@@ -194,8 +198,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                 }
                 else if (cmp == 0)
                 {
-                    Delivery delivery;
-                    mPendingToDeliver.TryPop(out delivery); // OK
+                    mPendingToDeliver.TryPop(out var delivery); // OK
                     delivery.Buffer.Release();
                     return true;
                 }

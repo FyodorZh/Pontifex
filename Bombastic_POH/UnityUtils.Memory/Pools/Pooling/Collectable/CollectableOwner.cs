@@ -50,7 +50,7 @@ namespace Shared.Pooling
             // DO NOTHING
         }
 
-        public TObject ShowResourceUnsafe(out TObject resource)
+        public TObject ExposeResourceUnsafe(out TObject resource)
         {
             return resource = Resource;
         }

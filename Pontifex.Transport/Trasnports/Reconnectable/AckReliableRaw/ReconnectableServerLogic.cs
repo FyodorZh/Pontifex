@@ -1,6 +1,6 @@
 ﻿using System;
+using Actuarius.Memory;
 using Pontifex.Utils;
-using Shared;
 using Transport.Abstractions.Endpoints.Server;
 using Transport.Abstractions.Handlers.Server;
 using TimeSpan = System.TimeSpan;
@@ -9,13 +9,13 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {
     class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawClientEndpoint>, IAckRawServerHandler, IAckRawClientEndpoint
     {
-        private UnionDataList mAckData;
+        private UnionDataList? mAckData;
 
         private readonly IAckRawServerHandler mUserHandler;
 
-        private volatile bool mAttached = false;
+        private volatile bool mAttached;
 
-        public event Action<IAckRawClientEndpoint> OnConnected;
+        public event Action<IAckRawClientEndpoint>? OnConnected;
 
         public ReconnectableServerLogic(IAckRawServerHandler userHandler, TimeSpan disconnectTimeout)
             : base(userHandler, disconnectTimeout)
@@ -36,21 +36,29 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         public bool Attach(SessionId sessionId, UnionDataList ackData)
         {
-            if (mUserHandler != null && sessionId.IsValid)
+            if (sessionId.IsValid)
             {
                 mSessionId = sessionId;
-                mAckData = ackData.Clone();
+                mAckData = ackData;
                 mAttached = true;
                 return true;
             }
+            ackData.Release();
             return false;
         }
 
         public bool Reattach(UnionDataList ackData)
         {
+            using var ackDataDisposer = ackData.AsDisposable();
             if (mAttached)
             {
                 Log.w("{sessionId}: Reattach failed due to true multiple reconnection", this);
+                return false;
+            }
+
+            if (mAckData == null)
+            {
+                Log.e("{sessionId}: Reattach failed due to null ack-data (ref)", this);
                 return false;
             }
 
@@ -64,24 +72,20 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             return true;
         }
 
-        byte[] IAckRawServerHandler.GetAckResponse()
+        void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
         {
-            byte[] ackResponse = AckUtils.AppendPrefix(mUserHandler.GetAckResponse(), mSessionId.Serialize());
-            ackResponse = AckUtils.AppendPrefix(ackResponse, ReconnectableInfo.AckOKResponse);
-            return ackResponse;
+            mUserHandler.GetAckResponse(ackData);
+            ackData.PutLast(new UnionData(mSessionId.Generation));
+            ackData.PutLast(new UnionData(mSessionId.Id));
+            ackData.PutLast(new UnionData(ReconnectableInfo.AckOKResponse));
         }
 
         void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
         {
-            bool isFirstConnection;
-            Connect(endPoint, out isFirstConnection);
+            Connect(endPoint, out var isFirstConnection);
             if (isFirstConnection)
             {
-                var onConnectd = OnConnected;
-                if (onConnectd != null)
-                {
-                    onConnectd(this);
-                }
+                OnConnected?.Invoke(this);
             }
         }
 

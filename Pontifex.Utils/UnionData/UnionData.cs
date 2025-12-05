@@ -251,7 +251,7 @@ namespace Pontifex.Utils
                 {
                     UnionDataMemoryAlias size = _bytes!.Count;
                     size.WriteTo4(byteSink);
-                    byteSink.PutMany(_bytes.ShowResourceUnsafe(out IReadOnlyBytes _));
+                    byteSink.PutMany(_bytes.ExposeResourceUnsafe(out IReadOnlyBytes _));
                 }
                     return;
                 case UnionDataType.NullArray:

@@ -1,8 +1,8 @@
 ﻿using System;
 using Actuarius.Collections;
+using Actuarius.ConcurrentPrimitives;
+using Actuarius.PeriodicLogic;
 using Pontifex.Utils;
-using Shared;
-using Shared.Utils;
 using Transport.Abstractions;
 using Transport.Abstractions.Endpoints;
 using Transport.Abstractions.Handlers;
@@ -93,8 +93,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
             bool System.IEquatable<IEndPoint>.Equals(IEndPoint other)
             {
-                EndPointImpl o = other as EndPointImpl;
-                if (o != null)
+                if (other is EndPointImpl o)
                 {
                     return mOwner.mSessionId.Id == o.mOwner.mSessionId.Id &&
                            mOwner.mSessionId.Generation == o.mOwner.mSessionId.Generation;
@@ -125,8 +124,8 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         private StopReason mCurrentStopReason = StopReason.Void;
 
         private readonly TinyConcurrentQueue<IIntention> mIntentions = new TinyConcurrentQueue<IIntention>();
-        private readonly ConcurrentQueueValve<IMemoryBufferHolder> mReceivedMessages;
-        private readonly ConcurrentQueueValve<IMemoryBufferHolder> mSentMessages;
+        private readonly ConcurrentQueueValve<UnionDataList> mReceivedMessages;
+        private readonly ConcurrentQueueValve<UnionDataList> mSentMessages;
 
         // Полный доступ из треда IPeriodicLogic
         private volatile State mState = State.BeforeReconnecting;
@@ -150,8 +149,8 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         protected ReconnectableBaseLogic(IRawBaseHandler userHandler, TimeSpan disconnectTimeout)
         {
-            mReceivedMessages = new ConcurrentQueueValve<IMemoryBufferHolder>(new TinyConcurrentQueue<IMemoryBufferHolder>(), holder => holder.Release());
-            mSentMessages = new ConcurrentQueueValve<IMemoryBufferHolder>(new TinyConcurrentQueue<IMemoryBufferHolder>(), holder => holder.Release());
+            mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), holder => holder.Release());
+            mSentMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), holder => holder.Release());
 
             mEndPoint = new EndPointImpl(this);
             mUserHandler = userHandler;
@@ -159,10 +158,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             Log = global::Log.StaticLogger;
         }
 
-        protected TEndpoint Endpoint
-        {
-            get { return mEndpoint; }
-        }
+        protected TEndpoint Endpoint => mEndpoint;
 
         bool IPeriodicLogic.LogicStarted(ILogicDriverCtl driver)
         {
@@ -182,8 +178,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             var now = DateTime.UtcNow;
 
             {
-                IIntention intention;
-                while (mIntentions.TryPop(out intention))
+                while (mIntentions.TryPop(out var intention))
                 {
                     intention.Apply(this);
                 }
@@ -216,8 +211,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             }
 
             {
-                IMemoryBufferHolder receivedBuffer;
-                while (mReceivedMessages.TryPop(out receivedBuffer))
+                while (mReceivedMessages.TryPop(out var receivedBuffer))
                 {
                     using (var bufferAccessor = receivedBuffer.ExposeAccessorOnce())
                     {
@@ -244,7 +238,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                                 // DO NOTHING
                                 break;
                             default:
-                                Fail(string.Format("Delivery system failed to receive with result '{0}'", opResult));
+                                Fail($"Delivery system failed to receive with result '{opResult}'");
                                 break;
                         }
                     }
@@ -257,8 +251,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             {
                 bool canResetSendingTime = false;
 
-                IMemoryBufferHolder sentMessage;
-                while (mSentMessages.TryPop(out sentMessage))
+                while (mSentMessages.TryPop(out var sentMessage))
                 {
                     if (DoSend(endPoint, sentMessage, false))
                     {
@@ -284,7 +277,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             }
         }
 
-        private bool DoSend(TEndpoint endPoint, IMemoryBufferHolder buffer, bool isServiceMessage)
+        private bool DoSend(TEndpoint endPoint, UnionDataList buffer, bool isServiceMessage)
         {
             using (var bufferAccessor = buffer.ExposeAccessorOnce())
             {
@@ -346,7 +339,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         public abstract void OnDisconnected(StopReason reason);
 
-        void IRawBaseHandler.OnReceived(IMemoryBufferHolder receivedBuffer)
+        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             if (mState != State.Stopped)
             {
@@ -376,18 +369,9 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         #region IAckRawBaseEndpoint
 
-        public IEndPoint RemoteEndPoint
-        {
-            get { return mEndPoint; }
-        }
+        public IEndPoint RemoteEndPoint => mEndPoint;
 
-        public bool IsConnected
-        {
-            get
-            {
-                return mEndpoint != null;
-            }
-        }
+        public bool IsConnected => mEndpoint != null;
 
         public int MessageMaxByteSize
         {
@@ -402,7 +386,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             }
         }
 
-        SendResult IAckRawBaseEndpoint.Send(IMemoryBufferHolder bufferToSend)
+        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             using (var bufferAccessor = bufferToSend.ExposeAccessorOnce())
             {
@@ -453,7 +437,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         bool IEquatable<IEndPoint>.Equals(IEndPoint other)
         {
-            ReconnectableBaseLogic<TEndpoint> typedOther = other as ReconnectableBaseLogic<TEndpoint>;
+            ReconnectableBaseLogic<TEndpoint>? typedOther = other as ReconnectableBaseLogic<TEndpoint>;
             if (!ReferenceEquals(typedOther, null))
             {
                 return mSessionId.Equals(typedOther.mSessionId);
