@@ -1,6 +1,7 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.ConcurrentPrimitives;
+using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
 using Pontifex.Utils;
 using Transport.Abstractions;
@@ -88,15 +89,14 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             {
                 var endpoint = mOwner.Endpoint;
                 string baseEP = endpoint != null ? endpoint.RemoteEndPoint.ToString() : "not-connected";
-                return string.Format("[{0} over '{1}']", mOwner.mSessionId, baseEP);
+                return $"[{mOwner.mSessionId} over '{baseEP}']";
             }
 
-            bool System.IEquatable<IEndPoint>.Equals(IEndPoint other)
+            bool IEquatable<IEndPoint>.Equals(IEndPoint other)
             {
                 if (other is EndPointImpl o)
                 {
-                    return mOwner.mSessionId.Id == o.mOwner.mSessionId.Id &&
-                           mOwner.mSessionId.Generation == o.mOwner.mSessionId.Generation;
+                    return mOwner.mSessionId.Equals(o.mOwner.mSessionId);
                 }
                 return false;
             }
@@ -110,7 +110,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         protected SessionId mSessionId = SessionId.Invalid;
 
-        private ILogicDriverCtl mLogicDriver;
+        private ILogicDriverCtl? mLogicDriver;
 
         protected abstract bool BeginReconnect();
 
@@ -119,7 +119,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         // Полный доступ на чтение/запись из многих тредов
         private volatile bool mWasConnected;
-        private volatile TEndpoint mEndpoint;
+        private volatile TEndpoint? mEndpoint;
 
         private StopReason mCurrentStopReason = StopReason.Void;
 
@@ -136,21 +136,14 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         // --
 
-        public SessionId Id
-        {
-            get { return mSessionId; }
-        }
+        public SessionId Id => mSessionId;
 
-        protected ILogger Log
-        {
-            get;
-            private set;
-        }
+        protected ILogger Log { get; private set; }
 
         protected ReconnectableBaseLogic(IRawBaseHandler userHandler, TimeSpan disconnectTimeout)
         {
-            mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), holder => holder.Release());
-            mSentMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), holder => holder.Release());
+            mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
+            mSentMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
 
             mEndPoint = new EndPointImpl(this);
             mUserHandler = userHandler;
@@ -163,13 +156,9 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         bool IPeriodicLogic.LogicStarted(ILogicDriverCtl driver)
         {
             mLogicDriver = driver;
-
-            Log = driver.Log.Wrap("transport", ToString);
-
+            //Log = driver.Log.Wrap("transport", ToString);
             mLastActivityTime.Time = DateTime.UtcNow;
-
             Log.i("Logic started");
-
             return true;
         }
 
@@ -177,11 +166,9 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         {
             var now = DateTime.UtcNow;
 
+            while (mIntentions.TryPop(out var intention))
             {
-                while (mIntentions.TryPop(out var intention))
-                {
-                    intention.Apply(this);
-                }
+                intention.Apply(this);
             }
 
             switch (mState)
@@ -190,7 +177,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                     if (now - mLastActivityTime.Time > mDisconnectTimeout)
                     {
                         System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, new StopReasons.TimeOut(ReconnectableInfo.TransportName), StopReason.Void);
-                        mLogicDriver.Stop();
+                        mLogicDriver?.Stop();
                     }
 
                     mState = State.Reconnecting;
@@ -213,34 +200,32 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             {
                 while (mReceivedMessages.TryPop(out var receivedBuffer))
                 {
-                    using (var bufferAccessor = receivedBuffer.ExposeAccessorOnce())
+                    using var receivedBufferDisposer = receivedBuffer.AsDisposable();
+                    
+                    DeliverySystem.OpResult opResult = mDelivery.Received(receivedBuffer.Acquire());
+                    switch (opResult)
                     {
-                        DeliverySystem.OpResult opResult = mDelivery.Received(bufferAccessor.Acquire());
-                        switch (opResult)
+                        case DeliverySystem.OpResult.Ok:
                         {
-                            case DeliverySystem.OpResult.Ok:
+                            if (receivedBuffer.TryPopFirst(out bool isServiceMessage))
+                            {
+                                if (!isServiceMessage)
                                 {
-                                    bool isServiceMessage;
-                                    if (bufferAccessor.Buffer.PopFirst().AsBoolean(out isServiceMessage))
-                                    {
-                                        if (!isServiceMessage)
-                                        {
-                                            mUserHandler.OnReceived(bufferAccessor.Acquire());
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Fail("Failed to parse incoming message service flag");
-                                    }
+                                    mUserHandler.OnReceived(receivedBuffer.Acquire());
                                 }
-                                break;
-                            case DeliverySystem.OpResult.DuplicateMessage:
-                                // DO NOTHING
-                                break;
-                            default:
-                                Fail($"Delivery system failed to receive with result '{opResult}'");
-                                break;
+                            }
+                            else
+                            {
+                                Fail("Failed to parse incoming message service flag");
+                            }
                         }
+                            break;
+                        case DeliverySystem.OpResult.DuplicateMessage:
+                            // DO NOTHING
+                            break;
+                        default:
+                            Fail($"Delivery system failed to receive with result '{opResult}'");
+                            break;
                     }
                 }
             }
@@ -279,19 +264,18 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         private bool DoSend(TEndpoint endPoint, UnionDataList buffer, bool isServiceMessage)
         {
-            using (var bufferAccessor = buffer.ExposeAccessorOnce())
+            using var bufferDisposer = buffer.AsDisposable();
+
+            buffer.PutFirst(new UnionData(isServiceMessage));
+            DeliverySystem.OpResult opResult = mDelivery.ScheduleToSend(buffer.Acquire());
+            switch (opResult)
             {
-                bufferAccessor.Buffer.PushBoolean(isServiceMessage);
-                DeliverySystem.OpResult opResult = mDelivery.ScheduleToSend(bufferAccessor.Acquire());
-                switch (opResult)
-                {
-                    case DeliverySystem.OpResult.Ok:
-                        endPoint.Send(ConcurrentUsageMemoryBufferPool.Instance.SnapshotOf(buffer));
-                        return true;
-                    default:
-                        Fail(string.Format("Delivery system failed to send with result '{0}'", opResult));
-                        return false;
-                }
+                case DeliverySystem.OpResult.Ok:
+                    endPoint.Send(buffer.Acquire());
+                    return true;
+                default:
+                    Fail($"Delivery system failed to send with result '{opResult}'");
+                    return false;
             }
         }
 
@@ -369,7 +353,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         #region IAckRawBaseEndpoint
 
-        public IEndPoint RemoteEndPoint => mEndPoint;
+        public IEndPoint? RemoteEndPoint => mEndPoint;
 
         public bool IsConnected => mEndpoint != null;
 

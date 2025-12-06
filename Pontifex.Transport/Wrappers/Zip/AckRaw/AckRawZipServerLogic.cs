@@ -1,4 +1,6 @@
-﻿using Pontifex.Utils;
+﻿using Actuarius.Collections;
+using Actuarius.Memory;
+using Pontifex.Utils;
 using Transport.Transports.ProtocolWrapper.AckRaw;
 
 namespace Transport.Protocols.Zip.AckRaw
@@ -12,7 +14,9 @@ namespace Transport.Protocols.Zip.AckRaw
 
         public bool ProcessAckData(UnionDataList ackData)
         {
-            return ackData.Check("zip");
+            bool res = ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? data) && data.EqualByContent(ZipInfo.TransportNameBytes);
+            data?.Release();
+            return res;
         }
 
         public override void OnConnected()

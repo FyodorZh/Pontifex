@@ -93,18 +93,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
             }
         }
 
-        IEndPoint IAckRawBaseEndpoint.RemoteEndPoint
-        {
-            get
-            {
-                var endpoint = _wrappedEndpoint;
-                if (endpoint != null)
-                {
-                    return endpoint.RemoteEndPoint;
-                }
-                return VoidEndPoint.Instance;
-            }
-        }
+        IEndPoint? IAckRawBaseEndpoint.RemoteEndPoint => _wrappedEndpoint?.RemoteEndPoint;
 
         bool IAckRawBaseEndpoint.IsConnected
         {

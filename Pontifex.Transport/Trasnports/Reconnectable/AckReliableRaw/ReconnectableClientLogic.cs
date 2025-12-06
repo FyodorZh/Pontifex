@@ -19,7 +19,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         private readonly ThreadSafeDateTime mNextReconnectionTime = new ThreadSafeDateTime();
 
-        public event Action<IAckRawServerEndpoint, UnionDataList> OnConnected;
+        public event Action<IAckRawServerEndpoint, UnionDataList>? OnConnected;
 
         public SessionId SessionId => mSessionId;
 
@@ -61,62 +61,54 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             mUserHandler.WriteAckData(ackData);
             ackData.PutFirst(mSessionId.Generation);
             ackData.PutFirst(mSessionId.Id);
-            ackData.PutFirst(new UnionData(ReconnectableInfo.AckRequest));
+            ackData.PutFirst(ReconnectableInfo.AckRequest);
         }
 
         void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
-            if (!ackResponse.PopFirstAsArray(out var ackBytes))
+            if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? ackBytes))
             {
                 Fail("Disconnecting due to wrong transport ack response format");
                 return;
             }
 
-            using var ackDisposer = ackBytes.AsDisposable();
+            using var ackBytesDisposer = ackBytes.AsDisposable();
             if (!ackBytes.EqualByContent(ReconnectableInfo.AckOKResponse))
             {
-                Fail("Disconnecting due to wrong transport ack response");
+                Fail("Disconnecting due to wrong transport ack response (1)");
+                return;
+            }
+            
+            if (!ackResponse.TryPopFirst(out int id) || !ackResponse.TryPopFirst(out int generation))
+            {
+                Fail("Disconnecting due to wrong transport ack response (2)");
                 return;
             }
 
-            if (ackResponse.Elements.Count > 1)
+            SessionId sessionId = new SessionId(id, generation);
+            if (sessionId.IsValid)
             {
-                ByteArraySegment sessionIdBytes;
-                ackResponse = AckUtils.GetPrefix(ackResponse, ackResponse[0], out sessionIdBytes);
-
-                SessionId sessionId;
-                if (sessionIdBytes.IsValid && SessionId.TryDeserialize(out sessionId, sessionIdBytes) && sessionId.IsValid)
+                if (!mSessionId.IsValid || mSessionId.Equals(sessionId))
                 {
-                    if (!mSessionId.IsValid || mSessionId.Equals(sessionId))
+                    mSessionId = sessionId;
+
+                    Connect(endPoint, out var isFirstConnection);
+
+                    if (isFirstConnection)
                     {
-                        mSessionId = sessionId;
-
-                        Connect(endPoint, out var isFirstConnection);
-
-                        if (isFirstConnection)
-                        {
-                            Log.i("Logic connected");
-                            var onConnected = OnConnected;
-                            if (onConnected != null)
-                            {
-                                onConnected(this, ackResponse);
-                            }
-                        }
-
-                        return;
+                        Log.i("Logic connected");
+                        OnConnected?.Invoke(this, ackResponse);
                     }
 
-                    Fail($"Disconnecting due to session id mismatch. Expected {mSessionId}, received {sessionId}");
+                    return;
                 }
-                else
-                {
-                    Fail("Disconnecting due to incorrect session id");
-                }
+
+                Fail($"Disconnecting due to session id mismatch. Expected {mSessionId}, received {sessionId}");
             }
             else
             {
-                Fail("Disconnecting due to wrong transport ack response");
+                Fail("Disconnecting due to incorrect session id");
             }
         }
 

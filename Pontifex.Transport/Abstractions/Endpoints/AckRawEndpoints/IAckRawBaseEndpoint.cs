@@ -7,7 +7,7 @@ namespace Transport.Abstractions.Endpoints
     /// </summary>
     public interface IAckRawBaseEndpoint
     {
-        IEndPoint RemoteEndPoint { get; }
+        IEndPoint? RemoteEndPoint { get; }
 
         bool IsConnected { get; }
         int MessageMaxByteSize { get; }

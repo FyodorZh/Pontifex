@@ -35,11 +35,14 @@ namespace TransportAnalyzer.TestLogic
 
         public void OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
         {
-            if (!ackResponse.PopFirstAsArray(out var response) || !AckResponse.EqualByContent(response))
+            using var ackResponseDisposer = ackResponse.AsDisposable();
+            if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) || !AckResponse.EqualByContent(response))
             {
+                response?.Release();
                 endPoint.Disconnect(new Transport.StopReasons.TextFail("stress-test", "Wrong ack response"));
                 return;
             }
+            response.Release();
 
             _endpoint = endPoint;
             var thread = new Thread(Work) { IsBackground = true };
@@ -61,7 +64,7 @@ namespace TransportAnalyzer.TestLogic
             try
             {
                 var id = Interlocked.Increment(ref _receiveId);
-                if (!receivedBuffer.PopFirstAsArray(out var buffer) || !CheckBuffer(id, buffer) || id == _lastTickId)
+                if (!receivedBuffer.TryPopFirst(out IMultiRefReadOnlyByteArray? buffer) || !CheckBuffer(id, buffer) || id == _lastTickId)
                 {
                     if (id == _lastTickId)
                     {
@@ -74,6 +77,7 @@ namespace TransportAnalyzer.TestLogic
                         _endpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check failed #" + id));
                     }
                 }
+                buffer?.Release();
             }
             finally
             {

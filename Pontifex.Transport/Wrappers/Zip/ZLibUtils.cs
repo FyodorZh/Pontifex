@@ -129,8 +129,10 @@ namespace Transport.Protocols.Zip
 
         public bool Unpack(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
         {
-            if (!data.PopFirstAsArray(out var compressedBytes) || data.Elements.Count != 0)
+            using var dataDisposer = data.AsDisposable();
+            if (!data.TryPopFirst(out IMultiRefReadOnlyByteArray? compressedBytes) || data.Elements.Count != 0)
             {
+                compressedBytes?.Release();
                 return false;
             }
             using var compressedBytesDisposer = compressedBytes.AsDisposable();

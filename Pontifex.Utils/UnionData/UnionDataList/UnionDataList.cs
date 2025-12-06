@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Actuarius.Collections;
 using Actuarius.Memory;
@@ -30,19 +31,34 @@ namespace Pontifex.Utils
             // DO NOTHING
         }
 
-        public bool PutFirst(UnionData value)
+        public void PutFirst(UnionData value)
         {
-            return _data.PutToHead(value);
+            _data.PutToHead(value);
         }
 
-        public bool PutLast(UnionData value)
+        public void PutLast(UnionData value)
         {
-            return _data.Put(value);
+            _data.Put(value);
+        }
+
+        public UnionData PopFirst()
+        {
+            if (!_data.TryPop(out var element))
+            {
+                throw new Exception();
+            }
+
+            return element;
         }
          
-        public bool TryGetFirst([MaybeNullWhen(false)] out UnionData value)
+        public bool TryPopFirst([MaybeNullWhen(false)] out UnionData value)
         {
             return _data.TryPop(out value);
+        }
+
+        public UnionDataType PeekFirstType()
+        {
+            return _data.Count > 0 ? _data[0].Type : UnionDataType.Unknown;
         }
 
         public IMultiRefByteArray Serialize(ICollectablePool collectablePool, IPool<IMultiRefByteArray, int> bytesPool)
@@ -100,27 +116,81 @@ namespace Pontifex.Utils
 
     public static class UnionDataList_Ext
     {
-        public static bool PutFirst(this UnionDataList data, string value)
+        public static void PutFirst(this UnionDataList data, short value)
         {
-            return data.PutFirst(new UnionData(new MultiRefByteArray(Encoding.UTF8.GetBytes(value))));
+            data.PutFirst(new UnionData(value));
         }
-        public static bool Check(this UnionDataList data, string value)
+        
+        public static void PutFirst(this UnionDataList data, int value)
         {
-            return data.TryGetFirst(out var d) && d.Type == UnionDataType.Array && Encoding.UTF8.GetString(d.Bytes!.ToArray(null)!) == value;
+            data.PutFirst(new UnionData(value));
         }
-
-        public static bool PopFirstAsArray(this UnionDataList data, [MaybeNullWhen(false)] out IMultiRefReadOnlyByteArray buffer)
+        
+        public static void PutFirst(this UnionDataList data, IMultiRefByteArray value)
         {
-            if (data.TryGetFirst(out var d) && d.Type == UnionDataType.Array)
+            data.PutFirst(new UnionData(value));
+        }
+        
+        public static void PutFirst(this UnionDataList data, string value)
+        {
+            data.PutFirst(new UnionData(new MultiRefByteArray(Encoding.UTF8.GetBytes(value))));
+        }
+        
+        public static bool TryPopFirst(this UnionDataList data, out bool value)
+        {
+            if (data.PeekFirstType() == UnionDataType.Bool)
             {
-                buffer = d.Bytes!;
+                value = data.PopFirst().Alias.BoolValue;
                 return true;
             }
-
-            buffer = null;
+            value = false;
             return false;
         }
 
+        public static bool TryPopFirst(this UnionDataList data, out short value)
+        {
+            if (data.PeekFirstType() == UnionDataType.Short)
+            {
+                value = data.PopFirst().Alias.ShortValue;
+                return true;
+            }
+            value = 0;
+            return false;
+        }
+        
+        public static bool TryPopFirst(this UnionDataList data, out ushort value)
+        {
+            if (data.PeekFirstType() == UnionDataType.UShort)
+            {
+                value = data.PopFirst().Alias.UShortValue;
+                return true;
+            }
+            value = 0;
+            return false;
+        }
+        
+        public static bool TryPopFirst(this UnionDataList data, out int value)
+        {
+            if (data.PeekFirstType() == UnionDataType.Int)
+            {
+                value = data.PopFirst().Alias.IntValue;
+                return true;
+            }
+            value = 0;
+            return false;
+        }
+        
+        public static bool TryPopFirst(this UnionDataList data, [MaybeNullWhen(false)] out IMultiRefReadOnlyByteArray value)
+        {
+            if (data.PeekFirstType() == UnionDataType.Short)
+            {
+                value = data.PopFirst().Bytes;
+                return value != null;
+            }
+            value = null;
+            return false;
+        }
+        
         public static bool EqualByContent(this UnionDataList d1, UnionDataList d2)
         {
             if (d1.Elements.Count != d2.Elements.Count)

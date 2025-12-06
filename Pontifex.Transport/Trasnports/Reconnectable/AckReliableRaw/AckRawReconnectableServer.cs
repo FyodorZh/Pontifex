@@ -65,28 +65,22 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         IAckRawServerHandler? IRawServerAcknowledger<IAckRawServerHandler>.TryAck(UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
-            if (!ackData.PopFirstAsArray(out var ackRequest))
+            if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ackRequest))
             {
                 return null;
             }
-
             using var ackRequestDisposer = ackRequest.AsDisposable();
-
             if (!ackRequest.EqualByContent(ReconnectableInfo.AckRequest))
             {
                 return null;
             }
 
-            UnionData r2 = default;
-            if (!ackData.TryGetFirst(out var r1) || !ackData.TryGetFirst(out r2) ||
-                r1.Type != UnionDataType.Int || r2.Type != UnionDataType.Int)
+            if (!ackData.TryPopFirst(out int id) || !ackData.TryPopFirst(out int generation))
             {
-                r1.Bytes?.Release();
-                r2.Bytes?.Release();
                 return null;
             }
 
-            SessionId sessionId = new SessionId(r1.Alias.IntValue, r2.Alias.IntValue);
+            SessionId sessionId = new SessionId(id, generation);
             if (sessionId.IsValid) // Пытаемся продолжить конкретную сессию
             {
                 var logic = mSessionsMap.Find(sessionId);

@@ -41,8 +41,10 @@ namespace TransportAnalyzer.TestLogic
 
         public IAckRawServerHandler? TryAck(UnionDataList ackData)
         {
-            if (ackData.PopFirstAsArray(out var ack) && AckRawCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
+            using var ackDataDisposer = ackData.AsDisposable();
+            if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) && AckRawCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
             {
+                ack.Release();
                 return new Handler(this);
             }
             return null;
@@ -95,20 +97,22 @@ namespace TransportAnalyzer.TestLogic
             {
                 try
                 {
-                    if (!receivedBuffer.PopFirstAsArray(out var data))
+                    if (!receivedBuffer.TryPopFirst(out IMultiRefReadOnlyByteArray? data))
                     {
                         Log.e("Invalid message");
                         mEndpoint?.Disconnect(new Transport.StopReasons.UserFail("Invalid message"));
                         return;
                     }
+                    using var dataDisposer = data.AsDisposable();
 
-                    int len = data.Count;
 
-                    var buffer = Memory.ByteArraysPool.Acquire(len);
                     
                     var toSend = Memory.CollectablePool.Acquire<UnionDataList>();
+                    using var toSendDisposable = toSend.AsDisposable();
+
+                    int len = data.Count;
+                    var buffer = Memory.ByteArraysPool.Acquire(len);
                     toSend.PutFirst(new UnionData(buffer));
-                    using var disposable = toSend.AsDisposable();
                     
                     for (int i = 0; i < len; ++i)
                     {
@@ -133,7 +137,6 @@ namespace TransportAnalyzer.TestLogic
                 {
                     receivedBuffer.Release();
                 }
-                
             }
 
             string IClientHandler.Name

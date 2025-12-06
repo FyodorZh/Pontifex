@@ -56,39 +56,36 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         public OpResult ScheduleToSend(UnionDataList bufferToSend)
         {
-            using (IMemoryBufferAccessor bufferAccessor = bufferToSend.ExposeAccessorOnce())
+            using var bufferToSendDisposer = bufferToSend.AsDisposable();
+            
+            if (!mIsValid)
             {
-                if (!mIsValid)
-                {
-                    return OpResult.DeliverySystemStopped;
-                }
-
-                IMemoryBuffer buffer = bufferAccessor.Buffer;
-
-                lock (mDeliveryReport)
-                {
-                    int count = 0;
-                    foreach (DeliveryId id in mDeliveryReport.Enumerate(QueueEnumerationOrder.TailToHead)) // порядок наоборот
-                    {
-                        buffer.PushUInt16(id.Id);
-                        count += 1;
-                    }
-                    buffer.PushUInt16((ushort)count);
-                    mDeliveryReport.Clear();
-                }
-
-                lock (mPendingToDeliver)
-                {
-                    if (!mNoNewPendingToDeliver)
-                    {
-                        bufferAccessor.Buffer.PushUInt16(mNextId.Id);
-                        mPendingToDeliver.Put(new Delivery {Id = mNextId, Buffer = bufferAccessor.Acquire()});
-                        mNextId = mNextId.Next;
-                    }
-                }
-
-                return OpResult.Ok;
+                return OpResult.DeliverySystemStopped;
             }
+
+            lock (mDeliveryReport)
+            {
+                int count = 0;
+                foreach (DeliveryId id in mDeliveryReport.Enumerate(QueueEnumerationOrder.TailToHead)) // порядок наоборот
+                {
+                    bufferToSend.PutFirst(new UnionData(id.Id));
+                    count += 1;
+                }
+                bufferToSend.PutFirst(new UnionData((ushort)count));
+                mDeliveryReport.Clear();
+            }
+
+            lock (mPendingToDeliver)
+            {
+                if (!mNoNewPendingToDeliver)
+                {
+                    bufferToSend.PutFirst(new UnionData(mNextId.Id));
+                    mPendingToDeliver.Put(new Delivery {Id = mNextId, Buffer = bufferToSend.Acquire()});
+                    mNextId = mNextId.Next;
+                }
+            }
+
+            return OpResult.Ok;
         }
 
         public IMultiRefResourceOwner<UnionDataList[]> ScheduledBuffers(IGenericConcurrentPool<Array, int> arrayPool)
@@ -124,64 +121,58 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         /// <returns> TRUE если мессадж пришёл первый раз и его надо показывать бизнеслогике </returns>
         public OpResult Received(UnionDataList receivedBuffer)
         {
-            using (IMemoryBufferAccessor bufferAccessor = receivedBuffer.ExposeAccessorOnce())
+            using var receivedBufferDisposer = receivedBuffer.AsDisposable();
+            
+            if (!mIsValid)
             {
-                if (!mIsValid)
+                return OpResult.DeliverySystemStopped;
+            }
+
+            if (!receivedBuffer.TryPopFirst(out ushort msgId))
+            {
+                return OpResult.WrongMessageFormat;
+            }
+            DeliveryId receivedMessageId = new DeliveryId(msgId);
+            int cmp = receivedMessageId.CompareTo(mLastReceivedMessageId.Next);
+            if (cmp < 0)
+            {
+                return OpResult.DuplicateMessage;
+            }
+            if (cmp > 0)
+            {
+                return OpResult.InternalError;
+            }
+            mLastReceivedMessageId = receivedMessageId;
+
+            
+            if (!receivedBuffer.TryPopFirst(out ushort shortCount))
+            {
+                return OpResult.WrongMessageFormat;
+            }
+
+            int count = shortCount;
+
+            lock (mPendingToDeliver)
+            {
+                for (int i = 0; i < count; ++i)
                 {
-                    return OpResult.DeliverySystemStopped;
-                }
-
-                IMemoryBuffer buffer = bufferAccessor.Buffer;
-
-                ushort val;
-
-
-                var valElement = buffer.PopFirst();
-                if (!valElement.AsUInt16(out val))
-                {
-                    return OpResult.WrongMessageFormat;
-                }
-
-                DeliveryId receivedMessageId = new DeliveryId(val);
-                int cmp = receivedMessageId.CompareTo(mLastReceivedMessageId.Next);
-                if (cmp < 0)
-                {
-                    return OpResult.DuplicateMessage;
-                }
-                if (cmp > 0)
-                {
-                    return OpResult.InternalError;
-                }
-                mLastReceivedMessageId = receivedMessageId;
-
-                if (!buffer.PopFirst().AsUInt16(out val))
-                {
-                    return OpResult.WrongMessageFormat;
-                }
-                int count = val;
-
-                lock (mPendingToDeliver)
-                {
-                    for (int i = 0; i < count; ++i)
+                    if (!receivedBuffer.TryPopFirst(out ushort id))
                     {
-                        if (!buffer.PopFirst().AsUInt16(out val))
-                        {
-                            return OpResult.WrongMessageFormat;
-                        }
+                        return OpResult.WrongMessageFormat;
+                    }
 
-                        if (!Delivered(new DeliveryId(val)))
-                        {
-                            return OpResult.InternalError;
-                        }
+                    if (!Delivered(new DeliveryId(id)))
+                    {
+                        return OpResult.InternalError;
                     }
                 }
-
-                lock (mDeliveryReport)
-                {
-                    mDeliveryReport.Put(receivedMessageId);
-                }
-                return OpResult.Ok;
             }
+
+            lock (mDeliveryReport)
+            {
+                mDeliveryReport.Put(receivedMessageId);
+            }
+            return OpResult.Ok;
         }
 
         private bool Delivered(DeliveryId id)

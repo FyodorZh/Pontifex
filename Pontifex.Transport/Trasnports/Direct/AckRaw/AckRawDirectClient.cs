@@ -83,35 +83,30 @@ namespace Transport.Transports.Direct
 
         void IAnyDirectCtl.OnReceived(UnionDataList buffer)
         {
-            try
+            using var bufferDisposer = buffer.AsDisposable();
+            switch (_state.State)
             {
-                switch (_state.State)
+                case State.Connecting:
                 {
-                    case State.Connecting:
+                    if (buffer.TryPopFirst(out IMultiRefReadOnlyByteArray? ackOk) && ackOk.EqualByContent(DirectInfo.AckOKResponse))  
                     {
-                        if (buffer.PopFirstAsArray(out var ackOk) && ackOk.EqualByContent(DirectInfo.AckOKResponse))  
-                        {
-                            _state.SetState(State.Connected);
-                            ConnectionFinished(_transport!.ClientSide, buffer.Acquire());
-                        }
-                        else
-                        {
-                            Log.w("Failed to parse ack response. Disconnecting...");
-                            Stop(new StopReasons.AckRejected(Type));
-                        }
+                        ackOk.Release();
+                        _state.SetState(State.Connected);
+                        ConnectionFinished(_transport!.ClientSide, buffer.Acquire());
                     }
-                        break;
-                    case State.Connected:
-                        Handler?.OnReceived(buffer.Acquire());
-                        break;
-                    default:
-                        Fail(new TextFail("direct-client", "Wrong state"));
-                        break;
+                    else
+                    {
+                        Log.w("Failed to parse ack response. Disconnecting...");
+                        Stop(new StopReasons.AckRejected(Type));
+                    }
                 }
-            }
-            finally
-            {
-                buffer.Release();
+                    break;
+                case State.Connected:
+                    Handler?.OnReceived(buffer.Acquire());
+                    break;
+                default:
+                    Fail(new TextFail("direct-client", "Wrong state"));
+                    break;
             }
         }
 

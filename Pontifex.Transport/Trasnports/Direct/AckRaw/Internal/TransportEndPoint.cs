@@ -75,18 +75,7 @@ namespace Transport.Transports.Direct
             _ctl.OnDisconnected(reason);
         }
 
-        IEndPoint IAckRawBaseEndpoint.RemoteEndPoint
-        {
-            get
-            {
-                var other = _other;
-                if (other != null)
-                {
-                    return other.LocalEndPoint;
-                }
-                return VoidEndPoint.Instance;
-            }
-        }
+        IEndPoint? IAckRawBaseEndpoint.RemoteEndPoint => _other?.LocalEndPoint;
 
         bool IAckRawBaseEndpoint.IsConnected => _other != null;
 
