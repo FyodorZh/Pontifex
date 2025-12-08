@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>9</LangVersion>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
+      <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
+      <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Utils\" />
+      <Folder Include="Wrappers\" />
+    </ItemGroup>
+
+</Project>

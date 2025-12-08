@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Actuarius.Memory;
+using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
@@ -16,7 +17,7 @@ namespace TransportAnalyzer.TestLogic
 
         protected AckRawCommonLogic()
         {
-            Log = global::Log.StaticLogger;
+            Log = StaticLogger.Instance;
             Memory = MemoryRental.Shared;
         }
         

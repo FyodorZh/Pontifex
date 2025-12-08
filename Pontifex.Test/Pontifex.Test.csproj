@@ -8,7 +8,16 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Pontifex.Transport\Pontifex.Transport.csproj" />
+      <ProjectReference Include="..\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
+      <ProjectReference Include="..\Pontifex.Wrapper.Zip\Pontifex.Wrapper.Zip.csproj" />
+      <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
+      <ProjectReference Include="..\Terminal.UICommon\Terminal.UICommon.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Scriba" Version="0.2.0-dev.1" />
+      <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
+      <PackageReference Include="Terminal.Gui" Version="2.0.0-v2-develop.2168" />
     </ItemGroup>
 
 </Project>

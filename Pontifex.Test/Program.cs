@@ -1,10 +1,14 @@
-﻿using LogConsumers;
+﻿using Scriba;
+using Scriba.Consumers;
+using Terminal.Gui;
+using Terminal.UI;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Servers;
 using Transport.Protocols.Monitoring.AckRaw;
 using Transport.Protocols.Zip.AckRaw;
 using Transport.Transports.Direct;
 using TransportAnalyzer.TestLogic;
+using Attribute = System.Attribute;
 
 namespace Pontifex.Test
 {
@@ -15,6 +19,27 @@ namespace Pontifex.Test
         
         static void Main(string[] args)
         {
+            Colors.ColorSchemes["Toplevel"] = Colors.ColorSchemes["Base"] = new ColorScheme(
+                new Terminal.Gui.Attribute(Color.Gray, Color.Blue), 
+                new Terminal.Gui.Attribute(Color.BrightYellow, Color.Blue), 
+                new Terminal.Gui.Attribute(Color.Gray, Color.Blue),
+                new Terminal.Gui.Attribute(Color.BrightGreen, Color.Blue), 
+                new Terminal.Gui.Attribute(Color.Green, Color.BrightGreen));
+            Colors.ColorSchemes["Menu"] = new ColorScheme(
+                new Terminal.Gui.Attribute(Color.Black, Color.BrightCyan), 
+                new Terminal.Gui.Attribute(Color.White, Color.Black), 
+                new Terminal.Gui.Attribute(Color.BrightYellow, Color.BrightCyan), 
+                new Terminal.Gui.Attribute(Color.DarkGray, Color.Gray), 
+                new Terminal.Gui.Attribute(Color.BrightYellow, Color.Black));
+            UISystem.Run(new SessionView());
+
+            return;
+            
+            
+            
+            
+            
+            
             Log.AddConsumer(new ConsoleConsumer(), true);
             
             Init();
@@ -30,7 +55,7 @@ namespace Pontifex.Test
             {
                 Console.WriteLine("Server stopped " + r);
                 work = false;
-            }, Log.StaticLogger);
+            }, StaticLogger.Instance);
             
             var client = mClientFactory.Construct(url);
             ((IAckRawClient)client).Init(new AckRawClientLogic(1, 1000));
@@ -38,7 +63,7 @@ namespace Pontifex.Test
             {
                 Console.WriteLine("Client stopped " + r);
                 work = false;
-            }, Log.StaticLogger);
+            }, StaticLogger.Instance);
             
             while (work)
             {

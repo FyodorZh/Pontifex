@@ -2,6 +2,7 @@
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
+using Scriba;
 using Transport;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Endpoints.Server;
@@ -16,7 +17,7 @@ namespace TransportAnalyzer.TestLogic
         public event Action<IClientHandler>? ClientAdded;
         public event Action<IClientHandler>? ClientRemoved;
 
-        private ILogger _logger = global::Log.StaticLogger;
+        private ILogger _logger = StaticLogger.Instance;
         private IMemoryRental _memory = MemoryRental.Shared;
 
         private void Add(IClientHandler handler)
