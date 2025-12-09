@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
-using Terminal.Gui;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 using Trader.Utils;
 
 namespace Terminal.UI
@@ -31,7 +32,7 @@ namespace Terminal.UI
             {
                 Y = 0,
             };
-            title.Accept += (_, _) => OnClick(title);
+            title.Accepting += (_, _) => OnClick(title);
             _titles.Add(title);
 
             PanelViewImpl panel = new PanelViewImpl(this, title);

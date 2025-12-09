@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
-using Terminal.Gui;
+using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
 
 namespace Terminal.UI
 {
@@ -36,7 +37,7 @@ namespace Terminal.UI
             topViewCover = new View()
             {
                 X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill(), 
-                ViewportSettings = ViewportSettings.ClearContentOnly,
+                ViewportSettings = ViewportSettingsFlags.ClearContentOnly,
                 ContentSizeTracksViewport = false
             };
             topViewCover.SetContentSize(new Size(0, 0));
@@ -44,7 +45,7 @@ namespace Terminal.UI
             
             topViewCover.MouseEvent += (_, args) =>
             {
-                if ((args.MouseEvent.Flags & MouseFlags.Button1Pressed) != 0)
+                if ((args.Flags & MouseFlags.Button1Pressed) != 0)
                 {
                     _selectThis?.Invoke();
                 }

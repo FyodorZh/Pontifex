@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using Scriba;
-using Terminal.Gui;
+using Terminal.Gui.Drivers;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 using Terminal.UI;
 
 namespace Pontifex.UI
@@ -39,7 +41,7 @@ namespace Pontifex.UI
             {
                 if (args.KeyCode == KeyCode.Enter || args.KeyCode == KeyCode.Space)
                 {
-                    MessageBox.Query("", _collection[listView.SelectedItem].Value, "OK");
+                    MessageBox.Query(App, "", _collection[listView.SelectedItem!.Value].Value, "OK");
                 }
             };
         }

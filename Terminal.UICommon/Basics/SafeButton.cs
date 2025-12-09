@@ -1,5 +1,6 @@
 using System;
-using Terminal.Gui;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Terminal.UI
 {
@@ -26,12 +27,13 @@ namespace Terminal.UI
             {
                 Width = Dim.Auto()
             };
-            _button.Accept += (_, _) =>
+            _button.Accepting += (_, args) =>
             {
-                if (MessageBox.Query(0, 0, WarningTitle, WarningMessage, WarningYes, WarningNo) == 0)
+                if (MessageBox.Query(App, 0, 0, WarningTitle, WarningMessage, WarningYes, WarningNo) == 0)
                 {
                     Accept?.Invoke();
                 }
+                args.Handled = true;
             };
             Add(_button);
         }

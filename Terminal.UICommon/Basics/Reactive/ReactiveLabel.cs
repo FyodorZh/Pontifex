@@ -1,7 +1,7 @@
 using System;
 using System.Reactive;
 using System.Threading;
-using Terminal.Gui;
+using Terminal.Gui.Views;
 
 namespace Terminal.UI
 {
@@ -22,7 +22,7 @@ namespace Terminal.UI
         public ReactiveLabel(Func<TData?, string> dataToText)
         {
             _dataToText = dataToText;
-            _tickHandler = Application.AddTimeout(TimeSpan.FromMilliseconds(100), Tick);
+            _tickHandler = App.AddTimeout(TimeSpan.FromMilliseconds(100), Tick);
             _observer = new AnonymousObserver<TData>(data =>
             {
                 _newData = data;
@@ -31,7 +31,7 @@ namespace Terminal.UI
 
         protected override void Dispose(bool disposing)
         {
-            Application.RemoveTimeout(_tickHandler);
+            App.RemoveTimeout(_tickHandler);
             _observer.Dispose();
             base.Dispose(disposing);
         }

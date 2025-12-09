@@ -1,29 +1,24 @@
-﻿using System.Threading;
-using Terminal.Gui;
-using Attribute = Terminal.Gui.Attribute;
-using BindingFlags = System.Reflection.BindingFlags;
+﻿using Terminal.Gui.App;
+using Terminal.Gui.Configuration;
 
 namespace Terminal.UI
 {
     public static class UISystem
     {
-        public static void Run(Toplevel top)
+        public static void Init()
         {
-            var driverType = typeof(Application).Assembly.GetType("Terminal.Gui.WindowsDriver");
-            //var driverType = typeof(Application).Assembly.GetType("Terminal.Gui.CursesDriver");
-            
-            var ctor = driverType!.GetConstructor(BindingFlags.Public | BindingFlags.Instance, []);
-            var driver = ctor!.Invoke([]);
-            
-            Application.Init((ConsoleDriver)driver);
-            
-
-            Application.Run(top, exception =>
-            {
-                return true;
-            } );
-
+            ConfigurationManager.RuntimeConfig = """{ "Theme": "Default" }""";
+            ConfigurationManager.Enable (ConfigLocations.All);
+        }
+        
+        public static void Run(IRunnable runnable)
+        {
+            Application.Init("dotnet");
+            Application.Run(runnable);
             Application.Shutdown();
+           // using IApplication app = Application.Create();
+           // app.Init("dotnet");
+           // app.Run(runnable);
         }
     }
 }

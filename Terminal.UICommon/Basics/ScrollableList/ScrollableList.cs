@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using Terminal.Gui;
+using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
 
 namespace Terminal.UI
 {
-    public sealed class ScrollableList : ScrollView
+    public sealed class ScrollableList : View
     {
         private readonly List<IScrollableListElement> _elements = new();
         private readonly View _content;
@@ -54,8 +55,8 @@ namespace Terminal.UI
 
             Add(_content);
             
-            ShowVerticalScrollIndicator = true;
-            ShowHorizontalScrollIndicator = false;
+            VerticalScrollBar.Visible = true;
+            HorizontalScrollBar.Visible = false;
         }
 
         public void ContentClear(bool disposeAll = true)
@@ -110,17 +111,18 @@ namespace Terminal.UI
             SetContentSize(wholeSize);
         }
 
-        private void MouseProcessor(object? sender, MouseEventEventArgs args)
+        private void MouseProcessor(object? sender, MouseEventArgs args)
         {
-            if ((args.MouseEvent.Flags & MouseFlags.Button1Pressed) != 0 ||
-                (args.MouseEvent.Flags & MouseFlags.Button1Clicked) != 0)
+            if ((args.Flags & MouseFlags.Button1Pressed) != 0 ||
+                (args.Flags & MouseFlags.Button1Clicked) != 0)
             {
-                var pos = this.ScreenToContent(args.MouseEvent.ScreenPosition);
+                var pos = this.ScreenToContent(args.ScreenPosition);
                 if (pos.X >= 0 && pos.X < Frame.Width - 1 &&
                     pos.Y >= 0 && pos.Y < Frame.Height - 1)
                 {
                     SetFocus();
-                    var posY = pos.Y - ContentOffset.Y;
+                    throw new Exception("Not implemented");
+                    var posY = pos.Y;// - ContentOffset.Y;
                     for (int i = 0; i < _elements.Count; ++i)
                     {
                         int lineHeight = _elements[i].Height;

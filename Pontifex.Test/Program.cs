@@ -1,6 +1,5 @@
 ﻿using Scriba;
 using Scriba.Consumers;
-using Terminal.Gui;
 using Terminal.UI;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Servers;
@@ -8,7 +7,6 @@ using Transport.Protocols.Monitoring.AckRaw;
 using Transport.Protocols.Zip.AckRaw;
 using Transport.Transports.Direct;
 using TransportAnalyzer.TestLogic;
-using Attribute = System.Attribute;
 
 namespace Pontifex.Test
 {
@@ -19,20 +17,20 @@ namespace Pontifex.Test
         
         static void Main(string[] args)
         {
-            Colors.ColorSchemes["Toplevel"] = Colors.ColorSchemes["Base"] = new ColorScheme(
-                new Terminal.Gui.Attribute(Color.Gray, Color.Blue), 
-                new Terminal.Gui.Attribute(Color.BrightYellow, Color.Blue), 
-                new Terminal.Gui.Attribute(Color.Gray, Color.Blue),
-                new Terminal.Gui.Attribute(Color.BrightGreen, Color.Blue), 
-                new Terminal.Gui.Attribute(Color.Green, Color.BrightGreen));
-            Colors.ColorSchemes["Menu"] = new ColorScheme(
-                new Terminal.Gui.Attribute(Color.Black, Color.BrightCyan), 
-                new Terminal.Gui.Attribute(Color.White, Color.Black), 
-                new Terminal.Gui.Attribute(Color.BrightYellow, Color.BrightCyan), 
-                new Terminal.Gui.Attribute(Color.DarkGray, Color.Gray), 
-                new Terminal.Gui.Attribute(Color.BrightYellow, Color.Black));
+            // Colors.ColorSchemes["Toplevel"] = Colors.ColorSchemes["Base"] = new ColorScheme(
+            //     new Terminal.Gui.Attribute(Color.Gray, Color.Blue), 
+            //     new Terminal.Gui.Attribute(Color.BrightYellow, Color.Blue), 
+            //     new Terminal.Gui.Attribute(Color.Gray, Color.Blue),
+            //     new Terminal.Gui.Attribute(Color.BrightGreen, Color.Blue), 
+            //     new Terminal.Gui.Attribute(Color.Green, Color.BrightGreen));
+            // Colors.ColorSchemes["Menu"] = new ColorScheme(
+            //     new Terminal.Gui.Attribute(Color.Black, Color.BrightCyan), 
+            //     new Terminal.Gui.Attribute(Color.White, Color.Black), 
+            //     new Terminal.Gui.Attribute(Color.BrightYellow, Color.BrightCyan), 
+            //     new Terminal.Gui.Attribute(Color.DarkGray, Color.Gray), 
+            //     new Terminal.Gui.Attribute(Color.BrightYellow, Color.Black));
+            UISystem.Init();
             UISystem.Run(new SessionView());
-
             return;
             
             

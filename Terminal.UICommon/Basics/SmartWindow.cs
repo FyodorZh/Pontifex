@@ -1,6 +1,9 @@
 using System;
 using System.Drawing;
-using Terminal.Gui;
+using Terminal.Gui.Drawing;
+using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Terminal.UI
 {
@@ -26,13 +29,19 @@ namespace Terminal.UI
                     Y = 0,
                     Text = "X"
                 };
-                closeBtn.Accept += (sender, args) =>
+                closeBtn.Accepting += (sender, args) =>
                 {
+                    if (SuperView == null)
+                    {
+                        return;
+                    }
+                    
                     if (CanClose())
                     {
                         SuperView.Remove(this);
                         Dispose();
                     }
+                    args.Handled = true;
                 };
                 Border.Add(closeBtn);
             }
@@ -61,14 +70,14 @@ namespace Terminal.UI
             bool resizing = false;
             corner.MouseEvent += (sender, args) =>
             {
-                if ((args.MouseEvent.Flags & MouseFlags.Button1Pressed) != 0)
+                if ((args.Flags & MouseFlags.Button1Pressed) != 0)
                 {
                     resizing = true;
 
                     X = Frame.Left;
                     Y = Frame.Top;
                     
-                    startPos = args.MouseEvent.ScreenPosition;
+                    startPos = args.ScreenPosition;
                     startSize = Frame.Size;
                     args.Handled = true;
                 }
@@ -78,7 +87,7 @@ namespace Terminal.UI
                     args.Handled = true;
                 }
             };
-            Application.MouseEvent += (sender, @event) =>
+            App.Mouse.MouseEvent += (sender, @event) =>
             {
                 if (resizing && (@event.Flags & MouseFlags.Button1Pressed) != 0)
                 {

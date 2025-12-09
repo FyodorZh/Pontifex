@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
-using Terminal.Gui;
+using Terminal.Gui.Drawing;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Terminal.UI
 {
@@ -80,9 +82,10 @@ namespace Terminal.UI
             };
             _values.ContentAdd(value);
 
-            value.Accept += (sender, args) =>
+            value.Accepting += (sender, args) =>
             {
                 onEnter();
+                args.Handled = true;
             };
 
             return value;
@@ -121,9 +124,10 @@ namespace Terminal.UI
                 view.Add(textField, button);
                 _values.ContentAdd(view);
 
-                button.Accept += (sender, args) =>
+                button.Accepting += (sender, args) =>
                 {
                     textChanged.Invoke(text);
+                    args.Handled = true;
                 };
             }
             else

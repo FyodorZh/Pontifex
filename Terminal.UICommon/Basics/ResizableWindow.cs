@@ -1,5 +1,8 @@
 using System;
 using Terminal.Gui;
+using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Terminal.UI
 {
@@ -20,17 +23,17 @@ namespace Terminal.UI
 
         public ResizableWindow()
         {
-            Application.MouseEvent += OnMouseEvent;
+            App.Mouse.MouseEvent += OnMouseEvent;
             Arrangement = ViewArrangement.Movable;
         }
 
         protected override void Dispose(bool disposing)
         {
-            Application.MouseEvent -= OnMouseEvent;
+            App.Mouse.MouseEvent -= OnMouseEvent;
             base.Dispose(disposing);
         }
 
-        private void OnMouseEvent(object? sender, MouseEvent evt)
+        private void OnMouseEvent(object? sender, MouseEventArgs evt)
         {
             if (!AllowResize)
             {

@@ -1,5 +1,7 @@
 using System;
-using Terminal.Gui;
+using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Terminal.UI
 {
@@ -14,7 +16,7 @@ namespace Terminal.UI
         {
             MouseEvent += (sender, args) =>
             {
-                if ((args.MouseEvent.Flags & MouseFlags.Button1Pressed) != 0)
+                if ((args.Flags & MouseFlags.Button1Pressed) != 0)
                 {
                     _selectThis?.Invoke();
                 }

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using Terminal.Gui;
+using Terminal.Gui.ViewBase;
 
 namespace Terminal.UI
 {
@@ -36,7 +36,7 @@ namespace Terminal.UI
         public void RefreshSize()
         {
             _size = new Size(0, 0);
-            foreach (var element in Subviews)
+            foreach (var element in SubViews)
             {
                 element.Y = _size.Height;
                 _size.Height += element.Frame.Height;
@@ -50,7 +50,7 @@ namespace Terminal.UI
 
         public void ContentClear()
         {
-            foreach (var view in Subviews)
+            foreach (var view in SubViews)
             {
                 view.Disposing -= _onDisposing;
             }
