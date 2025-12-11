@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -19,13 +20,13 @@ namespace Terminal.UI
         public SmartWindow(bool canClose)
         {
             BorderStyle = LineStyle.Double;
-            Arrangement = ViewArrangement.Movable;
+            Arrangement = ViewArrangement.Movable | ViewArrangement.Overlapped;
             
             if (canClose)
             {
                 var closeBtn = new Button()
                 {
-                    X = Pos.Align(Alignment.End) - 2,
+                    X = Pos.AnchorEnd(5),
                     Y = 0,
                     Text = "X"
                 };
@@ -87,7 +88,7 @@ namespace Terminal.UI
                     args.Handled = true;
                 }
             };
-            App.Mouse.MouseEvent += (sender, @event) =>
+            Application.Mouse.MouseEvent += (sender, @event) =>
             {
                 if (resizing && (@event.Flags & MouseFlags.Button1Pressed) != 0)
                 {
@@ -99,6 +100,7 @@ namespace Terminal.UI
                         Width = newWidth;
                         Height = newHeight;
                     }
+                    @event.Handled = true;
                 }
                 else
                 {

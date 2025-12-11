@@ -1,5 +1,6 @@
 ﻿using Terminal.Gui.App;
 using Terminal.Gui.Configuration;
+using Terminal.Gui.ViewBase;
 
 namespace Terminal.UI
 {

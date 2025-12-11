@@ -51,3 +51,4 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+copilot.data.migration.agent.xml

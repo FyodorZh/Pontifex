@@ -4,8 +4,6 @@ using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 using Terminal.UICommon;
-using Attribute = Terminal.Gui.Drawing.Attribute;
-using Color = Terminal.Gui.Drawing.Color;
 
 namespace Pontifex.Test
 {
@@ -13,9 +11,12 @@ namespace Pontifex.Test
     {
         private static readonly string _configPath = "../../../colorscheme.json";
         
-        public SessionView()
+        public SessionView(TransportFactory factory)
         {
             var colorScheme = LoadScheme();
+
+            Button.DefaultShadow = ShadowStyle.None;
+            TabStop = null;
             
             Border!.Thickness = new Thickness(0, 0, 0, 0);
             Title = "Session View";
@@ -33,17 +34,12 @@ namespace Pontifex.Test
                 new MenuBarItem("_TMP", [
                     new MenuItem("abc", "", () => {
                     {
-                        for (int i = 0; i < 10; ++i) Log.i("Hello " + i);
-                        var newScheme = new Scheme(GetScheme()) with
-                        {
-                            Normal = new Attribute(new Color(255, 0, 0), new Color(0, 255, 0))
-                        };
-                        this.SetScheme(newScheme);
                     }})
                 ])
             ];
             
             Add(menuBar);
+            Add(new TransportFactoryWindow(factory));
 
             var loggerView = new LoggerView()
             {
