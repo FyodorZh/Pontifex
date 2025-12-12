@@ -51,7 +51,7 @@ namespace Transport
         public IExternalJson Print()
         {
             JsonObjectAsExternalJson wrap = new JsonObjectAsExternalJson();
-            PrintTo(wrap.Root);
+            PrintTo(wrap.Root!);
             return wrap;
         }
 

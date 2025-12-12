@@ -46,7 +46,7 @@ namespace Pontifex.Test
                 X = 0, Y = 1, Width = Dim.Fill(), Height = Dim.Fill()
             };
             
-            Log.AddConsumer(loggerView, true);
+            Log.AddConsumer(loggerView);
             
             Add(loggerView);
         }
