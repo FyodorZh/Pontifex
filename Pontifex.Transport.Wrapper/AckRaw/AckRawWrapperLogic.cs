@@ -6,10 +6,10 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 {
     public abstract class AckRawWrapperLogic : IAckRawWrapperLogic
     {
-        protected ILogger Log { get; private set; } = StaticLogger.Instance;
-        protected IMemoryRental Memory { get; private set; } = MemoryRental.Shared;
+        protected ILogger Log { get; }
+        protected IMemoryRental Memory { get; }
 
-        public void Setup(IMemoryRental memoryRental, ILogger logger)
+        protected AckRawWrapperLogic(ILogger logger, IMemoryRental memoryRental)
         {
             Log = logger;
             Memory = memoryRental;

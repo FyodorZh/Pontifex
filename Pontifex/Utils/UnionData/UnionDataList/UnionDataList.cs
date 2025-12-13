@@ -182,7 +182,7 @@ namespace Pontifex.Utils
         
         public static bool TryPopFirst(this UnionDataList data, [MaybeNullWhen(false)] out IMultiRefReadOnlyByteArray value)
         {
-            if (data.PeekFirstType() == UnionDataType.Short)
+            if (data.PeekFirstType() == UnionDataType.Array)
             {
                 value = data.PopFirst().Bytes;
                 return value != null;

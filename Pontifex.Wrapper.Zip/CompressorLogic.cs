@@ -1,6 +1,7 @@
 ﻿using Actuarius.Memory;
 using Ionic.Zlib;
 using Pontifex.Utils;
+using Scriba;
 using Transport.Transports.ProtocolWrapper.AckRaw;
 
 namespace Transport.Protocols.Zip
@@ -10,7 +11,8 @@ namespace Transport.Protocols.Zip
         private ZLibCompressor? _compressor;
         private ZLibDecompressor? _decompressor;
 
-        public CompressorLogic(int compressionLvl)
+        public CompressorLogic(ILogger logger, IMemoryRental memoryRental, int compressionLvl)
+            :base(logger, memoryRental)
         {
             if (compressionLvl < 0)
             {
@@ -40,7 +42,6 @@ namespace Transport.Protocols.Zip
                     throw;
                 }
             }
-
             return false;
         }
 
@@ -59,7 +60,6 @@ namespace Transport.Protocols.Zip
                     throw;
                 }
             }
-
             return false;
         }
 

@@ -1,5 +1,6 @@
 using Pontifex.UI;
 using Scriba;
+using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -7,7 +8,7 @@ using Terminal.UICommon;
 
 namespace Pontifex.Test
 {
-    public class SessionView : Window
+    public class SessionView : Runnable
     {
         private static readonly string _configPath = "../../../colorscheme.json";
         
@@ -16,7 +17,7 @@ namespace Pontifex.Test
             var colorScheme = LoadScheme();
 
             Button.DefaultShadow = ShadowStyle.None;
-            TabStop = null;
+            Arrangement = ViewArrangement.Fixed;
             
             Border!.Thickness = new Thickness(0, 0, 0, 0);
             Title = "Session View";

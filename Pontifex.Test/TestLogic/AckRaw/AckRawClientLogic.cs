@@ -73,8 +73,8 @@ namespace TransportAnalyzer.TestLogic
                     }
                     else
                     {
-                        Log.e("Message check failed #" + id);
-                        _endpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check failed #" + id));
+                        Log.e("Message check (c) failed #" + id);
+                        _endpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check (c) failed #" + id));
                     }
                 }
                 buffer?.Release();
@@ -96,7 +96,7 @@ namespace TransportAnalyzer.TestLogic
                     var buffer = GenBuffer(Interlocked.Increment(ref _sendId));
                     var dataToSend = Memory.CollectablePool.Acquire<UnionDataList>();
                     dataToSend.PutFirst(new UnionData(buffer));
-                    Log.i("SendToServer");
+                    Log.i("SendToServer {tickId}", _sendId);
                     endpoint.Send(dataToSend);
                 }
                 Thread.Sleep(50);

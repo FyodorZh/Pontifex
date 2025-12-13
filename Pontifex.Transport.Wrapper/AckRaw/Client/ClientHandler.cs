@@ -7,7 +7,6 @@ using Transport.Abstractions.Endpoints;
 using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers;
 using Transport.Abstractions.Handlers.Client;
-using Transport.Endpoints;
 
 namespace Transport.Transports.ProtocolWrapper.AckRaw
 {

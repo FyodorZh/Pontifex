@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
 using Scriba;
 using Transport.Abstractions;
@@ -8,7 +9,7 @@ namespace Transport
 {
     public interface ITransportFactory
     {
-        ITransport? Construct(string address, IPeriodicLogicRunner? logicRunner = null);
+        ITransport? Construct(string address, ILogger? logger = null, IMemoryRental? memoryRental = null, IPeriodicLogicRunner? logicRunner = null);
     }
 
     public interface ITransportFactoryCtl : ITransportFactory
@@ -22,13 +23,13 @@ namespace Transport
 
         private readonly Dictionary<string, ITransportProducer> _producers = new ();
 
-        public ITransport? Construct(string address, IPeriodicLogicRunner? logicRunner = null)
+        public ITransport? Construct(string address, ILogger? logger = null, IMemoryRental? memoryRental = null, IPeriodicLogicRunner? logicRunner = null)
         {
             string typeName = TransportType(address);
             if (_producers.TryGetValue(typeName, out var producer))
             {
                 string @params = TransportParams(address);
-                return producer.Produce(@params, this, logicRunner);
+                return producer.Produce(@params, this, logger, memoryRental, logicRunner);
             }
 
             return null;
@@ -36,16 +37,7 @@ namespace Transport
 
         public bool Register(ITransportProducer producer)
         {
-            try
-            {
-                _producers.Add(producer.Name, producer);
-            }
-            catch (Exception e)
-            {
-                Log.wtf(e);
-                return false;
-            }
-
+            _producers.Add(producer.Name, producer);
             return true;
         }
 

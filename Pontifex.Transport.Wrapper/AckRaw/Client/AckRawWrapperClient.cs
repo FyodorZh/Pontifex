@@ -13,10 +13,10 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
     public class AckRawWrapperClient<TLogic> : AckRawWrapperClient
         where TLogic : IAckRawWrapperClientLogic
     {
-        public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap, Func<TLogic> constructor)
+        public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap, Func<ILogger, IMemoryRental, TLogic> constructor)
             : base(typeName, transportToWrap)
         {
-            SetupLogic(constructor.Invoke());
+            SetupLogic(constructor.Invoke(transportToWrap.Log, transportToWrap.Memory));
         }
     }
 
@@ -32,7 +32,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
         public override int MessageMaxByteSize => mBaseTransport.MessageMaxByteSize;
 
         public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap)
-            : base(typeName)
+            : base(typeName, transportToWrap.Log, transportToWrap.Memory)
         {
             mBaseTransport = transportToWrap;
             AppendControl(transportToWrap);
@@ -68,7 +68,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
                 {
                     Stop(new StopReasons.ChainFail(Type, r, "Unexpected underlying transport stop"));
                 }
-            }, Log);
+            });
         }
 
         protected override void OnReadyToConnect()

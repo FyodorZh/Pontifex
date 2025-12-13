@@ -18,9 +18,9 @@ namespace Transport.Transports.Core
 
         private IControlProvider _controlProvider = new VoidControlProvider();
 
-        public ILogger Log { get; private set; } = VoidLogger.Instance;
+        public ILogger Log { get; }
 
-        public IMemoryRental Memory { get; private set; } = MemoryRental.Shared;
+        public IMemoryRental Memory { get; }
 
         /// <summary>
         /// Попытка запустить протокольный транспорт.
@@ -64,7 +64,13 @@ namespace Transport.Transports.Core
             }
         }
 
-        public bool Start(Action<StopReason> onStopped, ILogger? logger)
+        protected AbstractTransport(ILogger? logger, IMemoryRental? memory)
+        {
+            Log = (logger??StaticLogger.Instance).Wrap("transport", () => Type);
+            Memory = memory ?? MemoryRental.Shared;
+        }
+
+        public bool Start(Action<StopReason> onStopped)
         {
             lock (_locker)
             {
@@ -72,10 +78,6 @@ namespace Transport.Transports.Core
                 {
                     if (!_started)
                     {
-                        if (logger != null)
-                        {
-                            Log = logger.Wrap("transport", ToString);
-                        }
                         if (TryStart())
                         {
                             _onStopped = onStopped;

@@ -52,7 +52,7 @@ namespace Transport.Protocols.Zip
             var buffer = bufferHodler.Value;
 
             // Упаковываем
-            _packedStream.Position = 0;
+            _packedStream.SetLength(0);
             _compressor.Write(buffer.Array, buffer.Offset, buffer.Count);
             _compressor.Flush();
 
@@ -81,7 +81,7 @@ namespace Transport.Protocols.Zip
             _compressor.WriteByte(123); // any byte
             _compressor.Flush();
             _compressor.FlushMode = FlushType.Sync;
-            _packedStream.Position = 0;
+            _packedStream.SetLength(0);
         }
     }
 
@@ -129,7 +129,6 @@ namespace Transport.Protocols.Zip
 
         public bool Unpack(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
         {
-            using var dataDisposer = data.AsDisposable();
             if (!data.TryPopFirst(out IMultiRefReadOnlyByteArray? compressedBytes) || data.Elements.Count != 0)
             {
                 compressedBytes?.Release();

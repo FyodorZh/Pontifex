@@ -1,5 +1,7 @@
 ﻿using System;
+using Actuarius.Memory;
 using Pontifex.Utils;
+using Scriba;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers.Client;
@@ -25,7 +27,8 @@ namespace Transport.Transports.Core
         
         protected IAckRawClientHandler? Handler =>  _handler;
 
-        protected AckRawClient(string typeName)
+        protected AckRawClient(string typeName, ILogger? logger, IMemoryRental? memory)
+            : base(logger, memory)
         {
             Type = typeName;
         }

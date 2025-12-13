@@ -1,5 +1,6 @@
 using System;
 using Actuarius.Collections;
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Transport.Abstractions;
 
@@ -11,11 +12,14 @@ namespace Transport.Transports.Direct
         private readonly Func<UnionDataList, IServerDirectCtl?> _onConnecting;
 
         private readonly IConcurrentMap<IEndPoint, DirectTransport> _connectedClients = new SynchronizedConcurrentDictionary<IEndPoint, DirectTransport>();
+        
+        private readonly IMemoryRental _memoryRental;
 
-        public DirectServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl?> onConnecting)
+        public DirectServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl?> onConnecting, IMemoryRental memoryRental)
         {
             _serverEp = serverEp;
             _onConnecting = onConnecting;
+            _memoryRental = memoryRental;
         }
 
         public void Stop()
@@ -29,9 +33,8 @@ namespace Transport.Transports.Direct
             {
                 return null;
             }
-            
-            
-            UnionDataList ackData = new();
+
+            UnionDataList ackData = _memoryRental.CollectablePool.Acquire<UnionDataList>();
             clientCtl.GetAckData(ackData);
             IServerDirectCtl? serverCtl = _onConnecting(ackData);
             if (serverCtl != null)

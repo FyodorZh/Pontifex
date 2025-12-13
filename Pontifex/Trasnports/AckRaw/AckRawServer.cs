@@ -1,5 +1,6 @@
 using Actuarius.Memory;
 using Pontifex.Utils;
+using Scriba;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Handlers.Server;
 using Transport.Abstractions.Servers;
@@ -12,7 +13,8 @@ namespace Transport.Transports.Core
 
         private IRawServerAcknowledger<IAckRawServerHandler>? _acknowledger;
 
-        protected AckRawServer(string typeName)
+        protected AckRawServer(string typeName, ILogger? logger, IMemoryRental? memory)
+            :base(logger, memory)
         {
             Type = typeName;
         }

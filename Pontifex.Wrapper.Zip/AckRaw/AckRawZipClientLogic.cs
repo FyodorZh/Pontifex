@@ -1,4 +1,6 @@
-﻿using Pontifex.Utils;
+﻿using Actuarius.Memory;
+using Pontifex.Utils;
+using Scriba;
 using Transport.Abstractions;
 using Transport.Transports.ProtocolWrapper.AckRaw;
 
@@ -8,8 +10,8 @@ namespace Transport.Protocols.Zip.AckRaw
     {
         public IControlProvider? Controls => null;
 
-        public AckRawZipClientLogic(int compressionLvl)
-            : base(compressionLvl)
+        public AckRawZipClientLogic(ILogger logger, IMemoryRental memoryRental, int compressionLvl)
+            : base(logger, memoryRental, compressionLvl)
         {
         }
 

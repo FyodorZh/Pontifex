@@ -131,11 +131,11 @@ namespace Pontifex.Test
             string cmd = "";
             if (_directTransport.CheckedState == CheckState.Checked)
             {
-                cmd = "direct:123";
+                cmd = "direct|123";
             }
             else if (_tcpTransport.CheckedState == CheckState.Checked)
             {
-                cmd = "tcp:127.0.0.1:10000";
+                cmd = "tcp|127.0.0.1:10000";
             }
             else
             {
@@ -144,7 +144,7 @@ namespace Pontifex.Test
             }
             
             if (_zipProtocol.CheckedState == CheckState.Checked) 
-                cmd = "zip:9|" + cmd;
+                cmd = "zip|9:" + cmd;
             if (_monitorProtocol.CheckedState == CheckState.Checked) 
                 cmd = "monitor|" + cmd;
             if (_loggerProtocol.CheckedState == CheckState.Checked) 

@@ -1,3 +1,5 @@
+using Actuarius.Memory;
+using Scriba;
 using Transport.Abstractions.Clients;
 using Transport.Abstractions.Servers;
 using Transport.Protocols.Monitoring.AckRaw;
@@ -47,14 +49,14 @@ namespace Pontifex.Test
             mServerFactory.Register(new AckRawLoggerServerProducer());
         }
 
-        public IAckRawServer? ConstructServer(string url)
+        public IAckRawServer? ConstructServer(string url, ILogger logger, IMemoryRental memoryRental)
         {
-            return mServerFactory.Construct(url) as IAckRawServer;
+            return mServerFactory.Construct(url, logger, memoryRental) as IAckRawServer;
         }
 
-        public IAckRawClient? ConstructClient(string url)
+        public IAckRawClient? ConstructClient(string url, ILogger logger, IMemoryRental memoryRental)
         {
-            return mClientFactory.Construct(url) as IAckRawClient;
+            return mClientFactory.Construct(url, logger, memoryRental) as IAckRawClient;
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Scriba;
+using Terminal.Gui.App;
 using Terminal.Gui.Drivers;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -48,12 +49,15 @@ namespace Pontifex.UI
 
         public void AddLog(string severity, string msg)
         {
-            msg = FormatMsg(severity, msg);
-            _collection.Add(new TrimmedString(msg));
-            if (_collection.Count > 1000)
+            Application.Invoke(() =>
             {
-                _collection.RemoveAt(0);
-            }
+                msg = FormatMsg(severity, msg);
+                _collection.Add(new TrimmedString(msg));
+                if (_collection.Count > 1000)
+                {
+                    _collection.RemoveAt(0);
+                }
+            });
         }
         
         private static string FormatMsg(string severity, string msg)

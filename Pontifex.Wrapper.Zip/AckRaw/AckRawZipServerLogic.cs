@@ -1,14 +1,15 @@
 ﻿using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
+using Scriba;
 using Transport.Transports.ProtocolWrapper.AckRaw;
 
 namespace Transport.Protocols.Zip.AckRaw
 {
     class AckRawZipServerLogic : CompressorLogic, IAckRawWrapperServerLogic
     {
-        public AckRawZipServerLogic(int compressionLvl)
-            : base(compressionLvl)
+        public AckRawZipServerLogic(ILogger logger, IMemoryRental memoryRental, int compressionLvl)
+            : base(logger, memoryRental, compressionLvl)
         {
         }
 

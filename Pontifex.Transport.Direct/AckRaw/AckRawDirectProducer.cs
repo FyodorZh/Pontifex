@@ -1,4 +1,6 @@
+using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
+using Scriba;
 using Transport.Abstractions;
 
 namespace Transport.Transports.Direct
@@ -7,9 +9,9 @@ namespace Transport.Transports.Direct
     {
         public string Name => DirectInfo.TransportName;
 
-        public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner? logicRunner)
+        public ITransport Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
         {
-            return new AckRawDirectServer(@params);
+            return new AckRawDirectServer(@params, logger, memoryRental);
         }
     }
 
@@ -17,9 +19,9 @@ namespace Transport.Transports.Direct
     {
         public string Name => DirectInfo.TransportName;
 
-        public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner? logicRunner)
+        public ITransport Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
         {
-            return new AckRawDirectClient(@params);
+            return new AckRawDirectClient(@params, logger, memoryRental);
         }
     }
 }

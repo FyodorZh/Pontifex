@@ -44,14 +44,14 @@ namespace Transport
 
         bool ITransport.IsStarted => _core.IsStarted;
 
-        bool ITransport.Start(Action<StopReason> onStopped, ILogger logger)
+        bool ITransport.Start(Action<StopReason> onStopped)
         {
             Log.i("Start()");
             return _core.Start(reason =>
             {
                 Log.i("OnStopped(" + reason + ")");
                 onStopped(reason);
-            }, logger);
+            });
         }
 
         bool ITransport.Stop(StopReason? reason)

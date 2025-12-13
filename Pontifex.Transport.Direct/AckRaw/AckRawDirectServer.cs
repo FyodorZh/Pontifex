@@ -1,4 +1,6 @@
+using Actuarius.Memory;
 using Pontifex.Utils;
+using Scriba;
 using Transport.Abstractions.Servers;
 using Transport.Endpoints;
 using Transport.Transports.Core;
@@ -12,15 +14,15 @@ namespace Transport.Transports.Direct
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
-        public AckRawDirectServer(string serverName)
-            : base(DirectInfo.TransportName)
+        public AckRawDirectServer(string serverName, ILogger? logger, IMemoryRental? memory)
+            : base(DirectInfo.TransportName, logger, memory)
         {
             _localEp = new StringEndPoint(serverName);
         }
 
         protected override bool TryStart()
         {
-            _server = DirectTransportManager.Instance.StartServer(_localEp, OnConnecting);
+            _server = DirectTransportManager.Instance.StartServer(_localEp, OnConnecting, Memory);
             return _server != null;
         }
 

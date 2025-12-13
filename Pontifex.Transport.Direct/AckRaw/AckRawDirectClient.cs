@@ -3,6 +3,7 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Pontifex.Utils.FSM;
+using Scriba;
 using Transport.Abstractions.Clients;
 using Transport.Endpoints;
 using Transport.StopReasons;
@@ -28,8 +29,8 @@ namespace Transport.Transports.Direct
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
-        public AckRawDirectClient(string serverName)
-            : base(DirectInfo.TransportName)
+        public AckRawDirectClient(string serverName, ILogger? logger, IMemoryRental? memory)
+            : base(DirectInfo.TransportName, logger, memory)
         {
             _serverEp = new StringEndPoint(serverName);
 
@@ -97,7 +98,7 @@ namespace Transport.Transports.Direct
                     else
                     {
                         Log.w("Failed to parse ack response. Disconnecting...");
-                        Stop(new StopReasons.AckRejected(Type));
+                        Stop(new AckRejected(Type));
                     }
                 }
                     break;

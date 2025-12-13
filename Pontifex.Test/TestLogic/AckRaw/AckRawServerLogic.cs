@@ -123,8 +123,8 @@ namespace TransportAnalyzer.TestLogic
                     long id = Interlocked.Increment(ref mReceiveId);
                     if (!CheckBuffer(id, buffer))
                     {
-                        Log.e("Message check failed #" + id);
-                        mEndpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check failed #" + id));
+                        Log.e("Message check (s) failed #" + id);
+                        mEndpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check (s) failed #" + id));
                         return;
                     }
 

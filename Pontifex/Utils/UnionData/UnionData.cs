@@ -214,7 +214,7 @@ namespace Pontifex.Utils
                 case UnionDataType.Array:
                     return 1 + 4 + Bytes!.Count;
                 case UnionDataType.NullArray:
-                    return 0;
+                    return 1;
                 default:
                     throw new InvalidOperationException();
             }

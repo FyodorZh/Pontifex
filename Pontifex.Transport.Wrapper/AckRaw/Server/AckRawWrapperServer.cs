@@ -1,4 +1,6 @@
 ﻿using System;
+using Actuarius.Memory;
+using Scriba;
 using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Handlers.Server;
 using Transport.Abstractions.Servers;
@@ -11,10 +13,10 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
     {
         private readonly IAckRawServer _core;
 
-        private readonly Func<TAcknowledgerWrapper> mWrapperConstructor;
+        private readonly Func<ILogger, IMemoryRental, TAcknowledgerWrapper> mWrapperConstructor;
 
-        public AckRawWrapperServer(string typeName, IAckRawServer core, Func<TAcknowledgerWrapper> wrapperConstructor)
-            : base(typeName)
+        public AckRawWrapperServer(string typeName, IAckRawServer core, Func<ILogger, IMemoryRental, TAcknowledgerWrapper> wrapperConstructor)
+            : base(typeName, core.Log, core.Memory)
         {
             _core = core;
             mWrapperConstructor = wrapperConstructor;
@@ -37,7 +39,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
                 {
                     Fail(r, "Unexpected underlying transport stop");
                 }
-            }, Log);
+            });
         }
 
         protected override void OnStopped(StopReason reason)
@@ -47,7 +49,7 @@ namespace Transport.Transports.ProtocolWrapper.AckRaw
 
         protected override IRawServerAcknowledger<IAckRawServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IAckRawServerHandler> baseAcknowledger)
         {
-            var acknowledger = mWrapperConstructor.Invoke();
+            var acknowledger = mWrapperConstructor.Invoke(Log, Memory);
             acknowledger.Init(baseAcknowledger, text => Log.e(text));
             if (_core.Init(acknowledger))
             {

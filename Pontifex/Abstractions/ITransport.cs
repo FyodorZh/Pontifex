@@ -28,12 +28,11 @@ namespace Transport.Abstractions
         /// Client: Успешное завершение метода значит что транспорт инициализировался и начал ассинхронный процесс подключения к серверу
         /// </summary>
         /// <param name="onStopped"> Если вернули true, то при остановке ТС должен быть вызван onStopped (если он не null) </param>
-        /// <param name="logger"> Логер, которым будет пользоваться транспорт, может быть null </param>
         /// <returns>
         /// Возвращает false если стартовать транспорт не удалось. После этого ТС переходит в невалидное состояние.
         /// Возвращает true если удалось запустить операцию старта транспортной системы.
         /// </returns>
-        bool Start(System.Action<StopReason> onStopped, ILogger logger);
+        bool Start(System.Action<StopReason> onStopped);
 
         /// <summary>
         /// Останавливает ТС, если она была запущена. Иначе не происходит ничего

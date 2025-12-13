@@ -1,5 +1,6 @@
 using System;
 using Actuarius.Collections;
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Transport.Abstractions;
 
@@ -11,9 +12,9 @@ namespace Transport.Transports.Direct
 
         private readonly IConcurrentMap<IEndPoint, DirectServer> _servers = new SynchronizedConcurrentDictionary<IEndPoint, DirectServer>();
 
-        public DirectServer? StartServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl?> onConnecting)
+        public DirectServer? StartServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl?> onConnecting, IMemoryRental memoryRental)
         {
-            DirectServer server = new DirectServer(serverEp, onConnecting);
+            DirectServer server = new DirectServer(serverEp, onConnecting, memoryRental);
 
             if (_servers.Add(serverEp, server))
             {
