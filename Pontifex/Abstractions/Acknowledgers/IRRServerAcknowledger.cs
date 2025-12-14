@@ -1,6 +1,6 @@
 ﻿using Pontifex.Utils;
 
-namespace Transport.Abstractions.Acknowledgers
+namespace Pontifex.Abstractions.Acknowledgers
 {
     /// <summary>
     /// Реализует бизнесс-логика

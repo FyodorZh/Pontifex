@@ -3,7 +3,7 @@ using Actuarius.Memory;
 using Ionic.Zlib;
 using Pontifex.Utils;
 
-namespace Transport.Protocols.Zip
+namespace Pontifex.Protocols.Zip
 {
     public class ZLibCompressor
     {

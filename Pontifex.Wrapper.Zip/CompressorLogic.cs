@@ -1,10 +1,10 @@
 ﻿using Actuarius.Memory;
 using Ionic.Zlib;
+using Pontifex.Transports.TransportWrapper.AckRaw;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Transports.ProtocolWrapper.AckRaw;
 
-namespace Transport.Protocols.Zip
+namespace Pontifex.Protocols.Zip
 {
     public abstract class CompressorLogic : AckRawWrapperLogic, IReleasableResource
     {

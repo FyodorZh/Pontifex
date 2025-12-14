@@ -1,4 +1,4 @@
-﻿namespace Transport.Abstractions.Flags
+﻿namespace Pontifex.Abstractions.Flags
 {
     public interface IReliable : IReliabiltyFlag
     {

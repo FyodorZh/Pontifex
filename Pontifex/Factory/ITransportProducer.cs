@@ -2,7 +2,7 @@
 using Actuarius.PeriodicLogic;
 using Scriba;
 
-namespace Transport.Abstractions
+namespace Pontifex.Abstractions
 {
     public interface ITransportProducer
     {

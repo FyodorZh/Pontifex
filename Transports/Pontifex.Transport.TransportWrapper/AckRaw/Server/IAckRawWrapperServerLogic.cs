@@ -1,6 +1,6 @@
 ﻿using Pontifex.Utils;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public interface IAckRawWrapperServerLogic : IAckRawWrapperLogic
     {

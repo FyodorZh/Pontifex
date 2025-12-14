@@ -1,4 +1,4 @@
-﻿namespace Transport.Abstractions.Clients
+﻿namespace Pontifex.Abstractions.Clients
 {
     public interface IAckRawClient : ITransport
     {

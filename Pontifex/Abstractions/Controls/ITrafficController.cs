@@ -1,4 +1,4 @@
-﻿namespace Transport.Abstractions.Controls
+﻿namespace Pontifex.Abstractions.Controls
 {
     public interface ITrafficCollector : IControl
     {

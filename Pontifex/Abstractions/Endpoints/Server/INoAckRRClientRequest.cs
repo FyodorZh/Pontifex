@@ -1,7 +1,7 @@
 ﻿using Actuarius.Memory;
 using Pontifex.Utils;
 
-namespace Transport.Abstractions.Endpoints.Server
+namespace Pontifex.Abstractions.Endpoints.Server
 {
     /// <summary>
     /// Инкапсулирует единичный запрос от клиента

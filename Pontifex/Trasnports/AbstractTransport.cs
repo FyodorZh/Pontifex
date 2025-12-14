@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
+using Pontifex.Abstractions;
+using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions;
-using Transport.Utils;
 
-namespace Transport.Transports.Core
+namespace Pontifex.Transports.Core
 {
     public abstract class AbstractTransport : ITransport
     {

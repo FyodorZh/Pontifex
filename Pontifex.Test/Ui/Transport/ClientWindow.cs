@@ -5,7 +5,7 @@ using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 using Terminal.UI;
-using Transport.Abstractions.Clients;
+using Pontifex.Abstractions.Clients;
 using TransportAnalyzer.TestLogic;
 
 namespace Pontifex.Test

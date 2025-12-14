@@ -1,9 +1,9 @@
 ﻿using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
-using Transport;
-using Transport.Abstractions.Endpoints.Client;
-using Transport.Abstractions.Handlers.Client;
+using Pontifex;
+using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.Abstractions.Handlers.Client;
 
 namespace TransportAnalyzer.TestLogic
 {
@@ -39,7 +39,7 @@ namespace TransportAnalyzer.TestLogic
             if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) || !AckResponse.EqualByContent(response))
             {
                 response?.Release();
-                endPoint.Disconnect(new Transport.StopReasons.TextFail("stress-test", "Wrong ack response"));
+                endPoint.Disconnect(new Pontifex.StopReasons.TextFail("stress-test", "Wrong ack response"));
                 return;
             }
             response.Release();
@@ -69,12 +69,12 @@ namespace TransportAnalyzer.TestLogic
                     if (id == _lastTickId)
                     {
                         Log.i("Last tick received");
-                        _endpoint?.Disconnect(new Transport.StopReasons.UserIntention("Last tick id encountered " + id));
+                        _endpoint?.Disconnect(new Pontifex.StopReasons.UserIntention("Last tick id encountered " + id));
                     }
                     else
                     {
                         Log.e("Message check (c) failed #" + id);
-                        _endpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check (c) failed #" + id));
+                        _endpoint?.Disconnect(new Pontifex.StopReasons.UserFail("Message check (c) failed #" + id));
                     }
                 }
                 buffer?.Release();

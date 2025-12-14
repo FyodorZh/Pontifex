@@ -1,7 +1,7 @@
 ﻿using Actuarius.Memory;
 using Scriba;
 
-namespace Transport.Abstractions
+namespace Pontifex.Abstractions
 {
     public interface ITransport : IControlProvider
     {

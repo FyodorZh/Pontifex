@@ -1,4 +1,4 @@
-﻿namespace Transport.Abstractions.Handlers.Client
+﻿namespace Pontifex.Abstractions.Handlers.Client
 {
     public interface IAckRRClientHandler : IAckHandler
     {

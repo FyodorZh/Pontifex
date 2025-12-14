@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Transport.Abstractions
+namespace Pontifex.Abstractions
 {
     public interface IControlProvider
     {

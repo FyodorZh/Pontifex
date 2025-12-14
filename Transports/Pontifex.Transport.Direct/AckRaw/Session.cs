@@ -1,11 +1,11 @@
 using System;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Handlers.Server;
-using Transport.StopReasons;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     internal class Session : IServerDirectCtl//, IAckRawClientEndpoint
     {

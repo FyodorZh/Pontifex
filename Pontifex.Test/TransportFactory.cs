@@ -1,17 +1,17 @@
 using Actuarius.Memory;
 using Scriba;
-using Transport.Abstractions.Clients;
-using Transport.Abstractions.Servers;
-using Transport.Protocols.Monitoring.AckRaw;
-using Transport.Protocols.Zip.AckRaw;
-using Transport.Transports.Direct;
+using Pontifex.Abstractions.Clients;
+using Pontifex.Abstractions.Servers;
+using Pontifex.Protocols.Monitoring.AckRaw;
+using Pontifex.Protocols.Zip.AckRaw;
+using Pontifex.Transports.Direct;
 
 namespace Pontifex.Test
 {
     public class TransportFactory
     {
-        private static readonly Transport.TransportFactory mClientFactory = new Transport.TransportFactory();
-        private static readonly Transport.TransportFactory mServerFactory = new Transport.TransportFactory();
+        private static readonly Pontifex.TransportFactory mClientFactory = new Pontifex.TransportFactory();
+        private static readonly Pontifex.TransportFactory mServerFactory = new Pontifex.TransportFactory();
 
         public TransportFactory()
         {

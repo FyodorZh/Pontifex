@@ -1,14 +1,13 @@
 using Actuarius.Collections;
+using Pontifex.Abstractions;
+using Pontifex.Abstractions.Endpoints;
+using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.Abstractions.Endpoints.Server;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions;
-using Transport.Abstractions.Endpoints;
-using Transport.Abstractions.Endpoints.Client;
-using Transport.Abstractions.Endpoints.Server;
-using Transport.Endpoints;
-using Transport.StopReasons;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     internal class TransportEndPoint : IAckRawServerEndpoint, IAckRawClientEndpoint
     {

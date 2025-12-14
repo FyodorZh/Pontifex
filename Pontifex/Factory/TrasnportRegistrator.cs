@@ -1,7 +1,7 @@
 ﻿using System;
-using Transport.Abstractions;
+using Pontifex.Abstractions;
 
-namespace Transport
+namespace Pontifex
 {
     public class TransportFactoryRegistrator
     {

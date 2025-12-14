@@ -3,10 +3,10 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
-using Transport;
-using Transport.Abstractions.Acknowledgers;
-using Transport.Abstractions.Endpoints.Server;
-using Transport.Abstractions.Handlers.Server;
+using Pontifex;
+using Pontifex.Abstractions.Acknowledgers;
+using Pontifex.Abstractions.Endpoints.Server;
+using Pontifex.Abstractions.Handlers.Server;
 
 namespace TransportAnalyzer.TestLogic
 {
@@ -101,7 +101,7 @@ namespace TransportAnalyzer.TestLogic
                     if (!receivedBuffer.TryPopFirst(out IMultiRefReadOnlyByteArray? data))
                     {
                         Log.e("Invalid message");
-                        mEndpoint?.Disconnect(new Transport.StopReasons.UserFail("Invalid message"));
+                        mEndpoint?.Disconnect(new Pontifex.StopReasons.UserFail("Invalid message"));
                         return;
                     }
                     using var dataDisposer = data.AsDisposable();
@@ -124,7 +124,7 @@ namespace TransportAnalyzer.TestLogic
                     if (!CheckBuffer(id, buffer))
                     {
                         Log.e("Message check (s) failed #" + id);
-                        mEndpoint?.Disconnect(new Transport.StopReasons.UserFail("Message check (s) failed #" + id));
+                        mEndpoint?.Disconnect(new Pontifex.StopReasons.UserFail("Message check (s) failed #" + id));
                         return;
                     }
 

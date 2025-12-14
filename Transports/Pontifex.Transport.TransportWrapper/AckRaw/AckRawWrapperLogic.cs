@@ -2,7 +2,7 @@
 using Pontifex.Utils;
 using Scriba;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public abstract class AckRawWrapperLogic : IAckRawWrapperLogic
     {

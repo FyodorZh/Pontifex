@@ -1,6 +1,6 @@
 using Pontifex.Utils;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     internal interface IAnyDirectCtl
     {

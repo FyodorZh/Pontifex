@@ -1,12 +1,12 @@
 ﻿using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
+using Pontifex.Abstractions;
+using Pontifex.Abstractions.Clients;
+using Pontifex.Abstractions.Servers;
+using Pontifex.Transports.TransportWrapper.AckRaw;
 using Scriba;
-using Transport.Abstractions;
-using Transport.Abstractions.Clients;
-using Transport.Abstractions.Servers;
-using Transport.Transports.ProtocolWrapper.AckRaw;
 
-namespace Transport.Protocols.Zip.AckRaw
+namespace Pontifex.Protocols.Zip.AckRaw
 {
     public abstract class AckRawZipProducer
     {

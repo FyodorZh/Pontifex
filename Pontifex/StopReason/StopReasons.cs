@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Scriba.JsonFactory;
 
-namespace Transport.StopReasons
+namespace Pontifex.StopReasons
 {
     /// <summary>
     /// Причина остановки неизвестна

@@ -1,14 +1,14 @@
 ﻿using System;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Clients;
+using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.Abstractions.Handlers;
+using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Clients;
-using Transport.Abstractions.Endpoints.Client;
-using Transport.Abstractions.Handlers;
-using Transport.Abstractions.Handlers.Client;
-using Transport.Transports.Core;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public class AckRawWrapperClient<TLogic> : AckRawWrapperClient
         where TLogic : IAckRawWrapperClientLogic

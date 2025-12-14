@@ -1,7 +1,7 @@
 ﻿using Actuarius.Memory;
-using Transport.Abstractions.Endpoints.Server;
+using Pontifex.Abstractions.Endpoints.Server;
 
-namespace Transport.Abstractions.Handlers.Server
+namespace Pontifex.Abstractions.Handlers.Server
 {
     public interface INoAckUnreliableRRServerHandler : IHandler
     {

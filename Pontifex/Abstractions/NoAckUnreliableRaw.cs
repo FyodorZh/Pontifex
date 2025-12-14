@@ -1,8 +1,8 @@
 using Actuarius.Memory;
-using Transport.Abstractions.Flags;
-using Transport.Abstractions.Handlers;
+using Pontifex.Abstractions.Flags;
+using Pontifex.Abstractions.Handlers;
 
-namespace Transport.Abstractions
+namespace Pontifex.Abstractions
 {
     public interface INoAckUnreliableRawEndpoint
     {

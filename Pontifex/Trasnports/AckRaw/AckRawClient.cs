@@ -1,12 +1,12 @@
 ﻿using System;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Clients;
+using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.Abstractions.Handlers.Client;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Clients;
-using Transport.Abstractions.Endpoints.Client;
-using Transport.Abstractions.Handlers.Client;
 
-namespace Transport.Transports.Core
+namespace Pontifex.Transports.Core
 {
     public abstract class AckRawClient : AbstractTransport, IAckRawClient
     {

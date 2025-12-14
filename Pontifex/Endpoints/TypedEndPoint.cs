@@ -1,7 +1,7 @@
 ﻿using System;
-using Transport.Abstractions;
+using Pontifex.Abstractions;
 
-namespace Transport.Endpoints
+namespace Pontifex.Endpoints
 {
     public class TypedEndPoint<TData> : IEndPoint
         where TData : IEquatable<TData>

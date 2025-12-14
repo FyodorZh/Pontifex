@@ -1,7 +1,7 @@
 using System;
-using Transport.Abstractions;
+using Pontifex.Abstractions;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     internal class DirectTransport
     {

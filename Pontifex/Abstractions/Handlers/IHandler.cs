@@ -1,7 +1,7 @@
 ﻿using Actuarius.Memory;
 using Scriba;
 
-namespace Transport.Abstractions.Handlers
+namespace Pontifex.Abstractions.Handlers
 {
     public interface IHandler
     {

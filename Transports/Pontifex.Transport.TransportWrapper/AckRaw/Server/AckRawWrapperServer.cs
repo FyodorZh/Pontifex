@@ -1,12 +1,12 @@
 ﻿using System;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Acknowledgers;
+using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Abstractions.Servers;
+using Pontifex.Transports.Core;
 using Scriba;
-using Transport.Abstractions.Acknowledgers;
-using Transport.Abstractions.Handlers.Server;
-using Transport.Abstractions.Servers;
-using Transport.Transports.Core;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public class AckRawWrapperServer<TAcknowledgerWrapper> : AckRawServer
         where TAcknowledgerWrapper : AcknowledgerWrapper

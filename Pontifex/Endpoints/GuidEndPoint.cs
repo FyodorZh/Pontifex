@@ -1,6 +1,6 @@
 using System;
 
-namespace Transport.Endpoints
+namespace Pontifex.Endpoints
 {
     public sealed class GuidEndPoint : TypedEndPoint<Guid>
     {

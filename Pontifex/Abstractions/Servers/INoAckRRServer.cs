@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using Actuarius.Memory;
 
-namespace Transport.Abstractions.Servers
+namespace Pontifex.Abstractions.Servers
 {
     public interface INoAckRRServer : ITransport
     {

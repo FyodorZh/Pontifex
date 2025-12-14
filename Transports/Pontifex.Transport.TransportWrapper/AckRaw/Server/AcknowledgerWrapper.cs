@@ -1,11 +1,11 @@
 ﻿using System;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Acknowledgers;
+using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Acknowledgers;
-using Transport.Abstractions.Handlers.Server;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public class AcknowledgerWrapper<THandlerWrapper> : AcknowledgerWrapper
         where THandlerWrapper : IHandlerWrapper

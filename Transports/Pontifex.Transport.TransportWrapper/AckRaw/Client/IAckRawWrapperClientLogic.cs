@@ -1,7 +1,7 @@
-﻿using Pontifex.Utils;
-using Transport.Abstractions;
+﻿using Pontifex.Abstractions;
+using Pontifex.Utils;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public interface IAckRawWrapperClientLogic : IAckRawWrapperLogic
     {

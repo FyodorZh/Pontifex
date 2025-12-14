@@ -2,13 +2,13 @@
 using Actuarius.Collections;
 using Actuarius.ConcurrentPrimitives;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.Abstractions.Handlers;
+using Pontifex.Abstractions.Handlers.Client;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Endpoints.Client;
-using Transport.Abstractions.Handlers;
-using Transport.Abstractions.Handlers.Client;
 
-namespace Transport.Handlers
+namespace Pontifex.Handlers
 {
     /// <summary>
     /// Враппер над клиентским хендлером. Делает взаимодействие однопоточным из подконтрольного треда,

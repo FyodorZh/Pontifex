@@ -1,4 +1,4 @@
-﻿namespace Transport.Abstractions.Servers
+﻿namespace Pontifex.Abstractions.Servers
 {
     public interface IAckRRServer : ITransport
     {

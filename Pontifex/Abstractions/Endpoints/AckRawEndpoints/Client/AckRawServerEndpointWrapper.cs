@@ -1,7 +1,7 @@
 ﻿using System;
 using Pontifex.Utils;
 
-namespace Transport.Abstractions.Endpoints.Client
+namespace Pontifex.Abstractions.Endpoints.Client
 {
     public class AckRawServerEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawServerEndpoint
     {

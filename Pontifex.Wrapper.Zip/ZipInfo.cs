@@ -1,6 +1,6 @@
 ﻿using Actuarius.Memory;
 
-namespace Transport.Protocols.Zip
+namespace Pontifex.Protocols.Zip
 {
     public static class ZipInfo
     {

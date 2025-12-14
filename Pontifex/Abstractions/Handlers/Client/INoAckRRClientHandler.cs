@@ -1,6 +1,6 @@
 ﻿using Actuarius.Memory;
 
-namespace Transport.Abstractions.Handlers.Client
+namespace Pontifex.Abstractions.Handlers.Client
 {
     public interface INoAckUnreliableRRClientHandler : IHandler
     {

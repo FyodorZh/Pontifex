@@ -1,4 +1,4 @@
-﻿namespace Transport.Abstractions.Endpoints.Server
+﻿namespace Pontifex.Abstractions.Endpoints.Server
 {
     /// <summary>
     /// Реализует транспортная система.

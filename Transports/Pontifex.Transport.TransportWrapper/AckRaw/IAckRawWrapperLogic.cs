@@ -1,8 +1,6 @@
-﻿using Actuarius.Memory;
-using Pontifex.Utils;
-using Scriba;
+﻿using Pontifex.Utils;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public interface IAckRawWrapperLogic
     {

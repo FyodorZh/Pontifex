@@ -1,9 +1,9 @@
 using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
+using Pontifex.Abstractions;
 using Scriba;
-using Transport.Abstractions;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     public class AckRawDirectServerProducer : ITransportProducer
     {

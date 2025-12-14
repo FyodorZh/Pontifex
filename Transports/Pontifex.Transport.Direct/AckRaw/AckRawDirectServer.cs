@@ -1,11 +1,11 @@
 using Actuarius.Memory;
+using Pontifex.Abstractions.Servers;
+using Pontifex.Endpoints;
+using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Servers;
-using Transport.Endpoints;
-using Transport.Transports.Core;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     public class AckRawDirectServer : AckRawServer, IAckReliableRawServer
     {

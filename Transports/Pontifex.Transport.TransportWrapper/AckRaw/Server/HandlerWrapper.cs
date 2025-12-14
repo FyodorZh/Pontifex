@@ -1,14 +1,14 @@
 ﻿using System;
 using Actuarius.Memory;
+using Pontifex.Abstractions;
+using Pontifex.Abstractions.Endpoints;
+using Pontifex.Abstractions.Endpoints.Server;
+using Pontifex.Abstractions.Handlers;
+using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions;
-using Transport.Abstractions.Endpoints;
-using Transport.Abstractions.Endpoints.Server;
-using Transport.Abstractions.Handlers;
-using Transport.Abstractions.Handlers.Server;
 
-namespace Transport.Transports.ProtocolWrapper.AckRaw
+namespace Pontifex.Transports.TransportWrapper.AckRaw
 {
     public interface IHandlerWrapper : IAckRawServerHandler
     {

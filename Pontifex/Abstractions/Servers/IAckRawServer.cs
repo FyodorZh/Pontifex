@@ -1,7 +1,7 @@
-﻿using Transport.Abstractions.Acknowledgers;
-using Transport.Abstractions.Handlers.Server;
+﻿using Pontifex.Abstractions.Acknowledgers;
+using Pontifex.Abstractions.Handlers.Server;
 
-namespace Transport.Abstractions.Servers
+namespace Pontifex.Abstractions.Servers
 {
     public interface IAckRawServer : ITransport
     {

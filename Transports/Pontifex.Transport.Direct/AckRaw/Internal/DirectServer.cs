@@ -1,10 +1,10 @@
 using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Abstractions;
 using Pontifex.Utils;
-using Transport.Abstractions;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     internal class DirectServer
     {

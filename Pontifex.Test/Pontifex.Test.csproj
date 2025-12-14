@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
+      <ProjectReference Include="..\Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
       <ProjectReference Include="..\Pontifex.Wrapper.Zip\Pontifex.Wrapper.Zip.csproj" />
       <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
       <ProjectReference Include="..\Terminal.UICommon\Terminal.UICommon.csproj" />

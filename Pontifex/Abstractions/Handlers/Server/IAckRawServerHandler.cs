@@ -1,11 +1,11 @@
 ﻿using System;
 using Actuarius.ConcurrentPrimitives;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Endpoints.Server;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Endpoints.Server;
 
-namespace Transport.Abstractions.Handlers.Server
+namespace Pontifex.Abstractions.Handlers.Server
 {
     public interface IAckRawServerHandler : IRawBaseHandler
     {

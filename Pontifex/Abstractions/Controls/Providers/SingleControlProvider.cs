@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using Transport.Abstractions;
+using Pontifex.Abstractions;
 
-namespace Transport.Utils
+namespace Pontifex.Utils
 {
     public class SingleControlProvider : IControlProvider
     {

@@ -2,7 +2,7 @@
 using Pontifex.Utils;
 using Scriba;
 
-namespace Transport.Abstractions.Acknowledgers
+namespace Pontifex.Abstractions.Acknowledgers
 {
     /// <summary>
     /// Реализует бизнесс-логика

@@ -15,7 +15,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Pontifex.Transport.Wrapper\Pontifex.Transport.Wrapper.csproj" />
+        <ProjectReference Include="..\Transports\Pontifex.Transport.TransportWrapper\Pontifex.Transport.TransportWrapper.csproj" />
         <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
     </ItemGroup>
 

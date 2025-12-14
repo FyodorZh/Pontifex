@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Transport
+namespace Pontifex
 {
     public struct DeliveryId : IComparable<DeliveryId>, IEquatable<DeliveryId>
     {

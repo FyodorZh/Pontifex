@@ -1,6 +1,6 @@
 ﻿using Pontifex.Utils;
 
-namespace Transport.Abstractions.Endpoints
+namespace Pontifex.Abstractions.Endpoints
 {
     /// <summary>
     /// Реализует транспортная система.

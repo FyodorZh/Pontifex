@@ -1,11 +1,11 @@
 using Actuarius.Memory;
+using Pontifex.Abstractions.Acknowledgers;
+using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Abstractions.Servers;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions.Acknowledgers;
-using Transport.Abstractions.Handlers.Server;
-using Transport.Abstractions.Servers;
 
-namespace Transport.Transports.Core
+namespace Pontifex.Transports.Core
 {
     public abstract class AckRawServer : AbstractTransport, IAckRawServer
     {

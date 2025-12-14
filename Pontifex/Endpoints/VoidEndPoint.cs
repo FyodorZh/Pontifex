@@ -1,6 +1,6 @@
-﻿using Transport.Abstractions;
+﻿using Pontifex.Abstractions;
 
-namespace Transport.Endpoints
+namespace Pontifex.Endpoints
 {
     public sealed class VoidEndPoint : IEndPoint
     {

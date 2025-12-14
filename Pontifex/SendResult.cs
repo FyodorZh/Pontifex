@@ -1,4 +1,4 @@
-﻿namespace Transport
+﻿namespace Pontifex
 {
     public enum SendResult : byte
     {

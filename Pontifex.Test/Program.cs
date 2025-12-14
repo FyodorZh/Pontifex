@@ -1,5 +1,4 @@
-﻿using Terminal.Gui.ViewBase;
-using Terminal.UI;
+﻿using Terminal.UI;
 
 namespace Pontifex.Test
 {

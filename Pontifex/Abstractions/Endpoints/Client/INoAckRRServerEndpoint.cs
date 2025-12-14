@@ -1,6 +1,6 @@
 ﻿using Actuarius.Memory;
 
-namespace Transport.Abstractions.Endpoints.Client
+namespace Pontifex.Abstractions.Endpoints.Client
 {
     using Handlers.Client;
 

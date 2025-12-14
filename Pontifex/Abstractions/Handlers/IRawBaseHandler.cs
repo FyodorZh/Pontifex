@@ -1,7 +1,7 @@
 ﻿using Actuarius.Memory;
 using Pontifex.Utils;
 
-namespace Transport.Abstractions.Handlers
+namespace Pontifex.Abstractions.Handlers
 {
     public interface IRawBaseHandler : IHandler
     {

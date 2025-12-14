@@ -1,4 +1,4 @@
-﻿namespace Transport.v2.Abstractions.Endpoints.Server
+﻿namespace Pontifex.v2.Abstractions.Endpoints.Server
 {
     public interface INoAckRRClientEndpoint
     {

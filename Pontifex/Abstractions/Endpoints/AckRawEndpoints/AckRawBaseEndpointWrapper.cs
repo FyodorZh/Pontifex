@@ -1,8 +1,8 @@
 ﻿using System;
+using Pontifex.Endpoints;
 using Pontifex.Utils;
-using Transport.Endpoints;
 
-namespace Transport.Abstractions.Endpoints
+namespace Pontifex.Abstractions.Endpoints
 {
     public abstract class AckRawBaseEndpointWrapper : IAckRawBaseEndpoint
     {

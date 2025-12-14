@@ -1,10 +1,10 @@
 ﻿using Actuarius.Memory;
+using Pontifex.Abstractions;
+using Pontifex.Transports.TransportWrapper.AckRaw;
 using Pontifex.Utils;
 using Scriba;
-using Transport.Abstractions;
-using Transport.Transports.ProtocolWrapper.AckRaw;
 
-namespace Transport.Protocols.Zip.AckRaw
+namespace Pontifex.Protocols.Zip.AckRaw
 {
     class AckRawZipClientLogic : CompressorLogic, IAckRawWrapperClientLogic
     {

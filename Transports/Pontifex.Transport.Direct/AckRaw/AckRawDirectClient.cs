@@ -1,15 +1,15 @@
 using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Abstractions.Clients;
+using Pontifex.Endpoints;
+using Pontifex.StopReasons;
+using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Pontifex.Utils.FSM;
 using Scriba;
-using Transport.Abstractions.Clients;
-using Transport.Endpoints;
-using Transport.StopReasons;
-using Transport.Transports.Core;
 
-namespace Transport.Transports.Direct
+namespace Pontifex.Transports.Direct
 {
     public class AckRawDirectClient : AckRawClient, IAckReliableRawClient, IClientDirectCtl
     {

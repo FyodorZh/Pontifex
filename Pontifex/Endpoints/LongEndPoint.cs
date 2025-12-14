@@ -1,4 +1,4 @@
-﻿namespace Transport.Endpoints
+﻿namespace Pontifex.Endpoints
 {
     public sealed class LongEndPoint : TypedEndPoint<long>
     {

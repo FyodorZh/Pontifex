@@ -1,9 +1,9 @@
 ﻿using System.IO;
+using Pontifex.StopReasons;
 using Scriba.JsonFactory;
 using Scriba.JsonFactory.ExternalJsons;
-using Transport.StopReasons;
 
-namespace Transport
+namespace Pontifex
 {
     public class StopReason
     {

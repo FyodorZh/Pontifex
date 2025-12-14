@@ -1,4 +1,4 @@
-﻿namespace Transport.Abstractions
+﻿namespace Pontifex.Abstractions
 {
     public interface IControl
     {
