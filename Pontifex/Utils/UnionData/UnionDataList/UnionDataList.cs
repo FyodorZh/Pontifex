@@ -61,35 +61,57 @@ namespace Pontifex.Utils
             return _data.Count > 0 ? _data[0].Type : UnionDataType.Unknown;
         }
 
-        public IMultiRefByteArray Serialize(ICollectablePool collectablePool, IPool<IMultiRefByteArray, int> bytesPool)
+        public int GetSize()
         {
-            int count = 4;
+            int size = 4;
             foreach (var element in _data.Enumerate())
             {
-                count += element.GetDataSize();
+                size += element.GetDataSize();
             }
-
-            var buffer = bytesPool.Acquire(count);
-            using var sink = collectablePool.Acquire<ByteSinkFromArray>().AsDisposable();
-            sink.Value.Reset(buffer, 0);
-
+            return size;
+        }
+        
+        public void SerializeTo<TByteSink>(ref TByteSink sink)
+            where TByteSink : IByteSink
+        {
             UnionDataMemoryAlias alias = _data.Count;
-            alias.WriteTo4(sink.Value);
+            alias.WriteTo4(ref sink);
             
             foreach (var element in _data.Enumerate())
             {
-                element.WriteTo(sink.Value);
+                element.WriteTo(ref sink);
             }
+        }
 
+        public void SerializeTo(IMultiRefByteArray buffer)
+        {
+            ByteSink sink = new ByteSink(buffer);
+            
+            UnionDataMemoryAlias alias = _data.Count;
+            alias.WriteTo4(ref sink);
+            
+            foreach (var element in _data.Enumerate())
+            {
+                element.WriteTo(ref sink);
+            }
+        }
+
+        public IMultiRefByteArray Serialize(IPool<IMultiRefByteArray, int> bytesPool)
+        {
+            int count = GetSize();
+            var buffer = bytesPool.Acquire(count);
+            
+            SerializeTo(buffer);
             return buffer;
         }
 
-        public bool Deserialize(IByteSource source, IPool<IMultiRefByteArray, int> pool)
+        public bool Deserialize<TByteSource>(ref TByteSource source, IPool<IMultiRefByteArray, int> pool)
+            where TByteSource : IByteSource
         {
             Clear();
             
             UnionDataMemoryAlias alias = new();
-            if (!alias.ReadFrom4(source))
+            if (!alias.ReadFrom4(ref source))
             {
                 return false;
             }
@@ -97,7 +119,7 @@ namespace Pontifex.Utils
             int count = alias.IntValue;
             for (int i = 0; i < count; i++)
             {
-                if (!UnionData.ReadFrom(source, pool, out var element))
+                if (!UnionData.ReadFrom(ref source, pool, out var element))
                 {
                     return false;
                 }

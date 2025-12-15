@@ -220,7 +220,8 @@ namespace Pontifex.Utils
             }
         }
         
-        public void WriteTo(IByteSink byteSink)
+        public void WriteTo<TByteSink>(ref TByteSink byteSink)
+            where TByteSink : IByteSink
         {
             byteSink.Put((byte)_type);
             switch (_type)
@@ -232,26 +233,26 @@ namespace Pontifex.Utils
                 case UnionDataType.Char:
                 case UnionDataType.Short:
                 case UnionDataType.UShort:
-                    _alias.WriteTo2(byteSink);
+                    _alias.WriteTo2(ref byteSink);
                     return;
                 case UnionDataType.Int:
                 case UnionDataType.UInt:
                 case UnionDataType.Float:
-                    _alias.WriteTo4(byteSink);
+                    _alias.WriteTo4(ref byteSink);
                     return;
                 case UnionDataType.Long:
                 case UnionDataType.ULong:
                 case UnionDataType.Double:
-                    _alias.WriteTo8(byteSink);
+                    _alias.WriteTo8(ref byteSink);
                     return;
                 case UnionDataType.Decimal:
-                    _alias.WriteTo16(byteSink);
+                    _alias.WriteTo16(ref byteSink);
                     return;
                 case UnionDataType.Array:
                 {
                     UnionDataMemoryAlias size = _bytes!.Count;
-                    size.WriteTo4(byteSink);
-                    byteSink.PutMany(_bytes.ExposeResourceUnsafe(out IReadOnlyBytes _));
+                    size.WriteTo4(ref byteSink);
+                    byteSink.PutMany(_bytes);
                 }
                     return;
                 case UnionDataType.NullArray:
@@ -261,7 +262,8 @@ namespace Pontifex.Utils
             }
         }
 
-        public static bool ReadFrom(IByteSource bytes, IPool<IMultiRefByteArray, int> pool, out UnionData unionData)
+        public static bool ReadFrom<TByteSource>(ref TByteSource bytes, IPool<IMultiRefByteArray, int> pool, out UnionData unionData)
+            where TByteSource : IByteSource
         {
             unionData = new UnionData();
             if (!bytes.TryPop(out var typeByte))
@@ -272,7 +274,7 @@ namespace Pontifex.Utils
             {
                 case UnionDataType.Bool:
                 case UnionDataType.Byte:
-                    if (alias.ReadFrom1(bytes))
+                    if (alias.ReadFrom1(ref bytes))
                     {
                         unionData._alias = alias;
                         return true;
@@ -281,7 +283,7 @@ namespace Pontifex.Utils
                 case UnionDataType.Char:
                 case UnionDataType.Short:
                 case UnionDataType.UShort:
-                    if (alias.ReadFrom2(bytes))
+                    if (alias.ReadFrom2(ref bytes))
                     {
                         unionData._alias = alias;
                         return true;
@@ -290,7 +292,7 @@ namespace Pontifex.Utils
                 case UnionDataType.Int:
                 case UnionDataType.UInt:
                 case UnionDataType.Float:
-                    if (alias.ReadFrom4(bytes))
+                    if (alias.ReadFrom4(ref bytes))
                     {
                         unionData._alias = alias;
                         return true;
@@ -299,14 +301,14 @@ namespace Pontifex.Utils
                 case UnionDataType.Long:
                 case UnionDataType.ULong:
                 case UnionDataType.Double:
-                    if (alias.ReadFrom8(bytes))
+                    if (alias.ReadFrom8(ref bytes))
                     {
                         unionData._alias = alias;
                         return true;
                     }
                     return false;
                 case UnionDataType.Decimal:
-                    if (alias.ReadFrom16(bytes))
+                    if (alias.ReadFrom16(ref bytes))
                     {
                         unionData._alias = alias;
                         return true;
@@ -315,7 +317,7 @@ namespace Pontifex.Utils
                 case UnionDataType.Array:
                 {
                     UnionDataMemoryAlias size = new();
-                    if (!size.ReadFrom4(bytes))
+                    if (!size.ReadFrom4(ref bytes))
                     {
                         return false;
                     }

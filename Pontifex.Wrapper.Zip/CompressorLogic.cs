@@ -34,7 +34,7 @@ namespace Pontifex.Protocols.Zip
             {
                 try
                 {
-                    return compressor.Pack(data, Memory.CollectablePool,  Memory.ByteArraysPool);
+                    return compressor.Pack(data, Memory.ByteArraysPool);
                 }
                 catch
                 {

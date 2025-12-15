@@ -1,5 +1,6 @@
 ﻿using System;
 using Actuarius.Memory;
+using Scriba;
 
 namespace Pontifex.Utils
 {
@@ -7,6 +8,7 @@ namespace Pontifex.Utils
     {
         private readonly ICollectablePool _collectablePool;
         private readonly IConcurrentPool<IMultiRefByteArray, int> _bytesPool;
+        
         private readonly BufferCompositor  _bufferCompositor;
         private readonly Action<UnionDataList?> _processor;
 
@@ -23,32 +25,34 @@ namespace Pontifex.Utils
             _bufferCompositor.Dispose();
         }
 
-        public IMultiRefByteArray Encode(UnionDataList data)
+        public static IMultiRefByteArray Encode(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> pool)
         {
-            try
-            {
-                var buffer = data.Serialize(_collectablePool, _bytesPool);
-                return buffer;
+            int dataSize = data.GetSize();
+            IMultiRefByteArray buffer = pool.Acquire(4 + dataSize);
 
-            }
-            finally
-            {
-                data.Release();
-            }
+            var sink = new ByteSink(buffer);
+            ((UnionDataMemoryAlias)dataSize).WriteTo4(ref sink);
+            data.SerializeTo(ref sink);
+                
+            return buffer;
         }
 
         private void BufferProcessor(IMultiRefByteArray buffer)
         {
-            var source = _collectablePool.Acquire<ByteSourceFromArray>();
+            var source = new ByteSourceFromArray(buffer);
             try
             {
-                UnionDataList list = new UnionDataList();
-                source.Reset(buffer, 0);
-                list.Deserialize(source, _bytesPool);
+                var data = _collectablePool.Acquire<UnionDataList>();
+                data.Deserialize(ref source, _bytesPool);
+                _processor.Invoke(data);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                _processor.Invoke(null);
             }
             finally
             {
-                source.Release();
                 buffer.Release();
             }
         }

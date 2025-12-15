@@ -46,9 +46,9 @@ namespace Pontifex.Protocols.Zip
             Reset();
         }
 
-        public bool Pack(UnionDataList data, ICollectablePool collectablePool, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
+        public bool Pack(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
         {
-            using var bufferHodler = data.Serialize(collectablePool, bytesPool).AsDisposable();
+            using var bufferHodler = data.Serialize(bytesPool).AsDisposable();
             var buffer = bufferHodler.Value;
 
             // Упаковываем
@@ -118,8 +118,6 @@ namespace Pontifex.Protocols.Zip
         private readonly DeflateStream _decompressor;
         private readonly CompressionLevel _compressionLevel;
         
-        private readonly ByteSourceFromStream _byteSource = new ByteSourceFromStream();
-
         private ZLibDecompressor(CompressionLevel compressionLvl)
         {
             _compressionLevel = compressionLvl;
@@ -146,8 +144,8 @@ namespace Pontifex.Protocols.Zip
             _decompressor.Flush();
             
             _unpackedStream.Position = 0;
-            _byteSource.Reset(_unpackedStream);
-            if (!data.Deserialize(_byteSource, bytesPool))
+            var byteSource = new ByteSourceFromStream(_unpackedStream);
+            if (!data.Deserialize(ref byteSource, bytesPool))
             {
                 return false;
             }

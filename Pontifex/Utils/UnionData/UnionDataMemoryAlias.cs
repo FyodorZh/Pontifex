@@ -108,12 +108,14 @@ namespace Pontifex.Utils
         public bool Equals8(UnionDataMemoryAlias other) => LongValue == other.LongValue;
         public bool Equals16(UnionDataMemoryAlias other) => LongValue == other.LongValue && _highHalf == other._highHalf;
 
-        public bool WriteTo1(IByteSink sink)
+        public bool WriteTo1<TByteSink>(ref TByteSink sink)
+            where TByteSink : IByteSink
         {
             return sink.Put(Byte0);
         }
         
-        public bool WriteTo2(IByteSink sink)
+        public bool WriteTo2<TByteSink>(ref TByteSink sink)
+            where TByteSink : IByteSink
         {
             bool res = true;
             res = res && sink.Put(Byte0);
@@ -121,7 +123,8 @@ namespace Pontifex.Utils
             return res;
         }
         
-        public bool WriteTo4(IByteSink sink)
+        public bool WriteTo4<TByteSink>(ref TByteSink sink)
+            where TByteSink : IByteSink
         {
             bool res = true;
             res = res && sink.Put(Byte0);
@@ -131,7 +134,8 @@ namespace Pontifex.Utils
             return res;
         }
         
-        public bool WriteTo8(IByteSink sink)
+        public bool WriteTo8<TByteSink>(ref TByteSink sink)
+            where TByteSink : IByteSink
         {
             bool res = true;
             res = res && sink.Put(Byte0);
@@ -145,7 +149,8 @@ namespace Pontifex.Utils
             return res;
         }
         
-        public bool WriteTo16(IByteSink sink)
+        public bool WriteTo16<TByteSink>(ref TByteSink sink)
+            where TByteSink : IByteSink
         {
             bool res = true;
             res = res && sink.Put(Byte0);
@@ -167,12 +172,14 @@ namespace Pontifex.Utils
             return res;
         }
         
-        public bool ReadFrom1(IByteSource source)
+        public bool ReadFrom1<TByteSource>(ref TByteSource source)
+            where TByteSource : IByteSource
         {
             return source.TryPop(out Byte0);
         }
         
-        public bool ReadFrom2(IByteSource source)
+        public bool ReadFrom2<TByteSource>(ref TByteSource source)
+            where TByteSource : IByteSource
         {
             bool res = true;
             res = res && source.TryPop(out Byte0);
@@ -180,7 +187,8 @@ namespace Pontifex.Utils
             return res;
         }
         
-        public bool ReadFrom4(IByteSource source)
+        public bool ReadFrom4<TByteSource>(ref TByteSource source)
+            where TByteSource : IByteSource
         {
             bool res = true;
             res = res && source.TryPop(out Byte0);
@@ -190,7 +198,8 @@ namespace Pontifex.Utils
             return res;
         }
         
-        public bool ReadFrom8(IByteSource source)
+        public bool ReadFrom8<TByteSource>(ref TByteSource source)
+            where TByteSource : IByteSource
         {
             bool res = true;
             res = res && source.TryPop(out Byte0);
@@ -204,7 +213,8 @@ namespace Pontifex.Utils
             return res;
         }
         
-        public bool ReadFrom16(IByteSource source)
+        public bool ReadFrom16<TByteSource>(ref TByteSource source)
+            where TByteSource : IByteSource
         {
             bool res = true;
             res = res && source.TryPop(out Byte0);
