@@ -1,55 +1,56 @@
 ﻿using System;
 using System.Net.Sockets;
+using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.Transports.Tcp
 {
     internal class TcpReceiver
     {
-        private volatile bool mStopped;
+        private volatile bool _stopped;
 
-        private readonly Socket mSocket;
-        private readonly PacketCompositor mPacketCompositor = new PacketCompositor();
+        private readonly Socket _socket;
+        private readonly UnionDataListCompositor _packetCompositor;
 
-        private Action<Exception> mOnFailed;
-        private Action mOnStopped;
+        private Action<Exception> _onFailed;
+        private readonly Action _onStopped;
 
-        private readonly Action<Packet> mOnReceived;
+        private volatile SocketAsyncEventArgs _asyncArgs = new SocketAsyncEventArgs();
 
-        private volatile SocketAsyncEventArgs mAsyncArgs = new SocketAsyncEventArgs();
+        private int _wasStopped;
 
-        private int mWasStopped;
-
-        public TcpReceiver(Socket socket, Action<Packet> onReceived, Action<Exception> onFailed, Action onStopped)
+        public TcpReceiver(Socket socket, Action<UnionDataList> onReceived, Action<Exception> onFailed, Action onStopped, IMemoryRental memoryRental)
         {
             if (onReceived == null)
             {
-                throw new ArgumentNullException("onReceived");
+                throw new ArgumentNullException(nameof(onReceived));
             }
             if (onFailed == null)
             {
-                throw new ArgumentNullException("onFailed");
+                throw new ArgumentNullException(nameof(onFailed));
             }
 
-            byte[] buffer = new byte[1024 * 4];
+            byte[] buffer = new byte[1024 * 8];
 
-            mAsyncArgs.Completed += ReadCallback;
-            mAsyncArgs.SocketFlags = SocketFlags.None;
-            mAsyncArgs.SetBuffer(buffer, 0, buffer.Length);
+            _asyncArgs.Completed += ReadCallback;
+            _asyncArgs.SocketFlags = SocketFlags.None;
+            _asyncArgs.SetBuffer(buffer, 0, buffer.Length);
 
-            mSocket = socket;
+            _socket = socket;
 
-            mOnReceived = onReceived;
-            mOnFailed = onFailed;
-            mOnStopped = onStopped;
+            _onFailed = onFailed;
+            _onStopped = onStopped;
+
+            _packetCompositor = new UnionDataListCompositor(onReceived, memoryRental.CollectablePool, memoryRental.ByteArraysPool);
         }
 
         public void Start()
         {
             try
             {
-                if (!mSocket.ReceiveAsync(mAsyncArgs))
+                if (!_socket.ReceiveAsync(_asyncArgs))
                 {
-                    ReadCallback(mSocket, mAsyncArgs);
+                    ReadCallback(_socket, _asyncArgs);
                 }
             }
             catch (Exception ex)
@@ -60,24 +61,24 @@ namespace Pontifex.Transports.Tcp
 
         public void Stop()
         {
-            mStopped = true;
+            _stopped = true;
         }
 
         private void OnStopped()
         {
-            if (System.Threading.Interlocked.Exchange(ref mWasStopped, 1) == 0)
+            if (System.Threading.Interlocked.Exchange(ref _wasStopped, 1) == 0)
             {
-                if (mAsyncArgs != null)
+                if (_asyncArgs != null)
                 {
-                    mAsyncArgs.Dispose();
-                    mAsyncArgs = null;
+                    _asyncArgs.Dispose();
+                    _asyncArgs = null;
                 }
 
-                mPacketCompositor.Destroy();
+                _packetCompositor.Dispose();
 
-                if (mOnStopped != null)
+                if (_onStopped != null)
                 {
-                    mOnStopped();
+                    _onStopped();
                 }
             }
         }
@@ -99,14 +100,14 @@ namespace Pontifex.Transports.Tcp
                     int bytesRead = args.BytesTransferred;
                     if (bytesRead > 0)
                     {
-                        mPacketCompositor.DecodePackets(args.Buffer, args.Offset, args.BytesTransferred, mOnReceived);
+                        _packetCompositor.PushData(args.Buffer, args.Offset, args.BytesTransferred);
 
                         // show must go on
-                        if (!mStopped)
+                        if (!_stopped)
                         {
-                            isSyncWork = !mSocket.ReceiveAsync(mAsyncArgs);
-                            sender = mSocket;
-                            args = mAsyncArgs;
+                            isSyncWork = !_socket.ReceiveAsync(_asyncArgs);
+                            sender = _socket;
+                            args = _asyncArgs;
                         }
                         else
                         {
@@ -130,7 +131,7 @@ namespace Pontifex.Transports.Tcp
         private void Fail(Exception ex)
         {
             Stop();
-            var failedHandler = System.Threading.Interlocked.Exchange(ref mOnFailed, null);
+            var failedHandler = System.Threading.Interlocked.Exchange(ref _onFailed, null);
             if (failedHandler != null)
             {
                 failedHandler(ex);

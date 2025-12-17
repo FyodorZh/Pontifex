@@ -1,4 +1,5 @@
-﻿using Actuarius.PeriodicLogic;
+﻿using Actuarius.Memory;
+using Actuarius.PeriodicLogic;
 
 namespace Pontifex.Transports.Tcp
 {
@@ -9,7 +10,7 @@ namespace Pontifex.Transports.Tcp
         public const int ServerConnectionsLimit = 20000;
         public static readonly DeltaTime DefaultDisconnectTimeout = DeltaTime.FromSeconds(180);
 
-        public static readonly string AckRequest = "AckTcp";
-        public static readonly byte[] AckOKResponse = System.Text.Encoding.UTF8.GetBytes("AckTcp-OK");
+        public static readonly IMultiRefReadOnlyByteArray AckRequest = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("AckTcp"));
+        public static readonly IMultiRefReadOnlyByteArray AckOKResponse = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("AckTcp-OK"));
     }
 }

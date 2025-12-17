@@ -53,3 +53,4 @@ TestResult.xml
 nunit-*.xml
 copilot.data.migration.agent.xml
 Bombastic_POH/packages
+*.sln.DotSettings.user

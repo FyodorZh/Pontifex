@@ -4,15 +4,20 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using Actuarius.Collections;
+using Actuarius.Memory;
+using Actuarius.PeriodicLogic;
 using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Abstractions.Servers;
 using Pontifex.Transports.Core;
+using Pontifex.Utils;
+using Scriba;
+using Transport.Utils;
 
 namespace Pontifex.Transports.Tcp
 {
     internal class AckRawTcpServer : AckRawServer, IAckReliableRawServer
     {
-        private class ClientSet : Utils.PeriodicLogic
+        private class ClientSet : PeriodicLogic
         {
             private readonly HashSet<ServerSideSocket> mClients = new HashSet<ServerSideSocket>();
             private readonly TinyConcurrentQueue<ServerSideSocket> mClientsToAdd = new TinyConcurrentQueue<ServerSideSocket>();
@@ -78,9 +83,9 @@ namespace Pontifex.Transports.Tcp
                 }
             }
 
-            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler> acknowledger, ILogger logger)
+            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler> acknowledger, IMemoryRental memoryRental, ILogger logger)
             {
-                ServerSideSocket client = new ServerSideSocket(socket, OnDisconnected, acknowledger, logger);
+                ServerSideSocket client = new ServerSideSocket(socket, OnDisconnected, acknowledger, memoryRental, logger);
                 mClientsToAdd.Put(client);
                 client.Start();
             }
@@ -106,8 +111,8 @@ namespace Pontifex.Transports.Tcp
 
         private IServerSocketListener mSocketListener;
 
-        public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, DeltaTime disconnectTimeout)
-            : base(TcpInfo.TransportName)
+        public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, DeltaTime disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+            : base(TcpInfo.TransportName, logger, memoryRental)
         {
             try
             {
@@ -143,7 +148,7 @@ namespace Pontifex.Transports.Tcp
         {
             try
             {
-                return string.Format("tcp-server[{0}]", mLocalEndPoint);
+                return $"tcp-server[{mLocalEndPoint}]";
             }
             catch (Exception)
             {
@@ -244,7 +249,7 @@ namespace Pontifex.Transports.Tcp
             socket.ReceiveBufferSize = TcpInfo.MessageMaxByteSize * 4;
             socket.NoDelay = true;
 
-            mClients.AddClient(socket, TryAcknowledge, Log);
+            mClients.AddClient(socket, TryAcknowledge, Memory, Log);
 
             try
             {
@@ -277,16 +282,23 @@ namespace Pontifex.Transports.Tcp
 
         private IAckRawServerHandler TryAcknowledge(EndPoint ep, UnionDataList ackData)
         {
+            using var ackDataDisposer = ackData.AsDisposable();
+            
             string remoteName;
             try { remoteName = ep.ToString(); }
             catch { remoteName = "invalid"; }
 
-            if (!ackData.Check(TcpInfo.AckRequest))
+            if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray ackRequest))
             {
-                var handler = TryConnectNewClient(ackData);
-                Log.i("ep[Ip={0}]: Acknowledging '{1}' by user logic", remoteName, handler != null ? "Succeeded" : "Failed");
-                return handler;
+                using var ackRequestDisposer = ackRequest.AsDisposable();
+                if (TcpInfo.AckRequest.EqualByContent(ackRequest))
+                {
+                    var handler = TryConnectNewClient(ackData.Acquire());
+                    Log.i("ep[Ip={0}]: Acknowledging '{1}' by user logic", remoteName, handler != null ? "Succeeded" : "Failed");
+                    return handler;
+                }
             }
+            
             Log.i("ep[Ip={0}]: Acknowledging 'Failed' by tcp-transport", remoteName);
             return null;
         }

@@ -1,19 +1,21 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
-using Pontifex.Endpoints;
-using Shared;
+using Actuarius.Memory;
+using Actuarius.PeriodicLogic;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Endpoints;
 using Pontifex.Abstractions.Endpoints.Server;
 using Pontifex.Abstractions.Handlers.Server;
-using Shared.Buffer;
+using Pontifex.Transports.NetSockets;
+using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Transports.Tcp
 {
     internal class ServerSideSocket : IAckRawClientEndpoint, IEquatable<ServerSideSocket>, IComparable<ServerSideSocket>
     {
-        internal enum ServerSideSocketState
+        private enum ServerSideSocketState
         {
             Constructed,
             Acknowledged,
@@ -27,9 +29,9 @@ namespace Pontifex.Transports.Tcp
         private readonly TcpSender mSocketSender;
 
         private readonly object mStateLock = new object();
-        private ServerSideSocketState mState = ServerSideSocketState.Constructed;
+        private volatile ServerSideSocketState mState = ServerSideSocketState.Constructed;
 
-        private IAckRawServerHandler mHandler;
+        private IAckRawServerHandler _handler;
 
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
@@ -42,11 +44,12 @@ namespace Pontifex.Transports.Tcp
 
         public IpEndPoint LocalEp { get; private set; }
 
-        private ILogger Log { get; set; }
+        private IMemoryRental Memory { get; }
+        private ILogger Log { get; }
 
         private ServerSideSocketState State
         {
-            get { return mState; }
+            get => mState;
             set
             {
                 lock (mStateLock)
@@ -63,28 +66,22 @@ namespace Pontifex.Transports.Tcp
             Socket socket,
             Action<ServerSideSocket> onDisconnected,
             Func<EndPoint, UnionDataList, IAckRawServerHandler> acknowledger,
+            IMemoryRental memoryRental,
             ILogger logger)
         {
-            if (onDisconnected == null)
-            {
-                throw new ArgumentNullException("onDisconnected");
-            }
-            if (acknowledger == null)
-            {
-                throw new ArgumentNullException("acknowledger");
-            }
-            mOnDisconnected = onDisconnected;
-            mAcknowledger = acknowledger;
+            mOnDisconnected = onDisconnected ?? throw new ArgumentNullException(nameof(onDisconnected));
+            mAcknowledger = acknowledger ?? throw new ArgumentNullException(nameof(acknowledger));
 
             mSocket = socket;
             mClientId = System.Threading.Interlocked.Increment(ref mPrevClientId);
 
-            mSocketReceiver = new TcpReceiver(mSocket, Received, OnFailed, () => Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName)));
-            mSocketSender = new TcpSender(mSocket, OnFailed);
+            mSocketReceiver = new TcpReceiver(mSocket, Received, OnFailed, () => Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName)), memoryRental);
+            mSocketSender = new TcpSender(mSocket, OnFailed, memoryRental);
 
             Ep = new IpEndPoint(socket.RemoteEndPoint);
             LocalEp = new IpEndPoint(socket.LocalEndPoint);
-            Log = logger != null ? logger.Wrap("socket", ToString) : global::Log.VoidLogger;
+            Memory = memoryRental;
+            Log = logger.Wrap("socket", ToString);
             mLastMessageReceiveTime.Time = DateTime.UtcNow;
         }
 
@@ -93,19 +90,13 @@ namespace Pontifex.Transports.Tcp
             mSocketReceiver.Start();
         }
 
-        public DateTime LastMessageReceiveUtcTime
-        {
-            get
-            {
-                return mLastMessageReceiveTime.Time;
-            }
-        }
+        public DateTime LastMessageReceiveUtcTime => mLastMessageReceiveTime.Time;
 
         public override string ToString()
         {
             try
             {
-                return string.Format("ep{0}", Ep);
+                return $"ep{Ep}";
             }
             catch (Exception)
             {
@@ -113,101 +104,117 @@ namespace Pontifex.Transports.Tcp
             }
         }
 
-        private void Received(Packet packet)
+        private void Received(UnionDataList packet)
         {
-            using (var bufferAccessor = packet.Buffer.ExposeAccessorOnce())
+            using var packetDisposer = packet.AsDisposable();
+
+            PacketType packetType;
+            if (packet.TryPopFirst(out byte packetTypeByte))
             {
-                mLastMessageReceiveTime.Time = DateTime.UtcNow;
-                switch (State)
+                packetType = (PacketType)packetTypeByte;
+            }
+            else
+            {
+                string text = $"Failed to parse incoming message type";
+                Log.e(text);
+                Disconnect(new StopReasons.TextFail(TcpInfo.TransportName, text));
+                return;
+            }
+
+            mLastMessageReceiveTime.Time = DateTime.UtcNow;
+            switch (State)
+            {
+                case ServerSideSocketState.Constructed:
                 {
-                    case ServerSideSocketState.Constructed:
+                    IAckRawServerHandler handler;
+                    StopReason reason;
+                    try
+                    {
+                        if (packetType == PacketType.AckRequest)
                         {
-                            IAckRawServerHandler handler;
-                            StopReason reason;
-                            try
-                            {
-                                ByteArraySegment ackData;
-                                if (packet.Type == PacketType.AckRequest && bufferAccessor.Buffer.PopFirst().AsArray(out ackData))
-                                {
-                                    handler = mAcknowledger.Invoke(mSocket.RemoteEndPoint, ackData);
-                                    reason = handler == null ? new StopReasons.AckRejected(TcpInfo.TransportName) : StopReason.Void;
-                                }
-                                else
-                                {
-                                    string text = string.Format("Wrong first message type. Expected '{0}', received '{1}'", PacketType.AckRequest, packet.Type);
-                                    Log.e(text);
-                                    handler = null;
-                                    reason = new StopReasons.TextFail(TcpInfo.TransportName, text);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.wtf(ex);
-                                handler = null;
-                                reason = new StopReasons.ExceptionFail(TcpInfo.TransportName, ex, "");
-                            }
-
-                            if (handler == null)
-                            {
-                                Disconnect(reason);
-                            }
-                            else
-                            {
-                                State = ServerSideSocketState.Acknowledged;
-
-                                byte[] ackResponse = AckUtils.AppendPrefix(handler.GetAckResponse(), TcpInfo.AckOKResponse);
-
-                                Send(new Packet(PacketType.AckResponse, ConcurrentUsageMemoryBufferPool.Instance.AllocateAndPush(ackResponse)));
-                                mHandler = handler;
-                                try
-                                {
-                                    mHandler.OnConnected(this);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.wtf(ex);
-                                }
-                            }
-                            break;
+                            handler = mAcknowledger.Invoke(mSocket.RemoteEndPoint, packet.Acquire());
+                            reason = handler == null ? new StopReasons.AckRejected(TcpInfo.TransportName) : StopReason.Void;
                         }
-                    case ServerSideSocketState.Acknowledged:
+                        else
                         {
-                            if (IsConnected)
+                            string text = $"Wrong first message type. Expected '{PacketType.AckRequest}', received '{packetType}'";
+                            Log.e(text);
+                            handler = null;
+                            reason = new StopReasons.TextFail(TcpInfo.TransportName, text);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                        handler = null;
+                        reason = new StopReasons.ExceptionFail(TcpInfo.TransportName, ex);
+                    }
+
+                    if (handler == null)
+                    {
+                        Disconnect(reason);
+                    }
+                    else
+                    {
+                        State = ServerSideSocketState.Acknowledged;
+
+                        UnionDataList ackResponse = Memory.CollectablePool.Acquire<UnionDataList>();
+                        handler.GetAckResponse(ackResponse);
+                        ackResponse.PutFirst(TcpInfo.AckOKResponse);
+                        ackResponse.PutFirst((byte)PacketType.AckResponse);
+                        Send(ackResponse);
+                        _handler = handler;
+                        try
+                        {
+                            _handler.OnConnected(this);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                        }
+                    }
+
+                    break;
+                }
+                case ServerSideSocketState.Acknowledged:
+                {
+                    if (IsConnected)
+                    {
+                        switch (packetType)
+                        {
+                            case PacketType.Regular:
                             {
-                                switch (packet.Type)
+                                var handler = _handler;
+                                if (handler != null)
                                 {
-                                    case PacketType.Regular:
-                                        {
-                                            var handler = mHandler;
-                                            if (handler != null)
-                                            {
-                                                try
-                                                {
-                                                    handler.OnReceived(bufferAccessor.Acquire());
-                                                }
-                                                catch (Exception ex)
-                                                {
-                                                    Log.e("Failed user handler\n{0}", ex);
-                                                }
-                                            }
-                                        }
-                                        break;
-                                    case PacketType.Ping:
-                                        Send(new Packet(packet.Type, bufferAccessor.Acquire())); // send back
-                                        break;
-                                    case PacketType.Disconnect:
-                                        Log.i("Graceful disconnect.");
-                                        Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName));
-                                        break;
-                                    default:
-                                        string error = string.Format("Wrong message type. Received '{0}'.", packet.Type);
-                                        Log.e(error);
-                                        Disconnect(new StopReasons.TextFail(TcpInfo.TransportName, error));
-                                        break;
+                                    try
+                                    {
+                                        handler.OnReceived(packet.Acquire());
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Log.e("Failed in user handler\n{0}", ex);
+                                    }
                                 }
                             }
-                            break;
+                                break;
+                            case PacketType.Ping:
+                                packet.PutFirst((byte)PacketType.Ping);
+                                Send(packet.Acquire()); // send back
+                                break;
+                            case PacketType.Disconnect:
+                                Log.i("Graceful disconnect.");
+                                Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName));
+                                break;
+                            default:
+                                string error = $"Wrong message type. Received '{packetType}'.";
+                                Log.e(error);
+                                Disconnect(new StopReasons.TextFail(TcpInfo.TransportName, error));
+                                break;
                         }
+                    }
+
+                    break;
                 }
             }
         }
@@ -218,10 +225,9 @@ namespace Pontifex.Transports.Tcp
             {
                 // DO NOTHING
             }
-            else if (ex is SocketException)
+            else if (ex is SocketException socektException)
             {
-                SocketException sex = (SocketException)ex;
-                switch (sex.SocketErrorCode)
+                switch (socektException.SocketErrorCode)
                 {
                     case SocketError.ConnectionReset:
                     case SocketError.ConnectionAborted:
@@ -229,7 +235,7 @@ namespace Pontifex.Transports.Tcp
                         // Ignore
                         break;
                     default:
-                        Log.e("SocketException({0}): {1}", sex.SocketErrorCode, sex.Message);
+                        Log.e("SocketException({0}): {1}", socektException.SocketErrorCode, socektException.Message);
                         break;
                 }
             }
@@ -238,34 +244,29 @@ namespace Pontifex.Transports.Tcp
                 Log.wtf(ex);
             }
 
-            Disconnect(new StopReasons.ExceptionFail(TcpInfo.TransportName, ex, ""));
+            Disconnect(new StopReasons.ExceptionFail(TcpInfo.TransportName, ex));
         }
 
-        private SendResult Send(Packet packet)
+        private SendResult Send(UnionDataList packet)
         {
             if (State == ServerSideSocketState.Acknowledged)
             {
                 return mSocketSender.Send(packet);
             }
-            packet.Buffer.Release();
+            packet.Release();
             return SendResult.Error;
         }
 
         #region Implementation of IAckRawClientEndpoint
 
-        public IEndPoint RemoteEndPoint
-        {
-            get { return Ep; }
-        }
+        public IEndPoint RemoteEndPoint => Ep;
 
-        public int MessageMaxByteSize
-        {
-            get { return TcpInfo.MessageMaxByteSize; }
-        }
+        public int MessageMaxByteSize => TcpInfo.MessageMaxByteSize;
 
-        SendResult IAckRawBaseEndpoint.Send(IMemoryBufferHolder bufferToSend)
+        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
-            return Send(new Packet(PacketType.Regular, bufferToSend));
+            bufferToSend.PutFirst((byte)PacketType.Regular);
+            return Send(bufferToSend);
         }
 
         bool IAckRawBaseEndpoint.Disconnect(StopReason reason)
@@ -310,7 +311,7 @@ namespace Pontifex.Transports.Tcp
 
                 RaiseOnDisconnected();
 
-                var handler = mHandler;
+                var handler = _handler;
                 if (handler != null)
                 {
                     try
@@ -329,10 +330,7 @@ namespace Pontifex.Transports.Tcp
             return false;
         }
 
-        public bool IsConnected
-        {
-            get { return mState == ServerSideSocketState.Acknowledged; }
-        }
+        public bool IsConnected => mState == ServerSideSocketState.Acknowledged;
 
         private void RaiseOnDisconnected()
         {

@@ -5,6 +5,7 @@ using Pontifex.Abstractions.Servers;
 using Pontifex.Protocols.Monitoring.AckRaw;
 using Pontifex.Protocols.Zip.AckRaw;
 using Pontifex.Transports.Direct;
+using Pontifex.Transports.Tcp;
 
 namespace Pontifex.Test
 {
@@ -23,9 +24,9 @@ namespace Pontifex.Test
             //
             mClientFactory.Register(new AckRawZipClientProducer());
             mServerFactory.Register(new AckRawZipServerProducer());
-            //
-            // mClientFactory.Register(new AckRawTcpClientProducer());
-            // mServerFactory.Register(new AckRawTcpServerProducer());
+            
+            mClientFactory.Register(new AckRawTcpClientProducer());
+            mServerFactory.Register(new AckRawTcpServerProducer());
             //
             // mClientFactory.Register(new NoAckRRUdpClientProducer());
             // mServerFactory.Register(new NoAckRRUdpServerProducer());

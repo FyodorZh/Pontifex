@@ -1,34 +1,27 @@
-﻿using Pontifex.Abstractions;
+﻿using Actuarius.Memory;
+using Actuarius.PeriodicLogic;
+using Pontifex.Abstractions;
+using Scriba;
 
 namespace Pontifex.Transports.Tcp
 {
     public class BaseAckRawTcpProducer
     {
-        public string Name
-        {
-            get { return TcpInfo.TransportName; }
-        }
+        public string Name => TcpInfo.TransportName;
 
         // host:ip/timeout
-        protected static bool Parse(string @params, out Shared.DeltaTime disconnectionTimeout, out System.Net.IPAddress ip, out int port)
+        protected static bool Parse(string @params, out DeltaTime disconnectionTimeout, out System.Net.IPAddress ip, out int port)
         {
             try
             {
                 string[] list = @params.Split('/');
-                if (list.Length == 1)
-                {
-                    disconnectionTimeout = TcpInfo.DefaultDisconnectTimeout;
-                }
-                else
-                {
-                    disconnectionTimeout = Shared.DeltaTime.FromSeconds(int.Parse(list[1]));
-                }
+                disconnectionTimeout = list.Length == 1 ? TcpInfo.DefaultDisconnectTimeout : DeltaTime.FromSeconds(int.Parse(list[1]));
 
                 return Utils.UrlStringParser.TryParseAddress(list[0], out ip, out port);
             }
             catch
             {
-                disconnectionTimeout = new Shared.DeltaTime();
+                disconnectionTimeout = new DeltaTime();
                 ip = null;
                 port = -1;
                 return false;
@@ -38,14 +31,11 @@ namespace Pontifex.Transports.Tcp
 
     public class AckRawTcpClientProducer : BaseAckRawTcpProducer, ITransportProducer
     {
-        public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner logicRunner)
+        public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner logicRunner)
         {
-            int port;
-            System.Net.IPAddress ip;
-            Shared.DeltaTime disconnectionTimeout;
-            if (Parse(@params, out disconnectionTimeout, out ip, out port))
+            if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {
-                return new AckRawTcpClient(ip, port, disconnectionTimeout, logicRunner);
+                return new AckRawTcpClient(ip, port, disconnectionTimeout, logicRunner, logger, memoryRental);
             }
             return null;
         }
@@ -53,14 +43,11 @@ namespace Pontifex.Transports.Tcp
 
     public class AckRawTcpServerProducer : BaseAckRawTcpProducer, ITransportProducer
     {
-        public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner logicRunner)
+        public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner logicRunner)
         {
-            int port;
-            System.Net.IPAddress ip;
-            Shared.DeltaTime disconnectionTimeout;
-            if (Parse(@params, out disconnectionTimeout, out ip, out port))
+            if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {
-                return new AckRawTcpServer(ip, port, TcpInfo.ServerConnectionsLimit, disconnectionTimeout);
+                return new AckRawTcpServer(ip, port, TcpInfo.ServerConnectionsLimit, disconnectionTimeout, logger, memoryRental);
             }
             return null;
         }

@@ -1,113 +1,29 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using Actuarius.Collections;
+using Actuarius.Memory;
+using Actuarius.PeriodicLogic;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Clients;
-using Pontifex.Abstractions.Controls;
 using Pontifex.Abstractions.Endpoints;
 using Pontifex.Abstractions.Endpoints.Client;
 using Pontifex.Transports.Core;
+using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
+using Scriba;
+using Transport.Utils;
 
 namespace Pontifex.Transports.Tcp
 {
     internal class AckRawTcpClient : AckRawClient, IAckReliableRawClient, IAckRawServerEndpoint
     {
-        private enum State
+        public enum State
         {
             Constructed,
             Connecting,
             Connected,
             Disconnected
-        }
-
-        private class PingCollector : IPingCollector
-        {
-            private volatile int mPing;
-
-            public bool CollectPing
-            {
-                get { return true; }
-                set { }
-            }
-
-            public string Name
-            {
-                get { return TcpInfo.TransportName; }
-            }
-
-            public bool GetPing(out int minPing, out int maxPing, out int avgPing)
-            {
-                var ping = mPing;
-                minPing = ping;
-                maxPing = ping;
-                avgPing = ping;
-                return true;
-            }
-
-            public void SetPing(int pingMs)
-            {
-                mPing = pingMs;
-            }
-        }
-
-        private class KeepAliver : IPeriodicLogic
-        {
-            private readonly AckRawTcpClient mOwner;
-            private ILogicDriverCtl mDriver;
-
-            public KeepAliver(AckRawTcpClient owner)
-            {
-                mOwner = owner;
-            }
-
-            bool IPeriodicLogic.LogicStarted(ILogicDriverCtl driver)
-            {
-                mDriver = driver;
-                return true;
-            }
-
-            void IPeriodicLogic.LogicTick()
-            {
-                try
-                {
-                    if (mOwner.ConnectionState != State.Connecting)
-                    {
-                        DateTime now = DateTime.UtcNow;
-                        long data = now.ToBinary();
-
-                        var buffer = ConcurrentUsageMemoryBufferPool.Instance.Allocate();
-                        using (var bufferAccessor = buffer.ExposeAccessorOnce())
-                        {
-                            bufferAccessor.Buffer.PushInt64(data);
-
-                            var result = mOwner.DoSend(PacketType.Ping, bufferAccessor.Acquire());
-                            if (result != SendResult.Ok)
-                            {
-                                mOwner.Stop(new StopReasons.TextFail(mOwner.Type, "{0}: Keep alive send failed with result '{1}'", mOwner, result));
-                            }
-                        }
-                    }
-
-                    mOwner.Tick();
-                }
-                catch (Exception ex)
-                {
-                    mOwner.Stop(new StopReasons.ExceptionFail(mOwner.Type, ex, mOwner + ": Keep alive failed."));
-                }
-            }
-
-            public void Stop()
-            {
-                if (mDriver != null)
-                {
-                    mDriver.Stop();
-                }
-            }
-
-            void IPeriodicLogic.LogicStopped()
-            {
-            }
         }
 
         private readonly IPEndPoint mRemoteEP;
@@ -130,10 +46,10 @@ namespace Pontifex.Transports.Tcp
 
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
-        private State ConnectionState
+        public State ConnectionState
         {
-            get { return mState; }
-            set
+            get => mState;
+            private set
             {
                 State oldState;
                 lock (mStateLock)
@@ -167,13 +83,11 @@ namespace Pontifex.Transports.Tcp
             }
         }
 
-        public override int MessageMaxByteSize
-        {
-            get { return TcpInfo.MessageMaxByteSize; }
-        }
+        public override int MessageMaxByteSize => TcpInfo.MessageMaxByteSize;
 
-        public AckRawTcpClient(IPAddress ipAddress, int port, DeltaTime disconnectTimeout, IPeriodicLogicRunner keepAliverSharedLogicRunner)
-            : base(TcpInfo.TransportName)
+        public AckRawTcpClient(IPAddress ipAddress, int port, DeltaTime disconnectTimeout, IPeriodicLogicRunner keepAliverSharedLogicRunner,
+            ILogger logger, IMemoryRental memoryRental)
+            : base(TcpInfo.TransportName, logger, memoryRental)
         {
             mRemoteEP = new IPEndPoint(ipAddress, port);
             mManagedRemoteEP = new IpEndPoint(mRemoteEP);
@@ -188,7 +102,7 @@ namespace Pontifex.Transports.Tcp
         {
             try
             {
-                return string.Format("tcp-client[{0}]", mRemoteEP);
+                return $"tcp-client[{mRemoteEP}]";
             }
             catch (Exception)
             {
@@ -196,7 +110,7 @@ namespace Pontifex.Transports.Tcp
             }
         }
 
-        private void Tick()
+        public void Tick()
         {
             DateTime now = DateTime.UtcNow;
             if ((now - mLastMessageReceiveTime.Time).TotalMilliseconds >= mDisconnectTimeout.MilliSeconds)
@@ -211,17 +125,15 @@ namespace Pontifex.Transports.Tcp
             {
                 mSocket.EndConnect(ar);
 
-                mSocketReceiver = new TcpReceiver(mSocket, OnReceived, OnFailed, null);
+                mSocketReceiver = new TcpReceiver(mSocket, OnReceived, OnFailed, null, Memory);
                 mSocketReceiver.Start();
 
-                mSocketSender = new TcpSender(mSocket, OnFailed);
+                mSocketSender = new TcpSender(mSocket, OnFailed, Memory);
 
                 ConnectionState = State.Connecting;
 
-                byte[] ackData = (byte[])ar.AsyncState;
-
-                var buffer = ConcurrentUsageMemoryBufferPool.Instance.AllocateAndPush(ackData);
-                DoSend(PacketType.AckRequest, buffer);
+                UnionDataList ackData = (UnionDataList)ar.AsyncState;
+                DoSend(PacketType.AckRequest, ackData);
             }
             catch (Exception)
             {
@@ -229,97 +141,108 @@ namespace Pontifex.Transports.Tcp
             }
         }
 
-        private void OnReceived(Packet packet)
+        private void OnReceived(UnionDataList packet)
         {
-            using (var bufferAccessor = packet.Buffer.ExposeAccessorOnce())
+            using var packetDisposer = packet.AsDisposable();
+
+            PacketType packetType;
+            if (packet.TryPopFirst(out byte packetTypeByte))
             {
-                mLastMessageReceiveTime.Time = DateTime.UtcNow;
-                switch (ConnectionState)
-                {
-                    case State.Connecting:
-                        try
+                packetType = (PacketType)packetTypeByte;
+            }
+            else
+            {
+                string text = $"Failed to parse incoming message type";
+                Log.e(text);
+                Stop(new StopReasons.TextFail(Type, text));
+                return;
+            }
+
+            mLastMessageReceiveTime.Time = DateTime.UtcNow;
+            switch (ConnectionState)
+            {
+                case State.Connecting:
+                    try
+                    {
+                        if (packetType == PacketType.AckResponse)
                         {
-                            if (packet.Type == PacketType.AckResponse)
+                            if (packet.TryPopFirst(out IMultiRefReadOnlyByteArray ackOk))
                             {
-                                ByteArraySegment ackResponse;
-                                bufferAccessor.Buffer.PopFirst().AsArray(out ackResponse);
-                                ackResponse = AckUtils.CheckPrefix(ackResponse, TcpInfo.AckOKResponse);
-                                if (ackResponse.IsValid)
+                                using var ackOkDisposer = ackOk.AsDisposable();
+                                if (TcpInfo.AckOKResponse.EqualByContent(ackOk))
                                 {
                                     ConnectionState = State.Connected;
-                                    ConnectionFinished(this, ackResponse);
-                                }
-                                else
-                                {
-                                    Log.w("Failed to parse ack response. Disconnecting...");
-                                    Stop(new StopReasons.AckRejected(Type));
+                                    ConnectionFinished(this, packet.Acquire());
+                                    break;
                                 }
                             }
-                            else if (packet.Type == PacketType.Disconnect)
+                            Log.w("Failed to parse ack response. Disconnecting...");
+                            Stop(new StopReasons.AckRejected(Type));
+                        }
+                        else if (packetType == PacketType.Disconnect)
+                        {
+                            Log.w("Failed to Ack on server. Disconnecting...");
+                            Stop(new StopReasons.AckRejected(Type));
+                        }
+                        else
+                        {
+                            Stop(new StopReasons.TextFail(Type, "Wrong first message type. Expected '{0}', received '{1}'", PacketType.AckResponse, packetType));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Stop(new StopReasons.ExceptionFail(Type, ex, ""));
+                    }
+                    break;
+                case State.Connected:
+                    if (packetType == PacketType.Regular)
+                    {
+                        mTrafficCollector.IncInTraffic(packet.GetDataSize());
+
+                        var handler = Handler;
+                        if (handler != null)
+                        {
+                            try
                             {
-                                Log.w("Failed to Ack on server. Disconnecting...");
-                                Stop(new StopReasons.AckRejected(Type));
+                                handler.OnReceived(packet.Acquire());
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.e("User logic exception, continue working...\n{0}", ex);
+                            }
+                        }
+                    }
+                    else if (packetType == PacketType.Disconnect)
+                    {
+                        Stop(new StopReasons.UnknownRemoteIntention(Type));
+                    }
+                    else if (packetType == PacketType.Ping)
+                    {
+                        try
+                        {
+                            if (packet.TryPopFirst(out long data))
+                            {
+                                DateTime time = DateTime.FromBinary(data);
+                                DateTime now = DateTime.UtcNow;
+                                int pingMs = (int)((now - time).TotalMilliseconds + 0.5f);
+                                mPingCollector.SetPing(pingMs);
                             }
                             else
                             {
-                                Stop(new StopReasons.TextFail(Type, "Wrong first message type. Expected '{0}', received '{1}'", PacketType.AckResponse, packet.Type));
+                                throw new Exception("Bad ping message");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Stop(new StopReasons.ExceptionFail(Type, ex, ""));
+                            Log.e("Failed to process ping response.\n{0}", ex);
                         }
-                        break;
-                    case State.Connected:
-                        if (packet.Type == PacketType.Regular)
-                        {
-                            mTrafficCollector.IncInTraffic(bufferAccessor.Buffer.Size);
+                    }
+                    else
+                    {
+                        Stop(new StopReasons.TextFail(Type, "Wrong incoming packet type. Received '{0}'", packetType));
+                    }
 
-                            var handler = Handler;
-                            if (handler != null)
-                            {
-                                try
-                                {
-                                    handler.OnReceived(bufferAccessor.Acquire());
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.e("User logic exception, continue working...\n{0}", ex);
-                                }
-                            }
-                        }
-                        else if (packet.Type == PacketType.Disconnect)
-                        {
-                            Stop(new StopReasons.UnknownRemoteIntention(Type));
-                        }
-                        else if (packet.Type == PacketType.Ping)
-                        {
-                            try
-                            {
-                                long data;
-                                if (bufferAccessor.Buffer.PopFirst().AsInt64(out data))
-                                {
-                                    DateTime time = DateTime.FromBinary(data);
-                                    DateTime now = DateTime.UtcNow;
-                                    int pingMs = (int)((now - time).TotalMilliseconds + 0.5f);
-                                    mPingCollector.SetPing(pingMs);
-                                }
-                                else
-                                {
-                                    throw new Exception("Bad ping message");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.e("Failed to process ping response.\n{0}", ex);
-                            }
-                        }
-                        else
-                        {
-                            Stop(new StopReasons.TextFail(Type, "Wrong incoming packet type. Received '{0}'", packet.Type));
-                        }
-                        break;
-                }
+                    break;
             }
         }
 
@@ -370,7 +293,7 @@ namespace Pontifex.Transports.Tcp
                     mSocket.SendTimeout = mDisconnectTimeout.MilliSeconds;
                     mSocket.NoDelay = true;
 
-                    UnionDataList ackData = new UnionDataList();
+                    UnionDataList ackData = Memory.CollectablePool.Acquire<UnionDataList>();
                     Handler.WriteAckData(ackData);
                     ackData.PutFirst(TcpInfo.AckRequest);
 
@@ -381,13 +304,13 @@ namespace Pontifex.Transports.Tcp
                     {
                         DeltaTime keepAlivePeriod = DeltaTime.FromMiliseconds(800);
 
-                        mKeepAliver = new KeepAliver(this);
+                        mKeepAliver = new KeepAliver(this, Memory);
 
                         if (mKeepAliverSharedLogicRunner != null)
                         {
                             if (mKeepAliverSharedLogicRunner.Run(mKeepAliver, keepAlivePeriod) == null)
                             {
-                                throw new Exception("Couldnt start mKeepAliverSharedLogicRunner");
+                                throw new Exception("Couldn't start mKeepAliveSharedLogicRunner");
                             }
                         }
                         else
@@ -429,10 +352,7 @@ namespace Pontifex.Transports.Tcp
 
                 {
                     var keepAliver = System.Threading.Interlocked.Exchange(ref mKeepAliver, null);
-                    if (keepAliver != null)
-                    {
-                        keepAliver.Stop();
-                    }
+                    keepAliver?.Stop();
                 }
 
                 {
@@ -453,24 +373,21 @@ namespace Pontifex.Transports.Tcp
 
                 {
                     var socketSender = System.Threading.Interlocked.Exchange(ref mSocketSender, null);
-                    if (socketSender != null)
+                    socketSender?.Stop(() =>
                     {
-                        socketSender.Stop(() =>
+                        try
                         {
-                            try
-                            {
-                                mSocket.Shutdown(SocketShutdown.Both);
-                                mSocket.Close();
-                                mSocket = null;
-                            }
-                            catch (Exception)
-                            {
-                                // ignored
-                            }
+                            mSocket.Shutdown(SocketShutdown.Both);
+                            mSocket.Close();
+                            mSocket = null;
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
 
-                            Log.i("Stopped.");
-                        });
-                    }
+                        Log.i("Stopped.");
+                    });
                 }
             }
             catch (Exception)
@@ -481,13 +398,13 @@ namespace Pontifex.Transports.Tcp
 
         #endregion
 
-        private SendResult DoSend(PacketType type, IMemoryBufferHolder buffer)
+        public SendResult DoSend(PacketType type, UnionDataList buffer)
         {
             var sender = mSocketSender;
             if (sender != null)
             {
-                var packet = new Packet(type, buffer);
-                return sender.Send(packet);
+                buffer.PutFirst((byte)type);
+                return sender.Send(buffer);
             }
             buffer.Release();
             return SendResult.Error;
@@ -500,19 +417,16 @@ namespace Pontifex.Transports.Tcp
             get { return mManagedRemoteEP; }
         }
 
-        SendResult IAckRawBaseEndpoint.Send(IMemoryBufferHolder bufferToSend)
+        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
-            using (var bufferAccessor = bufferToSend.ExposeAccessorOnce())
-            {
-                int len = bufferAccessor.Buffer.Size;
+            int len = bufferToSend.GetDataSize();
 
-                var res = DoSend(PacketType.Regular, bufferAccessor.Acquire());
-                if (res == SendResult.Ok)
-                {
-                    mTrafficCollector.IncOutTraffic(len);
-                }
-                return res;
+            var res = DoSend(PacketType.Regular, bufferToSend);
+            if (res == SendResult.Ok)
+            {
+                mTrafficCollector.IncOutTraffic(len);
             }
+            return res;
         }
 
         bool IAckRawBaseEndpoint.Disconnect(StopReason reason)
@@ -520,10 +434,7 @@ namespace Pontifex.Transports.Tcp
             return Stop(reason);
         }
 
-        bool IAckRawBaseEndpoint.IsConnected
-        {
-            get { return ConnectionState == State.Connected; }
-        }
+        bool IAckRawBaseEndpoint.IsConnected => ConnectionState == State.Connected;
 
         #endregion
 

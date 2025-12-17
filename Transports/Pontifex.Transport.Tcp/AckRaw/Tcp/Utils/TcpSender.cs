@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using Actuarius.Memory;
+using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Transports.Tcp
 {
@@ -9,86 +12,108 @@ namespace Pontifex.Transports.Tcp
     /// </summary>
     internal class TcpSender
     {
-        private readonly Socket mSocket;
-        private readonly Queue<Packet> mQueueToSend = new Queue<Packet>();
+        private readonly Socket _socket;
+        private readonly Queue<UnionDataList> _queueToSend = new Queue<UnionDataList>();
+        
+        private readonly IMemoryRental _memoryRental;
 
-        private bool mSendingNow; // !volatile but synchronized
+        private bool _sendingNow; // !volatile but synchronized
 
-        private Action<Exception> mOnFailed;
+        private Action<Exception> _onFailed;
 
-        private volatile bool mStopped;
-        private Action mOnStopped;
-        private bool mIntentionToStop;
-        private readonly object mStopLock = new object();
+        private volatile bool _stopped;
+        private Action _onStopped;
+        private bool _intentionToStop;
+        private readonly object _stopLock = new object();
 
-        private byte[] mBufferToSend = new byte[1024];
+        private IMultiRefByteArray _bufferToSend;
 
-        private SocketAsyncEventArgs mAsyncArgs = new SocketAsyncEventArgs();
-        private volatile PacketType mCurrentMessageType;
+        private SocketAsyncEventArgs _asyncArgs = new SocketAsyncEventArgs();
+        private volatile PacketType _currentMessageType;
 
-        public TcpSender(Socket socket, Action<Exception> onFailed)
+        public TcpSender(Socket socket, Action<Exception> onFailed, IMemoryRental memoryRental)
         {
-            mSocket = socket;
-            mOnFailed = onFailed;
-            mAsyncArgs.Completed += SendCallback;
-            mAsyncArgs.SocketFlags = SocketFlags.None;
+            _socket = socket;
+            _onFailed = onFailed;
+            _asyncArgs.Completed += SendCallback;
+            _asyncArgs.SocketFlags = SocketFlags.None;
+
+            _memoryRental = memoryRental;
         }
 
         public void Stop(Action onStopped)
         {
-            lock (mStopLock)
+            lock (_stopLock)
             {
-                if (!mIntentionToStop)
+                if (!_intentionToStop)
                 {
-                    if (mStopped)
+                    if (_stopped)
                     {
                         onStopped();
                     }
                     else
                     {
-                        mOnStopped = onStopped;
-                        Send(new Packet(PacketType.Disconnect, ConcurrentUsageMemoryBufferPool.Instance.Allocate()));
+                        _onStopped = onStopped;
+                        var packet = _memoryRental.CollectablePool.Acquire<UnionDataList>();
+                        packet.PutFirst(new UnionData((byte)PacketType.Disconnect));
+                        Send(packet);
                     }
-                    mIntentionToStop = true;
+                    _intentionToStop = true;
                 }
             }
         }
 
-        public SendResult Send(Packet packet)
+        public SendResult Send(UnionDataList packet)
         {
-            using (var bufferAccessor = packet.Buffer.Acquire().ExposeAccessorOnce())
+            using var packetDisposer = packet.AsDisposable();
+
+            if (packet.PeekFirstType() != UnionDataType.Byte)
             {
-                if (bufferAccessor.Buffer.Size + (sizeof(int) + sizeof(byte) * 2) * 3 > TcpInfo.MessageMaxByteSize) // *3 just to be sure
-                {
-                    return SendResult.MessageToBig;
-                }
+                return SendResult.InvalidMessage;
             }
 
-            lock (mStopLock)
+            switch ((PacketType)packet.Elements[0].Alias.ByteValue)
             {
-                if (mStopped || mIntentionToStop)
+                case PacketType.AckRequest:
+                case PacketType.AckResponse:
+                case PacketType.Regular:
+                case PacketType.Disconnect:
+                case PacketType.Ping:
+                    break;
+                default:
+                    return SendResult.InvalidMessage;
+            }
+            
+            if (packet.GetDataSize() > TcpInfo.MessageMaxByteSize)
+            {
+                return SendResult.MessageToBig;
+            }
+
+            lock (_stopLock)
+            {
+                if (_stopped || _intentionToStop)
                 {
                     return SendResult.Error;
                 }
             }
 
             bool haveToSendNow;
-            lock (mQueueToSend)
+            lock (_queueToSend)
             {
-                haveToSendNow = !mSendingNow;
+                haveToSendNow = !_sendingNow;
                 if (!haveToSendNow)
                 {
-                    mQueueToSend.Enqueue(packet);
+                    _queueToSend.Enqueue(packet.Acquire());
                 }
                 else
                 {
-                    mSendingNow = true;
+                    _sendingNow = true;
                 }
             }
 
             if (haveToSendNow)
             {
-                return DoSend(packet);
+                return DoSend(packet.Acquire());
             }
             return SendResult.Ok;
         }
@@ -97,16 +122,12 @@ namespace Pontifex.Transports.Tcp
         {
             try
             {
-                if (mCurrentMessageType == PacketType.Disconnect)
+                if (_currentMessageType == PacketType.Disconnect)
                 {
-                    lock (mStopLock)
+                    lock (_stopLock)
                     {
-                        mStopped = true;
-                        if (mOnStopped != null)
-                        {
-                            mOnStopped();
-                        }
-
+                        _stopped = true;
+                        _onStopped?.Invoke();
                         DisposeAsyncEventArgs();
                     }
                 }
@@ -117,47 +138,57 @@ namespace Pontifex.Transports.Tcp
                 return;
             }
 
-            if (!mStopped)
+            if (!_stopped)
             {
-                Packet packet = new Packet();
-                lock (mQueueToSend)
+                UnionDataList packet = null;
+                lock (_queueToSend)
                 {
-                    if (mQueueToSend.Count > 0)
+                    if (_queueToSend.Count > 0)
                     {
-                        packet = mQueueToSend.Dequeue();
+                        packet = _queueToSend.Dequeue();
                     }
                     else
                     {
-                        mSendingNow = false;
+                        _sendingNow = false;
                     }
                 }
 
-                if (mSendingNow)
+                if (_sendingNow)
                 {
                     DoSend(packet);
                 }
             }
             else
             {
-                mSendingNow = false;
+                _sendingNow = false;
             }
         }
 
-        private SendResult DoSend(Packet packet)
+        private SendResult DoSend(UnionDataList packet)
         {
+            using var packetDisposer = packet.AsDisposable();
             try
             {
-                int size = PacketCompositor.EncodePacketTo(packet, ref mBufferToSend);
-                mAsyncArgs.SetBuffer(mBufferToSend, 0, size);
-
-                mCurrentMessageType = packet.Type;
-                if (!mSocket.SendAsync(mAsyncArgs))
+                if (_bufferToSend != null)
                 {
-                    SendCallback(mSocket, mAsyncArgs);
+                    _bufferToSend?.Release();
+                    Log.e("Sent buffer is not null");
+                }
+                
+                _bufferToSend = UnionDataListCompositor.Encode(packet, _memoryRental.ByteArraysPool);
+                
+                _asyncArgs.SetBuffer(_bufferToSend.Array, _bufferToSend.Offset, _bufferToSend.Count);
+
+                _currentMessageType = (PacketType)packet.Elements[0].Alias.ByteValue;
+                if (!_socket.SendAsync(_asyncArgs))
+                {
+                    SendCallback(_socket, _asyncArgs);
                 }
             }
             catch (Exception ex)
             {
+                _bufferToSend?.Release();
+                _bufferToSend = null;
                 Fail(ex);
                 return SendResult.Error;
             }
@@ -166,21 +197,21 @@ namespace Pontifex.Transports.Tcp
 
         private void Fail(Exception ex)
         {
-            lock (mStopLock)
+            lock (_stopLock)
             {
-                if (!mStopped)
+                if (!_stopped)
                 {
-                    mStopped = true;
-                    if (mOnStopped != null)
+                    _stopped = true;
+                    if (_onStopped != null)
                     {
-                        mOnStopped();
+                        _onStopped();
                     }
 
                     DisposeAsyncEventArgs();
                 }
             }
 
-            var failedHandler = System.Threading.Interlocked.Exchange(ref mOnFailed, null);
+            var failedHandler = System.Threading.Interlocked.Exchange(ref _onFailed, null);
             if (failedHandler != null)
             {
                 failedHandler(ex);
@@ -189,10 +220,10 @@ namespace Pontifex.Transports.Tcp
 
         private void DisposeAsyncEventArgs()
         {
-            if (mAsyncArgs != null)
+            if (_asyncArgs != null)
             {
-                mAsyncArgs.Dispose();
-                mAsyncArgs = null;
+                _asyncArgs.Dispose();
+                _asyncArgs = null;
             }
         }
     }

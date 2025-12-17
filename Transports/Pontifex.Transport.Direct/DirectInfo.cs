@@ -9,6 +9,6 @@ namespace Pontifex.Transports.Direct
 
         public const int BufferCapacity = 500;
 
-        public static readonly IMultiRefReadOnlyByteArray AckOKResponse = new MultiRefByteArray(System.Text.Encoding.UTF8.GetBytes("Direct-Ack-OK"));
+        public static readonly IMultiRefReadOnlyByteArray AckOKResponse = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("Direct-Ack-OK"));
     }
 }

@@ -61,7 +61,7 @@ namespace Pontifex.Utils
             return _data.Count > 0 ? _data[0].Type : UnionDataType.Unknown;
         }
 
-        public int GetSize()
+        public int GetDataSize()
         {
             int size = 4;
             foreach (var element in _data.Enumerate())
@@ -98,7 +98,7 @@ namespace Pontifex.Utils
 
         public IMultiRefByteArray Serialize(IPool<IMultiRefByteArray, int> bytesPool)
         {
-            int count = GetSize();
+            int count = GetDataSize();
             var buffer = bytesPool.Acquire(count);
             
             SerializeTo(buffer);
@@ -138,6 +138,11 @@ namespace Pontifex.Utils
 
     public static class UnionDataList_Ext
     {
+        public static void PutFirst(this UnionDataList data, byte value)
+        {
+            data.PutFirst(new UnionData(value));
+        }
+        
         public static void PutFirst(this UnionDataList data, short value)
         {
             data.PutFirst(new UnionData(value));
@@ -148,7 +153,7 @@ namespace Pontifex.Utils
             data.PutFirst(new UnionData(value));
         }
         
-        public static void PutFirst(this UnionDataList data, IMultiRefByteArray value)
+        public static void PutFirst(this UnionDataList data, IMultiRefReadOnlyByteArray value)
         {
             data.PutFirst(new UnionData(value));
         }
@@ -166,6 +171,17 @@ namespace Pontifex.Utils
                 return true;
             }
             value = false;
+            return false;
+        }
+        
+        public static bool TryPopFirst(this UnionDataList data, out byte value)
+        {
+            if (data.PeekFirstType() == UnionDataType.Byte)
+            {
+                value = data.PopFirst().Alias.ByteValue;
+                return true;
+            }
+            value = 0;
             return false;
         }
 
@@ -196,6 +212,17 @@ namespace Pontifex.Utils
             if (data.PeekFirstType() == UnionDataType.Int)
             {
                 value = data.PopFirst().Alias.IntValue;
+                return true;
+            }
+            value = 0;
+            return false;
+        }
+        
+        public static bool TryPopFirst(this UnionDataList data, out long value)
+        {
+            if (data.PeekFirstType() == UnionDataType.Long)
+            {
+                value = data.PopFirst().Alias.LongValue;
                 return true;
             }
             value = 0;

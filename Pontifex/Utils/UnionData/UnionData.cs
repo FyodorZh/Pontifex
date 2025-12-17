@@ -106,55 +106,20 @@ namespace Pontifex.Utils
             _bytes = value;
         }
         
-        public static implicit operator UnionData(bool value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(byte value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(char value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(short value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(ushort value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(int value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(uint value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(long value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(ulong value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(float value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(double value)
-        {
-            return new UnionData(value);
-        }
-        public static implicit operator UnionData(decimal value)
-        {
-            return new UnionData(value);
-        }
-        
+        public static implicit operator UnionData(bool value) => new(value);
+        public static implicit operator UnionData(byte value) => new(value);
+        public static implicit operator UnionData(char value) => new(value);
+        public static implicit operator UnionData(short value) => new(value);
+        public static implicit operator UnionData(ushort value) => new(value);
+        public static implicit operator UnionData(int value) => new(value);
+        public static implicit operator UnionData(uint value) => new(value);
+        public static implicit operator UnionData(long value) => new(value);
+        public static implicit operator UnionData(ulong value) => new(value);
+        public static implicit operator UnionData(float value) => new(value);
+        public static implicit operator UnionData(double value) => new(value);
+        public static implicit operator UnionData(decimal value) => new(value);
+        // public static implicit operator UnionData(IMultiRefReadOnlyByteArray? value) => new(value);
+
         public bool Equals(UnionData other)
         {
             if (_type != other._type)
@@ -249,11 +214,9 @@ namespace Pontifex.Utils
                     _alias.WriteTo16(ref byteSink);
                     return;
                 case UnionDataType.Array:
-                {
                     UnionDataMemoryAlias size = _bytes!.Count;
                     size.WriteTo4(ref byteSink);
                     byteSink.PutMany(_bytes);
-                }
                     return;
                 case UnionDataType.NullArray:
                     return;
@@ -315,28 +278,23 @@ namespace Pontifex.Utils
                     }
                     return false;
                 case UnionDataType.Array:
-                {
                     UnionDataMemoryAlias size = new();
                     if (!size.ReadFrom4(ref bytes))
                     {
                         return false;
                     }
-
                     var buffer = pool.Acquire(size.IntValue);
                     if (!bytes.TakeMany(buffer))
                     {
                         return false;
                     }
-
                     unionData._bytes = buffer;
                     return true;
-                }
                 case UnionDataType.NullArray:
                     return true;
                 default:
                     return false;
             }
-            
         }
         
         public string ValueToString()

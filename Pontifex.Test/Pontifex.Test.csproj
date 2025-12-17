@@ -12,6 +12,7 @@
       <ProjectReference Include="..\Pontifex.Wrapper.Zip\Pontifex.Wrapper.Zip.csproj" />
       <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
       <ProjectReference Include="..\Terminal.UICommon\Terminal.UICommon.csproj" />
+      <ProjectReference Include="..\Transports\Pontifex.Transport.Tcp\Pontifex.Transport.Tcp.csproj" />
     </ItemGroup>
 
     <ItemGroup>

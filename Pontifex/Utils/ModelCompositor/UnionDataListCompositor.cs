@@ -25,16 +25,9 @@ namespace Pontifex.Utils
             _bufferCompositor.Dispose();
         }
 
-        public static IMultiRefByteArray Encode(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> pool)
+        public void PushData(byte[] bytes, int start, int count)
         {
-            int dataSize = data.GetSize();
-            IMultiRefByteArray buffer = pool.Acquire(4 + dataSize);
-
-            var sink = new ByteSink(buffer);
-            ((UnionDataMemoryAlias)dataSize).WriteTo4(ref sink);
-            data.SerializeTo(ref sink);
-                
-            return buffer;
+            _bufferCompositor.PushData(bytes, start, count);
         }
 
         private void BufferProcessor(IMultiRefByteArray buffer)
@@ -55,6 +48,18 @@ namespace Pontifex.Utils
             {
                 buffer.Release();
             }
+        }
+        
+        public static IMultiRefByteArray Encode(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> pool)
+        {
+            int dataSize = data.GetDataSize();
+            IMultiRefByteArray buffer = pool.Acquire(4 + dataSize);
+
+            var sink = new ByteSink(buffer);
+            ((UnionDataMemoryAlias)dataSize).WriteTo4(ref sink);
+            data.SerializeTo(ref sink);
+                
+            return buffer;
         }
     }
 }
