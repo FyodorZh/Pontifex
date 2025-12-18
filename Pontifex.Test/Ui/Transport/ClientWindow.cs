@@ -33,7 +33,7 @@ namespace Pontifex.Test
             
             
             _client = factory.ConstructClient(url, _logger, MemoryRental.Shared);
-            if (_client == null || !_client.Init(new AckRawClientLogic(1, 100000)))
+            if (_client == null || !_client.Init(new AckRawClientLogic(10, 100000)))
             {
                 _logger.e("Failed to construct client");
                 return;

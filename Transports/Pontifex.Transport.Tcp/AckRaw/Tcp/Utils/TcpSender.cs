@@ -120,6 +120,9 @@ namespace Pontifex.Transports.Tcp
 
         private void SendCallback(object sender, SocketAsyncEventArgs args)
         {
+            _bufferToSend?.Release();
+            _bufferToSend = null;
+            
             try
             {
                 if (_currentMessageType == PacketType.Disconnect)
@@ -171,10 +174,9 @@ namespace Pontifex.Transports.Tcp
             {
                 if (_bufferToSend != null)
                 {
-                    _bufferToSend?.Release();
-                    Log.e("Sent buffer is not null");
+                    Log.e("Buffer leak detected");
+                    _bufferToSend.Release();
                 }
-                
                 _bufferToSend = UnionDataListCompositor.Encode(packet, _memoryRental.ByteArraysPool);
                 
                 _asyncArgs.SetBuffer(_bufferToSend.Array, _bufferToSend.Offset, _bufferToSend.Count);

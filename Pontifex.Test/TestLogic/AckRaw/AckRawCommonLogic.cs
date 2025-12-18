@@ -9,8 +9,8 @@ namespace TransportAnalyzer.TestLogic
         const int MinN = 200;
         const int MaxN = 2000;
 
-        public static readonly IMultiRefByteArray AckRequest = new MultiRefByteArray("STRESS-LOGIC-ACK-REQUEST"u8.ToArray());
-        public static readonly IMultiRefByteArray AckResponse = new MultiRefByteArray("STRESS-LOGIC-ACK-OK"u8.ToArray());
+        public static readonly IMultiRefReadOnlyByteArray AckRequest = new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-REQUEST"u8.ToArray());
+        public static readonly IMultiRefReadOnlyByteArray AckResponse = new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-OK"u8.ToArray());
 
         public ILogger Log { get; private set; }
         public IMemoryRental Memory { get; private set; }

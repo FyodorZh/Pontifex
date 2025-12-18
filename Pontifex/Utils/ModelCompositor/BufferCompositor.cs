@@ -51,6 +51,7 @@ namespace Pontifex.Utils
                         for (int i = 0; i < bytesToCopy; i++)
                         {
                             _packetSize[_copiedCount] = bytes[start];
+                            _copiedCount += 1;
                             start += 1;
                             count -= 1;
                         }
