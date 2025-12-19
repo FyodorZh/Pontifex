@@ -3,7 +3,7 @@ using Scriba;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Servers;
 using Pontifex.Protocols.Monitoring.AckRaw;
-using Pontifex.Protocols.Zip.AckRaw;
+using Pontifex.Protocols.Zip;
 using Pontifex.Transports.Direct;
 using Pontifex.Transports.Tcp;
 
