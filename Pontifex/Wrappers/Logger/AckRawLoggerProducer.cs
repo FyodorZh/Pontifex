@@ -11,7 +11,7 @@ namespace Pontifex.Protocols.Monitoring.AckRaw
     {
         public string Name => "log";
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
             if (factory.Construct(@params, logger, memoryRental, logicRunner) is IAckReliableRawClient client)
             {
@@ -25,9 +25,9 @@ namespace Pontifex.Protocols.Monitoring.AckRaw
     {
         public string Name => "log";
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
-            if (factory.Construct(@params) is IAckReliableRawServer server)
+            if (factory.Construct(@params, logger, memoryRental, logicRunner) is IAckReliableRawServer server)
             {
                 return new AckRawReliableServerLogger(server);
             }

@@ -1,8 +1,10 @@
 ﻿using System;
+using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
 using Pontifex;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Transports.Core;
+using Scriba;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {
@@ -18,8 +20,10 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         public AckRawReconnectableClient(
             Func<IAckReliableRawClient> underlyingTransportProducer,
             TimeSpan disconnectTimeout,
+            ILogger? logger,
+            IMemoryRental? memoryRental,
             IPeriodicLogicRunner? reconnectableSharedLogicRunner = null)
-            : base(ReconnectableInfo.TransportName)
+            : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
             mUnderlyingTransportProducer = underlyingTransportProducer;
             mDisconnectTimeout = disconnectTimeout;

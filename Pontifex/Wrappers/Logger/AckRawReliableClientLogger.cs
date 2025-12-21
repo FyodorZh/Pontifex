@@ -114,10 +114,5 @@ namespace Pontifex
             Log.i("UserHandler.OnStopped(" + reason + ")");
             _userHandler?.OnStopped(reason);
         }
-
-        void IHandler.Setup(IMemoryRental memory, ILogger logger)
-        {
-            _userHandler?.Setup(memory, logger);
-        }
     }
 }

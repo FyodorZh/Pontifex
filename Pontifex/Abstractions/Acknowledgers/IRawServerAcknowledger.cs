@@ -10,8 +10,6 @@ namespace Pontifex.Abstractions.Acknowledgers
     public interface IRawServerAcknowledger<out THandler>
         where THandler : Handlers.Server.IAckRawServerHandler
     {
-        void Setup(IMemoryRental memory, ILogger logger);
-        
         /// <summary>
         /// Идентифицирует входящего клиента.
         /// Создаёт новую сессию для взаимодействия с ним.

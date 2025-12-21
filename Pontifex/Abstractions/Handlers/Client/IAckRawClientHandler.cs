@@ -71,19 +71,6 @@ namespace Pontifex.Abstractions.Handlers.Client
                 return $"'{_core}' - '{_core.GetType()}'";
             }
 
-            public void Setup(IMemoryRental memory, ILogger logger)
-            {
-                _core.Setup(memory, logger);
-            }
-
-            //            ~Wrapper()
-//            {
-//                if (State != HandlerState.Stopped)
-//                {
-//                    Fail();
-//                }
-//            }
-
             public void WriteAckData(UnionDataList ackData)
             {
                 _core.WriteAckData(ackData);

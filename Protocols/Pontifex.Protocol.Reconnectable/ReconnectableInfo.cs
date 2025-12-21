@@ -10,7 +10,7 @@ namespace Transport.Protocols.Reconnectable
         public const int ServerConnectionsLimit = 20000;
         public static readonly DeltaTime ReconnectionPeriod = DeltaTime.FromSeconds(2.0);
 
-        public static readonly MultiRefByteArray AckRequest = new (System.Text.Encoding.UTF8.GetBytes("ReconnectableAck"));
-        public static readonly MultiRefByteArray AckOKResponse = new (System.Text.Encoding.UTF8.GetBytes("ReconnectableAck-OK"));
+        public static readonly IMultiRefReadOnlyByteArray AckRequest = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("ReconnectableAck"));
+        public static readonly IMultiRefReadOnlyByteArray AckOKResponse = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("ReconnectableAck-OK"));
     }
 }

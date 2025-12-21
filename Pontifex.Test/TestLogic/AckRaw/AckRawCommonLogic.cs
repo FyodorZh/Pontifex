@@ -1,10 +1,9 @@
-﻿using System.Text;
-using Actuarius.Memory;
+﻿using Actuarius.Memory;
 using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class AckRawCommonLogic
+    abstract class AckRawCommonLogic
     {
         const int MinN = 200;
         const int MaxN = 2000;
@@ -12,21 +11,15 @@ namespace TransportAnalyzer.TestLogic
         public static readonly IMultiRefReadOnlyByteArray AckRequest = new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-REQUEST"u8.ToArray());
         public static readonly IMultiRefReadOnlyByteArray AckResponse = new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-OK"u8.ToArray());
 
-        public ILogger Log { get; private set; }
-        public IMemoryRental Memory { get; private set; }
+        public ILogger Log { get; }
+        public IMemoryRental Memory { get; }
 
-        protected AckRawCommonLogic()
-        {
-            Log = StaticLogger.Instance;
-            Memory = MemoryRental.Shared;
-        }
-        
-        public void Setup(IMemoryRental memory, ILogger logger)
+        protected AckRawCommonLogic(IMemoryRental memory, ILogger logger)
         {
             Log = logger;
             Memory = memory;
         }
-
+        
         protected IMultiRefByteArray GenBuffer(long id)
         {
             int N = (int)((id + 10) % MaxN + MinN);

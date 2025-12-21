@@ -13,7 +13,7 @@ namespace Pontifex.Transports.Core
 
         private IRawServerAcknowledger<IAckRawServerHandler>? _acknowledger;
 
-        protected AckRawServer(string typeName, ILogger? logger, IMemoryRental? memory)
+        protected AckRawServer(string typeName, ILogger logger, IMemoryRental memory)
             :base(logger, memory)
         {
             Type = typeName;
@@ -48,7 +48,6 @@ namespace Pontifex.Transports.Core
                         var processedAcknowledger = SetupAcknowledger(acknowledger);
                         if (processedAcknowledger != null)
                         {
-                            processedAcknowledger.Setup(Memory, Log);
                             _acknowledger = processedAcknowledger;
                             _isInitialized = true;
                             return true;
@@ -91,7 +90,6 @@ namespace Pontifex.Transports.Core
             {
                 var handler = acknowledger.TryAck(ackData.Acquire());
                 handler = handler?.Test(text => Log.e(text)).GetSafe(e => Log.e(e.ToString()));
-                handler?.Setup(Memory, Log);
                 return handler;
             }
             return null;

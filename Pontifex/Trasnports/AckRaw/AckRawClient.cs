@@ -27,7 +27,7 @@ namespace Pontifex.Transports.Core
         
         protected IAckRawClientHandler? Handler =>  _handler;
 
-        protected AckRawClient(string typeName, ILogger? logger, IMemoryRental? memory)
+        protected AckRawClient(string typeName, ILogger logger, IMemoryRental memory)
             : base(logger, memory)
         {
             Type = typeName;
@@ -84,7 +84,6 @@ namespace Pontifex.Transports.Core
                     {
                         if (!IsStarted && _state == State.Constructed)
                         {
-                            processedHandler.Setup(Memory, Log);
                             processedHandler = processedHandler.Test(text => Log.e(text));
                             _handler = processedHandler;
                             _state = State.Initialized;

@@ -96,11 +96,6 @@ namespace Pontifex.Protocols
             return $"{Type}<{coreName}>";
         }
 
-        public void Setup(IMemoryRental memory, ILogger logger)
-        {
-            mClientHandler!.Setup(memory, logger);
-        }
-
         #region IAckRawClientHandler (for internal usage)
 
         void IAckHandler.WriteAckData(UnionDataList ackData)

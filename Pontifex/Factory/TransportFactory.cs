@@ -9,7 +9,7 @@ namespace Pontifex
 {
     public interface ITransportFactory
     {
-        ITransport? Construct(string address, ILogger? logger = null, IMemoryRental? memoryRental = null, IPeriodicLogicRunner? logicRunner = null);
+        ITransport? Construct(string address, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner = null);
     }
 
     public interface ITransportFactoryCtl : ITransportFactory
@@ -23,7 +23,7 @@ namespace Pontifex
 
         private readonly Dictionary<string, ITransportProducer> _producers = new ();
 
-        public ITransport? Construct(string address, ILogger? logger = null, IMemoryRental? memoryRental = null, IPeriodicLogicRunner? logicRunner = null)
+        public ITransport? Construct(string address, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner = null)
         {
             string typeName = TransportType(address);
             if (_producers.TryGetValue(typeName, out var producer))

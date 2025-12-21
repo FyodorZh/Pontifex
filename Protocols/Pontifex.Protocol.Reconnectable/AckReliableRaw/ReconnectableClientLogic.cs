@@ -51,7 +51,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             }
 
             mNextReconnectionTime.Time = DateTime.UtcNow.AddSeconds(ReconnectableInfo.ReconnectionPeriod.Seconds);
-            return transport.Start(r => { }, Log);
+            return transport.Start(r => { });
         }
 
         #region IAckRawClientHandler

@@ -32,7 +32,7 @@ namespace Pontifex.Test
             _logger = new Logger(loggerView);  
 
             _server = factory.ConstructServer(url, _logger, MemoryRental.Shared);
-            if (_server == null || !_server.Init(new AckRawServerLogic()))
+            if (_server == null || !_server.Init(new AckRawServerLogic(_server.Log, _server.Memory)))
             {
                 _logger.e("Failed to construct server");
                 return;

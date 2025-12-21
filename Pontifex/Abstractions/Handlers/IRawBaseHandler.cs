@@ -1,5 +1,4 @@
-﻿using Actuarius.Memory;
-using Pontifex.Utils;
+﻿using Pontifex.Utils;
 
 namespace Pontifex.Abstractions.Handlers
 {

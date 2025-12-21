@@ -14,7 +14,7 @@ namespace Pontifex.Transports.Direct
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
-        public AckRawDirectServer(string serverName, ILogger? logger, IMemoryRental? memory)
+        public AckRawDirectServer(string serverName, ILogger logger, IMemoryRental memory)
             : base(DirectInfo.TransportName, logger, memory)
         {
             _localEp = new StringEndPoint(serverName);

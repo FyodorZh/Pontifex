@@ -129,10 +129,5 @@ namespace Pontifex.Handlers
                 _stopServiced = true;
             }
         }
-
-        public void Setup(IMemoryRental memory, ILogger logger)
-        {
-            _handler.Setup(memory, logger);
-        }
     }
 }

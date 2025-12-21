@@ -1,12 +1,11 @@
-﻿using System;
-using Actuarius.Collections;
+﻿using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex;
 using Pontifex.Utils;
 
 namespace Transport.Protocols.Reconnectable.AckReliableRaw
 {
-    class DeliverySystem
+    internal class DeliverySystem
     {
         public enum OpResult
         {
@@ -89,18 +88,16 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             return OpResult.Ok;
         }
 
-        public IMultiRefResourceOwner<UnionDataList[]> ScheduledBuffers(IGenericConcurrentPool<Array, int> arrayPool)
+        public int ScheduledBuffers(IConsumer<UnionDataList> dst)
         {
             lock (mPendingToDeliver)
             {
                 int count = mPendingToDeliver.Count;
-                var list = arrayPool.Acquire<UnionDataList[]>(count).AsOwner();
-                var array = list.ExposeResourceUnsafe(out _);
                 for (int i = 0; i < count; ++i)
                 {
-                    array[i] = mPendingToDeliver[i].Buffer.Acquire();
+                    dst.Put(mPendingToDeliver[i].Buffer.Acquire());
                 }
-                return list;
+                return count;
             }
         }
 

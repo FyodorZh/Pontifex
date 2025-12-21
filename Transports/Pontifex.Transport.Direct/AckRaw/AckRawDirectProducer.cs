@@ -9,7 +9,7 @@ namespace Pontifex.Transports.Direct
     {
         public string Name => DirectInfo.TransportName;
 
-        public ITransport Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
             return new AckRawDirectServer(@params, logger, memoryRental);
         }
@@ -19,7 +19,7 @@ namespace Pontifex.Transports.Direct
     {
         public string Name => DirectInfo.TransportName;
 
-        public ITransport Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
             return new AckRawDirectClient(@params, logger, memoryRental);
         }

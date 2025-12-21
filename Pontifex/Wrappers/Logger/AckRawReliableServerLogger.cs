@@ -71,11 +71,6 @@ namespace Pontifex
 
         int IAckRawServer.MessageMaxByteSize => _core.MessageMaxByteSize;
 
-        void IRawServerAcknowledger<IAckRawServerHandler>.Setup(IMemoryRental memory, ILogger logger)
-        {
-            _userAcknowledger?.Setup(memory, logger);
-        }
-
         public IAckRawServerHandler? TryAck(UnionDataList ackData)
         {
             if (_userAcknowledger == null)
@@ -131,11 +126,6 @@ namespace Pontifex
                 return endpoint?.Disconnect(disconnectReason) ?? false;
             });
             _userHandler?.OnConnected(endPointWrapper);
-        }
-
-        void IHandler.Setup(IMemoryRental memory, ILogger logger)
-        {
-            _userHandler?.Setup(memory, logger);
         }
     }
 }

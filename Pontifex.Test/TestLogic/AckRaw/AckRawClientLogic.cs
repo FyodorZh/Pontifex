@@ -4,6 +4,7 @@ using Pontifex.Utils;
 using Pontifex;
 using Pontifex.Abstractions.Endpoints.Client;
 using Pontifex.Abstractions.Handlers.Client;
+using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
@@ -22,7 +23,8 @@ namespace TransportAnalyzer.TestLogic
             return $"MessageId={Interlocked.Read(ref _receiveId)}";
         }
 
-        public AckRawClientLogic(int unconfirmedTicks = 1, long lastTickId = -1)
+        public AckRawClientLogic(IMemoryRental memoryRental, ILogger logger, int unconfirmedTicks = 1, long lastTickId = -1)
+            : base(memoryRental, logger)
         {
             _unconfirmedTicks = unconfirmedTicks;
             _lastTickId = lastTickId;

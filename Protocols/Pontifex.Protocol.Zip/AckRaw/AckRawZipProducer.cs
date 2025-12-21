@@ -43,7 +43,7 @@ namespace Pontifex.Protocols.Zip
             }
         }
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
             if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {
@@ -71,7 +71,7 @@ namespace Pontifex.Protocols.Zip
             }
         }
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger? logger, IMemoryRental? memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
             if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {

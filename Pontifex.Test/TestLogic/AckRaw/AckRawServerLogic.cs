@@ -17,8 +17,14 @@ namespace TransportAnalyzer.TestLogic
         public event Action<IClientHandler>? ClientAdded;
         public event Action<IClientHandler>? ClientRemoved;
 
-        private ILogger _logger = StaticLogger.Instance;
-        private IMemoryRental _memory = MemoryRental.Shared;
+        private readonly ILogger _logger;
+        private readonly IMemoryRental _memory;
+
+        public AckRawServerLogic(ILogger logger, IMemoryRental memory)
+        {
+            _logger = logger;
+            _memory = memory;
+        }
 
         private void Add(IClientHandler handler)
         {
@@ -34,19 +40,13 @@ namespace TransportAnalyzer.TestLogic
             evt?.Invoke(handler);
         }
 
-        public void Setup(IMemoryRental memory, ILogger logger)
-        {
-            _logger = logger;
-            _memory = memory;
-        }
-
         public IAckRawServerHandler? TryAck(UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) && AckRawCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
             {
                 ack.Release();
-                return new Handler(this);
+                return new Handler(this, _memory, _logger);
             }
             return null;
         }
@@ -70,7 +70,8 @@ namespace TransportAnalyzer.TestLogic
 
             private string mText = "<connecting>";
 
-            public Handler(AckRawServerLogic owner)
+            public Handler(AckRawServerLogic owner, IMemoryRental memoryRental, ILogger logger)
+                :base(memoryRental, logger)
             {
                 mOwner = owner;
             }

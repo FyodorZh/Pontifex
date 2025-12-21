@@ -6,7 +6,6 @@ using Pontifex.Abstractions.Endpoints.Server;
 using Pontifex.Abstractions.Handlers;
 using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Utils;
-using Scriba;
 
 namespace Pontifex.Protocols
 {
@@ -153,11 +152,6 @@ namespace Pontifex.Protocols
                 return endpoint.Disconnect(reason);
             }
             return false;
-        }
-
-        public void Setup(IMemoryRental memory, ILogger logger)
-        {
-            _wrappedHandler.Setup(memory, logger);
         }
     }
 }

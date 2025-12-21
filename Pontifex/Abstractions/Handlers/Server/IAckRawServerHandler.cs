@@ -79,11 +79,6 @@ namespace Pontifex.Abstractions.Handlers.Server
             {
                 _handler.OnConnected(endPoint);
             }
-
-            public void Setup(IMemoryRental memory, ILogger logger)
-            {
-                _handler.Setup(memory, logger);
-            }
         }
 
         private class TestWrapper : InvariantChecker<TestWrapper.HandlerState>, IAckRawServerHandler
@@ -119,19 +114,6 @@ namespace Pontifex.Abstractions.Handlers.Server
             {
                 return $"'{_core}' - '{_core.GetType()}'";
             }
-
-            public void Setup(IMemoryRental memory, ILogger logger)
-            {
-                _core.Setup(memory, logger);
-            }
-
-            //            ~Wrapper()
-//            {
-//                if (State != HandlerState.Disconnected)
-//                {
-//                    Fail();
-//                }
-//            }
 
             void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
             {

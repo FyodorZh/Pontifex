@@ -19,8 +19,8 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         private readonly SessionMap<ReconnectableServerLogic> mSessionsMap = new (ReconnectableInfo.ServerConnectionsLimit);
         private PeriodicMultiLogicMultiDriver? mSessions;
 
-        public AckRawReconnectableServer(IAckReliableRawServer coreTransport, System.TimeSpan disconnectTimeout)
-            : base(ReconnectableInfo.TransportName)
+        public AckRawReconnectableServer(IAckReliableRawServer coreTransport, System.TimeSpan disconnectTimeout, ILogger? logger, IMemoryRental? memoryRental)
+            : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
             mCoreTransport = coreTransport;
             mDisconnectTimeout = disconnectTimeout;
@@ -42,7 +42,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                 return mCoreTransport.Start(r =>
                 {
                     Fail(r, "Unexpected underlying transport stop");
-                }, Log);
+                });
             }
 
             return false;

@@ -34,11 +34,6 @@ namespace Pontifex.Protocols
             _wrappedAcknowledger = wrappedAcknowledger;
         }
 
-        public void Setup(IMemoryRental memory, ILogger logger)
-        {
-            _wrappedAcknowledger.Setup(memory, logger);
-        }
-
         public IAckRawServerHandler? TryAck(UnionDataList ackData)
         {
             var wrapper = ConstructWrapper();

@@ -64,9 +64,9 @@ namespace Pontifex.Transports.Core
             }
         }
 
-        protected AbstractTransport(ILogger? logger, IMemoryRental? memory)
+        protected AbstractTransport(ILogger logger, IMemoryRental memory)
         {
-            Log = (logger??StaticLogger.Instance).Wrap("transport", () => Type);
+            Log = logger.Wrap("transport", () => Type);
             Memory = memory ?? MemoryRental.Shared;
         }
 

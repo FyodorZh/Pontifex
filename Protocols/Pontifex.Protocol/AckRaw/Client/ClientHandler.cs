@@ -161,10 +161,5 @@ namespace Pontifex.Protocols
                 }
             }
         }
-
-        public void Setup(IMemoryRental memory, ILogger logger)
-        {
-            mUserHandler.Setup(memory, logger);
-        }
     }
 }
