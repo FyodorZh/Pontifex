@@ -49,7 +49,7 @@ namespace Pontifex.Protocols.Zip
         public bool Pack(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
         {
             using var bufferHodler = data.Serialize(bytesPool).AsDisposable();
-            var buffer = bufferHodler.Value;
+            var buffer = bufferHodler.Resource;
 
             // Упаковываем
             _packedStream.SetLength(0);
@@ -59,7 +59,7 @@ namespace Pontifex.Protocols.Zip
             // Аллоцируем буфер для записи
             int compressedSize = (int)_packedStream.Position;
             using var compressedBufferHolder = bytesPool.Acquire(compressedSize).AsDisposable();
-            var compressedBuffer = compressedBufferHolder.Value;            
+            var compressedBuffer = compressedBufferHolder.Resource;            
 
             // Записываем упакованные данные буфер
             _packedStream.Position = 0;

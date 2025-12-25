@@ -120,6 +120,13 @@ namespace Pontifex.Utils
         public static implicit operator UnionData(decimal value) => new(value);
         // public static implicit operator UnionData(IMultiRefReadOnlyByteArray? value) => new(value);
 
+        public UnionData Clone()
+        {
+            UnionData clone = this;
+            clone._bytes?.AddRef();
+            return clone;
+        }
+
         public bool Equals(UnionData other)
         {
             if (_type != other._type)

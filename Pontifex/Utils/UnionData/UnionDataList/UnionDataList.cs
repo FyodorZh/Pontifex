@@ -256,5 +256,20 @@ namespace Pontifex.Utils
 
             return true;
         }
+
+        public static void CopyFrom(this UnionDataList self, UnionDataList d2)
+        {
+            if (self.Elements.Count != 0)
+            {
+                throw new Exception();
+            }
+            
+            int count = d2.Elements.Count;
+            for (int i = 0; i < count; i++)
+            {
+                var d = d2.Elements[i];
+                self.PutLast(d.Clone());
+            }
+        }
     }
 }
