@@ -1,32 +1,31 @@
 ﻿using System;
 using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
-using Pontifex;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Transports.Core;
 using Scriba;
 
-namespace Transport.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     public sealed class AckRawReconnectableClient : AckRawClient, IAckReliableRawClient
     {
-        private readonly Func<IAckReliableRawClient> mUnderlyingTransportProducer;
-        private readonly TimeSpan mDisconnectTimeout;
+        private readonly Func<IAckReliableRawClient?> _underlyingTransportProducer;
+        private readonly TimeSpan _disconnectTimeout;
         private readonly IPeriodicLogicRunner? _reconnectableSharedLogicRunner;
 
-        private ReconnectableClientLogic? mLogic;
-        private ILogicDriverCtl? mLogicDriver;
+        private ReconnectableClientLogic? _logic;
+        private ILogicDriverCtl? _logicDriver;
 
         public AckRawReconnectableClient(
-            Func<IAckReliableRawClient> underlyingTransportProducer,
+            Func<IAckReliableRawClient?> underlyingTransportProducer,
             TimeSpan disconnectTimeout,
-            ILogger? logger,
-            IMemoryRental? memoryRental,
+            ILogger logger,
+            IMemoryRental memoryRental,
             IPeriodicLogicRunner? reconnectableSharedLogicRunner = null)
             : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
-            mUnderlyingTransportProducer = underlyingTransportProducer;
-            mDisconnectTimeout = disconnectTimeout;
+            _underlyingTransportProducer = underlyingTransportProducer;
+            _disconnectTimeout = disconnectTimeout;
             _reconnectableSharedLogicRunner = reconnectableSharedLogicRunner;
         }
 
@@ -38,23 +37,23 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                 return false;
             }
             
-            mLogic = new ReconnectableClientLogic(mUnderlyingTransportProducer, Handler, mDisconnectTimeout);
+            _logic = new ReconnectableClientLogic(_underlyingTransportProducer, Handler, _disconnectTimeout, Log, Memory);
 
-            mLogic.OnConnected += ConnectionFinished;
+            _logic.OnConnected += ConnectionFinished;
 
-            mLogic.OnStopped += (reason) => { Stop(reason); };
+            _logic.OnStopped += (reason) => { Stop(reason); };
 
             var logicTickTime = DeltaTime.FromMiliseconds(20);
 
             if (_reconnectableSharedLogicRunner != null)
             {
-                mLogicDriver = _reconnectableSharedLogicRunner.Run(mLogic, logicTickTime);
+                _logicDriver = _reconnectableSharedLogicRunner.Run(_logic, logicTickTime);
             }
             else
             {
                 var threadedDriver = new PeriodicLogicThreadedDriver(logicTickTime, 128);
-                threadedDriver.Start(mLogic, Log);
-                mLogicDriver = threadedDriver;
+                threadedDriver.Start(_logic, Log);
+                _logicDriver = threadedDriver;
             }
 
             return true;
@@ -67,20 +66,20 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         protected override void DestroyTransport(StopReason reason)
         {
-            var logic = mLogic;
+            var logic = _logic;
             if (logic != null)
             {
-                mLogicDriver?.Stop();
+                _logicDriver?.Stop();
             }
 
-            mLogic = null;
+            _logic = null;
         }
 
-        public override int MessageMaxByteSize => mLogic?.MessageMaxByteSize ?? 0;
+        public override int MessageMaxByteSize => _logic?.MessageMaxByteSize ?? 0;
 
         public override string ToString()
         {
-            var logic = mLogic;
+            var logic = _logic;
             if (logic != null)
             {
                 return "reconnectable-client[" + logic.SessionId + "]";

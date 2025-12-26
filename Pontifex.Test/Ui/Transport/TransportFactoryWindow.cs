@@ -20,7 +20,7 @@ namespace Pontifex.Test
         private readonly CheckBox _zipProtocol;
         private readonly CheckBox _loggerProtocol;
         private readonly CheckBox _monitorProtocol;
-        //private readonly CheckBox _reconectableProtocol;
+        private readonly CheckBox _reconectableProtocol;
         //private readonly CheckBox _reliableProtocol;
 
         private readonly TextField _tcpUdpAddressField;
@@ -70,7 +70,7 @@ namespace Pontifex.Test
             
             FrameView wrappersGroup = new FrameView()
             {
-                Title = "Protocols", X = 0, Y = Pos.Bottom(transportGroup), Width = Dim.Fill(), Height = 3
+                Title = "Protocols", X = 0, Y = Pos.Bottom(transportGroup), Width = Dim.Fill(), Height = 4
             };
             Add(transportGroup, wrappersGroup);
             
@@ -97,6 +97,14 @@ namespace Pontifex.Test
             };
             _loggerProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
             wrappersGroup.Add(_loggerProtocol);
+            
+            // Reconnectable
+            _reconectableProtocol = new CheckBox()
+            {
+                Title = "reconnectable", X = 0, Y = 1, Width = Dim.Auto(), Height = 1
+            };
+            _reconectableProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
+            wrappersGroup.Add(_reconectableProtocol);
 
             var startServerAndClientBtn = new Button()
             {
@@ -142,7 +150,9 @@ namespace Pontifex.Test
                 Log.e("No transport selected");
                 return;
             }
-            
+
+            if (_reconectableProtocol.CheckedState == CheckState.Checked)
+                cmd = "reconnectable|2000:" + cmd;
             if (_zipProtocol.CheckedState == CheckState.Checked) 
                 cmd = "zip|9:" + cmd;
             if (_monitorProtocol.CheckedState == CheckState.Checked) 

@@ -3,6 +3,7 @@ using Scriba;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Servers;
 using Pontifex.Protocols.Monitoring.AckRaw;
+using Pontifex.Protocols.Reconnectable.AckReliableRaw;
 using Pontifex.Protocols.Zip;
 using Pontifex.Transports.Direct;
 using Pontifex.Transports.Tcp;
@@ -43,8 +44,8 @@ namespace Pontifex.Test
             // //mClientFactory.Register(new AckRawReliableClientProducerNew());
             // //mServerFactory.Register(new AckRawReliableServerProducerNew());
             //
-            // mClientFactory.Register(new AckRawReconnectableClientProducer());
-            // mServerFactory.Register(new AckRawReconnectableServerProducer());
+            mClientFactory.Register(new AckRawReconnectableClientProducer());
+            mServerFactory.Register(new AckRawReconnectableServerProducer());
             
             mClientFactory.Register(new AckRawLoggerClientProducer());
             mServerFactory.Register(new AckRawLoggerServerProducer());

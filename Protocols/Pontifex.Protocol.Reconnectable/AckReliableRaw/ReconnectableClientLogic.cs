@@ -2,44 +2,46 @@
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
-using Pontifex;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Endpoints.Client;
 using Pontifex.Abstractions.Handlers;
 using Pontifex.Abstractions.Handlers.Client;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
-namespace Transport.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     class ReconnectableClientLogic : ReconnectableBaseLogic<IAckRawServerEndpoint>, IAckRawClientHandler, IAckRawServerEndpoint
     {
-        private readonly Func<IAckReliableRawClient> mTransportFactory;
-        private readonly IAckRawClientHandler mUserHandler;
+        private readonly Func<IAckReliableRawClient?> _underlyingTransportFactory;
+        private readonly IAckRawClientHandler _userHandler;
 
-        private readonly ThreadSafeDateTime mNextReconnectionTime = new ThreadSafeDateTime();
+        private readonly ThreadSafeDateTime _nextReconnectionTime = new ThreadSafeDateTime();
 
         public event Action<IAckRawServerEndpoint, UnionDataList>? OnConnected;
 
-        public SessionId SessionId => mSessionId;
+        public SessionId SessionId => _sessionId;
 
-        public ReconnectableClientLogic(Func<IAckReliableRawClient> transportFactory, IAckRawClientHandler userHandler, TimeSpan disconnectTimeout)
-            : base(userHandler, disconnectTimeout)
+        public ReconnectableClientLogic(Func<IAckReliableRawClient?> underlyingTransportFactory, IAckRawClientHandler userHandler, TimeSpan disconnectTimeout, 
+            ILogger logger, IMemoryRental memoryRental)
+            : base(userHandler, disconnectTimeout, logger, memoryRental)
         {
-            mUserHandler = userHandler;
-            mTransportFactory = transportFactory;
+            _underlyingTransportFactory = underlyingTransportFactory;
+            _userHandler = userHandler;
+            
 
-            mNextReconnectionTime.Time = DateTime.UtcNow;
+            _nextReconnectionTime.Time = DateTime.UtcNow;
         }
 
         protected override bool BeginReconnect()
         {
-            if (mNextReconnectionTime.Time > DateTime.UtcNow)
+            if (_nextReconnectionTime.Time > DateTime.UtcNow)
             {
                 return false;
             }
 
-            IAckReliableRawClient transport = mTransportFactory.Invoke();
+            IAckReliableRawClient? transport = _underlyingTransportFactory.Invoke();
             if (transport == null)
             {
                 return false;
@@ -50,17 +52,25 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                 return false;
             }
 
-            mNextReconnectionTime.Time = DateTime.UtcNow.AddSeconds(ReconnectableInfo.ReconnectionPeriod.Seconds);
-            return transport.Start(r => { });
+            _nextReconnectionTime.Time = DateTime.UtcNow.AddSeconds(ReconnectableInfo.ReconnectionPeriod.Seconds);
+            return transport.Start(r =>
+            {
+                Log.i($"TODO??: I need to react on this STOP: {r}");
+            });
+        }
+        
+        public override void OnDisconnected(StopReason reason)
+        {
+            _nextReconnectionTime.Time = DateTime.UtcNow.AddSeconds(ReconnectableInfo.ReconnectionPeriod.Seconds);
         }
 
         #region IAckRawClientHandler
 
         void IAckHandler.WriteAckData(UnionDataList ackData)
         {
-            mUserHandler.WriteAckData(ackData);
-            ackData.PutFirst(mSessionId.Generation);
-            ackData.PutFirst(mSessionId.Id);
+            _userHandler.WriteAckData(ackData);
+            ackData.PutFirst(_sessionId.Generation);
+            ackData.PutFirst(_sessionId.Id);
             ackData.PutFirst(ReconnectableInfo.AckRequest);
         }
 
@@ -89,9 +99,9 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             SessionId sessionId = new SessionId(id, generation);
             if (sessionId.IsValid)
             {
-                if (!mSessionId.IsValid || mSessionId.Equals(sessionId))
+                if (!_sessionId.IsValid || _sessionId.Equals(sessionId))
                 {
-                    mSessionId = sessionId;
+                    _sessionId = sessionId;
 
                     Connect(endPoint, out var isFirstConnection);
 
@@ -104,17 +114,12 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                     return;
                 }
 
-                Fail($"Disconnecting due to session id mismatch. Expected {mSessionId}, received {sessionId}");
+                Fail($"Disconnecting due to session id mismatch. Expected {_sessionId}, received {sessionId}");
             }
             else
             {
                 Fail("Disconnecting due to incorrect session id");
             }
-        }
-
-        public override void OnDisconnected(StopReason reason)
-        {
-            mNextReconnectionTime.Time = DateTime.UtcNow.AddSeconds(ReconnectableInfo.ReconnectionPeriod.Seconds);
         }
 
         void IAckRawClientHandler.OnStopped(StopReason reason)

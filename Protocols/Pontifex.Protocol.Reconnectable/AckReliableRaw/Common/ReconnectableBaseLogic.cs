@@ -3,133 +3,45 @@ using Actuarius.Collections;
 using Actuarius.ConcurrentPrimitives;
 using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
-using Pontifex;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Endpoints;
 using Pontifex.Abstractions.Handlers;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Transport.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IRawBaseHandler, IAckRawBaseEndpoint, IEndPoint
         where TEndpoint : class, IAckRawBaseEndpoint
     {
-        private enum State
-        {
-            BeforeReconnecting,
-            Reconnecting,
-            Connected,
-            Stopped
-        }
-
-        private interface IIntention
-        {
-            void Apply(ReconnectableBaseLogic<TEndpoint> owner);
-        }
-
-        private class IntentionToConnect : IIntention
-        {
-            private readonly bool mIsFirstConnection;
-
-            public IntentionToConnect(bool isFirstConnection)
-            {
-                mIsFirstConnection = isFirstConnection;
-            }
-
-            public void Apply(ReconnectableBaseLogic<TEndpoint> owner)
-            {
-                owner.mState = State.Connected;
-
-                if (!mIsFirstConnection)
-                {
-                    var endPoint = owner.mEndpoint;
-                    if (endPoint != null)
-                    {
-                        int failsCount = 0;
-
-                        var list = owner.mDelivery.ScheduledBuffers();
-                        for (int i = 0; i < list.Length; ++i)
-                        {
-                            var res = endPoint.Send(ConcurrentUsageMemoryBufferPool.Instance.SnapshotOf(list[i]));
-                            if (res != SendResult.Ok)
-                            {
-                                failsCount += 1;
-                            }
-                            list[i].Release();
-                        }
-
-                        if (failsCount > 0)
-                        {
-                            owner.Log.i("Failed to resend {0} messages. Will wait for next connection", failsCount);
-                        }
-                    }
-                }
-            }
-        }
-
-        private class IntentionToDisconnect : IIntention
-        {
-            public void Apply(ReconnectableBaseLogic<TEndpoint> owner)
-            {
-                owner.mState = State.BeforeReconnecting;
-            }
-        }
-
-
-        private class EndPointImpl : IEndPoint
-        {
-            private readonly ReconnectableBaseLogic<TEndpoint> mOwner;
-
-            public EndPointImpl(ReconnectableBaseLogic<TEndpoint> owner)
-            {
-                mOwner = owner;
-            }
-
-            public override string ToString()
-            {
-                var endpoint = mOwner.Endpoint;
-                string baseEP = endpoint != null ? endpoint.RemoteEndPoint.ToString() : "not-connected";
-                return $"[{mOwner.mSessionId} over '{baseEP}']";
-            }
-
-            bool IEquatable<IEndPoint>.Equals(IEndPoint other)
-            {
-                if (other is EndPointImpl o)
-                {
-                    return mOwner.mSessionId.Equals(o.mOwner.mSessionId);
-                }
-                return false;
-            }
-        }
-
-        private readonly EndPointImpl mEndPoint;
+        private readonly LogicEndpoint<TEndpoint> _logicEndpoint;
 
         private readonly IRawBaseHandler mUserHandler;
 
         private readonly TimeSpan mDisconnectTimeout;
 
-        protected SessionId mSessionId = SessionId.Invalid;
+        protected SessionId _sessionId = SessionId.Invalid;
 
         private ILogicDriverCtl? mLogicDriver;
 
         protected abstract bool BeginReconnect();
 
-        public event Action<StopReason> OnStopped;
+        public event Action<StopReason>? OnStopped;
 
 
         // Полный доступ на чтение/запись из многих тредов
         private volatile bool mWasConnected;
-        private volatile TEndpoint? mEndpoint;
+        private volatile TEndpoint? _underlyingEndpoint;
 
         private StopReason mCurrentStopReason = StopReason.Void;
 
-        private readonly TinyConcurrentQueue<IIntention> mIntentions = new TinyConcurrentQueue<IIntention>();
+        private readonly TinyConcurrentQueue<Intention> mIntentions = new TinyConcurrentQueue<Intention>();
         private readonly ConcurrentQueueValve<UnionDataList> mReceivedMessages;
         private readonly ConcurrentQueueValve<UnionDataList> mSentMessages;
 
         // Полный доступ из треда IPeriodicLogic
-        private volatile State mState = State.BeforeReconnecting;
+        private volatile ReconnectableLogicState mState = ReconnectableLogicState.BeforeReconnecting;
 
         private readonly DeliverySystem mDelivery = new DeliverySystem();
         private readonly ThreadSafeDateTime mLastActivityTime = new ThreadSafeDateTime();
@@ -137,22 +49,24 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         // --
 
-        public SessionId Id => mSessionId;
+        public SessionId Id => _sessionId;
 
-        protected ILogger Log { get; private set; }
+        protected ILogger Log { get; }
+        protected IMemoryRental Memory { get; }
 
-        protected ReconnectableBaseLogic(IRawBaseHandler userHandler, TimeSpan disconnectTimeout)
+        protected ReconnectableBaseLogic(IRawBaseHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
         {
             mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
             mSentMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
 
-            mEndPoint = new EndPointImpl(this);
+            _logicEndpoint = new LogicEndpoint<TEndpoint>(this);
             mUserHandler = userHandler;
             mDisconnectTimeout = disconnectTimeout;
-            Log = global::Log.StaticLogger;
+            Log = logger;
+            Memory = memoryRental;
         }
 
-        protected TEndpoint Endpoint => mEndpoint;
+        public TEndpoint? UnderlyingEndpoint => _underlyingEndpoint;
 
         bool IPeriodicLogic.LogicStarted(ILogicDriverCtl driver)
         {
@@ -169,31 +83,41 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
             while (mIntentions.TryPop(out var intention))
             {
-                intention.Apply(this);
+                switch (intention)
+                {
+                    case IntentionToConnect connectIntention:
+                        DoIntentionToConnect(connectIntention.IsFirstConnection);
+                        break;
+                    case IntentionToDisconnect _:
+                        DoIntentionToDisconnect();
+                        break;
+                    default:
+                        throw new InvalidOperationException("Impossible code path");
+                }
             }
 
             switch (mState)
             {
-                case State.BeforeReconnecting:
+                case ReconnectableLogicState.BeforeReconnecting:
                     if (now - mLastActivityTime.Time > mDisconnectTimeout)
                     {
-                        System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, new StopReasons.TimeOut(ReconnectableInfo.TransportName), StopReason.Void);
+                        System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, new TimeOut(ReconnectableInfo.TransportName), StopReason.Void);
                         mLogicDriver?.Stop();
                     }
 
-                    mState = State.Reconnecting;
+                    mState = ReconnectableLogicState.Reconnecting;
                     if (!BeginReconnect())
                     {
-                        mState = State.BeforeReconnecting;
+                        mState = ReconnectableLogicState.BeforeReconnecting;
                     }
                     break;
-                case State.Reconnecting:
+                case ReconnectableLogicState.Reconnecting:
                     // DO NOTHING
                     break;
-                case State.Connected:
+                case ReconnectableLogicState.Connected:
                     // DO NOTHING
                     break;
-                case State.Stopped:
+                case ReconnectableLogicState.Stopped:
                     // DO NOTHING
                     break;
             }
@@ -232,7 +156,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             }
 
 
-            var endPoint = mEndpoint;
+            var endPoint = _underlyingEndpoint;
             if (endPoint != null)
             {
                 bool canResetSendingTime = false;
@@ -249,8 +173,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                 {
                     if (mDelivery.HasDeliveryReports)
                     {
-                        IMemoryBufferHolder serviceMessage = ConcurrentUsageMemoryBufferPool.Instance.Allocate();
-                        DoSend(endPoint, serviceMessage, true);
+                        DoSend(endPoint, Memory.CollectablePool.Acquire<UnionDataList>(), true);
                     }
 
                     canResetSendingTime = true;
@@ -282,18 +205,18 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         void IPeriodicLogic.LogicStopped()
         {
-            mState = State.Stopped;
+            mState = ReconnectableLogicState.Stopped;
 
             var stopReason = mCurrentStopReason;
             if (stopReason == StopReason.Void)
             {
-                stopReason = new StopReasons.Unknown(ReconnectableInfo.TransportName);
+                stopReason = new Unknown(ReconnectableInfo.TransportName);
             }
 
-            var endpoint = mEndpoint;
+            var endpoint = _underlyingEndpoint;
             if (endpoint != null)
             {
-                mEndpoint = null;
+                _underlyingEndpoint = null;
                 endpoint.Disconnect(stopReason);
             }
 
@@ -308,25 +231,25 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             mReceivedMessages.CloseValve();
             mSentMessages.CloseValve();
         }
-
-        #region IHandler
-
-        protected void Connect(TEndpoint endPoint, out bool isFirstConnection)
+        
+        protected void Connect(TEndpoint underlyingTransportEndpoint, out bool isFirstConnection)
         {
             isFirstConnection = !mWasConnected;
             mWasConnected = true;
 
-            mEndpoint = endPoint;
+            _underlyingEndpoint = underlyingTransportEndpoint;
             mIntentions.Put(new IntentionToConnect(isFirstConnection));
 
-            Log.i("'{0}' to remote endpoint '{1}'", isFirstConnection ? "Connected" : "Reconnected", endPoint.RemoteEndPoint);
+            Log.i($"'{(isFirstConnection ? "Connected" : "Reconnected")}' to remote endpoint '{(underlyingTransportEndpoint.RemoteEndPoint?.ToString() ?? "null")}'");
         }
+
+        #region IHandler
 
         public abstract void OnDisconnected(StopReason reason);
 
         void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
-            if (mState != State.Stopped)
+            if (mState != ReconnectableLogicState.Stopped)
             {
                 mLastActivityTime.Time = DateTime.UtcNow;
                 mReceivedMessages.Put(receivedBuffer);
@@ -341,7 +264,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         {
             if (!mWasConnected)
             {
-                Fail(new StopReasons.ChainFail(ReconnectableInfo.TransportName, reason, "Failed to establish initial connection"));
+                Fail(new ChainFail(ReconnectableInfo.TransportName, reason, "Failed to establish initial connection"));
             }
             else
             {
@@ -354,34 +277,21 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         #region IAckRawBaseEndpoint
 
-        public IEndPoint? RemoteEndPoint => mEndPoint;
+        public IEndPoint? RemoteEndPoint => _logicEndpoint;
 
-        public bool IsConnected => mEndpoint != null;
+        public bool IsConnected => _underlyingEndpoint != null;
 
-        public int MessageMaxByteSize
-        {
-            get
-            {
-                var endPoint = mEndpoint;
-                if (endPoint != null)
-                {
-                    return endPoint.MessageMaxByteSize;
-                }
-                return 0;
-            }
-        }
+        public int MessageMaxByteSize => _underlyingEndpoint?.MessageMaxByteSize ?? throw new NotImplementedException("TODO: Cache previous session message size");
 
         SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
-            using (var bufferAccessor = bufferToSend.ExposeAccessorOnce())
+            if (_underlyingEndpoint != null)
             {
-                if (mEndpoint != null)
-                {
-                    mSentMessages.Put(bufferAccessor.Acquire());
-                    return SendResult.Ok;
-                }
-                return SendResult.NotConnected;
+                mSentMessages.Put(bufferToSend);
+                return SendResult.Ok;
             }
+            bufferToSend.Release();
+            return SendResult.NotConnected;
         }
 
         bool IAckRawBaseEndpoint.Disconnect(StopReason reason)
@@ -389,11 +299,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, reason, StopReason.Void);
 
             bool wasConnected = IsConnected;
-            var driver = mLogicDriver;
-            if (driver != null)
-            {
-                driver.Stop();
-            }
+            mLogicDriver?.Stop();
             return wasConnected;
         }
 
@@ -401,7 +307,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         protected void Fail(string reason)
         {
-            Fail(new StopReasons.TextFail(ReconnectableInfo.TransportName, reason));
+            Fail(new TextFail(ReconnectableInfo.TransportName, reason));
         }
 
         protected void Fail(StopReason reason)
@@ -425,9 +331,56 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             ReconnectableBaseLogic<TEndpoint>? typedOther = other as ReconnectableBaseLogic<TEndpoint>;
             if (!ReferenceEquals(typedOther, null))
             {
-                return mSessionId.Equals(typedOther.mSessionId);
+                return _sessionId.Equals(typedOther._sessionId);
             }
             return false;
         }
+        
+        #region Intentions
+
+        private void DoIntentionToConnect(bool isFirstConnection)
+        {
+            mState = ReconnectableLogicState.Connected;
+
+            if (!isFirstConnection)
+            {
+                var endPoint = _underlyingEndpoint;
+                if (endPoint != null)
+                {
+                    int failsCount = 0;
+
+                    using var queueDisposer = Memory.SmallObjectsPool.AcquireAsDisposable<SystemQueue<UnionDataList>>(q =>
+                    {
+                        while (q.TryPop(out var data))
+                        {
+                            data.Release();
+                        }
+                    });
+                    var queue = queueDisposer.Resource;
+
+                    mDelivery.ScheduledBuffers(Memory.CollectablePool, queue);
+                    while (queue.TryPop(out var element))
+                    {
+                        var res = endPoint.Send(element);
+                        if (res != SendResult.Ok)
+                        {
+                            failsCount += 1;
+                        }
+                    }
+
+                    if (failsCount > 0)
+                    {
+                        Log.i("Failed to resend {0} messages. Will wait for next connection", failsCount);
+                    }
+                }
+            }
+        }
+
+        private void DoIntentionToDisconnect()
+        {
+            mState = ReconnectableLogicState.BeforeReconnecting;
+        }
+        
+        #endregion
     }
 }

@@ -4,8 +4,9 @@ using Pontifex;
 using Pontifex.Abstractions.Endpoints.Server;
 using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Utils;
+using Scriba;
 
-namespace Transport.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawClientEndpoint>, IAckRawServerHandler, IAckRawClientEndpoint
     {
@@ -17,8 +18,8 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         public event Action<IAckRawClientEndpoint>? OnConnected;
 
-        public ReconnectableServerLogic(IAckRawServerHandler userHandler, TimeSpan disconnectTimeout)
-            : base(userHandler, disconnectTimeout)
+        public ReconnectableServerLogic(IAckRawServerHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+            : base(userHandler, disconnectTimeout, logger, memoryRental)
         {
             mUserHandler = userHandler;
         }
@@ -38,7 +39,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         {
             if (sessionId.IsValid)
             {
-                mSessionId = sessionId;
+                _sessionId = sessionId;
                 mAckData = ackData;
                 mAttached = true;
                 return true;
@@ -75,9 +76,9 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
         void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
         {
             mUserHandler.GetAckResponse(ackData);
-            ackData.PutLast(new UnionData(mSessionId.Generation));
-            ackData.PutLast(new UnionData(mSessionId.Id));
-            ackData.PutLast(new UnionData(ReconnectableInfo.AckOKResponse));
+            ackData.PutFirst(new UnionData(_sessionId.Generation));
+            ackData.PutFirst(new UnionData(_sessionId.Id));
+            ackData.PutFirst(new UnionData(ReconnectableInfo.AckOKResponse));
         }
 
         void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
@@ -91,7 +92,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         public override string ToString()
         {
-            return "Session[" + (mSessionId.IsValid ? mSessionId.ToString() : "invalid-session") + "]";
+            return "Session[" + (_sessionId.IsValid ? _sessionId.ToString() : "invalid-session") + "]";
         }
     }
 }

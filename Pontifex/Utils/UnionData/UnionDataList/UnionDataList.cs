@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Text;
 using Actuarius.Collections;
 using Actuarius.Memory;
@@ -134,6 +135,8 @@ namespace Pontifex.Utils
         {
             return "[" + string.Join(",", _data.Enumerate()) + "]";
         }
+
+        public UnionData[] _Dbg_List => _data.Enumerate().ToArray();
     }
 
     public static class UnionDataList_Ext

@@ -1,54 +1,54 @@
 ﻿using Actuarius.Collections;
 
-namespace Transport.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     public class SessionMap<TSession>
         where TSession : class
     {
-        private readonly int mCapacity;
+        private readonly int _capacity;
 
-        private readonly TinyConcurrentQueue<SessionId> mFreeSessions = new TinyConcurrentQueue<SessionId>();
+        private readonly TinyConcurrentQueue<SessionId> _freeSessions = new TinyConcurrentQueue<SessionId>();
 
-        private volatile TSession[] mSessions;
-        private volatile int[] mGenerations;
+        private volatile TSession[] _sessions;
+        private volatile int[] _generations;
 
-        private int mNextFreeId;
+        private int _nextFreeId;
 
         public SessionMap(int capacity)
         {
-            mCapacity = capacity;
-            mSessions = new TSession[mCapacity];
-            mGenerations = new int[mCapacity];
+            _capacity = capacity;
+            _sessions = new TSession[_capacity];
+            _generations = new int[_capacity];
         }
 
         public SessionId AddSession(TSession session)
         {
-            if (!mFreeSessions.TryPop(out var freeId))
+            if (!_freeSessions.TryPop(out var freeId))
             {
-                int id = System.Threading.Interlocked.Increment(ref mNextFreeId) - 1;
-                if (id >= mCapacity)
+                int id = System.Threading.Interlocked.Increment(ref _nextFreeId) - 1;
+                if (id >= _capacity)
                 {
-                    System.Threading.Interlocked.Decrement(ref mNextFreeId);
+                    System.Threading.Interlocked.Decrement(ref _nextFreeId);
                     return SessionId.Invalid;
                 }
                 freeId = new SessionId(id, 1);
             }
 
-            mSessions[freeId.Id] = session;
-            mGenerations[freeId.Id] = freeId.Generation;
+            _sessions[freeId.Id] = session;
+            _generations[freeId.Id] = freeId.Generation;
 
             return freeId;
         }
 
         public bool RemoveSession(SessionId id)
         {
-            if (id.Id >= 0 && id.Id < mCapacity)
+            if (id.Id >= 0 && id.Id < _capacity)
             {
-                int generation = System.Threading.Interlocked.CompareExchange(ref mGenerations[id.Id], 0, id.Generation);
+                int generation = System.Threading.Interlocked.CompareExchange(ref _generations[id.Id], 0, id.Generation);
                 if (generation == id.Generation)
                 {
-                    mSessions[id.Id] = null!;
-                    mFreeSessions.Put(new SessionId(id.Id, id.Generation + 1));
+                    _sessions[id.Id] = null!;
+                    _freeSessions.Put(new SessionId(id.Id, id.Generation + 1));
                     return true;
                 }
             }
@@ -57,12 +57,12 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         public TSession? Find(SessionId id)
         {
-            if (id.Id >= 0 && id.Id < mCapacity)
+            if (id.Id >= 0 && id.Id < _capacity)
             {
-                if (mGenerations[id.Id] == id.Generation)
+                if (_generations[id.Id] == id.Generation)
                 {
-                    TSession session = mSessions[id.Id];
-                    if (mGenerations[id.Id] == id.Generation)
+                    TSession session = _sessions[id.Id];
+                    if (_generations[id.Id] == id.Generation)
                     {
                         return session;
                     }

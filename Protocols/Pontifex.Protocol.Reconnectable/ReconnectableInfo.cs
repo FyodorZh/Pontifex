@@ -1,7 +1,7 @@
 ﻿using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
 
-namespace Transport.Protocols.Reconnectable
+namespace Pontifex.Protocols.Reconnectable
 {
     public static class ReconnectableInfo
     {

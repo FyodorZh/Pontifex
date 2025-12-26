@@ -3,7 +3,7 @@ using Actuarius.Memory;
 using Pontifex;
 using Pontifex.Utils;
 
-namespace Transport.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     internal class DeliverySystem
     {
@@ -88,14 +88,16 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             return OpResult.Ok;
         }
 
-        public int ScheduledBuffers(IConsumer<UnionDataList> dst)
+        public int ScheduledBuffers(ICollectablePool pool, IConsumer<UnionDataList> dst)
         {
             lock (mPendingToDeliver)
             {
                 int count = mPendingToDeliver.Count;
                 for (int i = 0; i < count; ++i)
                 {
-                    dst.Put(mPendingToDeliver[i].Buffer.Acquire());
+                    var list = pool.Acquire<UnionDataList>();
+                    list.CopyFrom(mPendingToDeliver[i].Buffer);
+                    dst.Put(list);
                 }
                 return count;
             }

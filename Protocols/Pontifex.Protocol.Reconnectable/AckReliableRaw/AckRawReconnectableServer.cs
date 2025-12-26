@@ -1,7 +1,6 @@
 ﻿using Actuarius.Collections;
 using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
-using Pontifex;
 using Pontifex.Abstractions.Acknowledgers;
 using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Abstractions.Servers;
@@ -9,21 +8,21 @@ using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Transport.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     public class AckRawReconnectableServer : AckRawServer, IAckReliableRawServer, IRawServerAcknowledger<IAckRawServerHandler>
     {
-        private readonly IAckReliableRawServer mCoreTransport;
-        private readonly System.TimeSpan mDisconnectTimeout;
+        private readonly IAckReliableRawServer _coreTransport;
+        private readonly System.TimeSpan _disconnectTimeout;
 
-        private readonly SessionMap<ReconnectableServerLogic> mSessionsMap = new (ReconnectableInfo.ServerConnectionsLimit);
-        private PeriodicMultiLogicMultiDriver? mSessions;
+        private readonly SessionMap<ReconnectableServerLogic> _sessionsMap = new (ReconnectableInfo.ServerConnectionsLimit);
+        private PeriodicMultiLogicMultiDriver? _sessionsLogicDriver;
 
-        public AckRawReconnectableServer(IAckReliableRawServer coreTransport, System.TimeSpan disconnectTimeout, ILogger? logger, IMemoryRental? memoryRental)
+        public AckRawReconnectableServer(IAckReliableRawServer coreTransport, System.TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
-            mCoreTransport = coreTransport;
-            mDisconnectTimeout = disconnectTimeout;
+            _coreTransport = coreTransport;
+            _disconnectTimeout = disconnectTimeout;
         }
 
         protected override bool TryStart()
@@ -34,12 +33,12 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             {
                 drivers[i] = new PeriodicLogicThreadedDriver(DeltaTime.FromMiliseconds(20), 128);
             }
-            mSessions = new PeriodicMultiLogicMultiDriver(drivers);
-            mSessions.Start(Log);
+            _sessionsLogicDriver = new PeriodicMultiLogicMultiDriver(drivers);
+            _sessionsLogicDriver.Start(Log);
 
-            if (mCoreTransport.Init(this))
+            if (_coreTransport.Init(this))
             {
-                return mCoreTransport.Start(r =>
+                return _coreTransport.Start(r =>
                 {
                     Fail(r, "Unexpected underlying transport stop");
                 });
@@ -50,19 +49,14 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
 
         protected override void OnStopped(StopReason reason)
         {
-            mCoreTransport.Stop(reason);
+            _coreTransport.Stop(reason);
 
-            var driver = mSessions;
+            var driver = _sessionsLogicDriver;
             driver?.Stop();
-            mSessions = null;
+            _sessionsLogicDriver = null;
         }
 
-        public override int MessageMaxByteSize => mCoreTransport.MessageMaxByteSize;
-
-        public void Setup(IMemoryRental memory, ILogger logger)
-        {
-            // TODO?
-        }
+        public override int MessageMaxByteSize => _coreTransport.MessageMaxByteSize;
 
         IAckRawServerHandler? IRawServerAcknowledger<IAckRawServerHandler>.TryAck(UnionDataList ackData)
         {
@@ -85,7 +79,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             SessionId sessionId = new SessionId(id, generation);
             if (sessionId.IsValid) // Пытаемся продолжить конкретную сессию
             {
-                var logic = mSessionsMap.Find(sessionId);
+                var logic = _sessionsMap.Find(sessionId);
                 if (logic != null) // Нашли искомую сессию
                 {
                     if (logic.Reattach(ackData.Acquire())) // Ломимся в неё
@@ -105,7 +99,7 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
             IAckRawServerHandler? userHandler = TryConnectNewClient(ackData.Acquire());
             if (userHandler != null)
             {
-                ReconnectableServerLogic logic = new ReconnectableServerLogic(userHandler, mDisconnectTimeout);
+                ReconnectableServerLogic logic = new ReconnectableServerLogic(userHandler, _disconnectTimeout, Log, Memory);
 
                 logic.OnConnected += (endPoint) => { userHandler.OnConnected(endPoint); };
 
@@ -113,14 +107,14 @@ namespace Transport.Protocols.Reconnectable.AckReliableRaw
                 {
                     Log.i("{0} is closed", logic);
                     userHandler.OnDisconnected(reason);
-                    mSessionsMap.RemoveSession(logic.Id);
+                    _sessionsMap.RemoveSession(logic.Id);
                 };
 
-                sessionId = mSessionsMap.AddSession(logic);
+                sessionId = _sessionsMap.AddSession(logic);
                 if (sessionId.IsValid)
                 {
                     logic.Attach(sessionId, ackData.Acquire());
-                    mSessions!.Append(logic, DeltaTime.FromMiliseconds(20));
+                    _sessionsLogicDriver!.Append(logic, DeltaTime.FromMiliseconds(20));
                     return logic;
                 }
             }
