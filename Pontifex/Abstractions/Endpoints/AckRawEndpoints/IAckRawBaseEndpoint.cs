@@ -1,4 +1,6 @@
-﻿using Pontifex.Utils;
+﻿using System;
+using System.Collections.Generic;
+using Pontifex.Utils;
 
 namespace Pontifex.Abstractions.Endpoints
 {
@@ -21,5 +23,10 @@ namespace Pontifex.Abstractions.Endpoints
         SendResult Send(UnionDataList bufferToSend);
 
         bool Disconnect(StopReason reason);
+        
+        /// <summary>
+        /// Возвращает все интерфейсы контроля 
+        /// </summary>
+        void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null);
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.ConcurrentPrimitives;
 using Actuarius.Memory;
@@ -301,6 +302,11 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             bool wasConnected = IsConnected;
             mLogicDriver?.Stop();
             return wasConnected;
+        }
+
+        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        {
+            _underlyingEndpoint?.GetControls(dst, predicate);
         }
 
         #endregion

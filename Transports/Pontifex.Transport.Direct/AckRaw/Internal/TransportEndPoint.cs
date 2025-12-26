@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Actuarius.Collections;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Endpoints;
@@ -41,7 +43,7 @@ namespace Pontifex.Transports.Direct
 
         private volatile TransportEndPoint? _other;
 
-        public IEndPoint LocalEndPoint { get; private set; }
+        public IEndPoint LocalEndPoint { get; }
 
         public TransportEndPoint(DirectTransport owner, IEndPoint localEp, IAnyDirectCtl ctl)
         {
@@ -73,6 +75,11 @@ namespace Pontifex.Transports.Direct
         {
             _other = null;
             _ctl.OnDisconnected(reason);
+        }
+
+        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        {
+            // EMPTY
         }
 
         IEndPoint? IAckRawBaseEndpoint.RemoteEndPoint => _other?.LocalEndPoint;

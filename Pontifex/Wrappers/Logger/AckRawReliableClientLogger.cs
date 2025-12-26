@@ -17,25 +17,9 @@ namespace Pontifex
 
         private volatile IAckRawClientHandler? _userHandler;
         
-        public ILogger Log => _core.Log;
-
-        public IMemoryRental Memory => _core.Memory;
-
         public AckRawReliableClientLogger(IAckReliableRawClient core)
         {
             _core = core;
-        }
-
-        TControl? IControlProvider.TryGetControl<TControl>(string? name) where TControl : class
-        {
-            Log.i("TryGetControl<" + typeof(TControl) + ">(" + (name ?? "null") + ")");
-            return _core.TryGetControl<TControl>(name);
-        }
-
-        IEnumerable<TControl> IControlProvider.GetControls<TControl>(string? name)
-        {
-            Log.i("TryGetControls<" + typeof(TControl) + ">(" + name + ")");
-            return _core.GetControls<TControl>(name);
         }
 
         string ITransport.Type => _core.Type;
@@ -59,6 +43,10 @@ namespace Pontifex
             Log.i("Stop(" + reason + ")");
             return _core.Stop(reason);
         }
+        
+        ILogger ITransport.Log => _core.Log;
+
+        IMemoryRental ITransport.Memory => _core.Memory;
 
         bool IAckRawClient.Init(IAckRawClientHandler handler)
         {

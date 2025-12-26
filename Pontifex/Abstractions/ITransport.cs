@@ -1,9 +1,11 @@
-﻿using Actuarius.Memory;
+﻿using System;
+using System.Collections.Generic;
+using Actuarius.Memory;
 using Scriba;
 
 namespace Pontifex.Abstractions
 {
-    public interface ITransport : IControlProvider
+    public interface ITransport
     {
         /// <summary>
         /// Тип транспорта. Уникальный идентификатор

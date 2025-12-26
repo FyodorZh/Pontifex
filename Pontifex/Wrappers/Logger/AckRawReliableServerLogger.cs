@@ -19,25 +19,9 @@ namespace Pontifex
         private IRawServerAcknowledger<IAckRawServerHandler>? _userAcknowledger;
         private IAckRawServerHandler? _userHandler;
 
-        public ILogger Log => _core.Log;
-
-        public IMemoryRental Memory => _core.Memory;
-
         public AckRawReliableServerLogger(IAckReliableRawServer core)
         {
             _core = core;
-        }
-
-        TControl? IControlProvider.TryGetControl<TControl>(string? name) where TControl : class
-        {
-            Log.i("TryGetControl<" + typeof(TControl) + ">(" + (name ?? "null") + ")");
-            return _core.TryGetControl<TControl>(name);
-        }
-
-        IEnumerable<TControl> IControlProvider.GetControls<TControl>(string? name)
-        {
-            Log.i("TryGetControls<" + typeof(TControl) + ">(" + name + ")");
-            return _core.GetControls<TControl>(name);
         }
 
         string ITransport.Type => _core.Type;
@@ -61,6 +45,10 @@ namespace Pontifex
             Log.i("Stop(" + reason + ")");
             return _core.Stop(reason);
         }
+        
+        ILogger ITransport.Log => _core.Log;
+
+        IMemoryRental ITransport.Memory => _core.Memory;
 
         bool IAckRawServer.Init(IRawServerAcknowledger<IAckRawServerHandler> acknowledger)
         {
@@ -124,7 +112,8 @@ namespace Pontifex
             {
                 Log.i("EndPoint.Disconnect(" + disconnectReason + ")");
                 return endpoint?.Disconnect(disconnectReason) ?? false;
-            });
+            }, 
+                Array.Empty<IControl>());
             _userHandler?.OnConnected(endPointWrapper);
         }
     }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Endpoints;
@@ -114,6 +115,11 @@ namespace Pontifex.Protocols
                 return endpoint.Disconnect(reason);
             }
             return false;
+        }
+
+        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        {
+            mWrapperLogic.GetControls(dst, predicate);
         }
 
         int IAckRawBaseEndpoint.MessageMaxByteSize

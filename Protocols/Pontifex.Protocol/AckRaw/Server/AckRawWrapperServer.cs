@@ -20,16 +20,9 @@ namespace Pontifex.Protocols
         {
             _core = core;
             mWrapperConstructor = wrapperConstructor;
-            AppendControl(core);
         }
 
-        public override int MessageMaxByteSize
-        {
-            get
-            {
-                return _core.MessageMaxByteSize;
-            }
-        }
+        public override int MessageMaxByteSize => _core.MessageMaxByteSize;
 
         protected override bool TryStart()
         {

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 
@@ -19,10 +20,10 @@ namespace Pontifex.Abstractions.Endpoints
             _disconnector = disconnector;
         }
 
-        public void SetCore(IAckRawBaseEndpoint core)
-        {
-            _core = core;
-        }
+        // public void SetCore(IAckRawBaseEndpoint core)
+        // {
+        //     _core = core;
+        // }
 
         public IEndPoint RemoteEndPoint => _core?.RemoteEndPoint ?? VoidEndPoint.Instance;
 
@@ -38,6 +39,11 @@ namespace Pontifex.Abstractions.Endpoints
         public bool Disconnect(StopReason reason)
         {
             return _disconnector.Invoke(_core, reason);
+        }
+
+        public virtual void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        {
+            _core?.GetControls(dst, predicate);
         }
     }
 }

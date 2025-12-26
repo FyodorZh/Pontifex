@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
-using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Transports.Core
@@ -15,8 +14,6 @@ namespace Pontifex.Transports.Core
         private bool _started;
 
         private Action<StopReason>? _onStopped;
-
-        private IControlProvider _controlProvider = new VoidControlProvider();
 
         public ILogger Log { get; }
 
@@ -67,7 +64,7 @@ namespace Pontifex.Transports.Core
         protected AbstractTransport(ILogger logger, IMemoryRental memory)
         {
             Log = logger.Wrap("transport", () => Type);
-            Memory = memory ?? MemoryRental.Shared;
+            Memory = memory;
         }
 
         public bool Start(Action<StopReason> onStopped)
@@ -191,34 +188,6 @@ namespace Pontifex.Transports.Core
             var reason = new StopReasons.ExceptionFail(Type, ex, text);
             Log.e("[{}()]: {@failReason}", method, reason.Print());
             Fail(reason);
-        }
-
-        TControl? IControlProvider.TryGetControl<TControl>(string? name) where TControl : class
-        {
-            return _controlProvider.TryGetControl<TControl>(name);
-        }
-
-        IEnumerable<TControl> IControlProvider.GetControls<TControl>(string? name)
-        {
-            return _controlProvider.GetControls<TControl>(name);
-        }
-
-        protected void AppendControl(IControl control)
-        {
-            AppendControl(new SingleControlProvider(control));
-        }
-
-        protected void AppendControl(IControlProvider provider2)
-        {
-            while (true)
-            {
-                IControlProvider provider = _controlProvider;
-                IControlProvider replacement = new CombinedControlProvider(provider, provider2);
-                if (System.Threading.Interlocked.CompareExchange(ref _controlProvider, replacement, provider) == provider)
-                {
-                    break;
-                }
-            }
         }
 
         public override string ToString()

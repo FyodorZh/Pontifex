@@ -1,5 +1,4 @@
 ﻿using Actuarius.Memory;
-using Pontifex.Abstractions;
 using Pontifex.Utils;
 using Scriba;
 
@@ -7,8 +6,6 @@ namespace Pontifex.Protocols.Zip
 {
     class AckRawZipClientLogic : CompressorLogic, IAckRawWrapperClientLogic
     {
-        public IControlProvider? Controls => null;
-
         public AckRawZipClientLogic(ILogger logger, IMemoryRental memoryRental, int compressionLvl)
             : base(logger, memoryRental, compressionLvl)
         {

@@ -51,6 +51,6 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
-copilot.data.migration.agent.xml
+copilot.data.migration.*
 Bombastic_POH/packages
 *.sln.DotSettings.user

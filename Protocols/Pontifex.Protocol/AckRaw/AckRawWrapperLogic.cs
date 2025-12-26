@@ -1,4 +1,7 @@
-﻿using Actuarius.Memory;
+﻿using System;
+using System.Collections.Generic;
+using Actuarius.Memory;
+using Pontifex.Abstractions;
 using Pontifex.Utils;
 using Scriba;
 
@@ -19,5 +22,6 @@ namespace Pontifex.Protocols
         public abstract void OnDisconnected();
         public abstract bool ProcessReceivedData(UnionDataList receivedData);
         public abstract bool ProcessSentData(UnionDataList sentData);
+        public abstract void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null);
     }
 }

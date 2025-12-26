@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
@@ -272,6 +273,11 @@ namespace Pontifex.Transports.Tcp
         bool IAckRawBaseEndpoint.Disconnect(StopReason reason)
         {
             return Disconnect(reason);
+        }
+
+        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl> predicate)
+        {
+            // EMPTY
         }
 
         public bool Disconnect(StopReason reason)

@@ -1,5 +1,8 @@
-﻿using Actuarius.Memory;
+﻿using System;
+using System.Collections.Generic;
+using Actuarius.Memory;
 using Ionic.Zlib;
+using Pontifex.Abstractions;
 using Pontifex.Utils;
 using Scriba;
 
@@ -75,6 +78,10 @@ namespace Pontifex.Protocols.Zip
             {
                 ZLibDecompressor.Release(decompressor);
             }
+        }
+        
+        public override void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        {
         }
     }
 }

@@ -23,7 +23,7 @@ namespace Pontifex.Protocols
     public class AckRawWrapperClient : AckRawClient, IAckRawClientHandler
     {
         private readonly IAckRawClient mBaseTransport;
-        private IAckRawWrapperClientLogic mLogic = null!;
+        private IAckRawWrapperClientLogic? mLogic;
 
         private bool mInConnectionProcess;
 
@@ -35,23 +35,24 @@ namespace Pontifex.Protocols
             : base(typeName, transportToWrap.Log, transportToWrap.Memory)
         {
             mBaseTransport = transportToWrap;
-            AppendControl(transportToWrap);
         }
 
         protected void SetupLogic(IAckRawWrapperClientLogic logic)
         {
             mLogic = logic;
-            if (logic.Controls != null)
-            {
-                AppendControl(logic.Controls);
-            }
         }
 
-        protected override IAckRawClientHandler SetupHandler(IAckRawClientHandler handler)
+        protected override IAckRawClientHandler? SetupHandler(IAckRawClientHandler handler)
         {
-            mClientHandler = new ClientHandler(this, mLogic, handler);
-            mBaseTransport.Init(mClientHandler);
-            return this;
+            var logic = mLogic;
+            if (logic != null)
+            {
+                mClientHandler = new ClientHandler(this, logic, handler);
+                mBaseTransport.Init(mClientHandler);
+                return this;
+            }
+
+            return null;
         }
 
         protected override bool BeginConnect()

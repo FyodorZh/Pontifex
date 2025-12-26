@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using Actuarius.Collections;
@@ -76,8 +77,9 @@ namespace Pontifex.Transports.Tcp
                                 break;
                         }
                     }
-                    catch (Exception)
+                    catch
                     {
+                        // ignored
                     }
                 }
             }
@@ -93,9 +95,6 @@ namespace Pontifex.Transports.Tcp
             mManagedRemoteEP = new IpEndPoint(mRemoteEP);
             mDisconnectTimeout = disconnectTimeout;
             mKeepAliverSharedLogicRunner = keepAliverSharedLogicRunner;
-
-            AppendControl(mPingCollector);
-            AppendControl(mTrafficCollector);
         }
 
         public override string ToString()
@@ -432,6 +431,14 @@ namespace Pontifex.Transports.Tcp
         bool IAckRawBaseEndpoint.Disconnect(StopReason reason)
         {
             return Stop(reason);
+        }
+
+        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl> predicate)
+        {
+            if (predicate?.Invoke(mPingCollector) ?? true)
+                dst.Add(mPingCollector);
+            if (predicate?.Invoke(mTrafficCollector) ?? true)
+                dst.Add(mTrafficCollector);
         }
 
         bool IAckRawBaseEndpoint.IsConnected => ConnectionState == State.Connected;
