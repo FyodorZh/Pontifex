@@ -30,14 +30,14 @@ namespace Pontifex.Transports.Tcp
         private readonly IPEndPoint mRemoteEP;
         private readonly IpEndPoint mManagedRemoteEP;
         private readonly DeltaTime mDisconnectTimeout;
-        private readonly IPeriodicLogicRunner mKeepAliverSharedLogicRunner;
+        private readonly IPeriodicLogicRunner? mKeepAliverSharedLogicRunner;
 
-        private Socket mSocket;
+        private Socket? mSocket;
 
-        private TcpReceiver mSocketReceiver;
-        private TcpSender mSocketSender;
+        private TcpReceiver? mSocketReceiver;
+        private TcpSender? mSocketSender;
 
-        private KeepAliver mKeepAliver;
+        private KeepAliver? mKeepAliver;
 
         private State mState = State.Constructed;
         private readonly object mStateLock = new object();
@@ -87,7 +87,7 @@ namespace Pontifex.Transports.Tcp
 
         public override int MessageMaxByteSize => TcpInfo.MessageMaxByteSize;
 
-        public AckRawTcpClient(IPAddress ipAddress, int port, DeltaTime disconnectTimeout, IPeriodicLogicRunner keepAliverSharedLogicRunner,
+        public AckRawTcpClient(IPAddress ipAddress, int port, DeltaTime disconnectTimeout, IPeriodicLogicRunner? keepAliverSharedLogicRunner,
             ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
         {
@@ -122,12 +122,13 @@ namespace Pontifex.Transports.Tcp
         {
             try
             {
-                mSocket.EndConnect(ar);
+                var socket = mSocket ?? throw new Exception("Socket is null");
+                socket.EndConnect(ar);
 
-                mSocketReceiver = new TcpReceiver(mSocket, OnReceived, OnFailed, null, Memory);
+                mSocketReceiver = new TcpReceiver(socket, OnReceived, OnFailed, null, Memory);
                 mSocketReceiver.Start();
 
-                mSocketSender = new TcpSender(mSocket, OnFailed, Memory);
+                mSocketSender = new TcpSender(socket, OnFailed, Memory);
 
                 ConnectionState = State.Connecting;
 
@@ -165,7 +166,7 @@ namespace Pontifex.Transports.Tcp
                     {
                         if (packetType == PacketType.AckResponse)
                         {
-                            if (packet.TryPopFirst(out IMultiRefReadOnlyByteArray ackOk))
+                            if (packet.TryPopFirst(out IMultiRefReadOnlyByteArray? ackOk))
                             {
                                 using var ackOkDisposer = ackOk.AsDisposable();
                                 if (TcpInfo.AckOKResponse.EqualByContent(ackOk))
@@ -293,7 +294,7 @@ namespace Pontifex.Transports.Tcp
                     mSocket.NoDelay = true;
 
                     UnionDataList ackData = Memory.CollectablePool.Acquire<UnionDataList>();
-                    Handler.WriteAckData(ackData);
+                    (Handler ?? throw new Exception("Handler is null")).WriteAckData(ackData);
                     ackData.PutFirst(TcpInfo.AckRequest);
 
                     mSocket.BeginConnect(mRemoteEP, ConnectCallback, ackData);
@@ -317,7 +318,7 @@ namespace Pontifex.Transports.Tcp
                             var driver = new PeriodicLogicThreadedDriver(keepAlivePeriod, 128);
                             if (!driver.Start(mKeepAliver, Log))
                             {
-                                throw new Exception("Couldnt start mKeepAliverSharedLogicRunner");
+                                throw new Exception("Couldn't start mKeepAliverSharedLogicRunner");
                             }
                         }
                     }
@@ -361,7 +362,7 @@ namespace Pontifex.Transports.Tcp
                         socketReceiver.Stop();
                         try
                         {
-                            mSocket.Shutdown(SocketShutdown.Receive);
+                            mSocket?.Shutdown(SocketShutdown.Receive);
                         }
                         catch (Exception)
                         {
@@ -376,8 +377,8 @@ namespace Pontifex.Transports.Tcp
                     {
                         try
                         {
-                            mSocket.Shutdown(SocketShutdown.Both);
-                            mSocket.Close();
+                            mSocket?.Shutdown(SocketShutdown.Both);
+                            mSocket?.Close();
                             mSocket = null;
                         }
                         catch (Exception)
@@ -433,7 +434,7 @@ namespace Pontifex.Transports.Tcp
             return Stop(reason);
         }
 
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl> predicate)
+        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             if (predicate?.Invoke(mPingCollector) ?? true)
                 dst.Add(mPingCollector);

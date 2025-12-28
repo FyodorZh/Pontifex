@@ -7,11 +7,11 @@ namespace Pontifex.Transports.Tcp
     internal class SyncServerSocketListener : IServerSocketListener
     {
         private readonly Socket mListener;
-        private Thread mThread;
+        private Thread? mThread;
 
-        public event Action<Socket> Connected;
-        public event Action Stopped;
-        public event Action<Exception> Failed;
+        public event Action<Socket>? Connected;
+        public event Action? Stopped;
+        public event Action<Exception>? Failed;
 
         public SyncServerSocketListener(Socket listener)
         {

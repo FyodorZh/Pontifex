@@ -12,14 +12,14 @@ namespace Pontifex.Transports.Tcp
         private readonly Socket _socket;
         private readonly UnionDataListCompositor _packetCompositor;
 
-        private Action<Exception> _onFailed;
-        private readonly Action _onStopped;
+        private Action<Exception>? _onFailed;
+        private readonly Action? _onStopped;
 
-        private volatile SocketAsyncEventArgs _asyncArgs = new SocketAsyncEventArgs();
+        private volatile SocketAsyncEventArgs? _asyncArgs = new SocketAsyncEventArgs();
 
         private int _wasStopped;
 
-        public TcpReceiver(Socket socket, Action<UnionDataList> onReceived, Action<Exception> onFailed, Action onStopped, IMemoryRental memoryRental)
+        public TcpReceiver(Socket socket, Action<UnionDataList> onReceived, Action<Exception> onFailed, Action? onStopped, IMemoryRental memoryRental)
         {
             if (onReceived == null)
             {
@@ -41,13 +41,25 @@ namespace Pontifex.Transports.Tcp
             _onFailed = onFailed;
             _onStopped = onStopped;
 
-            _packetCompositor = new UnionDataListCompositor(onReceived, memoryRental.CollectablePool, memoryRental.ByteArraysPool);
+            _packetCompositor = new UnionDataListCompositor(msg =>
+            {
+                if (msg == null)
+                {
+                    Fail(new Exception("Failed to decompose packet from stream"));
+                    return;
+                }
+                onReceived(msg);
+            }, memoryRental.CollectablePool, memoryRental.ByteArraysPool);
         }
 
         public void Start()
         {
             try
             {
+                if (_asyncArgs == null)
+                {
+                    throw new InvalidOperationException($"{nameof(_asyncArgs)} is null. TcpReceiver already stopped?");
+                }
                 if (!_socket.ReceiveAsync(_asyncArgs))
                 {
                     ReadCallback(_socket, _asyncArgs);
@@ -76,10 +88,7 @@ namespace Pontifex.Transports.Tcp
 
                 _packetCompositor.Dispose();
 
-                if (_onStopped != null)
-                {
-                    _onStopped();
-                }
+                _onStopped?.Invoke();
             }
         }
 
@@ -102,12 +111,12 @@ namespace Pontifex.Transports.Tcp
                     {
                         _packetCompositor.PushData(args.Buffer, args.Offset, args.BytesTransferred);
 
-                        // show must go on
+                        // Show must go on
                         if (!_stopped)
                         {
-                            isSyncWork = !_socket.ReceiveAsync(_asyncArgs);
-                            sender = _socket;
-                            args = _asyncArgs;
+                            var asyncArgs = _asyncArgs ?? throw new InvalidOperationException($"{nameof(_asyncArgs)} is null. TcpReceiver already stopped? (2)");
+                            isSyncWork = !_socket.ReceiveAsync(asyncArgs);
+                            args = asyncArgs;
                         }
                         else
                         {

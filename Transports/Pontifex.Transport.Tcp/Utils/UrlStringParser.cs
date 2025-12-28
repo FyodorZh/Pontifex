@@ -1,9 +1,11 @@
-﻿namespace Pontifex.Utils
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace Pontifex.Utils
 {
     internal static class UrlStringParser
     {
         // host:port
-        public static bool TryParseAddress(string address, out System.Net.IPAddress ip, out int port)
+        public static bool TryParseAddress(string address, [MaybeNullWhen(false)] out System.Net.IPAddress ip, out int port)
         {
             try
             {

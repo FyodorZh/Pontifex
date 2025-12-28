@@ -9,7 +9,7 @@ namespace Pontifex.Transports.Tcp
     {
         private readonly AckRawTcpClient _owner;
         private readonly IMemoryRental _memoryRental;
-        private ILogicDriverCtl _driver;
+        private ILogicDriverCtl? _driver;
 
         public KeepAliver(AckRawTcpClient owner, IMemoryRental memoryRental)
         {
@@ -52,10 +52,7 @@ namespace Pontifex.Transports.Tcp
 
         public void Stop()
         {
-            if (_driver != null)
-            {
-                _driver.Stop();
-            }
+            _driver?.Stop();
         }
 
         void IPeriodicLogic.LogicStopped()

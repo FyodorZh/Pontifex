@@ -25,7 +25,7 @@ namespace Pontifex.Transports.Tcp
 
             private readonly DeltaTime mDisconnectTimeout;
 
-            public event Action<ServerSideSocket> ClientDisconnected;
+            public event Action<ServerSideSocket>? ClientDisconnected;
 
             private readonly List<ServerSideSocket> mTmpClientList = new List<ServerSideSocket>();
 
@@ -41,7 +41,7 @@ namespace Pontifex.Transports.Tcp
             protected override void LogicTick()
             {
                 {
-                    ServerSideSocket client;
+                    ServerSideSocket? client;
                     while (mClientsToAdd.TryPop(out client))
                     {
                         mClients.Add(client);
@@ -71,8 +71,7 @@ namespace Pontifex.Transports.Tcp
 
             protected override void LogicStopped()
             {
-                ServerSideSocket client;
-                while (mClientsToAdd.TryPop(out client))
+                while (mClientsToAdd.TryPop(out var client))
                 {
                     mClients.Add(client);
                 }
@@ -83,7 +82,7 @@ namespace Pontifex.Transports.Tcp
                 }
             }
 
-            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler> acknowledger, IMemoryRental memoryRental, ILogger logger)
+            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler?> acknowledger, IMemoryRental memoryRental, ILogger logger)
             {
                 ServerSideSocket client = new ServerSideSocket(socket, OnDisconnected, acknowledger, memoryRental, logger);
                 mClientsToAdd.Put(client);
@@ -109,7 +108,7 @@ namespace Pontifex.Transports.Tcp
         private IPEndPoint mLocalEndPoint;
         private readonly ClientSet mClients;
 
-        private IServerSocketListener mSocketListener;
+        private IServerSocketListener? mSocketListener;
 
         public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, DeltaTime disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
@@ -141,6 +140,9 @@ namespace Pontifex.Transports.Tcp
             catch (Exception ex)
             {
                 FailException("AckRawTcpServer", ex);
+                mClients = null!;
+                mLocalEndPoint = null!;
+                mMaxNumberAcceptedClients = null!;
             }
         }
 
@@ -280,7 +282,7 @@ namespace Pontifex.Transports.Tcp
             Log.wtf("Server socket failed", ex);
         }
 
-        private IAckRawServerHandler TryAcknowledge(EndPoint ep, UnionDataList ackData)
+        private IAckRawServerHandler? TryAcknowledge(EndPoint ep, UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             
@@ -288,7 +290,7 @@ namespace Pontifex.Transports.Tcp
             try { remoteName = ep.ToString(); }
             catch { remoteName = "invalid"; }
 
-            if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray ackRequest))
+            if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ackRequest))
             {
                 using var ackRequestDisposer = ackRequest.AsDisposable();
                 if (TcpInfo.AckRequest.EqualByContent(ackRequest))

@@ -5,31 +5,27 @@ namespace Pontifex.Transports.NetSockets
 {
     internal sealed class IpEndPoint : IEndPoint
     {
-        private readonly EndPoint mEndpoint;
+        private readonly EndPoint? mEndpoint;
 
-        public IpEndPoint(EndPoint endPoint)
+        public IpEndPoint(EndPoint? endPoint)
         {
             mEndpoint = endPoint;
         }
 
-        public EndPoint EP
-        {
-            get { return mEndpoint; }
-        }
+        public EndPoint? EP => mEndpoint;
 
         public bool Equals(IEndPoint other)
         {
-            IpEndPoint endPoint = other as IpEndPoint;
-            return Equals(endPoint);
+            return Equals(other as IpEndPoint);
         }
 
-        private bool Equals(IpEndPoint other)
+        private bool Equals(IpEndPoint? other)
         {
             if (!ReferenceEquals(other, null))
             {
                 if (!ReferenceEquals(this, other))
                 {
-                    return mEndpoint.Equals(other.mEndpoint);
+                    return mEndpoint?.Equals(other.mEndpoint) ?? (other.mEndpoint == null);
                 }
                 return true;
             }
@@ -38,12 +34,12 @@ namespace Pontifex.Transports.NetSockets
 
         public override int GetHashCode()
         {
-            return (mEndpoint != null ? mEndpoint.GetHashCode() : 0);
+            return mEndpoint?.GetHashCode() ?? 0;
         }
 
         public override string ToString()
         {
-            return string.Format("[Ip={0}]", mEndpoint != null ? mEndpoint.ToString() : "null");
+            return $"[Ip={mEndpoint?.ToString() ?? "null"}]";
         }
     }
 }

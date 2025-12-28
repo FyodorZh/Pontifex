@@ -32,16 +32,16 @@ namespace Pontifex.Transports.Tcp
         private readonly object mStateLock = new object();
         private volatile ServerSideSocketState mState = ServerSideSocketState.Constructed;
 
-        private IAckRawServerHandler _handler;
+        private IAckRawServerHandler? _handler;
 
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
         private readonly Action<ServerSideSocket> mOnDisconnected;
-        private readonly Func<EndPoint, UnionDataList, IAckRawServerHandler> mAcknowledger;
+        private readonly Func<EndPoint, UnionDataList, IAckRawServerHandler?> mAcknowledger;
 
         private static long mPrevClientId = 1;
 
-        public IpEndPoint Ep { get; private set; }
+        public IpEndPoint Ep { get; }
 
         public IpEndPoint LocalEp { get; private set; }
 
@@ -66,7 +66,7 @@ namespace Pontifex.Transports.Tcp
         public ServerSideSocket(
             Socket socket,
             Action<ServerSideSocket> onDisconnected,
-            Func<EndPoint, UnionDataList, IAckRawServerHandler> acknowledger,
+            Func<EndPoint, UnionDataList, IAckRawServerHandler?> acknowledger,
             IMemoryRental memoryRental,
             ILogger logger)
         {
@@ -127,7 +127,7 @@ namespace Pontifex.Transports.Tcp
             {
                 case ServerSideSocketState.Constructed:
                 {
-                    IAckRawServerHandler handler;
+                    IAckRawServerHandler? handler;
                     StopReason reason;
                     try
                     {
@@ -275,7 +275,7 @@ namespace Pontifex.Transports.Tcp
             return Disconnect(reason);
         }
 
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl> predicate)
+        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             // EMPTY
         }
@@ -354,9 +354,9 @@ namespace Pontifex.Transports.Tcp
 
         #region Comparisons
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            ServerSideSocket other = obj as ServerSideSocket;
+            ServerSideSocket? other = obj as ServerSideSocket;
             return Equals(other);
         }
 
@@ -365,7 +365,7 @@ namespace Pontifex.Transports.Tcp
             return mClientId.GetHashCode();
         }
 
-        public bool Equals(ServerSideSocket other)
+        public bool Equals(ServerSideSocket? other)
         {
             if (ReferenceEquals(other, null))
             {

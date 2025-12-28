@@ -19,16 +19,16 @@ namespace Pontifex.Transports.Tcp
 
         private bool _sendingNow; // !volatile but synchronized
 
-        private Action<Exception> _onFailed;
+        private Action<Exception>? _onFailed;
 
         private volatile bool _stopped;
-        private Action _onStopped;
+        private Action? _onStopped;
         private bool _intentionToStop;
         private readonly object _stopLock = new object();
 
-        private IMultiRefByteArray _bufferToSend;
+        private IMultiRefByteArray? _bufferToSend;
 
-        private SocketAsyncEventArgs _asyncArgs = new SocketAsyncEventArgs();
+        private SocketAsyncEventArgs? _asyncArgs = new SocketAsyncEventArgs();
         private volatile PacketType _currentMessageType;
 
         public TcpSender(Socket socket, Action<Exception> onFailed, IMemoryRental memoryRental)
@@ -143,7 +143,7 @@ namespace Pontifex.Transports.Tcp
 
             if (!_stopped)
             {
-                UnionDataList packet = null;
+                UnionDataList? packet = null;
                 lock (_queueToSend)
                 {
                     if (_queueToSend.Count > 0)
@@ -158,7 +158,7 @@ namespace Pontifex.Transports.Tcp
 
                 if (_sendingNow)
                 {
-                    DoSend(packet);
+                    DoSend(packet!);
                 }
             }
             else
@@ -179,7 +179,7 @@ namespace Pontifex.Transports.Tcp
                 }
                 _bufferToSend = UnionDataListCompositor.Encode(packet, _memoryRental.ByteArraysPool);
                 
-                _asyncArgs.SetBuffer(_bufferToSend.Array, _bufferToSend.Offset, _bufferToSend.Count);
+                _asyncArgs!.SetBuffer(_bufferToSend.Array, _bufferToSend.Offset, _bufferToSend.Count);
 
                 _currentMessageType = (PacketType)packet.Elements[0].Alias.ByteValue;
                 if (!_socket.SendAsync(_asyncArgs))

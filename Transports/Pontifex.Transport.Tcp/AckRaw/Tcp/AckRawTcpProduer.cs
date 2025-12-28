@@ -1,4 +1,5 @@
-﻿using Actuarius.Memory;
+﻿using System.Diagnostics.CodeAnalysis;
+using Actuarius.Memory;
 using Actuarius.PeriodicLogic;
 using Pontifex.Abstractions;
 using Scriba;
@@ -10,7 +11,7 @@ namespace Pontifex.Transports.Tcp
         public string Name => TcpInfo.TransportName;
 
         // host:ip/timeout
-        protected static bool Parse(string @params, out DeltaTime disconnectionTimeout, out System.Net.IPAddress ip, out int port)
+        protected static bool Parse(string @params, out DeltaTime disconnectionTimeout, [MaybeNullWhen(false)] out System.Net.IPAddress ip, out int port)
         {
             try
             {
@@ -31,7 +32,7 @@ namespace Pontifex.Transports.Tcp
 
     public class AckRawTcpClientProducer : BaseAckRawTcpProducer, ITransportProducer
     {
-        public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
             if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {
@@ -43,7 +44,7 @@ namespace Pontifex.Transports.Tcp
 
     public class AckRawTcpServerProducer : BaseAckRawTcpProducer, ITransportProducer
     {
-        public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
         {
             if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {

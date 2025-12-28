@@ -1,9 +1,12 @@
 ﻿// ReSharper disable once CheckNamespace
+
+using System.Diagnostics.CodeAnalysis;
+
 namespace Pontifex.Utils
 {
     internal static class HostResolver
     {
-        public static bool TryParse(string host, out System.Net.IPAddress ipAddress)
+        public static bool TryParse(string host, [MaybeNullWhen(false)] out System.Net.IPAddress ipAddress)
         {
             if (System.Net.IPAddress.TryParse(host, out ipAddress))
             {
@@ -12,8 +15,8 @@ namespace Pontifex.Utils
 
             try
             {
-                System.Net.IPAddress ipv4 = null;
-                System.Net.IPAddress ipv6 = null;
+                System.Net.IPAddress? ipv4 = null;
+                System.Net.IPAddress? ipv6 = null;
 
                 System.Net.IPHostEntry hosts = System.Net.Dns.GetHostEntry(host);
                 for (int i = 0; i < hosts.AddressList.Length; i++)

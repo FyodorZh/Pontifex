@@ -14,14 +14,14 @@ namespace Pontifex.Transports.Tcp
 
         private readonly Socket mListener;
 
-        private SocketAsyncEventArgs mAcceptEventArg;
+        private SocketAsyncEventArgs mAcceptEventArg = null!;
 
         private readonly object mLocker = new object();
         private State mState = State.Constructed;
 
-        public event Action<Socket> Connected;
-        public event Action Stopped;
-        public event Action<Exception> Failed;
+        public event Action<Socket>? Connected;
+        public event Action? Stopped;
+        public event Action<Exception>? Failed;
 
         public AsyncServerSocketListener(Socket listener)
         {
