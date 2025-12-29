@@ -312,8 +312,11 @@ namespace Pontifex.Utils
                 case UnionDataType.Byte: return _alias.ByteValue.ToString();
                 case UnionDataType.Char: return _alias.CharValue.ToString();
                 case UnionDataType.Short: return _alias.ShortValue.ToString();
+                case UnionDataType.UShort: return _alias.UShortValue.ToString();
                 case UnionDataType.Int: return _alias.IntValue.ToString();
+                case UnionDataType.UInt: return _alias.UIntValue.ToString();
                 case UnionDataType.Long: return _alias.LongValue.ToString();
+                case UnionDataType.ULong: return _alias.ULongValue.ToString();
                 case UnionDataType.Float: return _alias.FloatValue.ToString(CultureInfo.InvariantCulture);
                 case UnionDataType.Double: return _alias.DoubleValue.ToString(CultureInfo.InvariantCulture);
                 case UnionDataType.Decimal: return _alias.DecimalValue.ToString(CultureInfo.InvariantCulture);
