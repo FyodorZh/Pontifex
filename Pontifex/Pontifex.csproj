@@ -15,9 +15,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
-      <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
-      <ProjectReference Include="..\Bombastic_POH\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj" />
+      <ProjectReference Include="..\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
+      <ProjectReference Include="..\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
+      <ProjectReference Include="..\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj" />
     </ItemGroup>
 
     <ItemGroup>

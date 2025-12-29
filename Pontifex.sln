@@ -1,14 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Collections", "Bombastic_POH\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj", "{7218EC9C-C9C0-4EE1-A22A-61E8209CB013}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Collections", "Actuarius\Actuarius.Collections\Actuarius.Collections.csproj", "{7218EC9C-C9C0-4EE1-A22A-61E8209CB013}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Memory", "Bombastic_POH\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj", "{CA59F473-418C-4AD3-B994-5153EB0B9A1F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.Memory", "Actuarius\Actuarius.Memory\Actuarius.Memory.csproj", "{CA59F473-418C-4AD3-B994-5153EB0B9A1F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex", "Pontifex\Pontifex.csproj", "{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.ConcurrentPrimitives", "Bombastic_POH\Actuarius\Actuarius.ConcurrentPrimitives\Actuarius.ConcurrentPrimitives.csproj", "{1DB15123-83FE-4C1E-A7FC-D0148386D3AE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.ConcurrentPrimitives", "Actuarius\Actuarius.ConcurrentPrimitives\Actuarius.ConcurrentPrimitives.csproj", "{1DB15123-83FE-4C1E-A7FC-D0148386D3AE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.PeriodicLogic", "Bombastic_POH\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj", "{800DB99A-37BD-4C33-8CF8-725544BE4D10}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Actuarius.PeriodicLogic", "Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj", "{800DB99A-37BD-4C33-8CF8-725544BE4D10}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Test", "Pontifex.Test\Pontifex.Test.csproj", "{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}"
 EndProject
