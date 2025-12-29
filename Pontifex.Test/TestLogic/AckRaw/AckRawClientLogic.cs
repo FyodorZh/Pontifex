@@ -17,6 +17,9 @@ namespace TransportAnalyzer.TestLogic
 
         private readonly int _unconfirmedTicks;
         private readonly long _lastTickId;
+        
+        public event Action<IAckRawServerEndpoint>? Connected;
+        public event Action<StopReason>? Disconnected;
 
         public override string ToString()
         {
@@ -46,6 +49,7 @@ namespace TransportAnalyzer.TestLogic
             }
             response.Release();
 
+            Connected?.Invoke(endPoint);
             _endpoint = endPoint;
             var thread = new Thread(Work) { IsBackground = true };
             thread.Start();
@@ -53,6 +57,7 @@ namespace TransportAnalyzer.TestLogic
 
         public void OnDisconnected(StopReason reason)
         {
+            Disconnected?.Invoke(reason);
             _endpoint = null;
         }
 

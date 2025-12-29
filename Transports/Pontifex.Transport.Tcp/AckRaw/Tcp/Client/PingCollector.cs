@@ -12,7 +12,7 @@ namespace Pontifex.Transports.Tcp
             set { }
         }
 
-        public string Name => TcpInfo.TransportName;
+        public string Name => "Tcp.Ping";
 
         public bool GetPing(out int minPing, out int maxPing, out int avgPing)
         {

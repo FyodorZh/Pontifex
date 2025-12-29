@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Abstractions;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Endpoints;
 using Pontifex.StopReasons;
@@ -26,6 +28,8 @@ namespace Pontifex.Transports.Direct
         private readonly IConcurrentFSM<State> _state;
 
         private DirectTransport? _transport;
+        
+        private readonly AckRawClientControl _transportControl;
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
@@ -36,6 +40,7 @@ namespace Pontifex.Transports.Direct
 
             var fsm = new RatchetFSM<State>((a, b) => ((int)a).CompareTo((int)b), State.Constructed);
             _state = new ConcurrentFSM<State>(fsm);
+            _transportControl = new AckRawClientControl(this);
         }
 
         protected override bool BeginConnect()
@@ -80,6 +85,12 @@ namespace Pontifex.Transports.Direct
         void IClientDirectCtl.GetAckData(UnionDataList ackData)
         {
             Handler?.WriteAckData(ackData);
+        }
+
+        void IClientDirectCtl.GetTransportControls(List<IControl> dst, Predicate<IControl>? predicate)
+        {
+            if (predicate == null || predicate(_transportControl))
+                dst.Add(_transportControl);
         }
 
         void IAnyDirectCtl.OnReceived(UnionDataList buffer)

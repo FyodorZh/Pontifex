@@ -79,7 +79,10 @@ namespace Pontifex.Transports.Direct
 
         void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
-            // EMPTY
+            if (_ctl is IClientDirectCtl clientCtl)
+            {
+                clientCtl.GetTransportControls(dst, predicate);
+            }
         }
 
         IEndPoint? IAckRawBaseEndpoint.RemoteEndPoint => _other?.LocalEndPoint;

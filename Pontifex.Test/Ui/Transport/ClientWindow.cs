@@ -12,19 +12,25 @@ namespace Pontifex.Test
 {
     public class ClientWindow : SmartWindow
     {
-        private readonly IAckRawClient? _client;
+        private readonly IAckRawClient? _transport;
         private readonly ILogger _logger;
         
         public ClientWindow(TransportFactory factory, string url)
         {
-            X = Pos.Center();
+            X = Pos.AnchorEnd();
             Y = 1;
             Title = "Client: " + url;
-            this.SetResizable(200, 20);
+            this.SetResizable(190, 20);
+
+            ControlsPanel controlsPanel = new()
+            {
+                X = 0, Y = 0, Width = 30, Height = Dim.Fill(1), BorderStyle = LineStyle.Rounded
+            };
+            Add(controlsPanel);
             
             LoggerView loggerView = new()
             {
-                X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill(1),
+                X = Pos.Right(controlsPanel), Y = 0, Width = Dim.Fill(), Height = Dim.Fill(1),
                 BorderStyle = LineStyle.Rounded
             };
             Add(loggerView);
@@ -32,14 +38,23 @@ namespace Pontifex.Test
             _logger = new Logger(loggerView);  
             
             
-            _client = factory.ConstructClient(url, _logger, MemoryRental.Shared);
-            if (_client == null || !_client.Init(new AckRawClientLogic(_client.Memory, _client.Log, 1, 10000)))
+            _transport = factory.ConstructClient(url, _logger, MemoryRental.Shared);
+            if (_transport == null)
             {
-                _logger.e("Failed to construct client");
+                _logger.e("Failed to construct transport");
+                return;
+            }
+            
+            var clientLogic = new AckRawClientLogic(_transport.Memory, _transport.Log, 1, 10000);
+            clientLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
+            clientLogic.Disconnected += _ => { controlsPanel.SetEndpoint(null); };
+            if ( !_transport.Init(clientLogic))
+            {
+                _logger.e("Failed to init transport");
                 return;
             }
 
-            bool started = _client.Start(stopReason =>
+            bool started = _transport.Start(stopReason =>
             {
                 _logger.e("OnStopped: " + stopReason);
             });
@@ -52,7 +67,7 @@ namespace Pontifex.Test
             Add(stopButton);
             stopButton.Accepting += (sender, args) =>
             {
-                _client?.Stop();
+                _transport?.Stop();
                 args.Handled = true;
             };
         }

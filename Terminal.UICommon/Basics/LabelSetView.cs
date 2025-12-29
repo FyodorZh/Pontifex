@@ -38,6 +38,12 @@ namespace Terminal.UI
 
             Add(_labels, _values);
         }
+
+        public void RefreshSize()
+        {
+            _labels.RefreshSize();
+            _values.RefreshSize();
+        }
         
         public View GetRightBottomView()
         {
@@ -48,19 +54,22 @@ namespace Terminal.UI
         {
             _labels.ContentAdd(new Label()
             {
-                Width = Dim.Auto(),
+                Width = caption.Length,
+                Height = 1,
                 Text = caption
             });
 
             var value = new Label()
             {
                 Width = width ?? Dim.Auto(),
+                Height = 1,
                 Text = "???"
             };
             _values.ContentAdd(value);
 
             value.TextChanged += (sender, args) =>
             {
+                value.Width = value.Text.Length;
                 _values.RefreshSize();
             };
 
@@ -71,13 +80,15 @@ namespace Terminal.UI
         {
             _labels.ContentAdd(new Label()
             {
-                Width = Dim.Auto(),
+                Width = text.Length,
+                Height = 1,
                 Text = text
             });
 
             var value = new Button()
             {
-                Width = Dim.Auto(),
+                Width = caption.Length + 4,
+                Height = 1,
                 Text = caption
             };
             _values.ContentAdd(value);

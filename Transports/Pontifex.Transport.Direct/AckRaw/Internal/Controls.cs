@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using Pontifex.Abstractions;
 using Pontifex.Utils;
 
 namespace Pontifex.Transports.Direct
@@ -11,6 +14,7 @@ namespace Pontifex.Transports.Direct
     internal interface IClientDirectCtl : IAnyDirectCtl
     {
         void GetAckData(UnionDataList ackData);
+        void GetTransportControls(List<IControl> dst, Predicate<IControl>? predicate = null);
     }
 
     internal interface IServerDirectCtl : IAnyDirectCtl

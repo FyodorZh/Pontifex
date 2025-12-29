@@ -42,8 +42,10 @@ namespace Pontifex.Transports.Tcp
         private State mState = State.Constructed;
         private readonly object mStateLock = new object();
 
+        private readonly AckRawClientControl _transportControl;
         private readonly PingCollector mPingCollector = new PingCollector();
-        private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim(TcpInfo.TransportName, UtcNowDateTimeProvider.Instance);
+        private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim("Tcp.Traffic", UtcNowDateTimeProvider.Instance);
+        
 
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
@@ -95,6 +97,7 @@ namespace Pontifex.Transports.Tcp
             mManagedRemoteEP = new IpEndPoint(mRemoteEP);
             mDisconnectTimeout = disconnectTimeout;
             mKeepAliverSharedLogicRunner = keepAliverSharedLogicRunner;
+            _transportControl = new AckRawClientControl(this);
         }
 
         public override string ToString()
@@ -436,6 +439,8 @@ namespace Pontifex.Transports.Tcp
 
         void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
+            if (predicate?.Invoke(_transportControl) ?? true)
+                dst.Add(_transportControl);
             if (predicate?.Invoke(mPingCollector) ?? true)
                 dst.Add(mPingCollector);
             if (predicate?.Invoke(mTrafficCollector) ?? true)
