@@ -6,7 +6,7 @@ namespace Pontifex.Transports.Tcp
     internal static class TcpInfo
     {
         public const string TransportName = "tcp";
-        public const int MessageMaxByteSize = 1024 * 64;
+        public const int MessageMaxByteSize = 1024 * 1023;
         public const int ServerConnectionsLimit = 20000;
         public static readonly DeltaTime DefaultDisconnectTimeout = DeltaTime.FromSeconds(180);
 
