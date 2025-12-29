@@ -1,4 +1,4 @@
-using Shared.Utils;
+using Actuarius.PeriodicLogic;
 using Pontifex.Abstractions;
 
 namespace Pontifex.Transports.Udp
@@ -12,9 +12,7 @@ namespace Pontifex.Transports.Udp
 
         public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner logicRunner)
         {
-            int port;
-            System.Net.IPAddress ip;
-            if (Utils.UrlStringParser.TryParseAddress(@params, out ip, out port))
+            if (Utils.UrlStringParser.TryParseAddress(@params, out System.Net.IPAddress ip, out int port))
             {
                 return new NoAckUnreliableRawUdpClient(ip, port, logicRunner);
             }
@@ -32,9 +30,7 @@ namespace Pontifex.Transports.Udp
 
         public ITransport Produce(string @params, ITransportFactory factory, IPeriodicLogicRunner logicRunner)
         {
-            int port;
-            System.Net.IPAddress ip;
-            if (Utils.UrlStringParser.TryParseAddress(@params, out ip, out port))
+            if (Utils.UrlStringParser.TryParseAddress(@params, out System.Net.IPAddress ip, out int port))
             {
                 return new NoAckUnreliableRawUdpServer(ip, port, logicRunner);
             }

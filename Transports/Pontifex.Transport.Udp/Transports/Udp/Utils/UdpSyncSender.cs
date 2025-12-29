@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using Shared;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Controls;
 

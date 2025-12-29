@@ -4,10 +4,9 @@ using System.Net.Sockets;
 using System.Security;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Shared;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Controls;
-using Pontifex.Utils;
+using Transport.Utils;
 
 namespace Pontifex.Transports.Udp
 {

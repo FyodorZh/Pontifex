@@ -45,7 +45,7 @@ namespace Pontifex.Test
                 return;
             }
             
-            var clientLogic = new AckRawClientLogic(_transport.Memory, _transport.Log, 1, 10000);
+            var clientLogic = new AckRawClientLogic(_transport.Memory, _transport.Log, 1);
             clientLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
             clientLogic.Disconnected += _ => { controlsPanel.SetEndpoint(null); };
             if ( !_transport.Init(clientLogic))

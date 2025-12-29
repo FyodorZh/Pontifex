@@ -1,10 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using Actuarius.Collections;
-using Pontifex.Endpoints;
-using Shared;
-using Shared.Utils;
+using Actuarius.PeriodicLogic;
 using Pontifex.Abstractions;
 using Pontifex.Transports.Core;
 

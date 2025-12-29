@@ -27,7 +27,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         protected override bool TryStart()
         {
-            int threads = 2;
+            int threads = 1;
             IPeriodicLogicDriver[] drivers = new IPeriodicLogicDriver[threads];
             for (int i = 0; i < threads; ++i)
             {
