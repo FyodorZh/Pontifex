@@ -14,17 +14,14 @@ namespace Pontifex.Transports.Core
         private IRawServerAcknowledger<IAckRawServerHandler>? _acknowledger;
 
         protected AckRawServer(string typeName, ILogger logger, IMemoryRental memory)
-            :base(logger, memory)
+            :base(typeName, logger, memory)
         {
-            Type = typeName;
         }
 
         protected virtual IRawServerAcknowledger<IAckRawServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IAckRawServerHandler> acknowledger)
         {
             return acknowledger;
         }
-
-        public sealed override string Type { get; }
 
         public bool IsInitialized
         {

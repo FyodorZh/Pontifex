@@ -75,14 +75,20 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             {
                 return null;
             }
-
+            
             SessionId sessionId = new SessionId(id, generation);
             if (sessionId.IsValid) // Пытаемся продолжить конкретную сессию
             {
+                if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? secret))
+                {
+                    return null;
+                }
+                using var secretDisposer = secret.AsDisposable();
+                
                 var logic = _sessionsMap.Find(sessionId);
                 if (logic != null) // Нашли искомую сессию
                 {
-                    if (logic.Reattach(ackData.Acquire())) // Ломимся в неё
+                    if (logic.Reattach(secret.Acquire())) // Ломимся в неё
                     {
                         return logic;
                     }
@@ -113,7 +119,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                 sessionId = _sessionsMap.AddSession(logic);
                 if (sessionId.IsValid)
                 {
-                    logic.Attach(sessionId, ackData.Acquire());
+                    logic.Attach(sessionId);
                     _sessionsLogicDriver!.Append(logic, DeltaTime.FromMiliseconds(20));
                     return logic;
                 }

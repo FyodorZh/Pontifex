@@ -23,14 +23,12 @@ namespace Pontifex.Transports.Core
 
         private IAckRawClientHandler? _handler;
 
-        public sealed override string Type { get; }
         
         protected IAckRawClientHandler? Handler =>  _handler;
 
         protected AckRawClient(string typeName, ILogger logger, IMemoryRental memory)
-            : base(logger, memory)
+            : base(typeName, logger, memory)
         {
-            Type = typeName;
         }
 
         protected virtual IAckRawClientHandler? SetupHandler(IAckRawClientHandler handler)

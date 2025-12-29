@@ -44,7 +44,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         // Полный доступ из треда IPeriodicLogic
         private volatile ReconnectableLogicState mState = ReconnectableLogicState.BeforeReconnecting;
 
-        private readonly DeliverySystem mDelivery = new DeliverySystem();
+        private readonly DeliverySystem mDelivery;
         private readonly ThreadSafeDateTime mLastActivityTime = new ThreadSafeDateTime();
         private readonly ThreadSafeDateTime mLastSendingTime = new ThreadSafeDateTime();
 
@@ -59,6 +59,8 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         {
             mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
             mSentMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
+            
+            mDelivery = new DeliverySystem(memoryRental.CollectablePool);
 
             _logicEndpoint = new LogicEndpoint<TEndpoint>(this);
             mUserHandler = userHandler;
@@ -288,8 +290,11 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         {
             if (_underlyingEndpoint != null)
             {
-                mSentMessages.Put(bufferToSend);
-                return SendResult.Ok;
+                if (mSentMessages.Put(bufferToSend))
+                {
+                    return SendResult.Ok;
+                }
+                return SendResult.BufferOverflow;
             }
             bufferToSend.Release();
             return SendResult.NotConnected;
@@ -364,7 +369,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                     });
                     var queue = queueDisposer.Resource;
 
-                    mDelivery.ScheduledBuffers(Memory.CollectablePool, queue);
+                    mDelivery.ScheduledBuffers(queue);
                     while (queue.TryPop(out var element))
                     {
                         var res = endPoint.Send(element);

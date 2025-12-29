@@ -19,6 +19,8 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         private readonly ThreadSafeDateTime _nextReconnectionTime = new ThreadSafeDateTime();
 
+        private IMultiRefReadOnlyByteArray? _secret;
+
         public event Action<IAckRawServerEndpoint, UnionDataList>? OnConnected;
 
         public SessionId SessionId => _sessionId;
@@ -69,6 +71,10 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         void IAckHandler.WriteAckData(UnionDataList ackData)
         {
             _userHandler.WriteAckData(ackData);
+            if (_sessionId.IsValid)
+            {
+                ackData.PutFirst(_secret ?? throw new InvalidOperationException("Secret must be set before sending ack data"));
+            }
             ackData.PutFirst(_sessionId.Generation);
             ackData.PutFirst(_sessionId.Id);
             ackData.PutFirst(ReconnectableInfo.AckRequest);
@@ -96,6 +102,12 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                 return;
             }
 
+            if (!ackResponse.TryPopFirst(out _secret))
+            {
+                Fail("Disconnecting due to wrong transport ack response (3)");
+                return;
+            }
+
             SessionId sessionId = new SessionId(id, generation);
             if (sessionId.IsValid)
             {
@@ -108,7 +120,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                     if (isFirstConnection)
                     {
                         Log.i("Logic connected");
-                        OnConnected?.Invoke(this, ackResponse);
+                        OnConnected?.Invoke(this, ackResponse.Acquire());
                     }
 
                     return;

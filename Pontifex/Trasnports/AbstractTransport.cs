@@ -37,7 +37,7 @@ namespace Pontifex.Transports.Core
         /// </summary>
         protected abstract void OnStopped(StopReason reason);
 
-        public abstract string Type { get; }
+        public string Type { get; }
 
         public bool IsValid
         {
@@ -61,9 +61,10 @@ namespace Pontifex.Transports.Core
             }
         }
 
-        protected AbstractTransport(ILogger logger, IMemoryRental memory)
+        protected AbstractTransport(string typeName, ILogger logger, IMemoryRental memory)
         {
-            Log = logger.Wrap("transport", () => Type);
+            Type = typeName;
+            Log = logger.Wrap(Type, "");
             Memory = memory;
         }
 

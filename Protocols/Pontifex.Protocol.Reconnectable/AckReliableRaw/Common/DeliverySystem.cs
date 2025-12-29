@@ -1,6 +1,5 @@
 ﻿using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex;
 using Pontifex.Utils;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
@@ -31,6 +30,13 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         private readonly CycleQueue<DeliveryId> mDeliveryReport = new CycleQueue<DeliveryId>();
 
         private DeliveryId mLastReceivedMessageId = DeliveryId.Zero;
+
+        private readonly ICollectablePool _pool;
+
+        public DeliverySystem(ICollectablePool pool)
+        {
+            _pool = pool;
+        }
 
         public void Destroy()
         {
@@ -80,22 +86,25 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                 if (!mNoNewPendingToDeliver)
                 {
                     bufferToSend.PutFirst(new UnionData(mNextId.Id));
-                    mPendingToDeliver.Put(new Delivery {Id = mNextId, Buffer = bufferToSend.Acquire()});
+                    var clone = _pool.Acquire<UnionDataList>();
+                    clone.CopyFrom(bufferToSend);
+                    mPendingToDeliver.Put(new Delivery {Id = mNextId, Buffer = clone});
                     mNextId = mNextId.Next;
+                    return OpResult.Ok;
                 }
             }
 
-            return OpResult.Ok;
+            return OpResult.DeliverySystemStopped;
         }
 
-        public int ScheduledBuffers(ICollectablePool pool, IConsumer<UnionDataList> dst)
+        public int ScheduledBuffers(IConsumer<UnionDataList> dst)
         {
             lock (mPendingToDeliver)
             {
                 int count = mPendingToDeliver.Count;
                 for (int i = 0; i < count; ++i)
                 {
-                    var list = pool.Acquire<UnionDataList>();
+                    var list = _pool.Acquire<UnionDataList>();
                     list.CopyFrom(mPendingToDeliver[i].Buffer);
                     dst.Put(list);
                 }
