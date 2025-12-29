@@ -162,12 +162,13 @@ namespace Pontifex.Transports.Core
 
         protected void ConnectionFinished(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
         {
+            using var ackResponseDisposer = ackResponse.AsDisposable();
             lock (_locker)
             {
                 if (_state == State.Connecting)
                 {
                     _state = State.Connected;
-                    _handler!.OnConnected(endPoint, ackResponse);
+                    _handler!.OnConnected(endPoint, ackResponse.Acquire());
                 }
                 else
                 {
