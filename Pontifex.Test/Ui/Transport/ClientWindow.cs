@@ -35,7 +35,7 @@ namespace Pontifex.Test
             };
             Add(loggerView);
 
-            _logger = new Logger(loggerView);  
+            _logger = new Logger([loggerView]);  
             
             
             _transport = factory.ConstructClient(url, _logger, MemoryRental.Shared);

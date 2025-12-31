@@ -82,7 +82,8 @@ namespace Pontifex.Transports.Tcp
             Ep = new IpEndPoint(socket.RemoteEndPoint);
             LocalEp = new IpEndPoint(socket.LocalEndPoint);
             Memory = memoryRental;
-            Log = logger.Wrap("socket", ToString);
+            Log = logger.Wrap();
+            Log.Tags.Set("ssSocket", ToString);
             mLastMessageReceiveTime.Time = DateTime.UtcNow;
         }
 

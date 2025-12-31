@@ -29,7 +29,7 @@ namespace Pontifex.Test
             };
             Add(loggerView);
 
-            _logger = new Logger(loggerView);  
+            _logger = new Logger([loggerView]);  
 
             _server = factory.ConstructServer(url, _logger, MemoryRental.Shared);
             if (_server == null || !_server.Init(new AckRawServerLogic(_server.Log, _server.Memory)))

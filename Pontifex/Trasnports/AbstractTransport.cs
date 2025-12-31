@@ -64,7 +64,8 @@ namespace Pontifex.Transports.Core
         protected AbstractTransport(string typeName, ILogger logger, IMemoryRental memory)
         {
             Type = typeName;
-            Log = logger.Wrap(Type, "");
+            Log = logger.Wrap();
+            Log.Tags.Set(Type);
             Memory = memory;
         }
 
