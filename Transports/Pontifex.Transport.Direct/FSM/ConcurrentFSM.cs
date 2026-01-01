@@ -1,5 +1,5 @@
 using Actuarius.Collections;
-using Actuarius.ConcurrentPrimitives;
+using Actuarius.Concurrent;
 using Actuarius.Memory;
 
 namespace Pontifex.Utils.FSM

@@ -1,6 +1,6 @@
 using System;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Utils;
 
 namespace Pontifex.Transports.Tcp

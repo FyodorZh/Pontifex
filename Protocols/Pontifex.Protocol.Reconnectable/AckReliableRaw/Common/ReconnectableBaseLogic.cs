@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
-using Actuarius.ConcurrentPrimitives;
+using Actuarius.Concurrent;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Endpoints;
 using Pontifex.Abstractions.Handlers;

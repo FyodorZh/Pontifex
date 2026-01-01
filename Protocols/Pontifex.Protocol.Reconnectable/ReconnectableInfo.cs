@@ -1,5 +1,5 @@
 ﻿using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 
 namespace Pontifex.Protocols.Reconnectable
 {

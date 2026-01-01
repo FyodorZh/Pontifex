@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Endpoints;
 using Pontifex.Abstractions.Endpoints.Server;

@@ -1,7 +1,7 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Endpoints.Client;
 using Pontifex.Abstractions.Handlers;

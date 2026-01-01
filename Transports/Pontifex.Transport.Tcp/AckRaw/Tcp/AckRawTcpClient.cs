@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Endpoints;

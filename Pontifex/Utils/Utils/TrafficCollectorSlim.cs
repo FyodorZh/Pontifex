@@ -1,5 +1,5 @@
 using System;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions.Controls;
 
 namespace Transport.Utils

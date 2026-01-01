@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 using Actuarius.Collections;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using TimeSpan = System.TimeSpan;
 
 namespace Pontifex.Utils

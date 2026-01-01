@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions;
 using Scriba;
 

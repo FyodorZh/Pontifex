@@ -1,6 +1,6 @@
 using System;
 using Actuarius.Collections;
-using Actuarius.ConcurrentPrimitives;
+using Actuarius.Concurrent;
 using Actuarius.Memory;
 using Scriba;
 

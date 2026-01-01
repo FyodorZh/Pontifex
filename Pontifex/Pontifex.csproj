@@ -16,12 +16,16 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
+      <ProjectReference Include="..\Actuarius\Actuarius.Concurrent\Actuarius.Concurrent.csproj" />
       <ProjectReference Include="..\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
-      <ProjectReference Include="..\Actuarius\Actuarius.PeriodicLogic\Actuarius.PeriodicLogic.csproj" />
     </ItemGroup>
 
     <ItemGroup>
       <Folder Include="Wrappers\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Operarius" Version="0.1.0-dev.1" />
     </ItemGroup>
 
 </Project>

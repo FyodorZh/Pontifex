@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Abstractions.Servers;
 using Pontifex.Transports.Core;

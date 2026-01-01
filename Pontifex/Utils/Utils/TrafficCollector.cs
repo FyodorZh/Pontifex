@@ -1,4 +1,4 @@
-﻿using Actuarius.PeriodicLogic;
+﻿using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Controls;
 using Pontifex.Utils;

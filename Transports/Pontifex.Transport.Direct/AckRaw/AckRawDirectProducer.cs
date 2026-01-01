@@ -1,5 +1,5 @@
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions;
 using Scriba;
 

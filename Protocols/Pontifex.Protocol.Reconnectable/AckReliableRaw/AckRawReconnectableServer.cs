@@ -1,6 +1,6 @@
 ﻿using Actuarius.Collections;
 using Actuarius.Memory;
-using Actuarius.PeriodicLogic;
+using Operarius;
 using Pontifex.Abstractions.Acknowledgers;
 using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Abstractions.Servers;
