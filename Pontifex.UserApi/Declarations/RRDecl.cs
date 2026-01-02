@@ -1,17 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
-#if !UNITY_2017_1_OR_NEWER
-using System.Threading.Tasks;
-#endif
-using Serializer.BinarySerializer;
-using Shared;
-using Shared.Buffer;
-using Transport;
-using TimeSpan = System.TimeSpan;
 
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public interface IRequest<out TRequest, in TResponse>
     {

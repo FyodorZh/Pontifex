@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using Transport;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     internal interface IRawSender
     {

@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <Nullable>enable</Nullable>
+        <Nullable>disable</Nullable>
         <LangVersion>9</LangVersion>
-        <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
+        <TargetFramework>netstandard2.0</TargetFramework>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -15,12 +15,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Pontifex.Transport\Pontifex.Transport.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
       <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
-      <PackageReference Include="Scriba" Version="0.1.0-dev.1" />
+      <PackageReference Include="Scriba" Version="0.2.0-dev.9" />
     </ItemGroup>
 
 </Project>

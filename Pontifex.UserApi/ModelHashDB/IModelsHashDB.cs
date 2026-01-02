@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public interface IModelsHashDB
     {

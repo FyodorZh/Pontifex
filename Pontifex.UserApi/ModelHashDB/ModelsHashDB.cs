@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public sealed class ModelsHashDB : IModelsHashDB, IEnumerable<KeyValuePair<string, string>>
     {

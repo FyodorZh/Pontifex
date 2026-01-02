@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Archivarius;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     internal interface ISender<in TMessage>
     {
