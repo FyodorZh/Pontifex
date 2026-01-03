@@ -1,12 +1,12 @@
 ﻿using System.Text;
 using Transport.Abstractions.Endpoints.Server;
 using Transport.Abstractions.Handlers.Server;
-using NewProtocol.Server;
+using Pontifex.UserApi.Server;
 using Shared;
 using Transport;
 using Transport.StopReasons;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public abstract class AckRawServerProtocol : AnySideProtocol<IAckRawClientEndpoint>, IAckRawServerHandler
     {

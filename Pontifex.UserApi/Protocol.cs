@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
+using Scriba;
 
 namespace Pontifex.UserApi
 {
@@ -12,11 +13,7 @@ namespace Pontifex.UserApi
         }
     }
 
-    internal interface IProtocol
-    {
-        IDeclaration[] Declarations { get; }
-        ProtocolInfo GetInfo(IModelsHashDB modelHashes);
-    }
+
 
     internal class ProtocolInfo
     {

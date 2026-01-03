@@ -11,7 +11,7 @@ using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers.Client;
 using TimeSpan = System.TimeSpan;
 
-namespace NewProtocol.Ping
+namespace Pontifex.UserApi.Ping
 {
     public class PingClient: INoAckUnreliableRRClientHandler, IPeriodicLogic
     {

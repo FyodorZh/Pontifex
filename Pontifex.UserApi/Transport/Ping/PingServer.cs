@@ -4,7 +4,7 @@ using Shared.Buffer;
 using Transport.Abstractions;
 using Transport.Abstractions.Handlers.Server;
 
-namespace NewProtocol.Ping
+namespace Pontifex.UserApi.Ping
 {
     public class PingServer : INoAckUnreliableRRServerHandler
     {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Archivarius;
+using Pontifex.Utils;
 
 namespace Pontifex.UserApi
 {
@@ -9,7 +10,7 @@ namespace Pontifex.UserApi
         void Send(TMessage message);
     }
 
-    internal interface IReceiver<TMessage>
+    internal interface IReceiver<out TMessage>
     {
         void SetProcessor(Action<TMessage> processor);
     }
@@ -48,7 +49,7 @@ namespace Pontifex.UserApi
             types.Add(typeof(TMessage));
         }
 
-        protected sealed override bool OnReceived(IBinarySerializer received)
+        protected sealed override bool OnReceived(ISerializer received)
         {
             if (!mStopped)
             {
@@ -66,7 +67,7 @@ namespace Pontifex.UserApi
             return false;
         }
 
-        protected override bool OnReceived(IMemoryBufferHolder buffer)
+        protected override bool OnReceived(UnionDataList buffer)
         {
             throw new InvalidOperationException("MessageDecl type doesn't support raw data");
         }
@@ -85,20 +86,18 @@ namespace Pontifex.UserApi
     public class S2CMessageDecl<TMessage> : MessageDecl<TMessage>
         where TMessage : IDataStruct, new()
     {
-        public S2CMessageDecl(Type[] typesToRegister = null)
+        public S2CMessageDecl(Type[]? typesToRegister = null)
             : base(typesToRegister)
         {
-
         }
     }
 
     public class C2SMessageDecl<TMessage> : MessageDecl<TMessage>
         where TMessage : IDataStruct, new()
     {
-        public C2SMessageDecl(Type[] typesToRegister = null)
+        public C2SMessageDecl(Type[]? typesToRegister = null)
             : base(typesToRegister)
         {
-
         }
     }
 

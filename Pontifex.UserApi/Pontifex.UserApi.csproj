@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <Nullable>disable</Nullable>
+        <Nullable>enable</Nullable>
         <LangVersion>9</LangVersion>
         <TargetFramework>netstandard2.0</TargetFramework>
     </PropertyGroup>
@@ -16,7 +16,12 @@
 
     <ItemGroup>
       <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
+      <PackageReference Include="Operarius" Version="0.1.0-dev.2" />
       <PackageReference Include="Scriba" Version="0.2.0-dev.9" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
     </ItemGroup>
 
 </Project>

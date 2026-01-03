@@ -2,7 +2,7 @@
 using Shared;
 using Transport.Abstractions.Servers;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public abstract class AckRawServerProtocolFactory<TProtocol> : AckRawServerProtocolFactoryBase
         where TProtocol : Protocol, new()

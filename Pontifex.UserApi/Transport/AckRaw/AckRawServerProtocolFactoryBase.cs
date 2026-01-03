@@ -6,7 +6,7 @@ using Transport.Abstractions.Acknowledgers;
 using Transport.Abstractions.Handlers.Server;
 using Transport.Abstractions.Servers;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public abstract class AckRawServerProtocolFactoryBase : IRawServerAcknowledger<IAckRawServerHandler>, IDisposable
     {

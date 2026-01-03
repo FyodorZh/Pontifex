@@ -6,7 +6,7 @@ using Shared;
 using Transport;
 using Transport.Abstractions.Servers;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public class AckRawServerProtocolMultiFactory : AckRawServerProtocolFactoryBase
     {

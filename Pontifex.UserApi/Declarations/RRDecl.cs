@@ -1,6 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
+using Archivarius;
+using Operarius;
+using Pontifex.Utils;
+using Scriba;
 
 
 namespace Pontifex.UserApi
@@ -88,10 +93,10 @@ namespace Pontifex.UserApi
                 get { return mRequest; }
             }
 
-            public bool Serialize(IBinarySerializer dst)
+            public void Serialize(ISerializer dst)
             {
                 dst.Add(ref mMessageId);
-                if (!dst.isReader)
+                if (dst.IsWriter)
                 {
                     mRequest.Serialize(dst);
                 }
@@ -100,8 +105,6 @@ namespace Pontifex.UserApi
                     mRequest = new TRequest();
                     mRequest.Serialize(dst);
                 }
-
-                return true;
             }
         }
 
@@ -113,30 +116,15 @@ namespace Pontifex.UserApi
             private TResponse mResponse;
             private float mProcessTime;
 
-            public long Id
-            {
-                get { return mMessageId; }
-            }
+            public long Id => mMessageId;
 
-            public bool IsOK
-            {
-                get { return mIsOK; }
-            }
+            public bool IsOK => mIsOK;
 
-            public string ErrorMessage
-            {
-                get { return mErrorMessage; }
-            }
+            public string ErrorMessage => mErrorMessage;
 
-            public TResponse Response
-            {
-                get { return mResponse; }
-            }
+            public TResponse Response => mResponse;
 
-            public TimeSpan ProcessTime
-            {
-                get { return TimeSpan.FromMilliseconds(mProcessTime); }
-            }
+            public TimeSpan ProcessTime => TimeSpan.FromMilliseconds(mProcessTime);
 
             public ResponseMessage(long messageId, string error, TimeSpan processTime)
             {
@@ -167,14 +155,14 @@ namespace Pontifex.UserApi
                 mProcessTime = (float) processTime.TotalMilliseconds;
             }
 
-            public bool Serialize(IBinarySerializer dst)
+            public void Serialize(ISerializer dst)
             {
                 dst.Add(ref mMessageId);
                 dst.Add(ref mIsOK);
                 dst.Add(ref mProcessTime);
                 if (mIsOK)
                 {
-                    if (!dst.isReader)
+                    if (dst.IsWriter)
                     {
                         mResponse.Serialize(dst);
                     }
@@ -188,8 +176,6 @@ namespace Pontifex.UserApi
                 {
                     dst.Add(ref mErrorMessage);
                 }
-
-                return true;
             }
         }
 
@@ -316,12 +302,12 @@ namespace Pontifex.UserApi
             }
         }
 
-        protected override bool OnReceived(IMemoryBufferHolder buffer)
+        protected override bool OnReceived(UnionDataList buffer)
         {
             throw new InvalidOperationException("RRDecl doesn't support raw data");
         }
 
-        protected sealed override bool OnReceived(IBinarySerializer received)
+        protected sealed override bool OnReceived(ISerializer received)
         {
             var processor = mProcessor;
             if (processor != null)

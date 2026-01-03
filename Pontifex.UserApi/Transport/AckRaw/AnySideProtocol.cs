@@ -16,7 +16,7 @@ using Shared.Serialization;
 using Transport.Endpoints;
 using Transport.StopReasons;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     internal interface IAnyProtocolCtl
     {

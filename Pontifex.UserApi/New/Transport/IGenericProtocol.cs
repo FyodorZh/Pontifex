@@ -1,8 +1,7 @@
 ﻿using System;
-using Shared.Utils;
-using Transport;
+using Operarius;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public interface IGenericProtocol<out TProtocolDeclarations> : IPeriodicLogic
         where TProtocolDeclarations : Protocol
@@ -13,6 +12,6 @@ namespace NewProtocol
 
         TProtocolDeclarations Protocol { get; }
 
-        void Stop(StopReason reason = null);
+        void Stop(StopReason? reason = null);
     }
 }

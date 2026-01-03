@@ -9,14 +9,14 @@ using Transport.Abstractions.Endpoints.Client;
 using Transport.Abstractions.Handlers;
 using Transport.Abstractions.Handlers.Client;
 using Transport.Handlers;
-using NewProtocol.Client;
+using Pontifex.UserApi.Client;
 using Pontifex.Utils;
 using Pontifex.Utils.FSM;
 using Shared.Concurrent;
 using Transport.Abstractions;
 using Transport.StopReasons;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public abstract class AckRawClientProtocol : AnySideProtocol<IAckRawServerEndpoint>, IAckRawClientHandler
     {

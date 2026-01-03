@@ -2,7 +2,7 @@
 using Transport;
 using Transport.Abstractions.Clients;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public abstract class AckRawClientSubProtocol<TProtocol> : AckRawClientProtocol
         where TProtocol : Protocol, new()

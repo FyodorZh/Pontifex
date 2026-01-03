@@ -1,6 +1,6 @@
 ﻿using Shared;
 
-namespace NewProtocol
+namespace Pontifex.UserApi
 {
     public interface IAckRawServerProtocolSubFactory
     {
