@@ -13,8 +13,6 @@ namespace Pontifex.Api.Protocol
         
         private Func<TModel, bool>? _receiver;
 
-        public ushort DeclId => _rawPipeOut.DeclId;
-        
         public UnidirectionalModelPipeOut(IUnidirectionalRawPipeOut rawPipeOut, ProtocolDeserializer deserializer)
         {
             _rawPipeOut = rawPipeOut;

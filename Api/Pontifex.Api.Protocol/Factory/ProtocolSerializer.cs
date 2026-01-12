@@ -5,22 +5,6 @@ using Archivarius.BinaryBackend;
 
 namespace Pontifex.Api.Protocol
 {
-    public class NullTypeSerializer : ITypeSerializer
-    {
-        public void Serialize(IWriter writer, Type type)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    public class NullTypeDeserializer : ITypeDeserializer
-    {
-        public Type? Deserialize(IReader reader)
-        {
-            throw new NotSupportedException();
-        }
-    }
-    
     public class ProtocolSerializer
     {
         private readonly BinaryWriter _writer = new BinaryWriter();
@@ -34,28 +18,6 @@ namespace Pontifex.Api.Protocol
         {
             _serializer = new HierarchicalSerializer(_writer, false);
         }
-
-        /// <summary>
-        /// Polymorphism is ON
-        /// </summary>
-        /// <param name="models"></param>
-        // public ProtocolSerialization(IEnumerable<Type> models)
-        // {
-        //     var list = models.ToList();
-        //     _serializer = new HierarchicalSerializer(
-        //         _writer, 
-        //         new NullTypeSerializer(), 
-        //         null, 
-        //         false,
-        //         0,
-        //         list);
-        //     _deserializer = new HierarchicalDeserializer(
-        //         _reader,
-        //         new NullTypeDeserializer(), 
-        //         null, 
-        //         _ => list, 
-        //         false);
-        // }
 
         /// <summary>
         /// 

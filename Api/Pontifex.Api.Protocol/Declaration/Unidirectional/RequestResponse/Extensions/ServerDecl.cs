@@ -1,0 +1,57 @@
+using System;
+using System.Threading.Tasks;
+using Archivarius;
+using Pontifex.UserApi;
+using Scriba;
+
+namespace Pontifex.Api.Protocol.Server
+{
+    public static class RRDecl
+    {
+        public static void SetProcessor<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, Action<IRequest<TRequest, TResponse>> processor)
+            where TRequest : class, IDataStruct, new()
+            where TResponse : class, IDataStruct, new()
+        {
+            ((IResponder<TRequest, TResponse>) decl).SetProcessor(processor);
+        }
+
+        public static void SetProcessorAsync<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, Func<TRequest, Task<TResponse>> processor)
+            where TRequest : class, IDataStruct, new()
+            where TResponse : class, IDataStruct, new()
+        {
+            ((IResponder<TRequest, TResponse>) decl).SetProcessor(r =>
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        var response = await processor(r.Data);
+                        r.Response(response);
+                    }
+                    catch (Exception e)
+                    {
+                        r.Fail(e.Message);
+                        Log.wtf(e);
+                    }
+                }));
+        }
+
+        public static void RegisterAsync<TMessage>(this C2SMessageDecl<TMessage> decl, Func<TMessage, Task> processor)
+            where TMessage : IDataStruct, new()
+        {
+            ((IReceiver<TMessage>) decl).SetProcessor(r =>
+            {
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await processor(r);
+                    }
+                    catch (Exception e)
+                    {
+                        Log.wtf(e);
+                    }
+                });
+            });
+        }
+    }
+}

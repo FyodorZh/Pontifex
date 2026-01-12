@@ -1,0 +1,13 @@
+using System;
+using Archivarius;
+using Pontifex.UserApi;
+
+namespace Pontifex.Api.Protocol
+{
+    internal interface IRequester<in TRequest, out TResponse>
+        where TRequest : IDataStruct, new()
+        where TResponse : IDataStruct, new()
+    {
+        void Request(TRequest request, Action<IRequestSuccess<TResponse>> onResponse, Action<IRequestFail> onFail);
+    }
+}

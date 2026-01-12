@@ -13,8 +13,6 @@ namespace Pontifex.Api.Protocol
         private readonly ProtocolSerializer _protocolSerializer;
         private readonly IMemoryRental _memoryRental;
         
-        public ushort DeclId => _rawPipeIn.DeclId;
-
         public UnidirectionalModelPipeIn(IUnidirectionalRawPipeIn rawPipeIn, ProtocolSerializer serializer, IMemoryRental memoryRental)
         {
             _rawPipeIn = rawPipeIn;
