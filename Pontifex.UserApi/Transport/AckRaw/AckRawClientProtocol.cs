@@ -1,20 +1,18 @@
 using System;
 using System.Text;
+using Actuarius.Concurrent;
 using Actuarius.ConcurrentPrimitives;
 using Actuarius.PeriodicLogic;
-using Shared;
-using Transport;
-using Transport.Abstractions.Clients;
-using Transport.Abstractions.Endpoints.Client;
-using Transport.Abstractions.Handlers;
-using Transport.Abstractions.Handlers.Client;
-using Transport.Handlers;
+using Operarius;
+using Pontifex.Abstractions;
+using Pontifex.Abstractions.Clients;
+using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.Abstractions.Handlers;
+using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Handlers;
+using Pontifex.StopReasons;
 using Pontifex.UserApi.Client;
 using Pontifex.Utils;
-using Pontifex.Utils.FSM;
-using Shared.Concurrent;
-using Transport.Abstractions;
-using Transport.StopReasons;
 
 namespace Pontifex.UserApi
 {
@@ -171,7 +169,7 @@ namespace Pontifex.UserApi
             }
             else
             {
-                endPoint.Disconnect(new Transport.StopReasons.TextFail("protocol", "Connection rejected by client logic"));
+                endPoint.Disconnect(new StopReasons.TextFail("protocol", "Connection rejected by client logic"));
                 SetState(State.Disconnected);
             }
         }

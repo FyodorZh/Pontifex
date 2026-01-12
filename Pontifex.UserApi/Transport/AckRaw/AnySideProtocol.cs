@@ -1,20 +1,13 @@
 ﻿using System;
-using System.Diagnostics;
-using Pontifex.Utils;
-using Serializer.BinarySerializer;
-using Serializer.Factory;
-using Shared;
-using Shared.Utils;
-using Transport;
-using Transport.Abstractions;
-using Transport.Abstractions.Endpoints;
-using Transport.Abstractions.Handlers;
-using Shared.Buffer;
-using Shared.Concurrent;
-using Shared.Pooling;
-using Shared.Serialization;
-using Transport.Endpoints;
-using Transport.StopReasons;
+using Actuarius.Concurrent;
+using Actuarius.Memory;
+using Operarius;
+using Pontifex.Abstractions;
+using Pontifex.Abstractions.Endpoints;
+using Pontifex.Abstractions.Handlers;
+using Pontifex.Endpoints;
+using Pontifex.StopReasons;
+using Scriba;
 
 namespace Pontifex.UserApi
 {
@@ -153,7 +146,7 @@ namespace Pontifex.UserApi
             var reason = mCurrentReasonToStop;
             if (reason == StopReason.Void)
             {
-                reason = new Transport.StopReasons.Unknown("protocol");
+                reason = new StopReasons.Unknown("protocol");
             }
 
             var endPoint = mEndPoint;

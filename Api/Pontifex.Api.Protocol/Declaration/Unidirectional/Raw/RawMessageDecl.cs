@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Archivarius;
 using Pontifex.Utils;
 
-namespace Pontifex.UserApi
+namespace Pontifex.Api.Protocol
 {
     public abstract class RawMessageDecl : Declaration, IRawSender, IRawReceiver
     {

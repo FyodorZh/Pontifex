@@ -1,6 +1,6 @@
 using Pontifex.Utils;
 
-namespace Pontifex.UserApi
+namespace Pontifex.Api.Protocol
 {
     internal interface IRawSender
     {

@@ -33,7 +33,7 @@ namespace Pontifex.UserApi
                 AppendType(sb, nonFactoryModels[i], modelHashes);
             }
 
-            Hash = Shared.MD5Helper.GetMd5Hash(sb.ToString());
+            Hash = MD5Helper.GetMd5Hash(sb.ToString());
             FactoryModels = factoryModels;
             NonFactoryModels = nonFactoryModels;
         }

@@ -112,8 +112,8 @@ namespace Pontifex.UserApi
         {
             private long mMessageId;
             private bool mIsOK;
-            private string mErrorMessage;
-            private TResponse mResponse;
+            private string? mErrorMessage;
+            private TResponse? mResponse;
             private float mProcessTime;
 
             public long Id => mMessageId;
@@ -122,7 +122,7 @@ namespace Pontifex.UserApi
 
             public string ErrorMessage => mErrorMessage;
 
-            public TResponse Response => mResponse;
+            public TResponse? Response => mResponse;
 
             public TimeSpan ProcessTime => TimeSpan.FromMilliseconds(mProcessTime);
 

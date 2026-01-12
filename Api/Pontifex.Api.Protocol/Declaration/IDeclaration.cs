@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Pontifex.UserApi
+namespace Pontifex.Api.Protocol
 {
     internal interface IDeclaration
     {

@@ -1,6 +1,6 @@
 using System;
 
-namespace Pontifex.UserApi
+namespace Pontifex.Api.Protocol
 {
     public class C2SRawMessageDecl : RawMessageDecl
     {
