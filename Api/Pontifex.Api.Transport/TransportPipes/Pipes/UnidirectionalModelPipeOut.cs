@@ -11,7 +11,7 @@ namespace Pontifex.Api
         private readonly IUnidirectionalRawPipeOut _rawPipeOut;
         private readonly ProtocolDeserializer _deserializer;
         
-        private Func<TModel, bool>? _receiver;
+        private Action<TModel>? _receiver;
 
         public UnidirectionalModelPipeOut(IUnidirectionalRawPipeOut rawPipeOut, ProtocolDeserializer deserializer)
         {
@@ -20,7 +20,7 @@ namespace Pontifex.Api
             rawPipeOut.SetReceiver(OnReceive);
         }
         
-        public void SetReceiver(Func<TModel, bool>? receiver)
+        public void SetReceiver(Action<TModel>? receiver)
         {
             _receiver = receiver;
         }
@@ -28,11 +28,22 @@ namespace Pontifex.Api
         private bool OnReceive(UnionDataList data)
         {
             using var disposer = data.AsDisposable();
+            
+            var receiver = _receiver;
+            if (receiver == null)
+            {
+                return false;
+            }
+            
             if (data.TryPopFirst(out IMultiRefReadOnlyByteArray? bytes))
             {
                 using var bytesDisposable = bytes.AsDisposable();
-                var model = _deserializer.Deserialize<TModel>(bytes);
-                return _receiver?.Invoke(model) ?? false;
+                if (!_deserializer.Deserialize<TModel>(bytes, out var model))
+                {
+                    return false;
+                }
+                receiver.Invoke(model);
+                return true;
             }
 
             return false;

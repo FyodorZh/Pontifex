@@ -73,7 +73,7 @@ namespace Pontifex.UserApi
             }
         }
         
-        private bool Receiver(RequestMessage<TRequest> requestMessage)
+        private void Receiver(RequestMessage<TRequest> requestMessage)
         {
             //Working in server mode
             if (!_stopped)
@@ -82,14 +82,11 @@ namespace Pontifex.UserApi
                 if (processor != null)
                 {
                     processor.Invoke(new Request(this, requestMessage.Request, requestMessage.Id));
-                    return true;
                 }
             }
-
-            return false;
         }
 
-        private bool Receiver(ResponseMessage<TResponse> responseMessage)
+        private void Receiver(ResponseMessage<TResponse> responseMessage)
         {
             //Working in client mode
             if (!_stopped)
@@ -109,7 +106,7 @@ namespace Pontifex.UserApi
                 if (!hasReaction)
                 {
                     Log.w("Failed to find messageId={0} for RRDecl={1}", responseMessage.Id, GetType());
-                    return false;
+                    return;
                 }
 
                 DeltaTime totalTime = DeltaTime.FromSeconds((HighResDateTime.UtcNow - reaction.RequestTime).TotalSeconds);
@@ -125,11 +122,7 @@ namespace Pontifex.UserApi
                     _currentRequestInfo_Reusable.Setup(totalTime - processTime, processTime, responseMessage.ErrorMessage);
                     reaction.OnFail(_currentRequestInfo_Reusable);
                 }
-
-                return true;
             }
-
-            return false;
         }
 
         public override void Stop()

@@ -1,17 +1,16 @@
 using System;
-using Archivarius;
 
 namespace Pontifex.Api
 {
     public interface IUnidirectionalModelPipeIn<in TModel> : ITransportPipe
-        where TModel : struct, IDataStruct
+        where TModel : struct
     {
         SendResult Send(TModel model);
     }
     
     public interface IUnidirectionalModelPipeOut<out TModel> : ITransportPipe
-        where TModel : struct, IDataStruct
+        where TModel : struct
     {
-        void SetReceiver(Func<TModel, bool>? receiver);
+        void SetReceiver(Action<TModel>? receiver);
     }
 }

@@ -43,6 +43,7 @@ namespace Pontifex.Api
                 }
             }
 
+            buffer.Release();
             return false;
         }
 

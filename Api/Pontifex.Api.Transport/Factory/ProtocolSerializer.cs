@@ -10,7 +10,6 @@ namespace Pontifex.Api
         private readonly BinaryWriter _writer = new BinaryWriter();
         private readonly HierarchicalSerializer _serializer;
 
-
         /// <summary>
         /// Polymorphism is OFF
         /// </summary>

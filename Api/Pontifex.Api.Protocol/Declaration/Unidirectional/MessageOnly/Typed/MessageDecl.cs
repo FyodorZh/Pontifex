@@ -29,7 +29,7 @@ namespace Pontifex.Api
             _stopped = true;
         }
 
-        private bool OnReceived(TMessage received)
+        private void OnReceived(TMessage received)
         {
             if (!_stopped)
             {
@@ -37,11 +37,8 @@ namespace Pontifex.Api
                 if (processor != null)
                 {
                     processor.Invoke(received);
-                    return true;
                 }
             }
-
-            return false;
         }
 
         SendResult ISender<TMessage>.Send(TMessage message)

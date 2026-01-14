@@ -116,7 +116,7 @@ namespace Pontifex.Api
         private class UnidirectionalModelPipe<TModel> : IUnidirectionalModelPipeIn<TModel>, IUnidirectionalModelPipeOut<TModel>
             where TModel : struct, IDataStruct
         {
-            private Func<TModel, bool>? _receiver;
+            private Action<TModel>? _receiver;
             
             public SendResult Send(TModel model)
             {
@@ -127,7 +127,7 @@ namespace Pontifex.Api
                 return SendResult.Ok;
             }
 
-            public void SetReceiver(Func<TModel, bool>? receiver)
+            public void SetReceiver(Action<TModel>? receiver)
             {
                 _receiver = receiver;
             }

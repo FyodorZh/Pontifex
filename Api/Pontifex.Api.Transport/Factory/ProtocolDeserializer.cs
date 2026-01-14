@@ -18,7 +18,7 @@ namespace Pontifex.Api
             _deserializer = new HierarchicalDeserializer(_reader, false);
         }
         
-        public TModel Deserialize<TModel>(IMultiRefReadOnlyByteArray buffer)
+        public bool Deserialize<TModel>(IMultiRefReadOnlyByteArray buffer, out TModel model)
             where TModel : struct, IDataStruct
         {
             lock (_deserializer)
@@ -32,9 +32,9 @@ namespace Pontifex.Api
 
                     _reader.Reset(buffer.ReadOnlyArray, buffer.Count);
                     _deserializer.Prepare();
-                    TModel model = new();
+                    model = new();
                     model.Serialize(_deserializer);
-                    return model;
+                    return true;
                 }
                 finally
                 {

@@ -1,4 +1,3 @@
-using System;
 using Archivarius;
 
 namespace Pontifex.Api
