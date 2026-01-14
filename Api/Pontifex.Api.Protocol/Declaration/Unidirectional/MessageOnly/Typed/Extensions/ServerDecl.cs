@@ -6,13 +6,13 @@ namespace Pontifex.Api.Protocol.Server
     public static class MessageDecl_Ext
     {
         public static void Send<TMessage>(this S2CMessageDecl<TMessage> decl, TMessage message)
-            where TMessage : IDataStruct, new()
+            where TMessage : struct, IDataStruct
         {
             ((ISender<TMessage>)decl).Send(message);
         }
 
-        public static void Register<TMessage>(this C2SMessageDecl<TMessage> decl, Action<TMessage> processor)
-            where TMessage : IDataStruct, new()
+        public static void SetProcessor<TMessage>(this C2SMessageDecl<TMessage> decl, Action<TMessage> processor)
+            where TMessage : struct, IDataStruct
         {
             ((IReceiver<TMessage>)decl).SetProcessor(processor);
         }

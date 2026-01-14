@@ -4,11 +4,18 @@ using Archivarius;
 namespace Pontifex.Api.Protocol
 {
     public class C2SMessageDecl<TMessage> : MessageDecl<TMessage>
-        where TMessage : IDataStruct, new()
+        where TMessage : struct, IDataStruct
     {
-        public C2SMessageDecl(Type[]? typesToRegister = null)
-            : base(typesToRegister)
+        protected override void Prepare(bool isServerMode, IPipeAllocator pipeAllocator)
         {
+            if (isServerMode)
+            {
+                SetPipeOut(pipeAllocator.AllocateModelPipeOut<TMessage>());
+            }
+            else
+            {
+                SetPipeIn(pipeAllocator.AllocateModelPipeIn<TMessage>());
+            }
         }
     }
 }

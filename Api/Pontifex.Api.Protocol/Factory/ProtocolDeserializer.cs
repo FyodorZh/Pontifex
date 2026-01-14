@@ -19,7 +19,7 @@ namespace Pontifex.Api.Protocol
         }
         
         public TModel Deserialize<TModel>(IMultiRefReadOnlyByteArray buffer)
-            where TModel : class, IDataStruct, new()
+            where TModel : struct, IDataStruct
         {
             lock (_deserializer)
             {

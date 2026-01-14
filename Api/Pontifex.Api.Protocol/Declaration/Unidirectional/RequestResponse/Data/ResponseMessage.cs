@@ -4,21 +4,21 @@ using Archivarius;
 namespace Pontifex.Api.Protocol
 {
     internal struct ResponseMessage<TResponse> : IDataStruct
-        where TResponse : class, IDataStruct, new()
+        where TResponse : struct, IDataStruct
     {
         private long _id;
         private bool _isOk;
         private string? _errorMessage;
-        private TResponse? _response;
+        private TResponse _response;
         private float _processTime;
 
         public long Id => _id;
 
         public bool IsOK => _isOk;
 
-        public string? ErrorMessage => _errorMessage;
+        public string ErrorMessage => _errorMessage ?? "";
 
-        public TResponse? Response => _response;
+        public TResponse Response => _response;
 
         public TimeSpan ProcessTime => TimeSpan.FromMilliseconds(_processTime);
 
@@ -26,8 +26,8 @@ namespace Pontifex.Api.Protocol
         {
             _id = messageId;
             _isOk = false;
+            _response = default;
             _errorMessage = error;
-            _response = null;
             _processTime = (float)processTime.TotalMilliseconds;
         }
 
@@ -35,8 +35,8 @@ namespace Pontifex.Api.Protocol
         {
             _id = messageId;
             _isOk = true;
-            _errorMessage = null;
             _response = response;
+            _errorMessage = null;
             _processTime = (float)processTime.TotalMilliseconds;
         }
 
@@ -47,7 +47,7 @@ namespace Pontifex.Api.Protocol
             
             if (_isOk)
             {
-                serializer.AddClass(ref _response);
+                serializer.AddStruct(ref _response);
             }
             else
             {

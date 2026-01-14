@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Archivarius;
 using Operarius;
 using Pontifex.Api.Protocol;
-using Pontifex.Utils;
 using Scriba;
 
 
@@ -28,9 +27,171 @@ namespace Pontifex.UserApi
     }
 
     public class RRDecl<TRequest, TResponse> : Declaration, IRequester<TRequest, TResponse>, IResponder<TRequest, TResponse>
-        where TRequest : class, IDataStruct, new()
-        where TResponse : class, IDataStruct, new()
+        where TRequest : struct, IDataStruct
+        where TResponse : struct, IDataStruct
     {
+        private readonly Dictionary<long, ActionPair> _pendingRequests = new Dictionary<long, ActionPair>();
+
+        private readonly RequestInfo _currentRequestInfo_Reusable;
+
+        private Action<IRequest<TRequest, TResponse>>? _processor;
+        private bool _stopped;
+
+        private long _lastSentRequestId;
+        
+        private IUnidirectionalModelPipeIn<ResponseMessage<TResponse>>? _responseSender;
+        private IUnidirectionalModelPipeIn<RequestMessage<TRequest>>? _requestSender;
+        private IUnidirectionalModelPipeOut<RequestMessage<TRequest>>? _requestReceiver;
+        private IUnidirectionalModelPipeOut<ResponseMessage<TResponse>>? _responseReceiver;
+
+        public RRDecl()
+        {
+            _currentRequestInfo_Reusable = new RequestInfo(this);
+        }
+
+
+        protected override void Prepare(bool isServerMode, IPipeAllocator pipeAllocator)
+        {
+            if (isServerMode != (_processor != null))
+            {
+                throw new InvalidOperationException("Wrong " + GetType() + " work mode on " + (isServerMode ? "server" : "client"));
+            }
+
+            if (isServerMode)
+            {
+                // order is important
+                _responseSender = pipeAllocator.AllocateModelPipeIn<ResponseMessage<TResponse>>();
+                _requestReceiver = pipeAllocator.AllocateModelPipeOut<RequestMessage<TRequest>>();
+                _requestReceiver.SetReceiver(Receiver);
+            }
+            else
+            {
+                // order is important
+                _responseReceiver = pipeAllocator.AllocateModelPipeOut<ResponseMessage<TResponse>>();
+                _requestSender = pipeAllocator.AllocateModelPipeIn<RequestMessage<TRequest>>();
+                _responseReceiver.SetReceiver(Receiver);
+            }
+        }
+        
+        private bool Receiver(RequestMessage<TRequest> requestMessage)
+        {
+            //Working in server mode
+            if (!_stopped)
+            {
+                var processor = _processor;
+                if (processor != null)
+                {
+                    processor.Invoke(new Request(this, requestMessage.Request, requestMessage.Id));
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool Receiver(ResponseMessage<TResponse> responseMessage)
+        {
+            //Working in client mode
+            if (!_stopped)
+            {
+                ActionPair reaction;
+                bool hasReaction = false;
+
+                lock (_pendingRequests)
+                {
+                    if (_pendingRequests.TryGetValue(responseMessage.Id, out reaction))
+                    {
+                        _pendingRequests.Remove(responseMessage.Id);
+                        hasReaction = true;
+                    }
+                }
+
+                if (!hasReaction)
+                {
+                    Log.w("Failed to find messageId={0} for RRDecl={1}", responseMessage.Id, GetType());
+                    return false;
+                }
+
+                DeltaTime totalTime = DeltaTime.FromSeconds((HighResDateTime.UtcNow - reaction.RequestTime).TotalSeconds);
+                DeltaTime processTime = DeltaTime.FromSeconds(responseMessage.ProcessTime.TotalSeconds);
+
+                if (responseMessage.IsOK)
+                {
+                    _currentRequestInfo_Reusable.Setup(totalTime - processTime, processTime, responseMessage.Response);
+                    reaction.OnResponse(_currentRequestInfo_Reusable);
+                }
+                else
+                {
+                    _currentRequestInfo_Reusable.Setup(totalTime - processTime, processTime, responseMessage.ErrorMessage);
+                    reaction.OnFail(_currentRequestInfo_Reusable);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        public override void Stop()
+        {
+            lock (_pendingRequests)
+            {
+                _stopped = true;
+                foreach (var eachPair in _pendingRequests)
+                {
+                    var reaction = eachPair.Value;
+
+                    DeltaTime totalTime = DeltaTime.FromSeconds((HighResDateTime.UtcNow - reaction.RequestTime).TotalSeconds);
+                    _currentRequestInfo_Reusable.Setup(totalTime, DeltaTime.Zero, "Declaration " + Name + " was stopped");
+                    reaction.OnFail(_currentRequestInfo_Reusable);
+                }
+
+                _pendingRequests.Clear();
+            }
+        }
+
+        SendResult IRequester<TRequest, TResponse>.Request(TRequest request, Action<IRequestSuccess<TResponse>> onResponse, Action<IRequestFail> onFail)
+        {
+            lock (_pendingRequests)
+            {
+                if (_stopped)
+                {
+                    var requestInfo = CreateErrorRequestInfo($"Declaration '{Name}' is not ready or stopped");
+                    onFail(requestInfo);
+                    return SendResult.NotConnected;
+                }
+                
+                long messageId = System.Threading.Interlocked.Increment(ref _lastSentRequestId);
+                _pendingRequests.Add(messageId, new ActionPair(onResponse, onFail, HighResDateTime.UtcNow));
+                var sendResult = _requestSender?.Send(new RequestMessage<TRequest>(messageId, request)) ?? SendResult.Error;
+                if (sendResult != SendResult.Ok)
+                {
+                    _pendingRequests.Remove(messageId);
+                    var requestInfo = CreateErrorRequestInfo("Send result at status " + sendResult);
+                    onFail(requestInfo);
+                }
+
+                return sendResult;
+            }
+        }
+        
+        void IResponder<TRequest, TResponse>.SetProcessor(Action<IRequest<TRequest, TResponse>> processor)
+        {
+            _processor = processor;
+        }
+
+        private SendResult Response(ResponseMessage<TResponse> responseMessage)
+        {
+            return _responseSender?.Send(responseMessage) ?? SendResult.Error;
+        }
+
+        private RequestInfo CreateErrorRequestInfo(string error)
+        {
+            var requestInfo = new RequestInfo(this);
+            requestInfo.Setup(DeltaTime.Zero, DeltaTime.Zero, error);
+            return requestInfo;
+        }
+        
         private class Request : IRequest<TRequest, TResponse>
         {
             private readonly RRDecl<TRequest, TResponse> mOwner;
@@ -46,19 +207,16 @@ namespace Pontifex.UserApi
                 mRequestId = requestId;
             }
 
-            TRequest IRequest<TRequest, TResponse>.Data
+            TRequest IRequest<TRequest, TResponse>.Data => mData;
+
+            SendResult IRequest<TRequest, TResponse>.Response(TResponse response)
             {
-                get { return mData; }
+                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, response, HighResDateTime.UtcNow - mRequestTime));
             }
 
-            void IRequest<TRequest, TResponse>.Response(TResponse response)
+            SendResult IRequest<TRequest, TResponse>.Fail(string errorMessage)
             {
-                mOwner.Send(new ResponseMessage<TResponse>(mRequestId, response, HighResDateTime.UtcNow - mRequestTime));
-            }
-
-            void IRequest<TRequest, TResponse>.Fail(string errorMessage)
-            {
-                mOwner.Send(new ResponseMessage<TResponse>(mRequestId, errorMessage, HighResDateTime.UtcNow - mRequestTime));
+                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, errorMessage, HighResDateTime.UtcNow - mRequestTime));
             }
         }
 
@@ -110,165 +268,6 @@ namespace Pontifex.UserApi
                 _response = null;
                 _error = error;
             }
-        }
-
-        private readonly Type[] mTypesToRegister;
-        private readonly Dictionary<long, ActionPair> mPendingActions = new Dictionary<long, ActionPair>();
-
-        private readonly RequestInfo mCurrentRequestInfo;
-
-        private Action<IRequest<TRequest, TResponse>>? _processor;
-        private bool mStopped;
-
-        private long mLastSentRequestId;
-
-        public RRDecl(params Type[] typesToRegister)
-        {
-            mTypesToRegister = typesToRegister;
-            mCurrentRequestInfo = new RequestInfo(this);
-        }
-
-        protected override void FillFactoryModels(HashSet<Type> types)
-        {
-            foreach (var type in mTypesToRegister)
-            {
-                types.Add(type);
-            }
-        }
-
-        protected sealed override void FillNonFactoryModels(HashSet<Type> types)
-        {
-            types.Add(typeof(TRequest));
-            types.Add(typeof(TResponse));
-        }
-
-        protected override void Prepare(bool isServerMode)
-        {
-            if (isServerMode != (_processor != null))
-            {
-                throw new InvalidOperationException("Wrong " + GetType() + " work mode on " + (isServerMode ? "server" : "client"));
-            }
-        }
-
-        protected override bool OnReceived(UnionDataList buffer)
-        {
-            throw new InvalidOperationException("RRDecl doesn't support raw data");
-        }
-
-        protected sealed override bool OnReceived(ISerializer received)
-        {
-            var processor = _processor;
-            if (processor != null)
-            {
-                // Работаем в режиме сервера
-                var request = new RequestMessage<TRequest>();
-                request.Serialize(received);
-                processor.Invoke(new Request(this, request.Request, request.Id));
-            }
-            else
-            {
-                if (!mStopped)
-                {
-                    //Работаем в режиме клиента
-                    var rMessage = new ResponseMessage<TResponse>();
-
-                    rMessage.Serialize(received);
-
-                    ActionPair reaction;
-                    bool hasReaction = false;
-
-                    lock (mPendingActions)
-                    {
-                        if (mPendingActions.TryGetValue(rMessage.Id, out reaction))
-                        {
-                            mPendingActions.Remove(rMessage.Id);
-                            hasReaction = true;
-                        }
-                    }
-
-                    if (!hasReaction)
-                    {
-                        Log.w("Failed to find messageId={0} for RRDecl={1}", rMessage.Id, GetType());
-                        return false;
-                    }
-
-                    DeltaTime totalTime = DeltaTime.FromSeconds((HighResDateTime.UtcNow - reaction.RequestTime).TotalSeconds);
-                    DeltaTime processTime = DeltaTime.FromSeconds(rMessage.ProcessTime.TotalSeconds);
-
-                    if (rMessage.IsOK)
-                    {
-                        mCurrentRequestInfo.Setup(totalTime - processTime, processTime, rMessage.Response ?? throw new InvalidOperationException("Response is null"));
-                        reaction.OnResponse(mCurrentRequestInfo);
-                    }
-                    else
-                    {
-                        mCurrentRequestInfo.Setup(totalTime - processTime, processTime, rMessage.ErrorMessage ?? "null");
-                        reaction.OnFail(mCurrentRequestInfo);
-                    }
-                }
-                else
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        public override void Stop()
-        {
-            lock (mPendingActions)
-            {
-                mStopped = true;
-                foreach (var eachPair in mPendingActions)
-                {
-                    var reaction = eachPair.Value;
-
-                    DeltaTime totalTime = DeltaTime.FromSeconds((HighResDateTime.UtcNow - reaction.RequestTime).TotalSeconds);
-                    mCurrentRequestInfo.Setup(totalTime, DeltaTime.Zero, "Declaration " + Name + " was stopped");
-                    reaction.OnFail(mCurrentRequestInfo);
-                }
-
-                mPendingActions.Clear();
-            }
-        }
-
-        void IRequester<TRequest, TResponse>.Request(TRequest request, Action<IRequestSuccess<TResponse>> onResponse, Action<IRequestFail> onFail)
-        {
-            lock (mPendingActions)
-            {
-                if (!mStopped)
-                {
-                    long messageId = System.Threading.Interlocked.Increment(ref mLastSentRequestId);
-                    var sendResult = Send(new RequestMessage<TRequest>(messageId, request));
-                    if (sendResult == SendResult.Ok)
-                    {
-                        mPendingActions.Add(messageId, new ActionPair(onResponse, onFail, HighResDateTime.UtcNow));
-                    }
-                    else
-                    {
-                        var requestInfo = CreateErrorRequestInfo("Send result at status " + sendResult);
-                        onFail(requestInfo);
-                    }
-                }
-                else
-                {
-                    var requestInfo = CreateErrorRequestInfo("Declaration " + Name + " is not ready or stopped");
-                    onFail(requestInfo);
-                }
-            }
-        }
-
-        private RequestInfo CreateErrorRequestInfo(string error)
-        {
-            var requestInfo = new RequestInfo(this);
-            requestInfo.Setup(DeltaTime.Zero, DeltaTime.Zero, error);
-            return requestInfo;
-        }
-
-        void IResponder<TRequest, TResponse>.SetProcessor(Action<IRequest<TRequest, TResponse>> processor)
-        {
-            _processor = processor;
         }
     }
 }

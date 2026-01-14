@@ -1,15 +1,8 @@
-using System;
-using System.Collections.Generic;
-
 namespace Pontifex.Api.Protocol
 {
     internal interface IDeclaration
     {
-        void FillFactoryModels(HashSet<Type> types);
-        void FillNonFactoryModels(HashSet<Type> types);
-
-        void Prepare(ushort declarationId, IDataModelSender sender);
-        bool OnReceived(ReceivedMessage data);
+        void Prepare(bool isServerMode, IPipeAllocator pipeAllocator);
 
         void SetName(string name);
         string Name { get; }

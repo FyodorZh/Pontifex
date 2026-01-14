@@ -10,6 +10,6 @@ namespace Pontifex.Api.Protocol
 
     public interface IUnidirectionalRawPipeOut : ITransportPipe
     { 
-        void SetReceiver(Func<UnionDataList, bool> receiver);
+        void SetReceiver(Func<UnionDataList, bool>? receiver);
     }
 }

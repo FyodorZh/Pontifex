@@ -1,10 +1,9 @@
-using System;
 using Archivarius;
 
 namespace Pontifex.Api.Protocol
 {
     internal struct RequestMessage<TRequest> : IDataStruct
-        where TRequest : class, IDataStruct, new()
+        where TRequest : struct, IDataStruct
     {
         private long _id;
         private TRequest _request;
@@ -22,7 +21,7 @@ namespace Pontifex.Api.Protocol
         public void Serialize(ISerializer serializer)
         {
             serializer.Add(ref _id);
-            serializer.AddClass(ref _request, () => throw new Exception());
+            serializer.AddStruct(ref _request);
         }
     }
 }

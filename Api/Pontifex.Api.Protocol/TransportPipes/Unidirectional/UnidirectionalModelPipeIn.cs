@@ -7,7 +7,7 @@ using Scriba;
 namespace Pontifex.Api.Protocol
 {
     public class UnidirectionalModelPipeIn<TModel> : IUnidirectionalModelPipeIn<TModel>
-        where TModel : class, IDataStruct
+        where TModel : struct, IDataStruct
     {
         private readonly IUnidirectionalRawPipeIn _rawPipeIn;
         private readonly ProtocolSerializer _protocolSerializer;

@@ -4,14 +4,14 @@ using Archivarius;
 namespace Pontifex.Api.Protocol
 {
     public interface IUnidirectionalModelPipeIn<in TModel> : ITransportPipe
-        where TModel : class, IDataStruct
+        where TModel : struct, IDataStruct
     {
         SendResult Send(TModel model);
     }
     
     public interface IUnidirectionalModelPipeOut<out TModel> : ITransportPipe
-        where TModel : class, IDataStruct
+        where TModel : struct, IDataStruct
     {
-        void SetReceiver(Func<TModel, bool> receiver);
+        void SetReceiver(Func<TModel, bool>? receiver);
     }
 }

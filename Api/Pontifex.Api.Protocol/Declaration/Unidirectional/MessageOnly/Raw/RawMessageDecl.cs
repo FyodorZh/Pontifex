@@ -1,48 +1,37 @@
 using System;
-using System.Collections.Generic;
-using Archivarius;
 using Pontifex.Utils;
 
 namespace Pontifex.Api.Protocol
 {
     public abstract class RawMessageDecl : Declaration, IRawSender, IRawReceiver
     {
-        private readonly Type[]? _typesToRegister;
+        private IUnidirectionalRawPipeIn? _pipeIn;
+        private IUnidirectionalRawPipeOut? _pipeOut;
+        
         private Action<UnionDataList>? _processor;
 
         private bool _stopped;
 
-        protected RawMessageDecl(Type[]? typesToRegister = null)
+        protected void SetPipeIn(IUnidirectionalRawPipeIn pipeIn)
         {
-            _typesToRegister = typesToRegister;
+            _pipeIn = pipeIn;
         }
-
-        protected override void FillFactoryModels(HashSet<Type> types)
+        
+        protected void SetPipeOut(IUnidirectionalRawPipeOut pipeOut)
         {
-            if (_typesToRegister != null)
-            {
-                foreach (var type in _typesToRegister)
-                {
-                    types.Add(type);
-                }
-            }
+            _pipeOut = pipeOut;
+            pipeOut.SetReceiver(OnReceived);
         }
-
+        
         public override void Stop()
         {
             _stopped = true;
+            _pipeIn = null;
+            _pipeOut?.SetReceiver(null);
+            _pipeOut = null;
         }
 
-        protected sealed override void FillNonFactoryModels(HashSet<Type> types)
-        {
-        }
-
-        protected sealed override bool OnReceived(ISerializer received)
-        {
-            throw new InvalidOperationException("RawMessageDecl type doesn't support typed data");
-        }
-
-        protected override bool OnReceived(UnionDataList buffer)
+        private bool OnReceived(UnionDataList buffer)
         {
             if (!_stopped)
             {
@@ -59,7 +48,7 @@ namespace Pontifex.Api.Protocol
 
         SendResult IRawSender.Send(UnionDataList message)
         {
-            return Send(message);
+            return _pipeIn?.Send(message) ?? SendResult.NotConnected;
         }
 
         void IRawReceiver.SetProcessor(Action<UnionDataList> processor)

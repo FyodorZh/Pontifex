@@ -27,7 +27,7 @@ namespace Pontifex.Api.Protocol
         /// <typeparam name="TModel"></typeparam>
         /// <returns></returns>
         public IMultiRefByteArray Serialize<TModel>(TModel model, IPool<IMultiRefByteArray, int> pool)
-            where TModel : class, IDataStruct
+            where TModel : struct, IDataStruct
         {
             lock (_serializer)
             {

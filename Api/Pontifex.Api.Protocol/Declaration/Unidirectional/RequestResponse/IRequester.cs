@@ -8,6 +8,6 @@ namespace Pontifex.Api.Protocol
         where TRequest : IDataStruct, new()
         where TResponse : IDataStruct, new()
     {
-        void Request(TRequest request, Action<IRequestSuccess<TResponse>> onResponse, Action<IRequestFail> onFail);
+        SendResult Request(TRequest request, Action<IRequestSuccess<TResponse>> onResponse, Action<IRequestFail> onFail);
     }
 }

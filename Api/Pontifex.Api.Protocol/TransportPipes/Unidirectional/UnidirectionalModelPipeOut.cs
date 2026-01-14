@@ -6,7 +6,7 @@ using Pontifex.Utils;
 namespace Pontifex.Api.Protocol
 {
     public class UnidirectionalModelPipeOut<TModel> : IUnidirectionalModelPipeOut<TModel>
-        where TModel : class, IDataStruct, new()
+        where TModel : struct, IDataStruct
     {
         private readonly IUnidirectionalRawPipeOut _rawPipeOut;
         private readonly ProtocolDeserializer _deserializer;
@@ -20,7 +20,7 @@ namespace Pontifex.Api.Protocol
             rawPipeOut.SetReceiver(OnReceive);
         }
         
-        public void SetReceiver(Func<TModel, bool> receiver)
+        public void SetReceiver(Func<TModel, bool>? receiver)
         {
             _receiver = receiver;
         }

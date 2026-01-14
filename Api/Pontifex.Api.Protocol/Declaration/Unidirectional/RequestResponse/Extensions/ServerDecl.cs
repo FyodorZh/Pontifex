@@ -6,18 +6,18 @@ using Scriba;
 
 namespace Pontifex.Api.Protocol.Server
 {
-    public static class RRDecl
+    public static class RRDecl_Ext
     {
         public static void SetProcessor<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, Action<IRequest<TRequest, TResponse>> processor)
-            where TRequest : class, IDataStruct, new()
-            where TResponse : class, IDataStruct, new()
+            where TRequest : struct, IDataStruct
+            where TResponse : struct, IDataStruct
         {
             ((IResponder<TRequest, TResponse>) decl).SetProcessor(processor);
         }
 
         public static void SetProcessorAsync<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, Func<TRequest, Task<TResponse>> processor)
-            where TRequest : class, IDataStruct, new()
-            where TResponse : class, IDataStruct, new()
+            where TRequest : struct, IDataStruct
+            where TResponse : struct, IDataStruct
         {
             ((IResponder<TRequest, TResponse>) decl).SetProcessor(r =>
                 Task.Run(async () =>
@@ -35,8 +35,8 @@ namespace Pontifex.Api.Protocol.Server
                 }));
         }
 
-        public static void RegisterAsync<TMessage>(this C2SMessageDecl<TMessage> decl, Func<TMessage, Task> processor)
-            where TMessage : IDataStruct, new()
+        public static void SetProcessorAsync<TMessage>(this C2SMessageDecl<TMessage> decl, Func<TMessage, Task> processor)
+            where TMessage : struct, IDataStruct
         {
             ((IReceiver<TMessage>) decl).SetProcessor(r =>
             {

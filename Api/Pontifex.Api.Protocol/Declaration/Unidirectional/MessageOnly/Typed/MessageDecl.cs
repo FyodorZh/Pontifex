@@ -1,55 +1,42 @@
 using System;
-using System.Collections.Generic;
 using Archivarius;
-using Pontifex.Utils;
 
 namespace Pontifex.Api.Protocol
 {
     public abstract class MessageDecl<TMessage> : Declaration, ISender<TMessage>, IReceiver<TMessage>
-        where TMessage : IDataStruct, new()
+        where TMessage : struct, IDataStruct
     {
-        private readonly Type[]? mTypesToRegister;
-        private Action<TMessage>? mProcessor;
+        private IUnidirectionalModelPipeIn<TMessage>? _pipeIn;
+        private IUnidirectionalModelPipeOut<TMessage>? _pipeOut;
+        
+        private Action<TMessage>? _processor;
 
-        private bool mStopped;
-
-        protected MessageDecl(Type[]? typesToRegister = null)
+        private bool _stopped;
+        
+        protected void SetPipeIn(IUnidirectionalModelPipeIn<TMessage> pipeIn)
         {
-            mTypesToRegister = typesToRegister;
+            _pipeIn = pipeIn;
         }
-
-        protected override void FillFactoryModels(HashSet<Type> types)
+        
+        protected void SetPipeOut(IUnidirectionalModelPipeOut<TMessage> pipeOut)
         {
-            if (mTypesToRegister != null)
-            {
-                foreach (var type in mTypesToRegister)
-                {
-                    types.Add(type);
-                }
-            }
+            _pipeOut = pipeOut;
+            pipeOut.SetReceiver(OnReceived);
         }
 
         public override void Stop()
         {
-            mStopped = true;
+            _stopped = true;
         }
 
-        protected sealed override void FillNonFactoryModels(HashSet<Type> types)
+        private bool OnReceived(TMessage received)
         {
-            types.Add(typeof(TMessage));
-        }
-
-        protected sealed override bool OnReceived(ISerializer received)
-        {
-            if (!mStopped)
+            if (!_stopped)
             {
-                var processor = mProcessor;
+                var processor = _processor;
                 if (processor != null)
                 {
-                    TMessage msg = new TMessage();
-                    msg.Serialize(received);
-
-                    processor.Invoke(msg);
+                    processor.Invoke(received);
                     return true;
                 }
             }
@@ -57,19 +44,14 @@ namespace Pontifex.Api.Protocol
             return false;
         }
 
-        protected override bool OnReceived(UnionDataList buffer)
+        SendResult ISender<TMessage>.Send(TMessage message)
         {
-            throw new InvalidOperationException("MessageDecl type doesn't support raw data");
-        }
-
-        void ISender<TMessage>.Send(TMessage message)
-        {
-            Send(message);
+            return _pipeIn?.Send(message) ?? SendResult.NotConnected;
         }
 
         void IReceiver<TMessage>.SetProcessor(Action<TMessage> processor)
         {
-            mProcessor = processor;
+            _processor = processor;
         }
     }
 }

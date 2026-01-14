@@ -8,21 +8,21 @@ using Pontifex.UserApi;
 
 namespace Pontifex.Api.Protocol.Client
 {
-    public static class RRDecl
+    public static class RRDecl_Ext
     {
         public static void Request<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl,
             TRequest request,
             Action<IRequestSuccess<TResponse>> response,
             Action<IRequestFail> onFail)
-            where TRequest : class, IDataStruct, new()
-            where TResponse : class, IDataStruct, new()
+            where TRequest : struct, IDataStruct
+            where TResponse : struct, IDataStruct
         {
             ((IRequester<TRequest, TResponse>)decl).Request(request, response, onFail);
         }
 
         public static async Task<TResponse> RequestAsync<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, TRequest request, TimeSpan? timeout = null)
-            where TRequest : class, IDataStruct, new()
-            where TResponse : class, IDataStruct, new()
+            where TRequest : struct, IDataStruct
+            where TResponse : struct, IDataStruct
         {
             var requestTask = decl.RequestWithInfoAsync(request);
 
@@ -39,8 +39,8 @@ namespace Pontifex.Api.Protocol.Client
         }
 
         private static Task<SuccessResponseInfo<TResponse>> RequestWithInfoAsync<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, TRequest request)
-            where TRequest : class, IDataStruct, new()
-            where TResponse : class, IDataStruct, new()
+            where TRequest : struct, IDataStruct
+            where TResponse : struct, IDataStruct
         {
             var tcs = new TaskCompletionSource<SuccessResponseInfo<TResponse>>();
 
@@ -69,9 +69,9 @@ namespace Pontifex.Api.Protocol.Client
                 Response = response;
             }
 
-            public CommonResponseInfo CommonResponseInfo { get; private set; }
+            public CommonResponseInfo CommonResponseInfo { get;}
 
-            public TResponse Response { get; private set; }
+            public TResponse Response { get; }
         }
 
         public struct ErrorResponseInfo
@@ -82,9 +82,9 @@ namespace Pontifex.Api.Protocol.Client
                 Error = error;
             }
 
-            public CommonResponseInfo CommonResponseInfo { get; private set; }
+            public CommonResponseInfo CommonResponseInfo { get; }
 
-            public string Error { get; private set; }
+            public string Error { get; }
         }
 
         public struct CommonResponseInfo
@@ -96,9 +96,9 @@ namespace Pontifex.Api.Protocol.Client
                 ProcessTime = processTime;
             }
 
-            public string Name { get; private set; }
-            public DeltaTime NetworkTime { get; private set; }
-            public DeltaTime ProcessTime { get; private set; }
+            public string Name { get; }
+            public DeltaTime NetworkTime { get; }
+            public DeltaTime ProcessTime { get; }
         }
     }
 }
