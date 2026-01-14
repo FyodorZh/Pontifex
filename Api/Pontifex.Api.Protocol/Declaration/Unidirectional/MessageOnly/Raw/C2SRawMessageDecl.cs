@@ -1,4 +1,4 @@
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     /// <summary>
     /// Represents a client-to-server raw message declaration for unidirectional communication.

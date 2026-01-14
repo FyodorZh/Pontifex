@@ -1,6 +1,6 @@
 using Archivarius;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     internal struct RequestMessage<TRequest> : IDataStruct
         where TRequest : struct, IDataStruct

@@ -1,6 +1,6 @@
 using System;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     internal interface IReceiver<out TMessage>
     {

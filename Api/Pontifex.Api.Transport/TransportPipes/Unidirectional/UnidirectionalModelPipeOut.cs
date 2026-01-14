@@ -3,7 +3,7 @@ using Actuarius.Memory;
 using Archivarius;
 using Pontifex.Utils;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public class UnidirectionalModelPipeOut<TModel> : IUnidirectionalModelPipeOut<TModel>
         where TModel : struct, IDataStruct

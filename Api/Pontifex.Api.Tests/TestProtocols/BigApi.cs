@@ -1,7 +1,7 @@
 using Archivarius;
 using Pontifex.UserApi;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public class BigApiSubApi : ProtocolSubApi
     {

@@ -3,7 +3,7 @@ using Actuarius.Memory;
 using Archivarius;
 using Archivarius.BinaryBackend;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public class ProtocolDeserializer
     {

@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.0</TargetFramework>
-        <LangVersion>9</LangVersion>
+        <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
+        <LangVersion>9</LangVersion>
         <RootNamespace>Pontifex.Api</RootNamespace>
     </PropertyGroup>
 
@@ -16,11 +16,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
+      <ProjectReference Include="..\Pontifex.Api.Protocol\Pontifex.Api.Protocol.csproj" />
     </ItemGroup>
 
 </Project>

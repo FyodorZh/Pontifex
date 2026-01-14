@@ -6,7 +6,7 @@ using Archivarius;
 using Operarius;
 using Pontifex.UserApi;
 
-namespace Pontifex.Api.Protocol.Client
+namespace Pontifex.Api.Client
 {
     public static class RRDecl_Ext
     {

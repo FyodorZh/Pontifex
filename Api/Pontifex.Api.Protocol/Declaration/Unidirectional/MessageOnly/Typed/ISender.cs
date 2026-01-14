@@ -1,4 +1,4 @@
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     internal interface ISender<in TMessage>
     {

@@ -1,7 +1,7 @@
 using System;
 using Archivarius;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public abstract class MessageDecl<TMessage> : Declaration, ISender<TMessage>, IReceiver<TMessage>
         where TMessage : struct, IDataStruct

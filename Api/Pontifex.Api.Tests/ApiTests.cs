@@ -1,6 +1,6 @@
-﻿using Pontifex.Api.Protocol;
-using Pontifex.Api.Protocol.Client;
-using Pontifex.Api.Protocol.Server;
+﻿using Pontifex.Api;
+using Pontifex.Api.Client;
+using Pontifex.Api.Server;
 
 namespace Pontifex.Api.Tests;
 

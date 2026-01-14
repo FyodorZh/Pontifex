@@ -1,7 +1,7 @@
 using System;
 using Archivarius;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public interface IUnidirectionalModelPipeIn<in TModel> : ITransportPipe
         where TModel : struct, IDataStruct

@@ -2,7 +2,7 @@ using System;
 using Archivarius;
 using Pontifex.UserApi;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     internal interface IResponder<out TRequest, in TResponse>
         where TRequest : IDataStruct

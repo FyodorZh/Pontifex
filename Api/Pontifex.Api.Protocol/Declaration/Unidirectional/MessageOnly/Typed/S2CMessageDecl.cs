@@ -1,6 +1,6 @@
 using Archivarius;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public class S2CMessageDecl<TMessage> : MessageDecl<TMessage>
         where TMessage : struct, IDataStruct

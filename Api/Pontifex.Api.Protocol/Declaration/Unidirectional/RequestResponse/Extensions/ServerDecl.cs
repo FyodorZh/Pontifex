@@ -4,7 +4,7 @@ using Archivarius;
 using Pontifex.UserApi;
 using Scriba;
 
-namespace Pontifex.Api.Protocol.Server
+namespace Pontifex.Api.Server
 {
     public static class RRDecl_Ext
     {

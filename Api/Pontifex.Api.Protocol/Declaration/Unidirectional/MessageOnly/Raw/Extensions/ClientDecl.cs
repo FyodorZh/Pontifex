@@ -1,7 +1,7 @@
 using System;
 using Pontifex.Utils;
 
-namespace Pontifex.Api.Protocol.Client
+namespace Pontifex.Api.Client
 {
     public static class RawMessageDecl_Ext
     {

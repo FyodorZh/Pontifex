@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public abstract class ProtocolApi : ProtocolSubApi, IProtocol
     {

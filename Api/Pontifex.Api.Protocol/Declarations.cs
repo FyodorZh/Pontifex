@@ -1,7 +1,7 @@
 ﻿using Archivarius;
 using Pontifex.Utils;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     internal struct ReceivedMessage // TODO: remove this struct
     {

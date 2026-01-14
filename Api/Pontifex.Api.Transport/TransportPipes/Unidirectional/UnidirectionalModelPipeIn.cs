@@ -4,7 +4,7 @@ using Archivarius;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public class UnidirectionalModelPipeIn<TModel> : IUnidirectionalModelPipeIn<TModel>
         where TModel : struct, IDataStruct

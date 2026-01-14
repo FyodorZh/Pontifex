@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Archivarius;
 using Pontifex.Utils;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public class InMemoryPipeAllocator
     {

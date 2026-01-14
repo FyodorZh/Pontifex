@@ -1,7 +1,7 @@
 using System;
 using Archivarius;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     internal struct ResponseMessage<TResponse> : IDataStruct
         where TResponse : struct, IDataStruct

@@ -1,7 +1,7 @@
 using System;
 using Pontifex.Utils;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public abstract class RawMessageDecl : Declaration, IRawSender, IRawReceiver
     {

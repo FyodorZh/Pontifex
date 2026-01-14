@@ -1,7 +1,7 @@
 using System;
 using Archivarius;
 
-namespace Pontifex.Api.Protocol.Client
+namespace Pontifex.Api.Client
 {
     public static class MessageDecl_Ext
     {

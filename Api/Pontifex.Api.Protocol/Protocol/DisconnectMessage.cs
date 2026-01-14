@@ -1,6 +1,6 @@
 ﻿using Archivarius;
 
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public struct DisconnectMessage : IDataStruct
     {

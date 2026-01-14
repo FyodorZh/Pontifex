@@ -1,4 +1,4 @@
-namespace Pontifex.Api.Protocol
+namespace Pontifex.Api
 {
     public interface IRequest<out TRequest, in TResponse>
     {
