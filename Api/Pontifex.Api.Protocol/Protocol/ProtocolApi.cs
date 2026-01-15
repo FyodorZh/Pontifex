@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
 
 namespace Pontifex.Api
 {
@@ -12,7 +13,8 @@ namespace Pontifex.Api
         private static readonly Type _declarationType = typeof(IDeclaration);
 
         private readonly object _locker = new object();
-        
+
+        private IPipeSystem? _pipeSystem;
         private IDeclaration[]? _declarations;
 
         IDeclaration[] IProtocol.Declarations
@@ -36,12 +38,29 @@ namespace Pontifex.Api
             }
         }
 
-        public void Prepare(bool isServerMode, IPipeAllocator pipeAllocator)
+        public void Prepare(bool isServerMode, IPipeSystem pipeSystem)
         {
-            IProtocol self = this;
-            foreach (var decl in self.Declarations)
+            if (Interlocked.CompareExchange(ref _pipeSystem, pipeSystem, null) == null)
             {
-                decl.Prepare(isServerMode, pipeAllocator);
+                IProtocol self = this;
+                foreach (var decl in self.Declarations)
+                {
+                    decl.Prepare(isServerMode, pipeSystem);
+                }
+            }
+        }
+
+        public void Stop()
+        {
+            var pipeSystem = Interlocked.Exchange(ref _pipeSystem, null);
+            if (pipeSystem != null)
+            {
+                pipeSystem.StopAll();
+                IProtocol self = this;
+                foreach (var decl in self.Declarations)
+                {
+                    decl.Stop();
+                }
             }
         }
 

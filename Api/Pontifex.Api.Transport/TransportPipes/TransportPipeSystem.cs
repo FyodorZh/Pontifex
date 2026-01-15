@@ -6,7 +6,7 @@ using Pontifex.Utils;
 
 namespace Pontifex.Api
 {
-    public class TransportPipeManager : IPipeAllocator
+    public class TransportPipeSystem : IPipeSystem
     {
         private readonly ProtocolSerializer _serializer;
         private readonly ProtocolDeserializer _deserializer;
@@ -15,19 +15,35 @@ namespace Pontifex.Api
         private readonly List<UnidirectionalRawPipeOut?> _rawPipeMap = new();
 
         private readonly Func<UnionDataList, SendResult> _globalSender;
+        
+        private bool _isStopped;
 
-        public TransportPipeManager(Func<UnionDataList, SendResult> sender, IMemoryRental memoryRental)
+        public TransportPipeSystem(Func<UnionDataList, SendResult> sender, IMemoryRental memoryRental)
         {
             _serializer = new ProtocolSerializer();
             _deserializer = new ProtocolDeserializer();
             _memoryRental = memoryRental;
             
-            _globalSender = sender;
+            _globalSender = data =>
+            {
+                if (_isStopped)
+                {
+                    data.Release();
+                    return SendResult.NotConnected;
+                }
+                return sender.Invoke(data);
+            };
         }
 
         public bool OnReceived(UnionDataList data)
         {
             using var disposer = data.AsDisposable();
+            
+            if (_isStopped)
+            {
+                return false;
+            }
+            
             if (data.TryPopFirst(out short pipeId) && pipeId < _rawPipeMap.Count)
             {
                 var pipe = _rawPipeMap[pipeId];
@@ -65,7 +81,12 @@ namespace Pontifex.Api
         {
             return new UnidirectionalModelPipeOut<TModel>(AllocateRawPipeOut(), _deserializer);
         }
-        
+
+        public void StopAll()
+        {
+            _isStopped = true;
+        }
+
         #endregion
     }
 }

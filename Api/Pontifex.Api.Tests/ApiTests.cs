@@ -9,7 +9,7 @@ public class ApiTests
     [Test]
     public void TestEmptyApi()
     {
-        var inMemoryPipeAllocator = new InMemoryPipeAllocator();
+        var inMemoryPipeAllocator = new InMemoryPipeSystem();
 
         var client = new EmptyApi_Client();
         var server = new EmptyApi_Server();
@@ -27,7 +27,7 @@ public class ApiTests
     [Test]
     public async Task TestBigApi()
     {
-        var inMemoryPipeAllocator = new InMemoryPipeAllocator();
+        var inMemoryPipeAllocator = new InMemoryPipeSystem();
 
         var client = new BigApi_Client();
         var server = new BigApi_Server();

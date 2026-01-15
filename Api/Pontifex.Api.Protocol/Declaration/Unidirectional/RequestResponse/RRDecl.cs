@@ -50,7 +50,7 @@ namespace Pontifex.UserApi
         }
 
 
-        protected override void Prepare(bool isServerMode, IPipeAllocator pipeAllocator)
+        protected override void Prepare(bool isServerMode, IPipeSystem pipeSystem)
         {
             if (isServerMode != (_processor != null))
             {
@@ -60,15 +60,15 @@ namespace Pontifex.UserApi
             if (isServerMode)
             {
                 // order is important
-                _responseSender = pipeAllocator.AllocateModelPipeIn<ResponseMessage<TResponse>>();
-                _requestReceiver = pipeAllocator.AllocateModelPipeOut<RequestMessage<TRequest>>();
+                _responseSender = pipeSystem.AllocateModelPipeIn<ResponseMessage<TResponse>>();
+                _requestReceiver = pipeSystem.AllocateModelPipeOut<RequestMessage<TRequest>>();
                 _requestReceiver.SetReceiver(Receiver);
             }
             else
             {
                 // order is important
-                _responseReceiver = pipeAllocator.AllocateModelPipeOut<ResponseMessage<TResponse>>();
-                _requestSender = pipeAllocator.AllocateModelPipeIn<RequestMessage<TRequest>>();
+                _responseReceiver = pipeSystem.AllocateModelPipeOut<ResponseMessage<TResponse>>();
+                _requestSender = pipeSystem.AllocateModelPipeIn<RequestMessage<TRequest>>();
                 _responseReceiver.SetReceiver(Receiver);
             }
         }

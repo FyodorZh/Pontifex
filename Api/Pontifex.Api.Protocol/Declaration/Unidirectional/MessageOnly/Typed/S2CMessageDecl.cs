@@ -5,15 +5,15 @@ namespace Pontifex.Api
     public class S2CMessageDecl<TMessage> : MessageDecl<TMessage>
         where TMessage : struct, IDataStruct
     {
-        protected override void Prepare(bool isServerMode, IPipeAllocator pipeAllocator)
+        protected override void Prepare(bool isServerMode, IPipeSystem pipeSystem)
         {
             if (isServerMode)
             {
-                SetPipeIn(pipeAllocator.AllocateModelPipeIn<TMessage>());
+                SetPipeIn(pipeSystem.AllocateModelPipeIn<TMessage>());
             }
             else
             {
-                SetPipeOut(pipeAllocator.AllocateModelPipeOut<TMessage>());
+                SetPipeOut(pipeSystem.AllocateModelPipeOut<TMessage>());
             }
         }
     }

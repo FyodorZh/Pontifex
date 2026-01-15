@@ -7,15 +7,15 @@ namespace Pontifex.Api
     /// </summary>
     public class C2SRawMessageDecl : RawMessageDecl
     {
-        protected override void Prepare(bool isServerMode, IPipeAllocator pipeAllocator)
+        protected override void Prepare(bool isServerMode, IPipeSystem pipeSystem)
         {
             if (isServerMode)
             {
-                SetPipeOut(pipeAllocator.AllocateRawPipeOut());
+                SetPipeOut(pipeSystem.AllocateRawPipeOut());
             }
             else
             {
-                SetPipeIn(pipeAllocator.AllocateRawPipeIn());
+                SetPipeIn(pipeSystem.AllocateRawPipeIn());
             }
         }
     }

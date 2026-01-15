@@ -1,23 +1,30 @@
 using System;
 using System.Collections.Generic;
+using Actuarius.Memory;
 using Archivarius;
 using Pontifex.Utils;
 
 namespace Pontifex.Api
 {
-    public class InMemoryPipeAllocator
+    public class InMemoryPipeSystem
     {
         private readonly List<ITransportPipe> _pipes = new();
         private readonly int[] _counts = new[] { 0, 0 };
         
+        private bool _isStopped;
         
-        public IPipeAllocator Side1 { get; }
-        public IPipeAllocator Side2 { get; }
+        public IPipeSystem Side1 { get; }
+        public IPipeSystem Side2 { get; }
 
-        public InMemoryPipeAllocator()
+        public InMemoryPipeSystem()
         {
-            Side1 = new PipeSide(this, 0);
-            Side2 = new PipeSide(this, 1);
+            Side1 = new PipeSystemSide(this, 0);
+            Side2 = new PipeSystemSide(this, 1);
+        }
+
+        private void StopAll()
+        {
+            _isStopped = true;
         }
 
         private UnidirectionalRawPipe AllocateRawPipe(int sideId)
@@ -34,7 +41,7 @@ namespace Pontifex.Api
                 return pipe;
             }
 
-            var result = new UnidirectionalRawPipe();
+            var result = new UnidirectionalRawPipe(this);
             _pipes.Add(result);
             _counts[sideId]++;
             return result;
@@ -55,19 +62,19 @@ namespace Pontifex.Api
                 return pipe;
             }
 
-            var result = new UnidirectionalModelPipe<TModel>();
+            var result = new UnidirectionalModelPipe<TModel>(this);
             _pipes.Add(result);
             _counts[sideId]++;
             return result;
         }
 
         
-        private class PipeSide : IPipeAllocator
+        private class PipeSystemSide : IPipeSystem
         {
-            private readonly InMemoryPipeAllocator _owner;
+            private readonly InMemoryPipeSystem _owner;
             private readonly int _sideId;
             
-            public PipeSide(InMemoryPipeAllocator owner, int sideId)
+            public PipeSystemSide(InMemoryPipeSystem owner, int sideId)
             {
                 _owner = owner;
                 _sideId = sideId;
@@ -92,18 +99,35 @@ namespace Pontifex.Api
             {
                 return _owner.AllocateModelPipe<TModel>(_sideId);
             }
+
+            public void StopAll()
+            {
+                _owner.StopAll();
+            }
         }
 
         private class UnidirectionalRawPipe : IUnidirectionalRawPipeIn, IUnidirectionalRawPipeOut
         {
+            private readonly InMemoryPipeSystem _owner;
             private Func<UnionDataList, bool>? _receiver;
+
+            public UnidirectionalRawPipe(InMemoryPipeSystem owner)
+            {
+                _owner = owner;
+            }
             
             public SendResult Send(UnionDataList data)
             {
+                using var disposer = data.AsDisposable();
+                if (_owner._isStopped)
+                {
+                    return SendResult.NotConnected;
+                }
+                
                 var receiver = _receiver;
                 if (receiver == null)
                     throw new InvalidOperationException();
-                receiver.Invoke(data);
+                receiver.Invoke(data.Acquire());
                 return SendResult.Ok;
             }
 
@@ -116,10 +140,21 @@ namespace Pontifex.Api
         private class UnidirectionalModelPipe<TModel> : IUnidirectionalModelPipeIn<TModel>, IUnidirectionalModelPipeOut<TModel>
             where TModel : struct, IDataStruct
         {
+            private readonly InMemoryPipeSystem _owner;
             private Action<TModel>? _receiver;
+
+            public UnidirectionalModelPipe(InMemoryPipeSystem owner)
+            {
+                _owner = owner;
+            }
             
             public SendResult Send(TModel model)
             {
+                if (_owner._isStopped)
+                {
+                    return SendResult.NotConnected;
+                }
+                
                 var receiver = _receiver;
                 if (receiver == null)
                     throw new InvalidOperationException();
