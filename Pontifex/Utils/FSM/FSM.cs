@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Scriba;
 
 namespace Pontifex.Utils.FSM
 {
@@ -94,16 +93,9 @@ namespace Pontifex.Utils.FSM
             {
                 if (nextStateValue.Equals(element.StateValue))
                 {
-                    try
+                    if (onStateChanged == null || onStateChanged(mCurrentState.State, nextState))
                     {
-                        if (onStateChanged == null || onStateChanged(mCurrentState.State, nextState))
-                        {
-                            mCurrentState = element;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
+                        mCurrentState = element;
                     }
                 }
             }

@@ -24,16 +24,21 @@ namespace Pontifex.Utils.FSM
 
             public void Invoke()
             {
-                if (mReset)
+                try
                 {
-                    mOwner.mCore.Reset();
+                    if (mReset)
+                    {
+                        mOwner.mCore.Reset();
+                    }
+                    else
+                    {
+                        mOwner.mCore.SetState(mStateToSet, mOnStateChanged);
+                    }
                 }
-                else
+                finally
                 {
-                    mOwner.mCore.SetState(mStateToSet, mOnStateChanged);
+                    mOwner.mCurState.Value = mOwner.mCore.State;    
                 }
-
-                mOwner.mCurState.Value = mOwner.mCore.State;
             }
 
             public void Fail()
