@@ -1,6 +1,6 @@
 namespace Pontifex.Api
 {
-    public class EmptyApi : ProtocolApi
+    public class EmptyApi : ApiRoot
     {
     }
 
@@ -15,14 +15,12 @@ namespace Pontifex.Api
     {
         public class EmptyApi_Server : EmptyApi
         {
-            public bool Disconnected { get; private set; }
-            
             public EmptyApi_Server()
             {
-                Disconnect.SetProcessor(msg =>
-                {
-                    Disconnected = true;
-                });
+                // Disconnect.SetProcessor(msg =>
+                // {
+                //     Disconnected = true;
+                // });
             }
         }
     }

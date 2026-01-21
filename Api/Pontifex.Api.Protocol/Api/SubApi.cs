@@ -1,6 +1,6 @@
 namespace Pontifex.Api
 {
-    public abstract class ProtocolSubApi
+    public abstract class SubApi
     {
         
     }

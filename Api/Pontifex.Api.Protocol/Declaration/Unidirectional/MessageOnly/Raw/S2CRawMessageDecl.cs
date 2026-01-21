@@ -7,7 +7,7 @@ namespace Pontifex.Api
     /// </summary>
     public class S2CRawMessageDecl : RawMessageDecl
     {
-        protected override void Prepare(bool isServerMode, IPipeSystem pipeSystem)
+        protected override void Start(bool isServerMode, IPipeSystem pipeSystem)
         {
             if (isServerMode)
             {

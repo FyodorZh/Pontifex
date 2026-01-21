@@ -28,13 +28,13 @@ namespace Pontifex.Utils
             void Fail();
         }
 
-        private readonly ConcurrentSerializedTicker mTicker;
-        private readonly ConcurrentQueueValve<TAction> mQueue;
+        private readonly ConcurrentSerializedExecutor _serializedExecutor;
+        private readonly ConcurrentQueueValve<TAction> _queue;
 
         public ActionQueue(IConcurrentQueue<TAction> queue)
         {
-            mTicker = new ConcurrentSerializedTicker(OnTick);
-            mQueue = new ConcurrentQueueValve<TAction>(queue, (action) =>
+            _serializedExecutor = new ConcurrentSerializedExecutor(OnTick);
+            _queue = new ConcurrentQueueValve<TAction>(queue, (action) =>
             {
                 try
                 {
@@ -49,9 +49,9 @@ namespace Pontifex.Utils
 
         public bool Put(TAction action)
         {
-            if (mQueue.Put(action))
+            if (_queue.Put(action))
             {
-                mTicker.Tick();
+                _serializedExecutor.ScheduleOneInvokation();
                 return true;
             }
 
@@ -60,25 +60,22 @@ namespace Pontifex.Utils
 
         private void OnTick()
         {
-            TAction action;
-            if (!mQueue.TryPop(out action))
+            while (_queue.TryPop(out var action))
             {
-                return;
-            }
-
-            try
-            {
-                action.Invoke();
-            }
-            catch (Exception e)
-            {
-                Log.wtf(e);
+                try
+                {
+                    action.Invoke();
+                }
+                catch (Exception e)
+                {
+                    Log.wtf(e);
+                }
             }
         }
 
         public void Release()
         {
-            mQueue.CloseValve();
+            _queue.CloseValve();
         }
     }
 }

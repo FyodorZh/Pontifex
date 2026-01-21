@@ -5,7 +5,7 @@ namespace Pontifex.Api
     public class S2CMessageDecl<TMessage> : MessageDecl<TMessage>
         where TMessage : struct, IDataStruct
     {
-        protected override void Prepare(bool isServerMode, IPipeSystem pipeSystem)
+        protected override void Start(bool isServerMode, IPipeSystem pipeSystem)
         {
             if (isServerMode)
             {

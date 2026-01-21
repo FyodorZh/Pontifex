@@ -4,15 +4,15 @@ namespace Pontifex.Api
     {
         private string _name = "";
 
-        protected abstract void Prepare(bool isServerMode, IPipeSystem pipeSystem);
+        protected abstract void Start(bool isServerMode, IPipeSystem pipeSystem);
 
         public string Name => _name;
 
         public abstract void Stop();
 
-        void IDeclaration.Prepare(bool isServerMode, IPipeSystem pipeSystem)
+        void IDeclaration.Start(bool isServerMode, IPipeSystem pipeSystem)
         {
-            Prepare(isServerMode, pipeSystem);
+            Start(isServerMode, pipeSystem);
         }
 
         void IDeclaration.SetName(string name)

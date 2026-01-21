@@ -50,7 +50,7 @@ namespace Pontifex.UserApi
         }
 
 
-        protected override void Prepare(bool isServerMode, IPipeSystem pipeSystem)
+        protected override void Start(bool isServerMode, IPipeSystem pipeSystem)
         {
             if (isServerMode != (_processor != null))
             {

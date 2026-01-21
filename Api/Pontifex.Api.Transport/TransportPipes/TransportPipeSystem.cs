@@ -3,20 +3,30 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Archivarius;
 using Pontifex.Utils;
+using Pontifex.Utils.FSM;
 
 namespace Pontifex.Api
 {
     public class TransportPipeSystem : IPipeSystem
     {
+        private enum StartStopState
+        {
+            NotStarted,
+            Started,
+            Stopped,
+        }
+        
         private readonly ProtocolSerializer _serializer;
         private readonly ProtocolDeserializer _deserializer;
         private readonly IMemoryRental _memoryRental;
 
         private readonly List<UnidirectionalRawPipeOut?> _rawPipeMap = new();
 
+        private volatile bool _stopOutgoing;
         private readonly Func<UnionDataList, SendResult> _globalSender;
-        
-        private bool _isStopped;
+
+        private readonly IFSM<StartStopState> _state = new ConcurrentFSM<StartStopState>(
+            new RatchetFSM<StartStopState>((l, r) => l.CompareTo(r), StartStopState.NotStarted)); 
 
         public TransportPipeSystem(Func<UnionDataList, SendResult> sender, IMemoryRental memoryRental)
         {
@@ -26,7 +36,7 @@ namespace Pontifex.Api
             
             _globalSender = data =>
             {
-                if (_isStopped)
+                if (_state.State != StartStopState.Started || _stopOutgoing)
                 {
                     data.Release();
                     return SendResult.NotConnected;
@@ -39,7 +49,7 @@ namespace Pontifex.Api
         {
             using var disposer = data.AsDisposable();
             
-            if (_isStopped)
+            if (_state.State != StartStopState.Started)
             {
                 return false;
             }
@@ -60,6 +70,9 @@ namespace Pontifex.Api
         
         public IUnidirectionalRawPipeIn AllocateRawPipeIn()
         {
+            if (_state.State != StartStopState.NotStarted)
+                throw new InvalidOperationException();
+
             var pipe =  new UnidirectionalRawPipeIn((short)_rawPipeMap.Count, _globalSender);
             _rawPipeMap.Add(null);
             return pipe;
@@ -67,6 +80,9 @@ namespace Pontifex.Api
 
         public IUnidirectionalRawPipeOut AllocateRawPipeOut()
         {
+            if (_state.State != StartStopState.NotStarted)
+                throw new InvalidOperationException();
+
             var pipe = new UnidirectionalRawPipeOut();
             _rawPipeMap.Add(pipe);
             return pipe;
@@ -82,9 +98,19 @@ namespace Pontifex.Api
             return new UnidirectionalModelPipeOut<TModel>(AllocateRawPipeOut(), _deserializer);
         }
 
+        public void Start()
+        {
+            _state.SetState(StartStopState.Started);
+        }
+
+        public void StopOutgoing()
+        {
+            _stopOutgoing = true;
+        }
+
         public void StopAll()
         {
-            _isStopped = true;
+            _state.SetState(StartStopState.Stopped);
         }
 
         #endregion

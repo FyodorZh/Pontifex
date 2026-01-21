@@ -3,15 +3,25 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Archivarius;
 using Pontifex.Utils;
+using Pontifex.Utils.FSM;
 
 namespace Pontifex.Api
 {
     public class InMemoryPipeSystem
     {
+        private enum StartStopState
+        {
+            NotStarted,
+            Started,
+            Stopped,
+        }
+        
         private readonly List<ITransportPipe> _pipes = new();
         private readonly int[] _counts = new[] { 0, 0 };
+
+        private bool _stopOutgoing;
+        private readonly IFSM<StartStopState> _state = new RatchetFSM<StartStopState>((l, r) => l.CompareTo(r), StartStopState.NotStarted);
         
-        private bool _isStopped;
         
         public IPipeSystem Side1 { get; }
         public IPipeSystem Side2 { get; }
@@ -22,9 +32,19 @@ namespace Pontifex.Api
             Side2 = new PipeSystemSide(this, 1);
         }
 
-        private void StopAll()
+        private void Start()
         {
-            _isStopped = true;
+            _state.SetState(StartStopState.Started);
+        }
+        
+        private void StopOutgoing()
+        {
+            _stopOutgoing = true;
+        }
+
+        private void Stop()
+        {
+            _state.SetState(StartStopState.Stopped);
         }
 
         private UnidirectionalRawPipe AllocateRawPipe(int sideId)
@@ -100,9 +120,19 @@ namespace Pontifex.Api
                 return _owner.AllocateModelPipe<TModel>(_sideId);
             }
 
+            public void Start()
+            {
+                _owner.Start();
+            }
+
+            public void StopOutgoing()
+            {
+                _owner.StopOutgoing();
+            }
+
             public void StopAll()
             {
-                _owner.StopAll();
+                _owner.Stop();
             }
         }
 
@@ -119,7 +149,7 @@ namespace Pontifex.Api
             public SendResult Send(UnionDataList data)
             {
                 using var disposer = data.AsDisposable();
-                if (_owner._isStopped)
+                if (_owner._state.State != StartStopState.Started || _owner._stopOutgoing)
                 {
                     return SendResult.NotConnected;
                 }
@@ -150,7 +180,7 @@ namespace Pontifex.Api
             
             public SendResult Send(TModel model)
             {
-                if (_owner._isStopped)
+                if (_owner._state.State != StartStopState.Started || _owner._stopOutgoing)
                 {
                     return SendResult.NotConnected;
                 }

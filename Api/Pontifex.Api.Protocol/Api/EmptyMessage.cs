@@ -2,7 +2,7 @@
 
 namespace Pontifex.Api
 {
-    public struct DisconnectMessage : IDataStruct
+    public struct EmptyMessage : IDataStruct
     {
         public void Serialize(ISerializer serializer)
         {

@@ -6,35 +6,35 @@ namespace Pontifex.Utils.FSM
     /// <typeparam name="TState"></typeparam>
     public class RatchetFSM<TState> : IFSM<TState>
     {
-        private readonly TState mInitState;
-        private readonly System.Comparison<TState> mComparator;
+        private readonly TState _initState;
+        private readonly System.Comparison<TState> _comparator;
 
-        private TState mCurState;
+        private TState _curState;
 
         public RatchetFSM(System.Comparison<TState> comparator, TState initState)
         {
-            mInitState = initState;
-            mComparator = comparator;
-            mCurState = initState;
+            _initState = initState;
+            _comparator = comparator;
+            _curState = initState;
         }
 
-        public TState InitState => mInitState;
+        public TState InitState => _initState;
 
-        public TState State => mCurState;
+        public TState State => _curState;
 
         public void Reset()
         {
-            mCurState = mInitState;
+            _curState = _initState;
         }
 
         public void SetState(TState nextState, StateChangeReaction<TState>? onStateChanged = null)
         {
-            int cmp = mComparator(mCurState, nextState);
+            int cmp = _comparator(_curState, nextState);
             if (cmp < 0)
             {
-                if (onStateChanged == null || onStateChanged(mCurState, nextState))
+                if (onStateChanged?.Invoke(_curState, nextState) ?? true)
                 {
-                    mCurState = nextState;
+                    _curState = nextState;
                 }
             }
         }

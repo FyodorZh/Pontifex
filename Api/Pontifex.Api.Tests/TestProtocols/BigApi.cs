@@ -3,45 +3,37 @@ using Pontifex.UserApi;
 
 namespace Pontifex.Api
 {
-    public class BigApiSubApi : ProtocolSubApi
+    public struct Int1 : IDataStruct
     {
-        public readonly RRDecl<Request, Response> Div = new();
-
-        public struct Request : IDataStruct
+        public int A;
+        public void Serialize(ISerializer serializer)
         {
-            public int A;
-            public int B;
-            public void Serialize(ISerializer serializer)
-            {
-                throw new NotImplementedException();
-            }
-        }
-
-        public struct Response : IDataStruct
-        {
-            public int C;
-            public void Serialize(ISerializer serializer)
-            {
-                throw new NotImplementedException();
-            }
+            throw new NotImplementedException();
         }
     }
     
-    public class BigApi : ProtocolApi
+    public struct Int2 : IDataStruct
+    {
+        public int A;
+        public int B;
+        public void Serialize(ISerializer serializer)
+        {
+            throw new NotImplementedException();
+        }
+    }
+    
+    
+    public class BigApiSubApi : SubApi
+    {
+        public readonly RRDecl<Int2, Int1> Div = new();
+    }
+    
+    public class BigApi : ApiRoot
     {
         public readonly BigApiSubApi SubApi = new();
 
-        public readonly C2SMessageDecl<IntValue> ToServer = new();
-        public readonly S2CMessageDecl<IntValue> FromServer = new();
-        
-        public struct IntValue : IDataStruct
-        {
-            public int Value;
-            public void Serialize(ISerializer serializer)
-            {
-                throw new NotImplementedException();
-            }
-        }
+        public readonly C2SMessageDecl<Int1> ToServer = new();
+        public readonly S2CMessageDecl<Int1> FromServer = new();
     }
 
     namespace Client
@@ -52,10 +44,10 @@ namespace Pontifex.Api
             
             public BigApi_Client()
             {
-                FromServer.SetProcessor(r => _tcs!.SetResult(r.Value));
+                FromServer.SetProcessor(r => _tcs!.SetResult(r.A));
             }
 
-            public Task<int> MultiplyOnce(int x)
+            public Task<int> MultiplyBy2(int x)
             {
                 if (_tcs != null)
                 {
@@ -63,7 +55,7 @@ namespace Pontifex.Api
                 }
 
                 _tcs = new TaskCompletionSource<int>();
-                ToServer.Send(new IntValue {Value = x});
+                ToServer.Send(new Int1 {A = x});
                 return _tcs.Task;
             }
         }
@@ -73,15 +65,8 @@ namespace Pontifex.Api
     {
         public class BigApi_Server : BigApi
         {
-            public bool Disconnected { get; private set; }
-            
             public BigApi_Server()
             {
-                Disconnect.SetProcessor(msg =>
-                {
-                    Disconnected = true;
-                });
-
                 SubApi.Div.SetProcessor(r =>
                 {
                     if (r.Data.B == 0)
@@ -89,15 +74,15 @@ namespace Pontifex.Api
                         r.Fail("Division by zero");
                         return;
                     }
-                    r.Response(new BigApiSubApi.Response
+                    r.Response(new Int1
                     {
-                        C = r.Data.A / r.Data.B
+                        A = r.Data.A / r.Data.B
                     });
                 });
 
                 ToServer.SetProcessor(v =>
                 {
-                    FromServer.Send(new IntValue {Value = v.Value * 2});
+                    FromServer.Send(new Int1() {A = v.A * 2});
                 });
             }
         }
