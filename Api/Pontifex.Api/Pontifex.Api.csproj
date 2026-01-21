@@ -4,10 +4,11 @@
         <TargetFramework>netstandard2.1</TargetFramework>
         <LangVersion>9</LangVersion>
         <Nullable>enable</Nullable>
+        <RootNamespace>Pontifex.Api</RootNamespace>
         <Version>0.1.0-dev.1</Version>
-        <Title>Pontifex</Title>
+        <Title>Pontifex.Api</Title>
         <Authors>Fyodor Zhmaev</Authors>
-        <Description>Generalized transport library</Description>
+        <Description>Extension to make custom API on top of Pontifex</Description>
         <Copyright>Copyright (c) Fyodor Zhmaev 2026</Copyright>
         <PackageProjectUrl>https://github.com/FyodorZh/Pontifex</PackageProjectUrl>
         <RepositoryUrl>https://github.com/FyodorZh/Pontifex.git</RepositoryUrl>
@@ -31,17 +32,15 @@
 
     <ItemGroup>
         <None Include="nuget.readme.md" Pack="true" PackagePath="\" />
-        <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+        <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Actuarius\Actuarius.Collections\Actuarius.Collections.csproj" />
-      <ProjectReference Include="..\Actuarius\Actuarius.Concurrent\Actuarius.Concurrent.csproj" />
-      <ProjectReference Include="..\Actuarius\Actuarius.Memory\Actuarius.Memory.csproj" />
+      <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Operarius" Version="0.1.0-dev.2" />
+      <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
     </ItemGroup>
 
 </Project>

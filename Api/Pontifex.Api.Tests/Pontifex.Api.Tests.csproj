@@ -21,7 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Pontifex.Api.Protocol\Pontifex.Api.Protocol.csproj" />
+      <ProjectReference Include="..\Pontifex.Api\Pontifex.Api.csproj" />
     </ItemGroup>
 
 </Project>

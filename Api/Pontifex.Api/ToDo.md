@@ -1,4 +1,9 @@
-### TODO:
+### TODO
+- ProtocolApi.cs
+  - ~~Три стейта (NotStarted/Started/Stopped)~~
+  - ~~Stop() метод можно вызывать многократно~~
+  - ~~GracefullDisconnect()~~
+  - ~~QuickDisconnect()~~
 - ClientSideApi.cs
   - Отправлять нормальный АЦК с хэшем
   - Проверять АЦК ответ от сервера

@@ -4,9 +4,14 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
     {
     }
 
-    internal class IntentionToConnect(bool isFirstConnection) : Intention
+    internal class IntentionToConnect : Intention
     {
-        public bool IsFirstConnection { get; } = isFirstConnection;
+        public bool IsFirstConnection { get; }
+        
+        public IntentionToConnect(bool isFirstConnection)
+        {
+            IsFirstConnection = isFirstConnection;
+        }
     }
     
     internal class IntentionToDisconnect : Intention

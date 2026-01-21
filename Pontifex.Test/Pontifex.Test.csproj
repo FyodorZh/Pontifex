@@ -8,8 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Api\Pontifex.Api.Protocol\Pontifex.Api.Protocol.csproj" />
-      <ProjectReference Include="..\Api\Pontifex.Api.Transport\Pontifex.Api.Transport.csproj" />
+      <ProjectReference Include="..\Api\Pontifex.Api\Pontifex.Api.csproj" />
       <ProjectReference Include="..\Protocols\Pontifex.Protocol.Reconnectable\Pontifex.Protocol.Reconnectable.csproj" />
       <ProjectReference Include="..\Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
       <ProjectReference Include="..\Protocols\Pontifex.Protocol.Zip\Pontifex.Protocol.Zip.csproj" />
