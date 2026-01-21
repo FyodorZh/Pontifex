@@ -6,6 +6,7 @@ using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 using Terminal.UI;
 using Pontifex.Abstractions.Servers;
+using Pontifex.Api;
 using TransportAnalyzer.TestLogic;
 
 namespace Pontifex.Test
@@ -15,7 +16,7 @@ namespace Pontifex.Test
         private readonly IAckRawServer? _server;
         private readonly ILogger _logger;
         
-        public ServerWindow(TransportFactory factory, string url)
+        public ServerWindow(TransportFactory factory, string url, bool startApi)
         {
             X = 0;
             Y = 1;
@@ -32,11 +33,26 @@ namespace Pontifex.Test
             _logger = new Logger([loggerView]);  
 
             _server = factory.ConstructServer(url, _logger, MemoryRental.Shared);
-            if (_server == null || !_server.Init(new AckRawServerLogic(_server.Log, _server.Memory)))
+            if (startApi)
             {
-                _logger.e("Failed to construct server");
-                return;
+                ServerSideApiFactory<AckRawProtocol_Server> apiFactory = new ServerSideApiFactory<AckRawProtocol_Server>(
+                    () => new AckRawProtocol_Server(MemoryRental.Shared, _logger), MemoryRental.Shared, _logger);
+                
+                if (_server == null || !_server.Init(apiFactory))
+                {
+                    _logger.e("Failed to construct server");
+                    return;
+                }
             }
+            else
+            {
+                if (_server == null || !_server.Init(new AckRawServerLogic(_server.Log, _server.Memory)))
+                {
+                    _logger.e("Failed to construct server");
+                    return;
+                }    
+            }
+            
 
             bool started = _server.Start(stopReason =>
             {
@@ -46,7 +62,7 @@ namespace Pontifex.Test
 
             Button stopButton = new()
             {
-                X = 0, Y = Pos.Bottom(loggerView), Width = Dim.Auto(), Height = 1, Title = "Stop server"
+                X = 0, Y = Pos.Bottom(loggerView), Width = Dim.Auto(), Height = 1, Title = "Transport.Stop"
             };
             Add(stopButton);
             stopButton.Accepting += (sender, args) =>

@@ -6,16 +6,17 @@ using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 using Terminal.UI;
 using Pontifex.Abstractions.Clients;
+using Pontifex.Api;
 using TransportAnalyzer.TestLogic;
 
 namespace Pontifex.Test
 {
-    public class ClientWindow : SmartWindow
+    public sealed class ClientWindow : SmartWindow
     {
         private readonly IAckRawClient? _transport;
         private readonly ILogger _logger;
         
-        public ClientWindow(TransportFactory factory, string url)
+        public ClientWindow(TransportFactory factory, string url, bool startApi)
         {
             X = Pos.AnchorEnd();
             Y = 1;
@@ -44,14 +45,28 @@ namespace Pontifex.Test
                 _logger.e("Failed to construct transport");
                 return;
             }
-            
-            var clientLogic = new AckRawClientLogic(_transport.Memory, _transport.Log, 1);
-            clientLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
-            clientLogic.Disconnected += _ => { controlsPanel.SetEndpoint(null); };
-            if ( !_transport.Init(clientLogic))
+
+            if (!startApi)
             {
-                _logger.e("Failed to init transport");
-                return;
+                var clientLogic = new AckRawClientLogic(_transport.Memory, _transport.Log, 1);
+                clientLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
+                clientLogic.Disconnected += _ => { controlsPanel.SetEndpoint(null); };
+
+                if (!_transport.Init(clientLogic))
+                {
+                    _logger.e("Failed to init transport");
+                    return;
+                }
+            }
+            else
+            {
+                AckRawProtocol_Client api = new AckRawProtocol_Client(_transport.Memory, _transport.Log);
+                ClientSideApi apiLogic = new ClientSideApi(api, _transport.Memory, _transport.Log);
+                if (!_transport.Init(apiLogic))
+                {
+                    _logger.e("Failed to init transport");
+                    return;
+                }
             }
 
             bool started = _transport.Start(stopReason =>
@@ -62,10 +77,10 @@ namespace Pontifex.Test
 
             Button stopButton = new()
             {
-                X = 0, Y = Pos.Bottom(loggerView), Width = Dim.Auto(), Height = 1, Title = "Disconnect"
+                X = 0, Y = Pos.Bottom(loggerView), Width = Dim.Auto(), Height = 1, Title = "Transport.Stop"
             };
             Add(stopButton);
-            stopButton.Accepting += (sender, args) =>
+            stopButton.Accepting += (_, args) =>
             {
                 _transport?.Stop();
                 args.Handled = true;

@@ -16,6 +16,7 @@ namespace Pontifex.Api
         public ProtocolSerializer()
         {
             _serializer = new HierarchicalSerializer(_writer, false);
+            _writer.Clear();
         }
 
         /// <summary>

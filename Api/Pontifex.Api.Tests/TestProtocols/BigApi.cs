@@ -1,5 +1,5 @@
 using Archivarius;
-using Pontifex.UserApi;
+using Pontifex.Api;
 
 namespace Pontifex.Api
 {

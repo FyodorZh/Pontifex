@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Archivarius;
 using Operarius;
-using Pontifex.UserApi;
+using Pontifex.Api;
 
 namespace Pontifex.Api.Client
 {

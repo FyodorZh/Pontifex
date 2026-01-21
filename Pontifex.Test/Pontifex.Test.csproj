@@ -8,6 +8,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Api\Pontifex.Api.Protocol\Pontifex.Api.Protocol.csproj" />
+      <ProjectReference Include="..\Api\Pontifex.Api.Transport\Pontifex.Api.Transport.csproj" />
       <ProjectReference Include="..\Protocols\Pontifex.Protocol.Reconnectable\Pontifex.Protocol.Reconnectable.csproj" />
       <ProjectReference Include="..\Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
       <ProjectReference Include="..\Protocols\Pontifex.Protocol.Zip\Pontifex.Protocol.Zip.csproj" />
@@ -17,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
       <PackageReference Include="Scriba" Version="0.2.0-dev.9" />
       <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
       <PackageReference Include="Terminal.Gui" Version="2.0.0-alpha.3865" />

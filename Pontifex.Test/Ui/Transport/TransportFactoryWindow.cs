@@ -34,7 +34,7 @@ namespace Pontifex.Test
             Title = "Transport Factory";
             X = Pos.Center();
             Y = Pos.Center();
-            Width = 50;
+            Width = 55;
             Height = 15;
             
             var urlLabel = new Label() { Title = "Url: ", X = 0, Y = 0, Width = Dim.Auto(), Height = 1 };
@@ -118,17 +118,36 @@ namespace Pontifex.Test
             {
                 Title = "Start C", X = Pos.Right(startServerBtn) + 1, Y = Pos.Bottom(wrappersGroup), Width = Dim.Auto(), Height = 1
             };
-            Add(startServerAndClientBtn, startServerBtn, startClientBtn);
+            var startApiBtn = new Button()
+            {
+                Title = "Start API", X = Pos.Right(startClientBtn) + 1, Y = Pos.Bottom(wrappersGroup), Width = Dim.Auto(), Height = 1
+            };
+            Add(startServerAndClientBtn, startServerBtn, startClientBtn, startApiBtn);
 
             startServerAndClientBtn.Accepting += (sender, args) => OnStart(args, true, true);
             startServerBtn.Accepting += (sender, args) => OnStart(args, true, false);
             startClientBtn.Accepting += (sender, args) => OnStart(args, false, true);
+            startApiBtn.Accepting += (sender, args) => OnStart(args, true, true, true);
 
-            void OnStart(CommandEventArgs args, bool startServer, bool StartClient)
+            void OnStart(CommandEventArgs args, bool startServer, bool startClient, bool startApi = false)
             {
                 args.Handled = true;
-                if (startServer) StartOneServer();
-                if (StartClient) StartOneClient();
+                if (startServer) StartOneServer(startApi);
+                if (startClient)
+                {
+                    if (startServer)
+                    {
+                        Task.Run(async () =>
+                        {
+                            await Task.Delay(1000);
+                            Application.Invoke(() => StartOneClient(startApi));
+                        });
+                    }
+                    else
+                    {
+                        StartOneClient(startApi);    
+                    }
+                }
             }
 
             OnCheckedStateChanged();
@@ -163,14 +182,14 @@ namespace Pontifex.Test
             _urlField.Text = cmd;
         }
 
-        private void StartOneServer()
+        private void StartOneServer(bool startApi)
         {
-            SuperView!.Add(new ServerWindow(_factory, _urlField.Text));
+            SuperView!.Add(new ServerWindow(_factory, _urlField.Text, startApi));
         }
 
-        private void StartOneClient()
+        private void StartOneClient(bool startApi)
         {
-            SuperView!.Add(new ClientWindow(_factory, _urlField.Text));
+            SuperView!.Add(new ClientWindow(_factory, _urlField.Text, startApi));
         }
     }
 }

@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Archivarius;
-using Pontifex.UserApi;
+using Pontifex.Api;
 using Scriba;
 
 namespace Pontifex.Api.Server

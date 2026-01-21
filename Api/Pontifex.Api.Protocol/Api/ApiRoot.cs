@@ -33,7 +33,7 @@ namespace Pontifex.Api
         
         private StopReason? _stopReason;
 
-
+        public event Action? Connected;
         public event Action? Disconnecting;
         public event Action<StopReason>? Disconnected;
         
@@ -96,15 +96,17 @@ namespace Pontifex.Api
                 }
                 
                 _pipeSystem.Start();
+                Connected?.Invoke();
                 return true;
             });
         }
 
-        public void GracefulShutdown(TimeSpan? timeOut)
+        public void GracefulShutdown(TimeSpan? timeOut, string? errorMessage = null)
         {
             _stage.SetState(State.ShuttingDown, (_, _) =>
             {
-                Interlocked.CompareExchange(ref _stopReason, new UserIntention(ToString(), "GracefulShutdown"), null);
+                StopReason reason = errorMessage != null ? new TextFail(ToString(), errorMessage) : new UserIntention(ToString(), "GracefulShutdown");
+                Interlocked.CompareExchange(ref _stopReason, reason, null);
                 if (_isServerMode)
                 {
                     ((ISender<EmptyMessage>)Kick).Send(new EmptyMessage());

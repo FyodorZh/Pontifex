@@ -4,6 +4,7 @@ using Actuarius.Memory;
 using Archivarius;
 using Pontifex.Utils;
 using Pontifex.Utils.FSM;
+using Scriba;
 
 namespace Pontifex.Api
 {
@@ -19,6 +20,7 @@ namespace Pontifex.Api
         private readonly ProtocolSerializer _serializer;
         private readonly ProtocolDeserializer _deserializer;
         private readonly IMemoryRental _memoryRental;
+        private readonly ILogger Log;
 
         private readonly List<UnidirectionalRawPipeOut?> _rawPipeMap = new();
 
@@ -28,11 +30,12 @@ namespace Pontifex.Api
         private readonly IFSM<StartStopState> _state = new ConcurrentFSM<StartStopState>(
             new RatchetFSM<StartStopState>((l, r) => l.CompareTo(r), StartStopState.NotStarted)); 
 
-        public TransportPipeSystem(Func<UnionDataList, SendResult> sender, IMemoryRental memoryRental)
+        public TransportPipeSystem(Func<UnionDataList, SendResult> sender, IMemoryRental memoryRental, ILogger logger)
         {
             _serializer = new ProtocolSerializer();
             _deserializer = new ProtocolDeserializer();
             _memoryRental = memoryRental;
+            Log = logger;
             
             _globalSender = data =>
             {
@@ -90,7 +93,7 @@ namespace Pontifex.Api
 
         public IUnidirectionalModelPipeIn<TModel> AllocateModelPipeIn<TModel>() where TModel : struct, IDataStruct
         {
-            return new UnidirectionalModelPipeIn<TModel>(AllocateRawPipeIn(), _serializer, _memoryRental);
+            return new UnidirectionalModelPipeIn<TModel>(AllocateRawPipeIn(), _serializer, _memoryRental, Log);
         }
 
         public IUnidirectionalModelPipeOut<TModel> AllocateModelPipeOut<TModel>() where TModel : struct, IDataStruct

@@ -12,12 +12,15 @@ namespace Pontifex.Api
         private readonly IUnidirectionalRawPipeIn _rawPipeIn;
         private readonly ProtocolSerializer _protocolSerializer;
         private readonly IMemoryRental _memoryRental;
+
+        private readonly ILogger Log;
         
-        public UnidirectionalModelPipeIn(IUnidirectionalRawPipeIn rawPipeIn, ProtocolSerializer serializer, IMemoryRental memoryRental)
+        public UnidirectionalModelPipeIn(IUnidirectionalRawPipeIn rawPipeIn, ProtocolSerializer serializer, IMemoryRental memoryRental, ILogger logger)
         {
             _rawPipeIn = rawPipeIn;
             _protocolSerializer = serializer;
             _memoryRental = memoryRental;
+            Log = logger;
         }
 
         public SendResult Send(TModel model)

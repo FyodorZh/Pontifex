@@ -6,7 +6,7 @@ using Pontifex.Api;
 using Scriba;
 
 
-namespace Pontifex.UserApi
+namespace Pontifex.Api
 {
 
     public interface IRequestInfo

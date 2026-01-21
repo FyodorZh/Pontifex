@@ -3,6 +3,7 @@ using Pontifex.Abstractions.Endpoints.Server;
 using Pontifex.Abstractions.Handlers;
 using Pontifex.Abstractions.Handlers.Server;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Api
 {
@@ -10,14 +11,16 @@ namespace Pontifex.Api
     {
         private readonly IApiRoot _api;
         private readonly IMemoryRental _memoryRental;
+        private readonly ILogger Log;
         
         private IAckRawClientEndpoint? _endpoint;
         private TransportPipeSystem? _transportPipeSystem;
         
-        public ServerSideApi(IApiRoot api, IMemoryRental memoryRental) 
+        public ServerSideApi(IApiRoot api, IMemoryRental memoryRental, ILogger logger) 
         {
             _api = api;
             _memoryRental = memoryRental;
+            Log = logger;
         }
 
         void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
@@ -38,7 +41,7 @@ namespace Pontifex.Api
                 }
                 dataToSend.Release();
                 return SendResult.NotConnected;
-            }, _memoryRental);
+            }, _memoryRental, Log);
             _api.Disconnected += r => _endpoint?.Disconnect(r);
             _api.Start(true, _transportPipeSystem);
         }
