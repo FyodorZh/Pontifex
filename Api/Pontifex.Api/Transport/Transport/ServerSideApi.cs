@@ -7,16 +7,19 @@ using Scriba;
 
 namespace Pontifex.Api
 {
-    public class ServerSideApi : IAckRawServerHandler
+    public class ServerSideApi<TApi> : IAckRawServerHandler
+        where TApi : IApiRoot
     {
-        private readonly IApiRoot _api;
+        private readonly TApi _api;
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
         
         private IAckRawClientEndpoint? _endpoint;
         private TransportPipeSystem? _transportPipeSystem;
         
-        public ServerSideApi(IApiRoot api, IMemoryRental memoryRental, ILogger logger) 
+        public TApi Api => _api;
+        
+        public ServerSideApi(TApi api, IMemoryRental memoryRental, ILogger logger) 
         {
             _api = api;
             _memoryRental = memoryRental;

@@ -2,30 +2,25 @@ using System;
 using Actuarius.Memory;
 using Pontifex.Abstractions.Acknowledgers;
 using Pontifex.Utils;
-using Scriba;
 
 namespace Pontifex.Api
 {
-    public class ServerSideApiFactory<TApi> : IRawServerAcknowledger<ServerSideApi>
+    public class ServerSideApiFactory<TApi> : IRawServerAcknowledger<ServerSideApi<TApi>>
         where TApi : IApiRoot
     {
-        private readonly Func<TApi> _apiFactory;
-        private readonly IMemoryRental _memoryRental;
-        private readonly ILogger Log;
+        private readonly Func<UnionDataList, ServerSideApi<TApi>> _apiFactory;
 
-        public ServerSideApiFactory(Func<TApi> apiFactory, IMemoryRental memoryRental, ILogger logger)
+        public ServerSideApiFactory(Func<UnionDataList, ServerSideApi<TApi>> apiFactory)
         {
             _apiFactory = apiFactory;
-            _memoryRental = memoryRental;
-            Log = logger;
         }
         
-        public ServerSideApi? TryAck(UnionDataList ackData)
+        public ServerSideApi<TApi>? TryAck(UnionDataList ackData)
         {
             using var disposer = ackData.AsDisposable();
-            if (ackData.TryPopFirst(out long value) && value == 777)
+            if (ackData.TryPopFirst(out long apiHash) && apiHash == 777)
             {
-                return new ServerSideApi(_apiFactory.Invoke(), _memoryRental, Log);
+                return _apiFactory.Invoke(ackData);
             }
 
             return null;

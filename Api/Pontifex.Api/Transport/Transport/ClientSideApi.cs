@@ -16,8 +16,11 @@ namespace Pontifex.Api
         
         private TransportPipeSystem? _transportPipeSystem;
         private IAckRawServerEndpoint? _endpoint;
-
-        //private volatile StopReason _currentReasonToStop = StopReason.Void;
+        
+        protected virtual void AppendAckData(UnionDataList ackData)
+        {
+            // Override to add custom ack data
+        }
         
         public ClientSideApi(IApiRoot api, IMemoryRental memoryRental, ILogger logger) 
         {
@@ -28,9 +31,9 @@ namespace Pontifex.Api
 
         void IAckHandler.WriteAckData(UnionDataList ackData)
         {
-            long protocolHash = 777;
-            // Write Protocol name and hash
-            ackData.PutFirst(protocolHash);
+            AppendAckData(ackData);
+            long apiHash = 777;
+            ackData.PutFirst(apiHash);
         }
 
         void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)

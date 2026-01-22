@@ -35,8 +35,8 @@ namespace Pontifex.Test
             _server = factory.ConstructServer(url, _logger, MemoryRental.Shared);
             if (startApi)
             {
-                ServerSideApiFactory<AckRawProtocol_Server> apiFactory = new ServerSideApiFactory<AckRawProtocol_Server>(
-                    () => new AckRawProtocol_Server(MemoryRental.Shared, _logger), MemoryRental.Shared, _logger);
+                ServerSideApiFactory<AckRawProtocol_Server> apiFactory = new ServerSideApiFactory<AckRawProtocol_Server>((ack) =>
+                    new ServerSideApi<AckRawProtocol_Server>(new AckRawProtocol_Server(MemoryRental.Shared, _logger), MemoryRental.Shared, _logger));
                 
                 if (_server == null || !_server.Init(apiFactory))
                 {
