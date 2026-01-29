@@ -71,7 +71,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         public TEndpoint? UnderlyingEndpoint => _underlyingEndpoint;
 
-        bool IPeriodicLogic.LogicStarted(ILogicDriverCtl driver)
+        bool ILogic<IPeriodicLogicDriverCtl>.LogicStarted(IPeriodicLogicDriverCtl driver)
         {
             mLogicDriver = driver;
             //Log = driver.Log.Wrap("transport", ToString);
@@ -80,7 +80,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             return true;
         }
 
-        void IPeriodicLogic.LogicTick()
+        void IPeriodicLogic.LogicTick(IPeriodicLogicDriverCtl driver)
         {
             var now = DateTime.UtcNow;
 
@@ -206,7 +206,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             }
         }
 
-        void IPeriodicLogic.LogicStopped()
+        void ILogic<IPeriodicLogicDriverCtl>.LogicStopped()
         {
             mState = ReconnectableLogicState.Stopped;
 

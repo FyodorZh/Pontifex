@@ -11,22 +11,19 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
     {
         private readonly Func<IAckReliableRawClient?> _underlyingTransportProducer;
         private readonly TimeSpan _disconnectTimeout;
-        private readonly IPeriodicLogicRunner? _reconnectableSharedLogicRunner;
 
         private ReconnectableClientLogic? _logic;
-        private ILogicDriverCtl? _logicDriver;
+        private  ILogicDriver<IPeriodicLogicDriverCtl>? _logicDriver;
 
         public AckRawReconnectableClient(
             Func<IAckReliableRawClient?> underlyingTransportProducer,
             TimeSpan disconnectTimeout,
             ILogger logger,
-            IMemoryRental memoryRental,
-            IPeriodicLogicRunner? reconnectableSharedLogicRunner = null)
+            IMemoryRental memoryRental)
             : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
             _underlyingTransportProducer = underlyingTransportProducer;
             _disconnectTimeout = disconnectTimeout;
-            _reconnectableSharedLogicRunner = reconnectableSharedLogicRunner;
         }
 
         protected override bool BeginConnect()
@@ -43,18 +40,11 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
             _logic.OnStopped += (reason) => { Stop(reason); };
 
-            var logicTickTime = DeltaTime.FromMiliseconds(20);
+            var logicTickTime = TimeSpan.FromMilliseconds(20);
 
-            if (_reconnectableSharedLogicRunner != null)
-            {
-                _logicDriver = _reconnectableSharedLogicRunner.Run(_logic, logicTickTime);
-            }
-            else
-            {
-                var threadedDriver = new PeriodicLogicThreadedDriver(logicTickTime, 128);
-                threadedDriver.Start(_logic, Log);
-                _logicDriver = threadedDriver;
-            }
+            var threadedDriver = new ThreadBasedPeriodicMultiLogicDriver(NowDateTimeProvider.Instance, logicTickTime);
+            threadedDriver.Start(_logic);
+            _logicDriver = threadedDriver;
 
             return true;
         }
@@ -69,7 +59,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             var logic = _logic;
             if (logic != null)
             {
-                _logicDriver?.Stop();
+                _logicDriver?.Finish();
             }
 
             _logic = null;

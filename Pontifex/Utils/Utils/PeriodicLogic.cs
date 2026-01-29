@@ -6,10 +6,10 @@ namespace Transport.Utils
 {
     public abstract class PeriodicLogic : IPeriodicLogic
     {
-        private readonly Action<int>? mOnTickDelay;
-        private readonly DeltaTime mLogicQuantLeghtMs;
+        private readonly Action<int>? _onTickDelay;
+        private readonly TimeSpan _logicQuantLength;
 
-        private PeriodicLogicThreadedDriver? mDriver;
+        private ILogicDriver<IPeriodicLogicDriverCtl>? _driver;
         private volatile ILogicDriverCtl? mDriverCtl;
 
         protected virtual void LogicStarted() { }
@@ -18,54 +18,35 @@ namespace Transport.Utils
 
         protected PeriodicLogic(int logicQuantLengthMs, Action<int>? onTickDelay = null)
         {
-            mOnTickDelay = onTickDelay;
-            mLogicQuantLeghtMs = DeltaTime.FromMiliseconds(logicQuantLengthMs);
+            _onTickDelay = onTickDelay;
+            _logicQuantLength = TimeSpan.FromMilliseconds(logicQuantLengthMs);
         }
 
-        public void Start(ILogger logger, int maxStackSizeKb = 0)
+        public void Start()
         {
-            mDriver = new PeriodicLogicThreadedDriver(mLogicQuantLeghtMs, maxStackSizeKb, mOnTickDelay);
-            mDriver.Start(this, logger);
-        }
-
-        public void Start(ILogger logger, IPeriodicLogicRunner logicRunner)
-        {
-            logicRunner.Run(this, mLogicQuantLeghtMs);
+            _driver = new SingleJobLogicDriver<IPeriodicLogicDriverCtl>(
+                new ThreadBasedPeriodicMultiLogicDriver(NowDateTimeProvider.Instance, _logicQuantLength));
+            _driver.Start(this);
         }
 
         public void Stop()
         {
-            if (mDriverCtl != null)
-            {
-                mDriverCtl.Stop();
-            }
+            mDriverCtl?.Stop();
         }
 
-        public void InvokeLogic()
-        {
-            if (mDriver != null)
-            {
-                mDriver.InvokeLogic();
-            }
-        }
-
-        protected bool IsStarted => mDriverCtl != null && mDriverCtl.IsStarted;
-
-        protected ILogger Log => mDriverCtl != null ? mDriverCtl.Log : StaticLogger.Instance;
-
-        bool IPeriodicLogic.LogicStarted(ILogicDriverCtl driver)
+        bool ILogic<IPeriodicLogicDriverCtl>.LogicStarted(IPeriodicLogicDriverCtl driver)
         {
             mDriverCtl = driver;
             LogicStarted();
             return true;
         }
 
-        void IPeriodicLogic.LogicTick()
+        void IPeriodicLogic.LogicTick(IPeriodicLogicDriverCtl driver)
         {
             LogicTick();
         }
 
-        void IPeriodicLogic.LogicStopped()
+        void ILogic<IPeriodicLogicDriverCtl>.LogicStopped()
         {
             LogicStopped();
         }

@@ -1,7 +1,5 @@
 ﻿using System;
 using Actuarius.Memory;
-using Operarius;
-using Pontifex;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Servers;
@@ -33,18 +31,17 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
     public class AckRawReconnectableClientProducer : BaseAckRawReconnectableProducer, ITransportProducer
     {
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
             if (Parse(@params, out var disconnectTimeout, out var otherParams))
             {
-                if (factory.Construct(otherParams, logger, memoryRental, logicRunner) is IAckReliableRawClient)
+                if (factory.Construct(otherParams, logger, memoryRental) is IAckReliableRawClient)
                 {
                     return new AckRawReconnectableClient(
-                        () => factory.Construct(otherParams, logger, memoryRental, logicRunner) as IAckReliableRawClient, 
+                        () => factory.Construct(otherParams, logger, memoryRental) as IAckReliableRawClient, 
                         disconnectTimeout, 
                         logger,
-                        memoryRental,
-                        logicRunner);
+                        memoryRental);
                 }
             }
             return null;
@@ -53,11 +50,11 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
     public class AckRawReconnectableServerProducer : BaseAckRawReconnectableProducer, ITransportProducer
     {
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
             if (Parse(@params, out var disconnectTimeout, out var otherParams))
             {
-                if (factory.Construct(otherParams, logger, memoryRental, logicRunner) is IAckReliableRawServer innerTransport)
+                if (factory.Construct(otherParams, logger, memoryRental) is IAckReliableRawServer innerTransport)
                 {
                     return new AckRawReconnectableServer(innerTransport, disconnectTimeout, logger, memoryRental);
                 }

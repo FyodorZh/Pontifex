@@ -1,6 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using Actuarius.Memory;
-using Operarius;
 using Pontifex.Abstractions;
 using Scriba;
 
@@ -11,18 +11,18 @@ namespace Pontifex.Transports.Tcp
         public string Name => TcpInfo.TransportName;
 
         // host:ip/timeout
-        protected static bool Parse(string @params, out DeltaTime disconnectionTimeout, [MaybeNullWhen(false)] out System.Net.IPAddress ip, out int port)
+        protected static bool Parse(string @params, out TimeSpan disconnectionTimeout, [MaybeNullWhen(false)] out System.Net.IPAddress ip, out int port)
         {
             try
             {
                 string[] list = @params.Split('/');
-                disconnectionTimeout = list.Length == 1 ? TcpInfo.DefaultDisconnectTimeout : DeltaTime.FromSeconds(int.Parse(list[1]));
+                disconnectionTimeout = list.Length == 1 ? TcpInfo.DefaultDisconnectTimeout : TimeSpan.FromSeconds(int.Parse(list[1]));
 
                 return Utils.UrlStringParser.TryParseAddress(list[0], out ip, out port);
             }
             catch
             {
-                disconnectionTimeout = new DeltaTime();
+                disconnectionTimeout = TimeSpan.Zero;
                 ip = null;
                 port = -1;
                 return false;
@@ -32,11 +32,11 @@ namespace Pontifex.Transports.Tcp
 
     public class AckRawTcpClientProducer : BaseAckRawTcpProducer, ITransportProducer
     {
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
             if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {
-                return new AckRawTcpClient(ip, port, disconnectionTimeout, logicRunner, logger, memoryRental);
+                return new AckRawTcpClient(ip, port, disconnectionTimeout, logger, memoryRental);
             }
             return null;
         }
@@ -44,7 +44,7 @@ namespace Pontifex.Transports.Tcp
 
     public class AckRawTcpServerProducer : BaseAckRawTcpProducer, ITransportProducer
     {
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
             if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {

@@ -1,5 +1,4 @@
 ﻿using Actuarius.Memory;
-using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Servers;
@@ -43,11 +42,11 @@ namespace Pontifex.Protocols.Zip
             }
         }
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
             if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {
-                if (factory.Construct(nestedAddress, logger, memoryRental, logicRunner) is IAckRawClient client)
+                if (factory.Construct(nestedAddress, logger, memoryRental) is IAckRawClient client)
                 {
                     return new ZipClient(client, compressionLevel);
                 }
@@ -71,11 +70,11 @@ namespace Pontifex.Protocols.Zip
             }
         }
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
             if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {
-                if (factory.Construct(nestedAddress, logger, memoryRental, logicRunner) is IAckRawServer server)
+                if (factory.Construct(nestedAddress, logger, memoryRental) is IAckRawServer server)
                 {
                     return new ZipServer(server, compressionLevel);
                 }

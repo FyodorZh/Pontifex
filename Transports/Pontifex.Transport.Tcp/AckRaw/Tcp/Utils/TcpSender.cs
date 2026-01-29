@@ -31,7 +31,9 @@ namespace Pontifex.Transports.Tcp
         private SocketAsyncEventArgs? _asyncArgs = new SocketAsyncEventArgs();
         private volatile PacketType _currentMessageType;
 
-        public TcpSender(Socket socket, Action<Exception> onFailed, IMemoryRental memoryRental)
+        private ILogger Log;
+
+        public TcpSender(Socket socket, Action<Exception> onFailed, IMemoryRental memoryRental, ILogger logger)
         {
             _socket = socket;
             _onFailed = onFailed;
@@ -39,6 +41,7 @@ namespace Pontifex.Transports.Tcp
             _asyncArgs.SocketFlags = SocketFlags.None;
 
             _memoryRental = memoryRental;
+            Log = logger;
         }
 
         public void Stop(Action onStopped)

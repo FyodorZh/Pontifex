@@ -29,8 +29,7 @@ namespace Pontifex.Transports.Tcp
 
         private readonly IPEndPoint mRemoteEP;
         private readonly IpEndPoint mManagedRemoteEP;
-        private readonly DeltaTime mDisconnectTimeout;
-        private readonly IPeriodicLogicRunner? mKeepAliverSharedLogicRunner;
+        private readonly TimeSpan mDisconnectTimeout;
 
         private Socket? mSocket;
 
@@ -89,14 +88,13 @@ namespace Pontifex.Transports.Tcp
 
         public override int MessageMaxByteSize => TcpInfo.MessageMaxByteSize;
 
-        public AckRawTcpClient(IPAddress ipAddress, int port, DeltaTime disconnectTimeout, IPeriodicLogicRunner? keepAliverSharedLogicRunner,
+        public AckRawTcpClient(IPAddress ipAddress, int port, TimeSpan disconnectTimeout,
             ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
         {
             mRemoteEP = new IPEndPoint(ipAddress, port);
             mManagedRemoteEP = new IpEndPoint(mRemoteEP);
             mDisconnectTimeout = disconnectTimeout;
-            mKeepAliverSharedLogicRunner = keepAliverSharedLogicRunner;
             _transportControl = new AckRawClientControl(this);
         }
 
@@ -115,7 +113,7 @@ namespace Pontifex.Transports.Tcp
         public void Tick()
         {
             DateTime now = DateTime.UtcNow;
-            if ((now - mLastMessageReceiveTime.Time).TotalMilliseconds >= mDisconnectTimeout.MilliSeconds)
+            if ((now - mLastMessageReceiveTime.Time) >= mDisconnectTimeout)
             {
                 Stop(new StopReasons.TimeOut(Type));
             }
@@ -131,7 +129,7 @@ namespace Pontifex.Transports.Tcp
                 mSocketReceiver = new TcpReceiver(socket, OnReceived, OnFailed, null, Memory);
                 mSocketReceiver.Start();
 
-                mSocketSender = new TcpSender(socket, OnFailed, Memory);
+                mSocketSender = new TcpSender(socket, OnFailed, Memory, Log);
 
                 ConnectionState = State.Connecting;
 
@@ -292,8 +290,8 @@ namespace Pontifex.Transports.Tcp
                 {
                     mSocket = new Socket(mRemoteEP.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
-                    mSocket.ReceiveTimeout = mDisconnectTimeout.MilliSeconds;
-                    mSocket.SendTimeout = mDisconnectTimeout.MilliSeconds;
+                    mSocket.ReceiveTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
+                    mSocket.SendTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
                     mSocket.NoDelay = true;
 
                     UnionDataList ackData = Memory.CollectablePool.Acquire<UnionDataList>();
@@ -305,24 +303,15 @@ namespace Pontifex.Transports.Tcp
                     mLastMessageReceiveTime.Time = DateTime.UtcNow;
                     try
                     {
-                        DeltaTime keepAlivePeriod = DeltaTime.FromMiliseconds(800);
+                        TimeSpan keepAlivePeriod = TimeSpan.FromMilliseconds(800);
 
                         mKeepAliver = new KeepAliver(this, Memory);
 
-                        if (mKeepAliverSharedLogicRunner != null)
+                        var driver = new SingleJobLogicDriver<IPeriodicLogicDriverCtl>(
+                            new ThreadBasedPeriodicMultiLogicDriver(NowDateTimeProvider.Instance, keepAlivePeriod));
+                        if (driver.Start(mKeepAliver) != LogicStartResult.Success)
                         {
-                            if (mKeepAliverSharedLogicRunner.Run(mKeepAliver, keepAlivePeriod) == null)
-                            {
-                                throw new Exception("Couldn't start mKeepAliveSharedLogicRunner");
-                            }
-                        }
-                        else
-                        {
-                            var driver = new PeriodicLogicThreadedDriver(keepAlivePeriod, 128);
-                            if (!driver.Start(mKeepAliver, Log))
-                            {
-                                throw new Exception("Couldn't start mKeepAliverSharedLogicRunner");
-                            }
+                            throw new Exception("Couldn't start mKeepAliverSharedLogicRunner");
                         }
                     }
                     catch (Exception ex)

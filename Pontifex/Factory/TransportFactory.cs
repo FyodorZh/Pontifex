@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Actuarius.Memory;
-using Operarius;
 using Pontifex.Abstractions;
 using Scriba;
 
@@ -9,7 +7,7 @@ namespace Pontifex
 {
     public interface ITransportFactory
     {
-        ITransport? Construct(string address, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner = null);
+        ITransport? Construct(string address, ILogger logger, IMemoryRental memoryRental);
     }
 
     public interface ITransportFactoryCtl : ITransportFactory
@@ -23,13 +21,13 @@ namespace Pontifex
 
         private readonly Dictionary<string, ITransportProducer> _producers = new ();
 
-        public ITransport? Construct(string address, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner = null)
+        public ITransport? Construct(string address, ILogger logger, IMemoryRental memoryRental)
         {
             string typeName = TransportType(address);
             if (_producers.TryGetValue(typeName, out var producer))
             {
                 string @params = TransportParams(address);
-                return producer.Produce(@params, this, logger, memoryRental, logicRunner);
+                return producer.Produce(@params, this, logger, memoryRental);
             }
 
             return null;

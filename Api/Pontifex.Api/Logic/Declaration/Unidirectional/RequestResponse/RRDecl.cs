@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using Archivarius;
-using Operarius;
-using Pontifex.Api;
 using Scriba;
 
 
@@ -12,8 +10,8 @@ namespace Pontifex.Api
     public interface IRequestInfo
     {
         string Name { get; }
-        DeltaTime NetworkTime { get; }
-        DeltaTime ProcessTime { get; }
+        TimeSpan NetworkTime { get; }
+        TimeSpan ProcessTime { get; }
     }
 
     public interface IRequestSuccess<out TResponse> : IRequestInfo
@@ -109,8 +107,8 @@ namespace Pontifex.Api
                     return;
                 }
 
-                DeltaTime totalTime = DeltaTime.FromSeconds((HighResDateTime.UtcNow - reaction.RequestTime).TotalSeconds);
-                DeltaTime processTime = DeltaTime.FromSeconds(responseMessage.ProcessTime.TotalSeconds);
+                TimeSpan totalTime = TimeSpan.FromSeconds((DateTime.UtcNow - reaction.RequestTime).TotalSeconds);
+                TimeSpan processTime = TimeSpan.FromSeconds(responseMessage.ProcessTime.TotalSeconds);
 
                 if (responseMessage.IsOK)
                 {
@@ -134,8 +132,8 @@ namespace Pontifex.Api
                 {
                     var reaction = eachPair.Value;
 
-                    DeltaTime totalTime = DeltaTime.FromSeconds((HighResDateTime.UtcNow - reaction.RequestTime).TotalSeconds);
-                    _currentRequestInfo_Reusable.Setup(totalTime, DeltaTime.Zero, "Declaration " + Name + " was stopped");
+                    TimeSpan totalTime = TimeSpan.FromSeconds((DateTime.UtcNow - reaction.RequestTime).TotalSeconds);
+                    _currentRequestInfo_Reusable.Setup(totalTime, TimeSpan.Zero, "Declaration " + Name + " was stopped");
                     reaction.OnFail(_currentRequestInfo_Reusable);
                 }
 
@@ -155,7 +153,7 @@ namespace Pontifex.Api
                 }
                 
                 long messageId = System.Threading.Interlocked.Increment(ref _lastSentRequestId);
-                _pendingRequests.Add(messageId, new ActionPair(onResponse, onFail, HighResDateTime.UtcNow));
+                _pendingRequests.Add(messageId, new ActionPair(onResponse, onFail, DateTime.UtcNow));
                 var sendResult = _requestSender?.Send(new RequestMessage<TRequest>(messageId, request)) ?? SendResult.Error;
                 if (sendResult != SendResult.Ok)
                 {
@@ -181,7 +179,7 @@ namespace Pontifex.Api
         private RequestInfo CreateErrorRequestInfo(string error)
         {
             var requestInfo = new RequestInfo(this);
-            requestInfo.Setup(DeltaTime.Zero, DeltaTime.Zero, error);
+            requestInfo.Setup(TimeSpan.Zero, TimeSpan.Zero, error);
             return requestInfo;
         }
         
@@ -196,7 +194,7 @@ namespace Pontifex.Api
             {
                 mOwner = owner;
                 mData = data;
-                mRequestTime = HighResDateTime.UtcNow;
+                mRequestTime = DateTime.UtcNow;
                 mRequestId = requestId;
             }
 
@@ -204,12 +202,12 @@ namespace Pontifex.Api
 
             SendResult IRequest<TRequest, TResponse>.Response(TResponse response)
             {
-                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, response, HighResDateTime.UtcNow - mRequestTime));
+                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, response, DateTime.UtcNow - mRequestTime));
             }
 
             SendResult IRequest<TRequest, TResponse>.Fail(string errorMessage)
             {
-                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, errorMessage, HighResDateTime.UtcNow - mRequestTime));
+                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, errorMessage, DateTime.UtcNow - mRequestTime));
             }
         }
 
@@ -233,8 +231,8 @@ namespace Pontifex.Api
             private TResponse? _response;
             private string? _error;
 
-            public DeltaTime NetworkTime { get; private set; }
-            public DeltaTime ProcessTime { get; private set; }
+            public TimeSpan NetworkTime { get; private set; }
+            public TimeSpan ProcessTime { get; private set; }
 
             public TResponse Response => _response ?? throw new InvalidOperationException("Response is not available");
             public string Error => _error ?? throw new InvalidOperationException("Error is not available");
@@ -246,7 +244,7 @@ namespace Pontifex.Api
                 _owner = owner;
             }
 
-            public void Setup(DeltaTime networkTime, DeltaTime processTime, TResponse response)
+            public void Setup(TimeSpan networkTime, TimeSpan processTime, TResponse response)
             {
                 NetworkTime = networkTime;
                 ProcessTime = processTime;
@@ -254,7 +252,7 @@ namespace Pontifex.Api
                 _error = null;
             }
 
-            public void Setup(DeltaTime networkTime, DeltaTime processTime, string error)
+            public void Setup(TimeSpan networkTime, TimeSpan processTime, string error)
             {
                 NetworkTime = networkTime;
                 ProcessTime = processTime;

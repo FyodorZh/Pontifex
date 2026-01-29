@@ -23,7 +23,7 @@ namespace Pontifex.Transports.Tcp
             private readonly TinyConcurrentQueue<ServerSideSocket> mClientsToAdd = new TinyConcurrentQueue<ServerSideSocket>();
             private readonly TinyConcurrentQueue<ServerSideSocket> mClientsToRemove = new TinyConcurrentQueue<ServerSideSocket>();
 
-            private readonly DeltaTime mDisconnectTimeout;
+            private readonly TimeSpan mDisconnectTimeout;
 
             public event Action<ServerSideSocket>? ClientDisconnected;
 
@@ -32,7 +32,7 @@ namespace Pontifex.Transports.Tcp
             private static readonly StopReasons.TimeOut mTimeOutReasonSingleton = new StopReasons.TimeOut(TcpInfo.TransportName);
             private static readonly StopReasons.UserIntention mUserIntentionReasonSingleton = new StopReasons.UserIntention(TcpInfo.TransportName);
 
-            public ClientSet(DeltaTime disconnectTimeout)
+            public ClientSet(TimeSpan disconnectTimeout)
                 : base(100)
             {
                 mDisconnectTimeout = disconnectTimeout;
@@ -56,7 +56,7 @@ namespace Pontifex.Transports.Tcp
                 DateTime now = DateTime.UtcNow;
                 foreach (var client in mClients)
                 {
-                    if ((now - client.LastMessageReceiveUtcTime).TotalMilliseconds > mDisconnectTimeout.MilliSeconds)
+                    if ((now - client.LastMessageReceiveUtcTime) > mDisconnectTimeout)
                     {
                         mTmpClientList.Add(client);
                     }
@@ -102,7 +102,7 @@ namespace Pontifex.Transports.Tcp
         }
 
         private readonly int mConnectionsLimit;
-        private readonly DeltaTime mDisconnectTimeout;
+        private readonly TimeSpan mDisconnectTimeout;
         private readonly Semaphore mMaxNumberAcceptedClients;
 
         private IPEndPoint mLocalEndPoint;
@@ -110,7 +110,7 @@ namespace Pontifex.Transports.Tcp
 
         private IServerSocketListener? mSocketListener;
 
-        public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, DeltaTime disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
         {
             try
@@ -197,7 +197,7 @@ namespace Pontifex.Transports.Tcp
                     res = mSocketListener.Start();
                     if (res)
                     {
-                        mClients.Start(Log, 128);
+                        mClients.Start();
                     }
 
                     Log.i("Starting.Result = '{0}'", res ? "OK" : "FAIL");
@@ -245,8 +245,8 @@ namespace Pontifex.Transports.Tcp
             catch { remoteName = "invalid"; }
             Log.i("ep[Ip={0}]: Connecting...", remoteName);
 
-            socket.ReceiveTimeout = mDisconnectTimeout.MilliSeconds;
-            socket.SendTimeout = mDisconnectTimeout.MilliSeconds;
+            socket.ReceiveTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
+            socket.SendTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
             socket.SendBufferSize = TcpInfo.MessageMaxByteSize * 4;
             socket.ReceiveBufferSize = TcpInfo.MessageMaxByteSize * 4;
             socket.NoDelay = true;

@@ -89,7 +89,7 @@ namespace Pontifex.Api.Client
 
         public struct CommonResponseInfo
         {
-            public CommonResponseInfo(string name, DeltaTime networkTime, DeltaTime processTime)
+            public CommonResponseInfo(string name, TimeSpan networkTime, TimeSpan processTime)
             {
                 Name = name;
                 NetworkTime = networkTime;
@@ -97,8 +97,8 @@ namespace Pontifex.Api.Client
             }
 
             public string Name { get; }
-            public DeltaTime NetworkTime { get; }
-            public DeltaTime ProcessTime { get; }
+            public TimeSpan NetworkTime { get; }
+            public TimeSpan ProcessTime { get; }
         }
     }
 }

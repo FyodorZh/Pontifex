@@ -1,5 +1,4 @@
 using Actuarius.Memory;
-using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Servers;
@@ -11,9 +10,9 @@ namespace Pontifex.Protocols.Monitoring.AckRaw
     {
         public string Name => "log";
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
-            if (factory.Construct(@params, logger, memoryRental, logicRunner) is IAckReliableRawClient client)
+            if (factory.Construct(@params, logger, memoryRental) is IAckReliableRawClient client)
             {
                 return new AckRawReliableClientLogger(client);
             }
@@ -25,9 +24,9 @@ namespace Pontifex.Protocols.Monitoring.AckRaw
     {
         public string Name => "log";
 
-        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental, IPeriodicLogicRunner? logicRunner)
+        public ITransport? Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
-            if (factory.Construct(@params, logger, memoryRental, logicRunner) is IAckReliableRawServer server)
+            if (factory.Construct(@params, logger, memoryRental) is IAckReliableRawServer server)
             {
                 return new AckRawReliableServerLogger(server);
             }

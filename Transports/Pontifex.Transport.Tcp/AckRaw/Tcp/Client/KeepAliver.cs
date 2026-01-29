@@ -17,13 +17,13 @@ namespace Pontifex.Transports.Tcp
             _memoryRental = memoryRental;
         }
 
-        bool IPeriodicLogic.LogicStarted(ILogicDriverCtl driver)
+        bool ILogic<IPeriodicLogicDriverCtl>.LogicStarted(IPeriodicLogicDriverCtl driver)
         {
             _driver = driver;
             return true;
         }
 
-        void IPeriodicLogic.LogicTick()
+        void IPeriodicLogic.LogicTick(IPeriodicLogicDriverCtl driver)
         {
             try
             {
@@ -55,7 +55,7 @@ namespace Pontifex.Transports.Tcp
             _driver?.Stop();
         }
 
-        void IPeriodicLogic.LogicStopped()
+        void ILogic<IPeriodicLogicDriverCtl>.LogicStopped()
         {
         }
     }

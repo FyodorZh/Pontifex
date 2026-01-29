@@ -76,15 +76,15 @@ namespace Pontifex.Transports.Tcp
             mSocket = socket;
             mClientId = System.Threading.Interlocked.Increment(ref mPrevClientId);
 
-            mSocketReceiver = new TcpReceiver(mSocket, Received, OnFailed, () => Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName)), memoryRental);
-            mSocketSender = new TcpSender(mSocket, OnFailed, memoryRental);
-
             Ep = new IpEndPoint(socket.RemoteEndPoint);
             LocalEp = new IpEndPoint(socket.LocalEndPoint);
             Memory = memoryRental;
             Log = logger.Wrap();
             Log.Tags.Set("ssSocket", ToString);
             mLastMessageReceiveTime.Time = DateTime.UtcNow;
+            
+            mSocketReceiver = new TcpReceiver(mSocket, Received, OnFailed, () => Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName)), memoryRental);
+            mSocketSender = new TcpSender(mSocket, OnFailed, memoryRental, Log);
         }
 
         public void Start()

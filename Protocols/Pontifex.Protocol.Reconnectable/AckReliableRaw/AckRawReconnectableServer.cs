@@ -1,4 +1,5 @@
-﻿using Actuarius.Collections;
+﻿using System;
+using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Abstractions.Acknowledgers;
@@ -13,12 +14,12 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
     public class AckRawReconnectableServer : AckRawServer, IAckReliableRawServer, IRawServerAcknowledger<IAckRawServerHandler>
     {
         private readonly IAckReliableRawServer _coreTransport;
-        private readonly System.TimeSpan _disconnectTimeout;
+        private readonly TimeSpan _disconnectTimeout;
 
         private readonly SessionMap<ReconnectableServerLogic> _sessionsMap = new (ReconnectableInfo.ServerConnectionsLimit);
-        private PeriodicMultiLogicMultiDriver? _sessionsLogicDriver;
+        private ILogicDriver<IPeriodicLogicDriverCtl>? _sessionsLogicDriver;
 
-        public AckRawReconnectableServer(IAckReliableRawServer coreTransport, System.TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        public AckRawReconnectableServer(IAckReliableRawServer coreTransport, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
             _coreTransport = coreTransport;
@@ -27,14 +28,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         protected override bool TryStart()
         {
-            int threads = 1;
-            IPeriodicLogicDriver[] drivers = new IPeriodicLogicDriver[threads];
-            for (int i = 0; i < threads; ++i)
-            {
-                drivers[i] = new PeriodicLogicThreadedDriver(DeltaTime.FromMiliseconds(20), 128);
-            }
-            _sessionsLogicDriver = new PeriodicMultiLogicMultiDriver(drivers);
-            _sessionsLogicDriver.Start(Log);
+            _sessionsLogicDriver = new ThreadBasedPeriodicMultiLogicDriver(NowDateTimeProvider.Instance, TimeSpan.FromMilliseconds(20));
 
             if (_coreTransport.Init(this))
             {
@@ -52,7 +46,13 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             _coreTransport.Stop(reason);
 
             var driver = _sessionsLogicDriver;
-            driver?.Stop();
+            driver?.Finish().ContinueWith(t =>
+            {
+                if (t.Exception != null)
+                {
+                    Log.wtf(t.Exception);
+                }
+            });
             _sessionsLogicDriver = null;
         }
 
@@ -120,7 +120,12 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                 if (sessionId.IsValid)
                 {
                     logic.Attach(sessionId);
-                    _sessionsLogicDriver!.Append(logic, DeltaTime.FromMiliseconds(20));
+                    if (_sessionsLogicDriver!.Start(logic) != LogicStartResult.Success)
+                    {
+                        _sessionsMap.RemoveSession(logic.Id);
+                        Log.w("{0} failed to start", logic);
+                        return null;
+                    }
                     return logic;
                 }
             }
