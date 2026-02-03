@@ -16,7 +16,7 @@ namespace Pontifex.Test
         private readonly IAckRawServer? _server;
         private readonly ILogger _logger;
         
-        public ServerWindow(TransportFactory factory, string url, bool startApi)
+        public ServerWindow(TransportFactory factory, string url, string? api)
         {
             X = 0;
             Y = 1;
@@ -33,10 +33,12 @@ namespace Pontifex.Test
             _logger = new Logger([loggerView]);  
 
             _server = factory.ConstructServer(url, _logger, MemoryRental.Shared);
-            if (startApi)
+            if (api != null)
             {
-                ServerSideApiFactory<AckRawProtocol_Server> apiFactory = new ServerSideApiFactory<AckRawProtocol_Server>((ack) =>
-                    new ServerSideApi<AckRawProtocol_Server>(new AckRawProtocol_Server(MemoryRental.Shared, _logger), MemoryRental.Shared, _logger));
+                var apiFactory = new ServerSideApiFactory<ApiRoot>((ack) =>
+                {
+                    return new ServerSideApi<ApiRoot>(ApiFactory.Construct(api, false, MemoryRental.Shared, _logger), MemoryRental.Shared, _logger);
+                });
                 
                 if (_server == null || !_server.Init(apiFactory))
                 {

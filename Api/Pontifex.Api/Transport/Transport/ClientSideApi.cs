@@ -1,3 +1,4 @@
+using System;
 using Actuarius.Memory;
 using Pontifex.Abstractions.Endpoints.Client;
 using Pontifex.Abstractions.Handlers;
@@ -16,6 +17,9 @@ namespace Pontifex.Api
         
         private TransportPipeSystem? _transportPipeSystem;
         private IAckRawServerEndpoint? _endpoint;
+        
+        public event Action<IAckRawServerEndpoint>? Connected;
+        public event Action<StopReason>? Disconnected;
         
         protected virtual void AppendAckData(UnionDataList ackData)
         {
@@ -54,6 +58,7 @@ namespace Pontifex.Api
                 }, _memoryRental, Log);
                 _api.Disconnected += r => _endpoint?.Disconnect(r);
                 _api.Start(false, _transportPipeSystem);
+                Connected?.Invoke(endPoint);
             }
             else
             {
@@ -71,6 +76,7 @@ namespace Pontifex.Api
             _api.Stop();
             _transportPipeSystem = null;
             _endpoint = null;
+            Disconnected?.Invoke(reason);
         }
         
         void IAckRawClientHandler.OnStopped(StopReason reason)

@@ -16,7 +16,7 @@ namespace Pontifex.Test
         private readonly IAckRawClient? _transport;
         private readonly ILogger _logger;
         
-        public ClientWindow(TransportFactory factory, string url, bool startApi)
+        public ClientWindow(TransportFactory factory, string url, string? startApi)
         {
             X = Pos.AnchorEnd();
             Y = 1;
@@ -46,7 +46,7 @@ namespace Pontifex.Test
                 return;
             }
 
-            if (!startApi)
+            if (startApi == null)
             {
                 var clientLogic = new AckRawClientLogic(_transport.Memory, _transport.Log, 1);
                 clientLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
@@ -60,8 +60,10 @@ namespace Pontifex.Test
             }
             else
             {
-                AckRawProtocol_Client api = new AckRawProtocol_Client(_transport.Memory, _transport.Log);
+                var api = ApiFactory.Construct(startApi, true, _transport.Memory, _transport.Log);
                 ClientSideApi apiLogic = new ClientSideApi(api, _transport.Memory, _transport.Log);
+                apiLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
+                apiLogic.Disconnected += _ => { controlsPanel.SetEndpoint(null); };
                 if (!_transport.Init(apiLogic))
                 {
                     _logger.e("Failed to init transport");

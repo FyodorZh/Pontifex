@@ -66,7 +66,7 @@ namespace TransportAnalyzer.TestLogic
             try
             {
                 List<Task> tasks = new List<Task>();
-                for (int i = 0; i < 1; ++i)
+                for (int i = 0; i < 4; ++i)
                 {
                     tasks.Add(Task.Run(async () =>
                     {

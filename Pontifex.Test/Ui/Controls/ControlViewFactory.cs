@@ -1,4 +1,5 @@
 using Pontifex.Abstractions;
+using Pontifex.Transports.Tcp;
 
 namespace Pontifex.Test
 {
@@ -9,6 +10,7 @@ namespace Pontifex.Test
             return control switch
             {
                 IAckRawClientControl ackRawClientControl => new AckRawClientControlView(ackRawClientControl),
+                IAckRawTcpClientDebugControl ackRawTcpClientDebugControlrol => new AckRawTcpClientDebugControlView(ackRawTcpClientDebugControlrol),
                 _ => new UnknownControlView(control)
             };
         }

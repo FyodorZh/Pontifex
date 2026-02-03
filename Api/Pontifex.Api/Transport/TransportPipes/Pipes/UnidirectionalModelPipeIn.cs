@@ -31,8 +31,7 @@ namespace Pontifex.Api
                     _protocolSerializer.Serialize(model, _memoryRental.ByteArraysPool).AsDisposable();
                 UnionDataList data = _memoryRental.CollectablePool.Acquire<UnionDataList>();
                 data.PutFirst(bytesHolder.Resource.Acquire());
-                _rawPipeIn.Send(data);
-                return SendResult.Ok;
+                return _rawPipeIn.Send(data);
             }
             catch (Exception ex)
             {

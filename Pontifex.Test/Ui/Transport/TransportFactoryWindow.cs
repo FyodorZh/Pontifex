@@ -12,6 +12,7 @@ namespace Pontifex.Test
     {
         private readonly TransportFactory _factory;
         private readonly TextField _urlField;
+        private string _api = "";
         
         private readonly CheckBox _directTransport;
         private readonly CheckBox _tcpTransport;
@@ -26,6 +27,11 @@ namespace Pontifex.Test
         private readonly TextField _tcpUdpAddressField;
         private readonly TextField _tcpUdpPortField;
         
+        private CheckBox _silentApi = null!;
+        private CheckBox _bruteForceApi = null!;
+        private CheckBox _bigApi = null!;
+        
+        
         public TransportFactoryWindow(TransportFactory factory)
             :base(false)
         {
@@ -35,7 +41,7 @@ namespace Pontifex.Test
             X = Pos.Center();
             Y = Pos.Center();
             Width = 55;
-            Height = 15;
+            Height = 17;
             
             var urlLabel = new Label() { Title = "Url: ", X = 0, Y = 0, Width = Dim.Auto(), Height = 1 };
             Add(urlLabel);
@@ -68,11 +74,11 @@ namespace Pontifex.Test
             _tcpUdpAddressField.Text = "127.0.0.1";
             _tcpUdpPortField.Text = "12345";
             
-            FrameView wrappersGroup = new FrameView()
+            FrameView protocolsGroup = new FrameView()
             {
                 Title = "Protocols", X = 0, Y = Pos.Bottom(transportGroup), Width = Dim.Fill(), Height = 4
             };
-            Add(transportGroup, wrappersGroup);
+            Add(transportGroup, protocolsGroup);
             
             // Zip
             _zipProtocol = new CheckBox()
@@ -80,7 +86,7 @@ namespace Pontifex.Test
                 Title = "zip", X = 0, Y = 0, Width = Dim.Auto(), Height = 1
             };
             _zipProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
-            wrappersGroup.Add(_zipProtocol);
+            protocolsGroup.Add(_zipProtocol);
             
             // Monitor
             _monitorProtocol = new CheckBox()
@@ -88,7 +94,7 @@ namespace Pontifex.Test
                 Title = "monitor", X = Pos.Right(_zipProtocol)+ 1, Y = 0, Width = Dim.Auto(), Height = 1
             };
             _monitorProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
-            wrappersGroup.Add(_monitorProtocol);
+            protocolsGroup.Add(_monitorProtocol);
             
             // Logger
             _loggerProtocol = new CheckBox()
@@ -96,7 +102,7 @@ namespace Pontifex.Test
                 Title = "log", X = Pos.Right(_monitorProtocol) + 1, Y = 0, Width = Dim.Auto(), Height = 1
             };
             _loggerProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
-            wrappersGroup.Add(_loggerProtocol);
+            protocolsGroup.Add(_loggerProtocol);
             
             // Reconnectable
             _reconectableProtocol = new CheckBox()
@@ -104,29 +110,32 @@ namespace Pontifex.Test
                 Title = "reconnectable", X = 0, Y = 1, Width = Dim.Auto(), Height = 1
             };
             _reconectableProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
-            wrappersGroup.Add(_reconectableProtocol);
+            protocolsGroup.Add(_reconectableProtocol);
+            
+            
+            var posY = SetupApiGroup(Pos.Bottom(protocolsGroup));
 
             var startServerAndClientBtn = new Button()
             {
-                Text = "Start S&C", X = 0, Y = Pos.Bottom(wrappersGroup), Width = Dim.Auto(), Height = 1
+                Text = "Start S&C", X = 0, Y = posY, Width = Dim.Auto(), Height = 1
             };
             var startServerBtn = new Button()
             {
-                Title = "Start S", X = Pos.Right(startServerAndClientBtn) + 1, Y = Pos.Bottom(wrappersGroup), Width = Dim.Auto(), Height = 1
+                Title = "Start S", X = Pos.Right(startServerAndClientBtn) + 1, Y = posY, Width = Dim.Auto(), Height = 1
             };
             var startClientBtn = new Button()
             {
-                Title = "Start C", X = Pos.Right(startServerBtn) + 1, Y = Pos.Bottom(wrappersGroup), Width = Dim.Auto(), Height = 1
+                Title = "Start C", X = Pos.Right(startServerBtn) + 1, Y = posY, Width = Dim.Auto(), Height = 1
             };
             var startApiBtn = new Button()
             {
-                Title = "Start API", X = Pos.Right(startClientBtn) + 1, Y = Pos.Bottom(wrappersGroup), Width = Dim.Auto(), Height = 1
+                Title = "Start API", X = Pos.Right(startClientBtn) + 1, Y = posY, Width = Dim.Auto(), Height = 1
             };
             Add(startServerAndClientBtn, startServerBtn, startClientBtn, startApiBtn);
 
-            startServerAndClientBtn.Accepting += (sender, args) => OnStart(args, true, true);
-            startServerBtn.Accepting += (sender, args) => OnStart(args, true, false);
-            startClientBtn.Accepting += (sender, args) => OnStart(args, false, true);
+            startServerAndClientBtn.Accepting += (sender, args) => OnStart(args, true, true, true);
+            startServerBtn.Accepting += (sender, args) => OnStart(args, true, false, true);
+            startClientBtn.Accepting += (sender, args) => OnStart(args, false, true, true);
             startApiBtn.Accepting += (sender, args) => OnStart(args, true, true, true);
 
             void OnStart(CommandEventArgs args, bool startServer, bool startClient, bool startApi = false)
@@ -153,6 +162,37 @@ namespace Pontifex.Test
             OnCheckedStateChanged();
         }
 
+        private Pos SetupApiGroup(Pos yPos)
+        {
+            RadioButtonGroup apiGroup = new(
+                _silentApi = new CheckBox() // silent-api
+                {
+                    RadioStyle = true,
+                    Title = "silent",
+                    X = 0, Y = 0, Width = Dim.Auto(), Height = 1, CheckedState = CheckState.Checked
+                },
+                _bruteForceApi = new CheckBox() // brute-force-api
+                {
+                    RadioStyle = true,
+                    Title = "brute-force",
+                    X = 0, Y = 1, Width = Dim.Auto(), Height = 1
+                },
+                _bigApi = new CheckBox() // big-api
+                {
+                    RadioStyle = true,
+                    Title = "big",
+                    X = 0, Y = 2, Width = Dim.Auto(), Height = 1
+                })
+            {
+                Title = "Api", X = 0, Y = yPos, Width = Dim.Fill(), Height = 5
+            };
+            apiGroup.CheckBoxActivated += _ => OnCheckedStateChanged();
+            
+            Add(apiGroup);
+
+            return Pos.Bottom(apiGroup);
+        }
+
         private void OnCheckedStateChanged()
         {
             string cmd = "";
@@ -162,7 +202,7 @@ namespace Pontifex.Test
             }
             else if (_tcpTransport.CheckedState == CheckState.Checked)
             {
-                cmd = "tcp|127.0.0.1:10000";
+                cmd = $"tcp|{_tcpUdpAddressField.Text}:{_tcpUdpPortField.Text}";
             }
             else
             {
@@ -180,16 +220,23 @@ namespace Pontifex.Test
                 cmd = "log|" + cmd;
             
             _urlField.Text = cmd;
+
+            if (_silentApi.CheckedState == CheckState.Checked)
+                _api = "silent";
+            if (_bruteForceApi.CheckedState == CheckState.Checked)
+                _api = "brute";
+            if (_bigApi.CheckedState == CheckState.Checked)
+                _api = "big";
         }
 
         private void StartOneServer(bool startApi)
         {
-            SuperView!.Add(new ServerWindow(_factory, _urlField.Text, startApi));
+            SuperView!.Add(new ServerWindow(_factory, _urlField.Text, startApi ? _api : null));
         }
 
         private void StartOneClient(bool startApi)
         {
-            SuperView!.Add(new ClientWindow(_factory, _urlField.Text, startApi));
+            SuperView!.Add(new ClientWindow(_factory, _urlField.Text, startApi ? _api : null));
         }
     }
 }
