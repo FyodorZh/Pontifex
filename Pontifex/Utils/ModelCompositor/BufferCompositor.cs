@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Threading;
 using Actuarius.Memory;
+using Scriba;
 
 namespace Pontifex.Utils
 {
@@ -7,10 +9,10 @@ namespace Pontifex.Utils
     {
         private readonly IPool<IMultiRefByteArray, int> _arrayPool;
         
-        private readonly int _maxPacketSize;
+        private readonly int _maxMessageSize;
         private readonly BufferProcessorDelegate _bufferProcessor;
         
-        private UnionDataMemoryAlias _packetSize = 0;
+        private UnionDataMemoryAlias _messageSize = 0;
         private IMultiRefByteArray? _packetData;
         
         private int _copiedCount;
@@ -26,17 +28,16 @@ namespace Pontifex.Utils
 
         public delegate void BufferProcessorDelegate(IMultiRefByteArray bytes);
 
-        public BufferCompositor(BufferProcessorDelegate bufferProcessor, IConcurrentPool<IMultiRefByteArray, int> arrayPool, int maxPacketSize = 1024 * 1024)
+        public BufferCompositor(BufferProcessorDelegate bufferProcessor, IConcurrentPool<IMultiRefByteArray, int> arrayPool, int maxMessageSize)
         {
             _arrayPool = arrayPool;
-            _maxPacketSize = maxPacketSize;
+            _maxMessageSize = maxMessageSize;
             _bufferProcessor =  bufferProcessor;
         }
 
         public void Dispose()
         {
-            _packetData?.Release();
-            _packetData = null!;
+            Interlocked.Exchange(ref _packetData, null)?.Release();
         }
         
         public void PushData(byte[] bytes, int start, int count)
@@ -50,7 +51,7 @@ namespace Pontifex.Utils
                         int bytesToCopy = Math.Min(4 - _copiedCount, count);
                         for (int i = 0; i < bytesToCopy; i++)
                         {
-                            _packetSize[_copiedCount] = bytes[start];
+                            _messageSize[_copiedCount] = bytes[start];
                             _copiedCount += 1;
                             start += 1;
                             count -= 1;
@@ -66,19 +67,24 @@ namespace Pontifex.Utils
                     }
                     case Stage.AllocateBuffer:
                     {
-                        if (_packetSize.IntValue > _maxPacketSize)
+                        if (_messageSize.IntValue > _maxMessageSize)
                         {
-                            throw new Exception($"ModelCompositor: packet size is too large ({_packetSize.IntValue})");
+                            throw new Exception($"ModelCompositor: packet size is too large ({_messageSize.IntValue})");
+                        }
+
+                        var packet = Interlocked.Exchange(ref _packetData, _arrayPool.Acquire(_messageSize.IntValue));
+                        if (packet != null)
+                        {
+                            throw new Exception();
                         }
                         
-                        _packetData = _arrayPool.Acquire(_packetSize.IntValue);
                         _copiedCount = 0;
                         _stage = Stage.FillBuffer;
                         break;
                     }
                     case Stage.FillBuffer:
                     {
-                        int bytesToCopy = Math.Min(_packetSize.IntValue - _copiedCount, count);
+                        int bytesToCopy = Math.Min(_messageSize.IntValue - _copiedCount, count);
                         if (bytesToCopy > 0)
                         {
                             if (!_packetData?.CopyFrom(bytes, start, _copiedCount, bytesToCopy) ?? false)
@@ -90,16 +96,16 @@ namespace Pontifex.Utils
                             start += bytesToCopy;
                         }
 
-                        if (_copiedCount == _packetSize.IntValue)
+                        if (_copiedCount == _messageSize.IntValue)
                         {
                             try
                             {
-                                _bufferProcessor(_packetData!);
+                                var packet = Interlocked.Exchange(ref _packetData, null);
+                                _bufferProcessor(packet ?? throw new Exception());
                             }
                             finally
                             {
                                 _copiedCount = 0;
-                                _packetData = null;
                                 _stage = Stage.FillSize;
                             }
                             break;

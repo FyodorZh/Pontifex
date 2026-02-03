@@ -48,8 +48,11 @@ namespace Pontifex.Protocols.Zip
 
         public bool Pack(UnionDataList data, IConcurrentPool<IMultiRefByteArray, int> bytesPool)
         {
-            using var bufferHodler = data.Serialize(bytesPool).AsDisposable();
-            var buffer = bufferHodler.Resource;
+            if (!data.Serialize(bytesPool, out var buffer))
+            {
+                return false;
+            }
+            using var bufferHodler = buffer.AsDisposable();
 
             // Упаковываем
             _packedStream.SetLength(0);

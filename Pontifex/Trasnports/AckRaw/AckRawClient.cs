@@ -1,5 +1,4 @@
-﻿using System;
-using Actuarius.Memory;
+﻿using Actuarius.Memory;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Endpoints.Client;
 using Pontifex.Abstractions.Handlers.Client;
