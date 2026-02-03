@@ -24,9 +24,7 @@ namespace Pontifex.Test
                     data[i] = (byte)rnd.Next();
                 }
 
-                Log.i("Request sending...");
                 var res = await Ping.RequestAsync(new BytesWrapper(data));
-                Log.i("Response received");
                 for (int i = 0; i < size; ++i)
                 {
                     if (res.Value![i] != data[i])
@@ -35,6 +33,7 @@ namespace Pontifex.Test
                     }
                 }
                 Log.i("Response is OK");
+                this.GracefulShutdown(TimeSpan.FromSeconds(1));
             });
         }
     }
@@ -45,10 +44,9 @@ namespace Pontifex.Test
         {
             Ping.SetProcessor( (request) =>
             {
-                logger.i("Received");
                 var bytes = request.Data.Value!;
-                var res = request.Response(new BytesWrapper(bytes));
-                logger.i("Responded");
+                request.Response(new BytesWrapper(bytes));
+                logger.i("Message received");
             });
         }
     }

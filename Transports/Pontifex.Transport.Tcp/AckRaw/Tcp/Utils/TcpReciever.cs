@@ -48,7 +48,6 @@ namespace Pontifex.Transports.Tcp
 
             _packetCompositor = new UnionDataListCompositor(msg =>
             {
-                Log.i("Received MSG SIZE" + (msg?.GetDataSize()?? -1));
                 if (msg == null)
                 {
                     Fail(new Exception("Failed to decompose packet from stream"));

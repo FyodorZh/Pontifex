@@ -73,7 +73,6 @@ namespace Pontifex.Transports.Tcp
                 _currentBuffer = buffer.Acquire();
                 _asyncArgs!.SetBuffer(buffer.Array, buffer.Offset, buffer.Count);
 
-                Log.i("Send" + buffer.Count);
                 if (!_socket.SendAsync(_asyncArgs))
                 {
                     SendCallback(_socket, _asyncArgs);
