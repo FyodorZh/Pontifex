@@ -1,71 +1,127 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Net.Sockets;
+using Actuarius.Collections;
+using Actuarius.Concurrent;
 using Actuarius.Memory;
+using Operarius;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Transports.Tcp
 {
-    /// <summary>
-    /// Отсылает ассинхронно в сокет
-    /// </summary>
-    internal class TcpSender
+    internal class TcpSender : INonPeriodicLogic 
     {
+        [Flags]
+        public enum State { Constructed = 1, Connected = 2, Disconnecting = 4, InError = 8, Stopped = 16}
+        
         private readonly Socket _socket;
-        private readonly Queue<UnionDataList> _queueToSend = new Queue<UnionDataList>();
+        private readonly int _messageMaxSize;
+        private readonly int _messagePartMaxSize;
+
+        private readonly InverseDelegateProducer<IMultiRefByteArray> _bufferProducer;
+        private readonly LowLevelTcpSender _lowLevelTcpSender;
         
         private readonly IMemoryRental _memoryRental;
+        
+        private readonly object _stageLock = new();
+        private volatile State _stage = State.Constructed; 
 
-        private bool _sendingNow; // !volatile but synchronized
+        private INonPeriodicLogicDriverCtl? _driver;
+        
+        private readonly ConcurrentQueueValve<UnionDataList> _packetsToSend;
+        
+        public event Action? Disconnected;
+        public event Action<Exception>? ErrorOccured;
+        public event Action? Stopped;
 
-        private Action<Exception>? _onFailed;
-
-        private volatile bool _stopped;
-        private Action? _onStopped;
-        private bool _intentionToStop;
-        private readonly object _stopLock = new object();
-
-        private IMultiRefByteArray? _bufferToSend;
-
-        private SocketAsyncEventArgs? _asyncArgs = new SocketAsyncEventArgs();
-        private volatile PacketType _currentMessageType;
-
-        private ILogger Log;
-
-        public TcpSender(Socket socket, Action<Exception> onFailed, IMemoryRental memoryRental, ILogger logger)
+        public State Stage => _stage;
+        
+        public TcpSender(Socket socket, int messageMaxSize, int messagePartMaxSize, IMemoryRental memoryRental, ILogger logger)
         {
             _socket = socket;
-            _onFailed = onFailed;
-            _asyncArgs.Completed += SendCallback;
-            _asyncArgs.SocketFlags = SocketFlags.None;
-
+            _messageMaxSize = messageMaxSize;
+            _messagePartMaxSize = messagePartMaxSize;
             _memoryRental = memoryRental;
-            Log = logger;
+
+            _packetsToSend = new ConcurrentQueueValve<UnionDataList>(new SystemConcurrentQueue<UnionDataList>(),
+                packet => packet.Release());
+
+            _bufferProducer = new InverseDelegateProducer<IMultiRefByteArray>(ProcessDataToSend);
+            _lowLevelTcpSender = new LowLevelTcpSender(socket, _bufferProducer, logger);
+
+            _lowLevelTcpSender.ChainStopped += () =>
+            {
+                if (_packetsToSend.Count > 0)
+                {
+                    _driver?.RequestInvocation();
+                }
+                else if (_stage == State.Disconnecting)
+                {
+                    Disconnected?.Invoke();
+                    _driver?.Stop();
+                }
+            };
+            _lowLevelTcpSender.ErrorOccured += Fail;
+        }
+        
+        bool ILogic<INonPeriodicLogicDriverCtl>.LogicStarted(INonPeriodicLogicDriverCtl driver)
+        {
+            lock (_stageLock)
+            {
+                if (_stage != State.Constructed)
+                {
+                    Fail(new Exception($"Invalid TcpSender.Stage {_stage} in LogicStarted()"));
+                    return false;
+                }
+                _driver = driver;
+                _stage = State.Connected;
+                driver.RequestInvocation();
+                return true;
+            }
+        }
+        
+        void INonPeriodicLogic.LogicTick(INonPeriodicLogicDriverCtl driver)
+        {
+            _lowLevelTcpSender.Run();
         }
 
-        public void Stop(Action onStopped)
+        void ILogic<INonPeriodicLogicDriverCtl>.LogicStopped()
         {
-            lock (_stopLock)
+            lock (_stageLock)
             {
-                if (!_intentionToStop)
+                _stage = State.Stopped;
+            }
+
+            try
+            {
+                _packetsToSend.CloseValve();
+                _lowLevelTcpSender.Destroy();
+                while (_bufferProducer.TryPop(out var buffer))
                 {
-                    if (_stopped)
-                    {
-                        onStopped();
-                    }
-                    else
-                    {
-                        _onStopped = onStopped;
-                        var packet = _memoryRental.CollectablePool.Acquire<UnionDataList>();
-                        packet.PutFirst(new UnionData((byte)PacketType.Disconnect));
-                        Send(packet);
-                    }
-                    _intentionToStop = true;
+                    buffer.Release();
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorOccured?.Invoke(ex);
+            }
+
+            Stopped?.Invoke();
+        }
+        
+        private void ProcessDataToSend(IConsumer<IMultiRefByteArray> dst)
+        {
+            if (_packetsToSend.TryPop(out var packet))
+            {
+                using var dispose = packet.AsDisposable();
+                    
+                if (!UnionDataListCompositor.Encode(packet, _memoryRental.ByteArraysPool, _messagePartMaxSize, dst))
+                {
+                    Fail(new Exception("Failed to encode packet"));
                 }
             }
         }
-
+        
         public SendResult Send(UnionDataList packet)
         {
             using var packetDisposer = packet.AsDisposable();
@@ -74,162 +130,92 @@ namespace Pontifex.Transports.Tcp
             {
                 return SendResult.InvalidMessage;
             }
-
+            
             switch ((PacketType)packet.Elements[0].Alias.ByteValue)
             {
                 case PacketType.AckRequest:
                 case PacketType.AckResponse:
                 case PacketType.Regular:
-                case PacketType.Disconnect:
                 case PacketType.Ping:
+                    if (_stage == State.Disconnecting)
+                    {
+                        return SendResult.Ok;
+                    }
+                    if (_stage != State.Connected)
+                    {
+                        return SendResult.NotConnected;
+                    }
+                    break;
+                case PacketType.Disconnect:
+                    lock (_stageLock)
+                    {
+                        if (_stage != State.Disconnecting)
+                        {
+                            return SendResult.Error;
+                        }
+                    }
                     break;
                 default:
                     return SendResult.InvalidMessage;
             }
             
-            if (packet.GetDataSize() > TcpInfo.MessageMaxByteSize)
+            if (packet.GetDataSize() > _messageMaxSize)
             {
                 return SendResult.MessageToBig;
             }
 
-            lock (_stopLock)
+            switch (_packetsToSend.EnqueueEx(packet.Acquire()))
             {
-                if (_stopped || _intentionToStop)
-                {
+                case ValveEnqueueResult.Ok:
+                    _driver?.RequestInvocation();
+                    return SendResult.Ok;
+                case ValveEnqueueResult.Overflown:
+                    return SendResult.BufferOverflow;
+                case ValveEnqueueResult.Rejected:
+                    return SendResult.NotConnected;
+                default:
+                    Fail(new Exception("Impossible error #1"));
                     return SendResult.Error;
-                }
-            }
-
-            bool haveToSendNow;
-            lock (_queueToSend)
-            {
-                haveToSendNow = !_sendingNow;
-                if (!haveToSendNow)
-                {
-                    _queueToSend.Enqueue(packet.Acquire());
-                }
-                else
-                {
-                    _sendingNow = true;
-                }
-            }
-
-            if (haveToSendNow)
-            {
-                return DoSend(packet.Acquire());
-            }
-            return SendResult.Ok;
-        }
-
-        private void SendCallback(object sender, SocketAsyncEventArgs args)
-        {
-            _bufferToSend?.Release();
-            _bufferToSend = null;
-            
-            try
-            {
-                if (_currentMessageType == PacketType.Disconnect)
-                {
-                    lock (_stopLock)
-                    {
-                        _stopped = true;
-                        _onStopped?.Invoke();
-                        DisposeAsyncEventArgs();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Fail(ex);
-                return;
-            }
-
-            if (!_stopped)
-            {
-                UnionDataList? packet = null;
-                lock (_queueToSend)
-                {
-                    if (_queueToSend.Count > 0)
-                    {
-                        packet = _queueToSend.Dequeue();
-                    }
-                    else
-                    {
-                        _sendingNow = false;
-                    }
-                }
-
-                if (_sendingNow)
-                {
-                    DoSend(packet!);
-                }
-            }
-            else
-            {
-                _sendingNow = false;
             }
         }
 
-        private SendResult DoSend(UnionDataList packet)
+        public void GracefulDisconnect()
         {
-            using var packetDisposer = packet.AsDisposable();
-            try
+            bool sendDisconnect = false;
+            lock (_stageLock)
             {
-                if (_bufferToSend != null)
+                if (_stage == State.Connected)
                 {
-                    Log.e("Buffer leak detected");
-                    _bufferToSend.Release();
+                    _stage = State.Disconnecting;
+                    sendDisconnect = true;
                 }
-                _bufferToSend = UnionDataListCompositor.Encode(packet, _memoryRental.ByteArraysPool);
-                
-                _asyncArgs!.SetBuffer(_bufferToSend.Array, _bufferToSend.Offset, _bufferToSend.Count);
+            }
 
-                _currentMessageType = (PacketType)packet.Elements[0].Alias.ByteValue;
-                if (!_socket.SendAsync(_asyncArgs))
-                {
-                    SendCallback(_socket, _asyncArgs);
-                }
-            }
-            catch (Exception ex)
+            if (sendDisconnect)
             {
-                _bufferToSend?.Release();
-                _bufferToSend = null;
-                Fail(ex);
-                return SendResult.Error;
+                var packet = _memoryRental.CollectablePool.Acquire<UnionDataList>();
+                packet.PutFirst(new UnionData((byte)PacketType.Disconnect));
+                Send(packet);
             }
-            return SendResult.Ok;
+        }
+
+        public void Stop()
+        {
+            _driver?.Stop();
         }
 
         private void Fail(Exception ex)
         {
-            lock (_stopLock)
+            lock (_stageLock)
             {
-                if (!_stopped)
+                if (_stage != State.Stopped)
                 {
-                    _stopped = true;
-                    if (_onStopped != null)
-                    {
-                        _onStopped();
-                    }
-
-                    DisposeAsyncEventArgs();
+                    _stage = State.InError;
+                    _driver?.Stop();
                 }
             }
 
-            var failedHandler = System.Threading.Interlocked.Exchange(ref _onFailed, null);
-            if (failedHandler != null)
-            {
-                failedHandler(ex);
-            }
-        }
-
-        private void DisposeAsyncEventArgs()
-        {
-            if (_asyncArgs != null)
-            {
-                _asyncArgs.Dispose();
-                _asyncArgs = null;
-            }
+            ErrorOccured?.Invoke(ex);
         }
     }
 }

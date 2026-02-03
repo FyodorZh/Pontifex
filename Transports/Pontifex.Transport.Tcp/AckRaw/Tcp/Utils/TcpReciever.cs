@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Net.Sockets;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Transports.Tcp
 {
@@ -19,8 +21,11 @@ namespace Pontifex.Transports.Tcp
 
         private int _wasStopped;
 
-        public TcpReceiver(Socket socket, Action<UnionDataList> onReceived, Action<Exception> onFailed, Action? onStopped, IMemoryRental memoryRental)
+        private readonly ILogger Log;
+
+        public TcpReceiver(Socket socket, Action<UnionDataList> onReceived, Action<Exception> onFailed, Action? onStopped, int messageMaxSize, IMemoryRental memoryRental, ILogger logger)
         {
+            Log = logger;
             if (onReceived == null)
             {
                 throw new ArgumentNullException(nameof(onReceived));
@@ -30,7 +35,7 @@ namespace Pontifex.Transports.Tcp
                 throw new ArgumentNullException(nameof(onFailed));
             }
 
-            byte[] buffer = new byte[1024 * 8];
+            byte[] buffer = new byte[socket.SendBufferSize];
 
             _asyncArgs.Completed += ReadCallback;
             _asyncArgs.SocketFlags = SocketFlags.None;
@@ -43,13 +48,14 @@ namespace Pontifex.Transports.Tcp
 
             _packetCompositor = new UnionDataListCompositor(msg =>
             {
+                Log.i("Received MSG SIZE" + (msg?.GetDataSize()?? -1));
                 if (msg == null)
                 {
                     Fail(new Exception("Failed to decompose packet from stream"));
                     return;
                 }
                 onReceived(msg);
-            }, memoryRental.CollectablePool, memoryRental.ByteArraysPool);
+            }, memoryRental.CollectablePool, memoryRental.ByteArraysPool, messageMaxSize);
         }
 
         public void Start()
@@ -78,7 +84,7 @@ namespace Pontifex.Transports.Tcp
 
         private void OnStopped()
         {
-            if (System.Threading.Interlocked.Exchange(ref _wasStopped, 1) == 0)
+            if (Interlocked.Exchange(ref _wasStopped, 1) == 0)
             {
                 if (_asyncArgs != null)
                 {
@@ -109,7 +115,7 @@ namespace Pontifex.Transports.Tcp
                     int bytesRead = args.BytesTransferred;
                     if (bytesRead > 0)
                     {
-                        _packetCompositor.PushData(args.Buffer, args.Offset, args.BytesTransferred);
+                        _packetCompositor.PushData(args.Buffer, args.Offset, bytesRead);
 
                         // Show must go on
                         if (!_stopped)

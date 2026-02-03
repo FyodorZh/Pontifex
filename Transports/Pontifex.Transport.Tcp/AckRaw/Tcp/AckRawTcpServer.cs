@@ -25,6 +25,8 @@ namespace Pontifex.Transports.Tcp
 
             private readonly TimeSpan mDisconnectTimeout;
 
+            private readonly ILogicDriver<INonPeriodicLogicDriverCtl> _driver = new ThreadBasedNonPeriodicLogicMultiDriver(NowDateTimeProvider.Instance);
+
             public event Action<ServerSideSocket>? ClientDisconnected;
 
             private readonly List<ServerSideSocket> mTmpClientList = new List<ServerSideSocket>();
@@ -80,11 +82,13 @@ namespace Pontifex.Transports.Tcp
                 {
                     clientToDisconnect.Disconnect(mUserIntentionReasonSingleton);
                 }
+
+                _driver.Finish();
             }
 
-            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler?> acknowledger, IMemoryRental memoryRental, ILogger logger)
+            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler?> acknowledger, int messageMaxSize, IMemoryRental memoryRental, ILogger logger)
             {
-                ServerSideSocket client = new ServerSideSocket(socket, OnDisconnected, acknowledger, memoryRental, logger);
+                ServerSideSocket client = new ServerSideSocket(socket, OnDisconnected, acknowledger, _driver, messageMaxSize, memoryRental, logger);
                 mClientsToAdd.Put(client);
                 client.Start();
             }
@@ -110,7 +114,7 @@ namespace Pontifex.Transports.Tcp
 
         private IServerSocketListener? mSocketListener;
 
-        public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, TimeSpan disconnectTimeout, int? messageMaxSize, ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
         {
             try
@@ -118,6 +122,7 @@ namespace Pontifex.Transports.Tcp
                 mConnectionsLimit = Math.Max(1, connectionsLimit);
                 mDisconnectTimeout = disconnectTimeout;
                 mMaxNumberAcceptedClients = new Semaphore(mConnectionsLimit - 1, mConnectionsLimit);
+                MessageMaxByteSize = messageMaxSize ?? TcpInfo.DefaultMessageMaxSize;
 
                 mLocalEndPoint = new IPEndPoint(ipAddress, port);
 
@@ -212,13 +217,7 @@ namespace Pontifex.Transports.Tcp
             return false;
         }
 
-        public override int MessageMaxByteSize
-        {
-            get
-            {
-                return TcpInfo.MessageMaxByteSize;
-            }
-        }
+        public override int MessageMaxByteSize { get; }
 
         protected override void OnStopped(StopReason reason)
         {
@@ -247,11 +246,11 @@ namespace Pontifex.Transports.Tcp
 
             socket.ReceiveTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
             socket.SendTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
-            socket.SendBufferSize = TcpInfo.MessageMaxByteSize * 4;
-            socket.ReceiveBufferSize = TcpInfo.MessageMaxByteSize * 4;
+            //socket.SendBufferSize = TcpInfo.DefaultMessageMaxSize * 4;
+            //socket.ReceiveBufferSize = TcpInfo.DefaultMessageMaxSize * 4;
             socket.NoDelay = true;
 
-            mClients.AddClient(socket, TryAcknowledge, Memory, Log);
+            mClients.AddClient(socket, TryAcknowledge, MessageMaxByteSize, Memory, Log);
 
             try
             {

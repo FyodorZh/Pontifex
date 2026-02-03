@@ -36,7 +36,7 @@ namespace Pontifex.Transports.Tcp
         {
             if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {
-                return new AckRawTcpClient(ip, port, disconnectionTimeout, logger, memoryRental);
+                return new AckRawTcpClient(ip, port, disconnectionTimeout, null, logger, memoryRental);
             }
             return null;
         }
@@ -48,7 +48,7 @@ namespace Pontifex.Transports.Tcp
         {
             if (Parse(@params, out var disconnectionTimeout, out var ip, out var port))
             {
-                return new AckRawTcpServer(ip, port, TcpInfo.ServerConnectionsLimit, disconnectionTimeout, logger, memoryRental);
+                return new AckRawTcpServer(ip, port, TcpInfo.ServerConnectionsLimit, disconnectionTimeout, null, logger, memoryRental);
             }
             return null;
         }

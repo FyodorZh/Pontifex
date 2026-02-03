@@ -67,6 +67,8 @@ namespace Pontifex.Transports.Tcp
             Socket socket,
             Action<ServerSideSocket> onDisconnected,
             Func<EndPoint, UnionDataList, IAckRawServerHandler?> acknowledger,
+            ILogicDriver<INonPeriodicLogicDriverCtl> driver,
+            int? messageMaxSize,
             IMemoryRental memoryRental,
             ILogger logger)
         {
@@ -78,13 +80,35 @@ namespace Pontifex.Transports.Tcp
 
             Ep = new IpEndPoint(socket.RemoteEndPoint);
             LocalEp = new IpEndPoint(socket.LocalEndPoint);
+            
+            MessageMaxByteSize = messageMaxSize ?? TcpInfo.DefaultMessageMaxSize;
+            
             Memory = memoryRental;
             Log = logger.Wrap();
             Log.Tags.Set("ssSocket", ToString);
             mLastMessageReceiveTime.Time = DateTime.UtcNow;
             
-            mSocketReceiver = new TcpReceiver(mSocket, Received, OnFailed, () => Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName)), memoryRental);
-            mSocketSender = new TcpSender(mSocket, OnFailed, memoryRental, Log);
+            mSocketReceiver = new TcpReceiver(mSocket, Received, OnFailed, 
+                () => Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName)),
+                MessageMaxByteSize,
+                memoryRental,
+                Log);
+            mSocketSender = new TcpSender(mSocket, MessageMaxByteSize, mSocket.SendBufferSize, memoryRental, Log);
+            mSocketSender.ErrorOccured += OnFailed;
+            mSocketSender.Stopped += () =>
+            {
+                try
+                {
+                    mSocket.Shutdown(SocketShutdown.Both);
+                    mSocket.Close();
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
+                Log.i("Stopped.");
+            };
+            driver.Start(mSocketSender);
         }
 
         public void Start()
@@ -263,7 +287,7 @@ namespace Pontifex.Transports.Tcp
 
         public IEndPoint RemoteEndPoint => Ep;
 
-        public int MessageMaxByteSize => TcpInfo.MessageMaxByteSize;
+        public int MessageMaxByteSize { get; }
 
         SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
@@ -302,19 +326,7 @@ namespace Pontifex.Transports.Tcp
                 Log.i("Disconnected.");
 
                 // Шедулим отправку дисконнекта и ждём
-                mSocketSender.Stop(() =>
-                {
-                    try
-                    {
-                        mSocket.Shutdown(SocketShutdown.Both);
-                        mSocket.Close();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
-                    }
-                    Log.i("Stopped.");
-                });
+                mSocketSender.GracefulDisconnect();
 
                 RaiseOnDisconnected();
 

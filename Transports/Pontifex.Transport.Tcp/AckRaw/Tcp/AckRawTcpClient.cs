@@ -9,6 +9,7 @@ using Pontifex.Abstractions;
 using Pontifex.Abstractions.Clients;
 using Pontifex.Abstractions.Endpoints;
 using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.StopReasons;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
@@ -38,13 +39,15 @@ namespace Pontifex.Transports.Tcp
 
         private KeepAliver? mKeepAliver;
 
+        private bool _gracefulDisconnectAttempt;
+
         private State mState = State.Constructed;
         private readonly object mStateLock = new object();
 
         private readonly AckRawClientControl _transportControl;
         private readonly PingCollector mPingCollector = new PingCollector();
         private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim("Tcp.Traffic", UtcNowDateTimeProvider.Instance);
-        
+        private readonly TcpClientDebugControl _debugControl;
 
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
@@ -86,16 +89,18 @@ namespace Pontifex.Transports.Tcp
             }
         }
 
-        public override int MessageMaxByteSize => TcpInfo.MessageMaxByteSize;
+        public override int MessageMaxByteSize { get; }
 
-        public AckRawTcpClient(IPAddress ipAddress, int port, TimeSpan disconnectTimeout,
+        public AckRawTcpClient(IPAddress ipAddress, int port, TimeSpan disconnectTimeout, int? messageMaxSize,
             ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
         {
             mRemoteEP = new IPEndPoint(ipAddress, port);
             mManagedRemoteEP = new IpEndPoint(mRemoteEP);
             mDisconnectTimeout = disconnectTimeout;
+            MessageMaxByteSize = messageMaxSize ?? TcpInfo.DefaultMessageMaxSize;
             _transportControl = new AckRawClientControl(this);
+            _debugControl = new TcpClientDebugControl(this);
         }
 
         public override string ToString()
@@ -126,10 +131,29 @@ namespace Pontifex.Transports.Tcp
                 var socket = mSocket ?? throw new Exception("Socket is null");
                 socket.EndConnect(ar);
 
-                mSocketReceiver = new TcpReceiver(socket, OnReceived, OnFailed, null, Memory);
+                mSocketReceiver = new TcpReceiver(socket, OnReceived, OnFailed, null, MessageMaxByteSize, Memory, Log);
                 mSocketReceiver.Start();
 
-                mSocketSender = new TcpSender(socket, OnFailed, Memory, Log);
+                mSocketSender = new TcpSender(socket, MessageMaxByteSize, mSocket.SendBufferSize - 4, Memory, Log);
+                mSocketSender.ErrorOccured += OnFailed;
+                mSocketSender.Stopped += () =>
+                {
+                    try
+                    {
+                        mSocket?.Shutdown(SocketShutdown.Both);
+                        mSocket?.Close();
+                        mSocket = null;
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+
+                    Log.i("Stopped.");
+                };
+                ILogicDriver<INonPeriodicLogicDriverCtl> driver =
+                    new SingleJobLogicDriver<INonPeriodicLogicDriverCtl>(new ThreadBasedNonPeriodicLogicMultiDriver(NowDateTimeProvider.Instance));
+                driver.Start(mSocketSender);
 
                 ConnectionState = State.Connecting;
 
@@ -139,6 +163,8 @@ namespace Pontifex.Transports.Tcp
             catch (Exception)
             {
                 ConnectionState = State.Disconnected;
+                UnionDataList ackData = (UnionDataList)ar.AsyncState;
+                ackData.Release();
             }
         }
 
@@ -247,8 +273,22 @@ namespace Pontifex.Transports.Tcp
             }
         }
 
+        public void GracefulDisconnect()
+        {
+            _gracefulDisconnectAttempt = true;
+            mSocketSender?.GracefulDisconnect();
+            var keepAliver = System.Threading.Interlocked.Exchange(ref mKeepAliver, null);
+            keepAliver?.Stop();
+        }
+
         private void OnFailed(Exception ex)
         {
+            if (_gracefulDisconnectAttempt)
+            {
+                Stop(new UserIntention(Type, "GracefulDisconnect"));
+                return;
+            }
+            
             if (ConnectionState != State.Disconnected)
             {
                 if (ex is ObjectDisposedException)
@@ -303,7 +343,7 @@ namespace Pontifex.Transports.Tcp
                     mLastMessageReceiveTime.Time = DateTime.UtcNow;
                     try
                     {
-                        TimeSpan keepAlivePeriod = TimeSpan.FromMilliseconds(800);
+                        TimeSpan keepAlivePeriod = TimeSpan.FromMilliseconds(80000);
 
                         mKeepAliver = new KeepAliver(this, Memory);
 
@@ -365,21 +405,7 @@ namespace Pontifex.Transports.Tcp
 
                 {
                     var socketSender = System.Threading.Interlocked.Exchange(ref mSocketSender, null);
-                    socketSender?.Stop(() =>
-                    {
-                        try
-                        {
-                            mSocket?.Shutdown(SocketShutdown.Both);
-                            mSocket?.Close();
-                            mSocket = null;
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
-
-                        Log.i("Stopped.");
-                    });
+                    socketSender?.Stop();
                 }
             }
             catch (Exception)
@@ -404,10 +430,7 @@ namespace Pontifex.Transports.Tcp
 
         #region IAckRawServerEndpoint
 
-        IEndPoint IAckRawBaseEndpoint.RemoteEndPoint
-        {
-            get { return mManagedRemoteEP; }
-        }
+        IEndPoint IAckRawBaseEndpoint.RemoteEndPoint => mManagedRemoteEP;
 
         SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
         {
@@ -434,11 +457,30 @@ namespace Pontifex.Transports.Tcp
                 dst.Add(mPingCollector);
             if (predicate?.Invoke(mTrafficCollector) ?? true)
                 dst.Add(mTrafficCollector);
+            if (predicate?.Invoke(_debugControl) ?? true)
+                dst.Add(_debugControl);
         }
 
         bool IAckRawBaseEndpoint.IsConnected => ConnectionState == State.Connected;
 
         #endregion
 
+        private class TcpClientDebugControl : IAckRawTcpClientDebugControl
+        {
+            private readonly AckRawTcpClient _client;
+            
+            public string Name => "TcpClient.Debug";
+
+            public TcpClientDebugControl(AckRawTcpClient client)
+            {
+                _client = client;
+            }
+            
+            public void GracefulDisconnect()
+            {
+                _client.GracefulDisconnect();
+            }
+        }
+        
     }
 }
