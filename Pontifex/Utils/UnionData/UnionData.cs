@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Linq;
 using Actuarius.Collections;
 using Actuarius.Memory;
 
@@ -192,44 +193,44 @@ namespace Pontifex.Utils
             }
         }
         
-        public void WriteTo<TByteSink>(ref TByteSink byteSink)
+        public bool WriteTo<TByteSink>(ref TByteSink byteSink)
             where TByteSink : IByteSink
         {
-            byteSink.Put((byte)_type);
-            switch (_type)
+            if (byteSink.Put((byte)_type))
             {
-                case UnionDataType.Bool:
-                case UnionDataType.Byte:
-                    byteSink.Put(_alias.Byte0);
-                    return;
-                case UnionDataType.Char:
-                case UnionDataType.Short:
-                case UnionDataType.UShort:
-                    _alias.WriteTo2(ref byteSink);
-                    return;
-                case UnionDataType.Int:
-                case UnionDataType.UInt:
-                case UnionDataType.Float:
-                    _alias.WriteTo4(ref byteSink);
-                    return;
-                case UnionDataType.Long:
-                case UnionDataType.ULong:
-                case UnionDataType.Double:
-                    _alias.WriteTo8(ref byteSink);
-                    return;
-                case UnionDataType.Decimal:
-                    _alias.WriteTo16(ref byteSink);
-                    return;
-                case UnionDataType.Array:
-                    UnionDataMemoryAlias size = _bytes!.Count;
-                    size.WriteTo4(ref byteSink);
-                    byteSink.PutMany(_bytes);
-                    return;
-                case UnionDataType.NullArray:
-                    return;
-                default:
-                    throw new InvalidOperationException();
+                switch (_type)
+                {
+                    case UnionDataType.Bool:
+                    case UnionDataType.Byte:
+                        return byteSink.Put(_alias.Byte0);
+                    case UnionDataType.Char:
+                    case UnionDataType.Short:
+                    case UnionDataType.UShort:
+                        return _alias.WriteTo2(ref byteSink);
+                    case UnionDataType.Int:
+                    case UnionDataType.UInt:
+                    case UnionDataType.Float:
+                        return _alias.WriteTo4(ref byteSink);
+                    case UnionDataType.Long:
+                    case UnionDataType.ULong:
+                    case UnionDataType.Double:
+                        return _alias.WriteTo8(ref byteSink);
+                    case UnionDataType.Decimal:
+                        return _alias.WriteTo16(ref byteSink);
+                    case UnionDataType.Array:
+                        UnionDataMemoryAlias size = _bytes!.Count;
+                        if (size.WriteTo4(ref byteSink))
+                        {
+                            return byteSink.PutMany(_bytes);
+                        }
+                        return false;
+                    case UnionDataType.NullArray:
+                        return true;
+                    default:
+                        return false;
+                }
             }
+            return false;
         }
 
         public static bool ReadFrom<TByteSource>(ref TByteSource bytes, IPool<IMultiRefByteArray, int> pool, out UnionData unionData)
@@ -320,7 +321,7 @@ namespace Pontifex.Utils
                 case UnionDataType.Float: return _alias.FloatValue.ToString(CultureInfo.InvariantCulture);
                 case UnionDataType.Double: return _alias.DoubleValue.ToString(CultureInfo.InvariantCulture);
                 case UnionDataType.Decimal: return _alias.DecimalValue.ToString(CultureInfo.InvariantCulture);
-                case UnionDataType.Array: return Bytes != null ? ("[" + string.Join(",", Bytes.Enumerate()) + "]") : "null";
+                case UnionDataType.Array: return Bytes != null ? ($"[{string.Join(",", Bytes.Enumerate().Take(100))}{(Bytes.Count > 100 ? "..." : "")}]") : "null";
                 case UnionDataType.NullArray: return "null";
                 default: return "INVALID";
             }

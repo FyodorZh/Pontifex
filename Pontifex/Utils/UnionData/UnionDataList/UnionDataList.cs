@@ -72,38 +72,59 @@ namespace Pontifex.Utils
             return size;
         }
         
-        public void SerializeTo<TByteSink>(ref TByteSink sink)
+        public bool SerializeTo<TByteSink>(ref TByteSink sink)
             where TByteSink : IByteSink
         {
             UnionDataMemoryAlias alias = _data.Count;
-            alias.WriteTo4(ref sink);
-            
-            foreach (var element in _data.Enumerate())
+            if (alias.WriteTo4(ref sink))
             {
-                element.WriteTo(ref sink);
+                foreach (var element in _data.Enumerate())
+                {
+                    if (!element.WriteTo(ref sink))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
             }
+
+            return false;
         }
 
-        public void SerializeTo(IMultiRefByteArray buffer)
+        public bool SerializeTo(IMultiRefByteArray buffer)
         {
             ByteSink sink = new ByteSink(buffer);
             
             UnionDataMemoryAlias alias = _data.Count;
-            alias.WriteTo4(ref sink);
-            
-            foreach (var element in _data.Enumerate())
+            if (alias.WriteTo4(ref sink))
             {
-                element.WriteTo(ref sink);
+                foreach (var element in _data.Enumerate())
+                {
+                    if (!element.WriteTo(ref sink))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
             }
+
+            return false;
         }
 
-        public IMultiRefByteArray Serialize(IPool<IMultiRefByteArray, int> bytesPool)
+        public bool Serialize(IPool<IMultiRefByteArray, int> bytesPool, [MaybeNullWhen(false)] out IMultiRefByteArray serializedData)
         {
             int count = GetDataSize();
             var buffer = bytesPool.Acquire(count);
-            
-            SerializeTo(buffer);
-            return buffer;
+            if (SerializeTo(buffer))
+            {
+                serializedData = buffer;
+                return true;
+            }
+            buffer.Release();
+            serializedData = null;
+            return false;
         }
 
         public bool Deserialize<TByteSource>(ref TByteSource source, IPool<IMultiRefByteArray, int> pool)
