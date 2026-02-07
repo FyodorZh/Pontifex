@@ -4,7 +4,7 @@
         <TargetFramework>netstandard2.1</TargetFramework>
         <LangVersion>9</LangVersion>
         <Nullable>enable</Nullable>
-        <Version>0.1.0-dev.2</Version>
+        <Version>0.1.0-dev.5</Version>
         <Title>Pontifex</Title>
         <Authors>Fyodor Zhmaev</Authors>
         <Description>Generalized transport library</Description>
@@ -41,7 +41,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Operarius" Version="0.2.0-dev.3" />
+      <PackageReference Include="Operarius" Version="0.2.0-dev.4" />
       <PackageReference Include="Scriba" Version="0.2.0-dev.9" />
     </ItemGroup>
 
