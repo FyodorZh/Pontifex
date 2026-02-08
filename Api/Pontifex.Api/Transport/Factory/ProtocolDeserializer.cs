@@ -15,7 +15,7 @@ namespace Pontifex.Api
         /// </summary>
         public ProtocolDeserializer()
         {
-            _deserializer = new HierarchicalDeserializer(_reader, false);
+            _deserializer = HierarchicalDeserializer.From(_reader).SetAutoPrepare(false).SetMonomorphic().Build();
         }
         
         public bool Deserialize<TModel>(IMultiRefReadOnlyByteArray buffer, out TModel model)

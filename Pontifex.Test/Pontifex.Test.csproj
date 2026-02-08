@@ -18,8 +18,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Archivarius" Version="0.2.1-dev.8" />
-      <PackageReference Include="Archivarius.Tools" Version="0.2.1-dev.9" />
+      <PackageReference Include="Archivarius" Version="0.2.2-dev.1" />
+      <PackageReference Include="Archivarius.Tools" Version="0.2.2-dev.1" />
       <PackageReference Include="Scriba" Version="0.2.0-dev.9" />
       <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
       <PackageReference Include="Terminal.Gui" Version="2.0.0-alpha.3865" />
