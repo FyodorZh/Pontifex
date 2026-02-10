@@ -1,14 +1,13 @@
 using System;
 using System.Threading.Tasks;
 using Archivarius;
-using Pontifex.Api;
 using Scriba;
 
 namespace Pontifex.Api.Server
 {
     public static class RRDecl_Ext
     {
-        public static void SetProcessor<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, Action<IRequest<TRequest, TResponse>> processor)
+        public static void SetProcessor<TRequest, TResponse>(this RRDecl<TRequest, TResponse> decl, Action<Request<TRequest, TResponse>> processor)
             where TRequest : struct, IDataStruct
             where TResponse : struct, IDataStruct
         {

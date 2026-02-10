@@ -23,8 +23,14 @@ namespace Pontifex.Api
     {
         string Error { get; }
     }
+    
+    internal interface IRRDeclControl<TResponse>
+        where TResponse : struct, IDataStruct
+    {
+        SendResult Response(ResponseMessage<TResponse> responseMessage);
+    }
 
-    public class RRDecl<TRequest, TResponse> : Declaration, IRequester<TRequest, TResponse>, IResponder<TRequest, TResponse>
+    public class RRDecl<TRequest, TResponse> : Declaration, IRequester<TRequest, TResponse>, IResponder<TRequest, TResponse>, IRRDeclControl<TResponse>
         where TRequest : struct, IDataStruct
         where TResponse : struct, IDataStruct
     {
@@ -32,7 +38,7 @@ namespace Pontifex.Api
 
         private readonly RequestInfo _currentRequestInfo_Reusable;
 
-        private Action<IRequest<TRequest, TResponse>>? _processor;
+        private Action<Request<TRequest, TResponse>>? _processor;
         private bool _stopped;
 
         private long _lastSentRequestId;
@@ -79,7 +85,7 @@ namespace Pontifex.Api
                 var processor = _processor;
                 if (processor != null)
                 {
-                    processor.Invoke(new Request(this, requestMessage.Request, requestMessage.Id));
+                    processor.Invoke(new Request<TRequest, TResponse>(this, requestMessage.Request, requestMessage.Id));
                 }
             }
         }
@@ -166,12 +172,12 @@ namespace Pontifex.Api
             }
         }
         
-        void IResponder<TRequest, TResponse>.SetProcessor(Action<IRequest<TRequest, TResponse>> processor)
+        void IResponder<TRequest, TResponse>.SetProcessor(Action<Request<TRequest, TResponse>> processor)
         {
             _processor = processor;
         }
 
-        private SendResult Response(ResponseMessage<TResponse> responseMessage)
+        SendResult IRRDeclControl<TResponse>.Response(ResponseMessage<TResponse> responseMessage)
         {
             return _responseSender?.Send(responseMessage) ?? SendResult.Error;
         }
@@ -181,34 +187,6 @@ namespace Pontifex.Api
             var requestInfo = new RequestInfo(this);
             requestInfo.Setup(TimeSpan.Zero, TimeSpan.Zero, error);
             return requestInfo;
-        }
-        
-        private class Request : IRequest<TRequest, TResponse>
-        {
-            private readonly RRDecl<TRequest, TResponse> mOwner;
-            private readonly TRequest mData;
-            private readonly DateTime mRequestTime;
-            private readonly long mRequestId;
-
-            public Request(RRDecl<TRequest, TResponse> owner, TRequest data, long requestId)
-            {
-                mOwner = owner;
-                mData = data;
-                mRequestTime = DateTime.UtcNow;
-                mRequestId = requestId;
-            }
-
-            TRequest IRequest<TRequest, TResponse>.Data => mData;
-
-            SendResult IRequest<TRequest, TResponse>.Response(TResponse response)
-            {
-                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, response, DateTime.UtcNow - mRequestTime));
-            }
-
-            SendResult IRequest<TRequest, TResponse>.Fail(string errorMessage)
-            {
-                return mOwner.Response(new ResponseMessage<TResponse>(mRequestId, errorMessage, DateTime.UtcNow - mRequestTime));
-            }
         }
 
         private struct ActionPair
