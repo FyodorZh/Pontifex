@@ -1,64 +1,29 @@
+using System;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Endpoints.Server;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Abstractions.Acknowledgers;
 using Pontifex.Utils;
-using Scriba;
 
 namespace Pontifex.Api
 {
-    public class ServerSideApi<TApi> : IAckRawServerHandler
+    public class ServerSideApiFactory<TApi> : IRawServerAcknowledger<ServerSideApiInstance<TApi>>
         where TApi : IApiRoot
     {
-        private readonly TApi _api;
-        private readonly IMemoryRental _memoryRental;
-        private readonly ILogger Log;
-        
-        private IAckRawClientEndpoint? _endpoint;
-        private TransportPipeSystem? _transportPipeSystem;
-        
-        public TApi Api => _api;
-        
-        public ServerSideApi(TApi api, IMemoryRental memoryRental, ILogger logger) 
-        {
-            _api = api;
-            _memoryRental = memoryRental;
-            Log = logger;
-        }
+        private readonly Func<UnionDataList, ServerSideApiInstance<TApi>> _instanceFactory;
 
-        void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
+        public ServerSideApiFactory(Func<UnionDataList, ServerSideApiInstance<TApi>> instanceFactory)
         {
-            ackData.PutFirst((long)7777);
+            _instanceFactory = instanceFactory;
         }
-
-        void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
+        
+        public ServerSideApiInstance<TApi>? TryAck(UnionDataList ackData)
         {
-            _endpoint = endPoint;
-            
-            _transportPipeSystem = new TransportPipeSystem(dataToSend =>
+            using var disposer = ackData.AsDisposable();
+            if (ackData.TryPopFirst(out long apiHash) && apiHash == 777)
             {
-                var endpoint = _endpoint;
-                if (endpoint != null)
-                {
-                    return endpoint.Send(dataToSend);
-                }
-                dataToSend.Release();
-                return SendResult.NotConnected;
-            }, _memoryRental, Log);
-            _api.Disconnected += r => _endpoint?.Disconnect(r);
-            _api.Start(true, _transportPipeSystem);
-        }
-        
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
-        {
-            _transportPipeSystem!.OnReceived(receivedBuffer);
-        }
-        
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
-        {
-            _api.Stop();
-            _transportPipeSystem = null;
-            _endpoint = null;
+                return _instanceFactory.Invoke(ackData);
+            }
+
+            return null;
         }
     }
 }

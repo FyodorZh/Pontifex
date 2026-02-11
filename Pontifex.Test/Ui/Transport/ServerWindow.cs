@@ -37,7 +37,7 @@ namespace Pontifex.Test
             {
                 var apiFactory = new ServerSideApiFactory<ApiRoot>((ack) =>
                 {
-                    return new ServerSideApi<ApiRoot>(ApiFactory.Construct(api, false, MemoryRental.Shared, _logger), MemoryRental.Shared, _logger);
+                    return new ServerSideApiInstance<ApiRoot>(ApiFactory.Construct(api, false, MemoryRental.Shared, _logger), MemoryRental.Shared, _logger);
                 });
                 
                 if (_server == null || !_server.Init(apiFactory))
