@@ -343,7 +343,7 @@ namespace Pontifex.Transports.Tcp
                     mLastMessageReceiveTime.Time = DateTime.UtcNow;
                     try
                     {
-                        TimeSpan keepAlivePeriod = TimeSpan.FromMilliseconds(80000);
+                        TimeSpan keepAlivePeriod = TimeSpan.FromMilliseconds(1000);
 
                         mKeepAliver = new KeepAliver(this, Memory);
 

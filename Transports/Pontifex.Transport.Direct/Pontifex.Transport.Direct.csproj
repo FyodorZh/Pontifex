@@ -5,7 +5,7 @@
         <RootNamespace>Pontifex.Transports.Direct</RootNamespace>
         <LangVersion>9</LangVersion>
         <Nullable>enable</Nullable>
-        <Version>0.1.0-dev.4</Version>
+        <Version>0.1.0-dev.5</Version>
         <Title>Pontifex.Transport.Direct</Title>
         <Authors>Fyodor Zhmaev</Authors>
         <Description>Extension for Pontifex library. InMemory transport</Description>
