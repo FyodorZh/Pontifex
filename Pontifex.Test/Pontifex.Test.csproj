@@ -19,8 +19,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Archivarius" Version="0.2.2-dev.2" />
-      <PackageReference Include="Archivarius.Tools" Version="0.2.2-dev.2" />
+      <PackageReference Include="Archivarius" Version="0.2.2-dev.5" />
+      <PackageReference Include="Archivarius.Tools" Version="0.2.2-dev.3" />
       <PackageReference Include="Scriba" Version="0.2.0-dev.9" />
       <PackageReference Include="System.Reactive" Version="6.1.0" />
       <PackageReference Include="Terminal.Gui" Version="2.0.0-alpha.3865" />

@@ -5,7 +5,7 @@
         <LangVersion>9</LangVersion>
         <Nullable>enable</Nullable>
         <RootNamespace>Pontifex.Api</RootNamespace>
-        <Version>0.1.0-dev.11</Version>
+        <Version>0.1.0-dev.13</Version>
         <Title>Pontifex.Api</Title>
         <Authors>Fyodor Zhmaev</Authors>
         <Description>Extension to make custom API on top of Pontifex</Description>
@@ -40,7 +40,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Archivarius" Version="0.2.2-dev.2" />
+      <PackageReference Include="Archivarius" Version="0.2.2-dev.5" />
     </ItemGroup>
 
 </Project>
