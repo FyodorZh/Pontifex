@@ -1,0 +1,85 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex", "Pontifex\Pontifex.csproj", "{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Test", "Pontifex.Test\Pontifex.Test.csproj", "{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Protocol.Reconnectable", "Protocols\Pontifex.Protocol.Reconnectable\Pontifex.Protocol.Reconnectable.csproj", "{2EFAF53F-1344-4C4B-80F2-907E1DB94575}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Transports", "Transports", "{E81BF466-7B6C-416B-9264-CDE25C96DC3F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.Direct", "Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj", "{45E4CA13-158C-4321-B6D1-3D7F8720F8D3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Protocol", "Protocols\Pontifex.Protocol\Pontifex.Protocol.csproj", "{C9761D07-76B0-4F9F-8AC2-E087CF36DB3B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Protocols", "Protocols", "{E6E45B50-3584-49AE-8089-63102A29C4F0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Protocol.Zip", "Protocols\Pontifex.Protocol.Zip\Pontifex.Protocol.Zip.csproj", "{A67751DA-435F-46A1-8431-2F3BBFCF22B9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Terminal.UICommon", "Terminal.UICommon\Terminal.UICommon.csproj", "{8F8B31E5-FACC-44B8-BB02-5A5DB9083FCC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.Tcp", "Transports\Pontifex.Transport.Tcp\Pontifex.Transport.Tcp.csproj", "{219DBCB7-493E-4E1F-8DF7-6886B71D3BD8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Api", "Api", "{AECBB42A-8A85-4F29-BB0B-104EABCCDF23}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Api", "Api\Pontifex.Api\Pontifex.Api.csproj", "{C5D41350-9751-41B8-8B92-4B9CA5E8DB84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Api.Tests", "Api\Pontifex.Api.Tests\Pontifex.Api.Tests.csproj", "{7B521253-D68D-40C5-BC3E-EC2C88756156}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2EFAF53F-1344-4C4B-80F2-907E1DB94575}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2EFAF53F-1344-4C4B-80F2-907E1DB94575}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2EFAF53F-1344-4C4B-80F2-907E1DB94575}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2EFAF53F-1344-4C4B-80F2-907E1DB94575}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45E4CA13-158C-4321-B6D1-3D7F8720F8D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45E4CA13-158C-4321-B6D1-3D7F8720F8D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45E4CA13-158C-4321-B6D1-3D7F8720F8D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45E4CA13-158C-4321-B6D1-3D7F8720F8D3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C9761D07-76B0-4F9F-8AC2-E087CF36DB3B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9761D07-76B0-4F9F-8AC2-E087CF36DB3B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9761D07-76B0-4F9F-8AC2-E087CF36DB3B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9761D07-76B0-4F9F-8AC2-E087CF36DB3B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A67751DA-435F-46A1-8431-2F3BBFCF22B9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A67751DA-435F-46A1-8431-2F3BBFCF22B9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A67751DA-435F-46A1-8431-2F3BBFCF22B9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A67751DA-435F-46A1-8431-2F3BBFCF22B9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8F8B31E5-FACC-44B8-BB02-5A5DB9083FCC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8F8B31E5-FACC-44B8-BB02-5A5DB9083FCC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8F8B31E5-FACC-44B8-BB02-5A5DB9083FCC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8F8B31E5-FACC-44B8-BB02-5A5DB9083FCC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{219DBCB7-493E-4E1F-8DF7-6886B71D3BD8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{219DBCB7-493E-4E1F-8DF7-6886B71D3BD8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{219DBCB7-493E-4E1F-8DF7-6886B71D3BD8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{219DBCB7-493E-4E1F-8DF7-6886B71D3BD8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5D41350-9751-41B8-8B92-4B9CA5E8DB84}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5D41350-9751-41B8-8B92-4B9CA5E8DB84}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5D41350-9751-41B8-8B92-4B9CA5E8DB84}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5D41350-9751-41B8-8B92-4B9CA5E8DB84}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B521253-D68D-40C5-BC3E-EC2C88756156}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B521253-D68D-40C5-BC3E-EC2C88756156}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B521253-D68D-40C5-BC3E-EC2C88756156}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B521253-D68D-40C5-BC3E-EC2C88756156}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{45E4CA13-158C-4321-B6D1-3D7F8720F8D3} = {E81BF466-7B6C-416B-9264-CDE25C96DC3F}
+		{A67751DA-435F-46A1-8431-2F3BBFCF22B9} = {E6E45B50-3584-49AE-8089-63102A29C4F0}
+		{219DBCB7-493E-4E1F-8DF7-6886B71D3BD8} = {E81BF466-7B6C-416B-9264-CDE25C96DC3F}
+		{C9761D07-76B0-4F9F-8AC2-E087CF36DB3B} = {E6E45B50-3584-49AE-8089-63102A29C4F0}
+		{2EFAF53F-1344-4C4B-80F2-907E1DB94575} = {E6E45B50-3584-49AE-8089-63102A29C4F0}
+		{C5D41350-9751-41B8-8B92-4B9CA5E8DB84} = {AECBB42A-8A85-4F29-BB0B-104EABCCDF23}
+		{7B521253-D68D-40C5-BC3E-EC2C88756156} = {AECBB42A-8A85-4F29-BB0B-104EABCCDF23}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,302 @@
+[
+  {
+    "SchemeName": "Base",
+    "PaletteName": "Normal",
+    "Foreground": -4659724,
+    "Background": -15973225
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "HotNormal",
+    "Foreground": -5383962,
+    "Background": -14409436
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "Focus",
+    "Foreground": -14409436,
+    "Background": -5383962
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "HotFocus",
+    "Foreground": -14409436,
+    "Background": -5383962
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "Active",
+    "Foreground": -5659991,
+    "Background": -14525843
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "HotActive",
+    "Foreground": -5659991,
+    "Background": -14525843
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "Highlight",
+    "Foreground": -4661260,
+    "Background": -14920277
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "Editable",
+    "Foreground": -5383962,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "ReadOnly",
+    "Foreground": -12015673,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Base",
+    "PaletteName": "Disabled",
+    "Foreground": -12015673,
+    "Background": -14409436
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "Normal",
+    "Foreground": -15854571,
+    "Background": -6365722
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "HotNormal",
+    "Foreground": -13220529,
+    "Background": -5383962
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "Focus",
+    "Foreground": -5383962,
+    "Background": -13220529
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "HotFocus",
+    "Foreground": -5383962,
+    "Background": -13220529
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "Active",
+    "Foreground": -9160925,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "HotActive",
+    "Foreground": -9160925,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "Highlight",
+    "Foreground": -9160925,
+    "Background": -5383962
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "Editable",
+    "Foreground": -13220529,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "ReadOnly",
+    "Foreground": -16777216,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Menu",
+    "PaletteName": "Disabled",
+    "Foreground": -16777216,
+    "Background": -5383962
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "Normal",
+    "Foreground": -7876870,
+    "Background": -12498356
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "HotNormal",
+    "Foreground": -7876870,
+    "Background": -12498356
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "Focus",
+    "Foreground": -12498356,
+    "Background": -7876870
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "HotFocus",
+    "Foreground": -12498356,
+    "Background": -7876870
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "Active",
+    "Foreground": -3814194,
+    "Background": -16430474
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "HotActive",
+    "Foreground": -3814194,
+    "Background": -16430474
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "Highlight",
+    "Foreground": -3814194,
+    "Background": -12498356
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "Editable",
+    "Foreground": -7876870,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "ReadOnly",
+    "Foreground": -16082704,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Dialog",
+    "PaletteName": "Disabled",
+    "Foreground": -16082704,
+    "Background": -12498356
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "Normal",
+    "Foreground": -10510688,
+    "Background": -13220529
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "HotNormal",
+    "Foreground": -10510688,
+    "Background": -13220529
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "Focus",
+    "Foreground": -13220529,
+    "Background": -10510688
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "HotFocus",
+    "Foreground": -13220529,
+    "Background": -10510688
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "Active",
+    "Foreground": -4601905,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "HotActive",
+    "Foreground": -4601905,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "Highlight",
+    "Foreground": -4601905,
+    "Background": -13220529
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "Editable",
+    "Foreground": -10510688,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "ReadOnly",
+    "Foreground": -13743284,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Runnable",
+    "PaletteName": "Disabled",
+    "Foreground": -13743284,
+    "Background": -13220529
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "Normal",
+    "Foreground": -3318692,
+    "Background": -14409436
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "HotNormal",
+    "Foreground": -3318692,
+    "Background": -14409436
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "Focus",
+    "Foreground": -14409436,
+    "Background": -3318692
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "HotFocus",
+    "Foreground": -14409436,
+    "Background": -3318692
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "Active",
+    "Foreground": -5659991,
+    "Background": -15268089
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "HotActive",
+    "Foreground": -5659991,
+    "Background": -15268089
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "Highlight",
+    "Foreground": -5659991,
+    "Background": -14409436
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "Editable",
+    "Foreground": -3318692,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "ReadOnly",
+    "Foreground": -8575450,
+    "Background": -16777216
+  },
+  {
+    "SchemeName": "Error",
+    "PaletteName": "Disabled",
+    "Foreground": -8575450,
+    "Background": -14409436
+  }
+]

@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Api\Pontifex.Api\Pontifex.Api.csproj" />
+      <ProjectReference Include="..\Protocols\Pontifex.Protocol.Reconnectable\Pontifex.Protocol.Reconnectable.csproj" />
+      <ProjectReference Include="..\Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
+      <ProjectReference Include="..\Protocols\Pontifex.Protocol.Zip\Pontifex.Protocol.Zip.csproj" />
+      <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
+      <ProjectReference Include="..\Terminal.UICommon\Terminal.UICommon.csproj" />
+      <ProjectReference Include="..\Transports\Pontifex.Transport.Tcp\Pontifex.Transport.Tcp.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Archivarius" Version="0.2.3-dev.0" />
+      <PackageReference Include="Archivarius.Tools" Version="0.2.3-dev.0" />
+      <PackageReference Include="Scriba" Version="0.2.1-dev.0" />
+      <PackageReference Include="System.Reactive" Version="6.1.0" />
+      <PackageReference Include="Terminal.Gui" Version="2.0.0-alpha.3865" />
+    </ItemGroup>
+
+</Project>
