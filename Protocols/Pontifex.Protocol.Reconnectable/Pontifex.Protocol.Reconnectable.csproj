@@ -5,7 +5,7 @@
         <LangVersion>9</LangVersion>
         <Nullable>enable</Nullable>
         <RootNamespace>Pontifex.Protocols.Reconnectable</RootNamespace>
-        <Version>0.1.0-dev.5</Version>
+        <Version>0.1.1-dev.0</Version>
         <Title>Pontifex.Protocol.Reconnectable</Title>
         <Authors>Fyodor Zhmaev</Authors>
         <Description>Extension to make transports reconnectable in Pontifex library</Description>
