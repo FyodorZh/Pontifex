@@ -8,9 +8,9 @@ namespace Pontifex.Api
     public class ServerSideApiFactory<TApi> : IRawServerAcknowledger<ServerSideApiInstance<TApi>>
         where TApi : IApiRoot
     {
-        private readonly Func<UnionDataList, ServerSideApiInstance<TApi>> _instanceFactory;
+        private readonly Func<UnionDataList, ServerSideApiInstance<TApi>?> _instanceFactory;
 
-        public ServerSideApiFactory(Func<UnionDataList, ServerSideApiInstance<TApi>> instanceFactory)
+        public ServerSideApiFactory(Func<UnionDataList, ServerSideApiInstance<TApi>?> instanceFactory)
         {
             _instanceFactory = instanceFactory;
         }
