@@ -4,7 +4,7 @@
         <TargetFramework>netstandard2.1</TargetFramework>
         <LangVersion>9</LangVersion>
         <Nullable>enable</Nullable>
-        <Version>0.1.1-dev.0</Version>
+        <Version>0.1.2-dev.0</Version>
         <Title>Pontifex</Title>
         <Authors>Fyodor Zhmaev</Authors>
         <Description>Generalized transport library</Description>
@@ -35,8 +35,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Actuarius.Memory" Version="0.1.2-dev.0" />
-      <PackageReference Include="Operarius" Version="0.2.1-dev.0" />
+      <PackageReference Include="Actuarius.Memory" Version="0.1.3-dev.0" />
+      <PackageReference Include="Operarius" Version="0.2.2-dev.0" />
       <PackageReference Include="Scriba" Version="0.2.1-dev.0" />
     </ItemGroup>
 
