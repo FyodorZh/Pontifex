@@ -47,7 +47,9 @@ namespace Pontifex.Transports.Tcp
         private readonly AckRawClientControl _transportControl;
         private readonly PingCollector mPingCollector = new PingCollector();
         private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim("Tcp.Traffic", UtcNowDateTimeProvider.Instance);
+        
         private readonly TcpClientDebugControl _debugControl;
+        private readonly SocketUnsafeAccessor _socketUnsafeAccessor;
 
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
@@ -101,6 +103,7 @@ namespace Pontifex.Transports.Tcp
             MessageMaxByteSize = messageMaxSize ?? TcpInfo.DefaultMessageMaxSize;
             _transportControl = new AckRawClientControl(this);
             _debugControl = new TcpClientDebugControl(this);
+            _socketUnsafeAccessor = new SocketUnsafeAccessor(this);
         }
 
         public override string ToString()
@@ -459,6 +462,8 @@ namespace Pontifex.Transports.Tcp
                 dst.Add(mTrafficCollector);
             if (predicate?.Invoke(_debugControl) ?? true)
                 dst.Add(_debugControl);
+            if (predicate?.Invoke(_socketUnsafeAccessor) ?? true)
+                dst.Add(_socketUnsafeAccessor);
         }
 
         bool IAckRawBaseEndpoint.IsConnected => ConnectionState == State.Connected;
@@ -479,6 +484,23 @@ namespace Pontifex.Transports.Tcp
             public void GracefulDisconnect()
             {
                 _client.GracefulDisconnect();
+            }
+        }
+
+        private class SocketUnsafeAccessor : ISocketUnsafeAccessor
+        {
+            private readonly AckRawTcpClient _client;
+            
+            public string Name => "TcpClient.SocketAccessor";
+            
+            public SocketUnsafeAccessor(AckRawTcpClient client)
+            {
+                _client = client;
+            }
+
+            public Socket? GetSocketUnsafe()
+            {
+                return _client.mSocket;
             }
         }
         
