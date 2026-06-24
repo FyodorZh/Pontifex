@@ -1,10 +1,8 @@
-﻿// ReSharper disable once CheckNamespace
+﻿using System.Diagnostics.CodeAnalysis;
 
-using System.Diagnostics.CodeAnalysis;
-
-namespace Pontifex.Utils
+namespace Pontifex.Transports.NetSockets
 {
-    internal static class HostResolver
+    public static class HostResolver
     {
         public static bool TryParse(string host, [MaybeNullWhen(false)] out System.Net.IPAddress ipAddress)
         {

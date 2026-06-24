@@ -79,7 +79,7 @@ namespace Pontifex.Abstractions
 
         public Message Acquire()
         {
-            return new Message(Id, Data != null ? Data.Acquire() : null);
+            return new Message(Id, Data?.Acquire());
         }
     }
 }

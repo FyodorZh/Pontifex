@@ -1,3 +1,4 @@
+using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Abstractions.Flags;
 using Pontifex.Abstractions.Handlers;
@@ -12,14 +13,12 @@ namespace Pontifex.Abstractions
     public interface INoAckUnreliableRawServerEndpoint : INoAckUnreliableRawEndpoint
     {
         IEndPoint ServerEndPoint { get; }
-        //SendResult Send(Message messages);
-        //SendResult Send(IMacroOwner<Message> messages);
+        SendResult Send(IMultiRefByteArray message);
     }
 
     public interface INoAckUnreliableRawClientEndpoint : INoAckUnreliableRawEndpoint
     {
-        //SendResult Send(IEndPoint destination, Message messages);
-        //SendResult Send(IEndPoint destination, IMacroOwner<Message> messages);
+        SendResult Send(IEndPoint destination, IMultiRefByteArray message);
     }
 
     public interface INoAckUnreliableRawClientHandler : IHandler
@@ -31,11 +30,11 @@ namespace Pontifex.Abstractions
         void OnStarted(INoAckUnreliableRawServerEndpoint endpoint);
 
         /// <summary>
-        /// Информирует об пришедшем ответе от сервера.
+        /// Информирует об пришедшем сообщении от сервера.
         /// Начинает работать после Started()
         /// </summary>
         /// <param name="message"> Данные присланные сервером </param>
-        void OnReceived(Message message);
+        void OnReceived(IMultiRefByteArray message);
         /// <summary>
         /// Информирует о разрушении транспорта. Приходит строго после Started()
         /// Эндпоинт становится невалидным

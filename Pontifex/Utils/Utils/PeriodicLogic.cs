@@ -1,6 +1,5 @@
 ﻿using System;
 using Operarius;
-using Scriba;
 
 namespace Transport.Utils
 {
@@ -10,7 +9,9 @@ namespace Transport.Utils
         private readonly TimeSpan _logicQuantLength;
 
         private ILogicDriver<IPeriodicLogicDriverCtl>? _driver;
-        private volatile ILogicDriverCtl? mDriverCtl;
+        private volatile ILogicDriverCtl? _driverCtl;
+        
+        protected bool IsStarted => _driverCtl != null;
 
         protected virtual void LogicStarted() { }
         protected abstract void LogicTick();
@@ -31,12 +32,12 @@ namespace Transport.Utils
 
         public void Stop()
         {
-            mDriverCtl?.Stop();
+            _driverCtl?.Stop();
         }
 
         bool ILogic<IPeriodicLogicDriverCtl>.LogicStarted(IPeriodicLogicDriverCtl driver)
         {
-            mDriverCtl = driver;
+            _driverCtl = driver;
             LogicStarted();
             return true;
         }
@@ -48,6 +49,7 @@ namespace Transport.Utils
 
         void ILogic<IPeriodicLogicDriverCtl>.LogicStopped()
         {
+            _driverCtl = null;
             LogicStopped();
         }
     }

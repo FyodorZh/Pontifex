@@ -2,6 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
+using Pontifex.Transports.NetSockets;
 using Scriba;
 
 namespace Pontifex.Transports.Tcp
@@ -18,7 +19,7 @@ namespace Pontifex.Transports.Tcp
                 string[] list = @params.Split('/');
                 disconnectionTimeout = list.Length == 1 ? TcpInfo.DefaultDisconnectTimeout : TimeSpan.FromSeconds(int.Parse(list[1]));
 
-                return Utils.UrlStringParser.TryParseAddress(list[0], out ip, out port);
+                return UrlStringParser.TryParseAddress(list[0], out ip, out port);
             }
             catch
             {

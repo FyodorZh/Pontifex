@@ -3,7 +3,7 @@ using Pontifex.Abstractions;
 
 namespace Pontifex.Transports.NetSockets
 {
-    internal sealed class IpEndPoint : IEndPoint
+    public sealed class IpEndPoint : IEndPoint
     {
         private readonly EndPoint? mEndpoint;
 

@@ -1,9 +1,13 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using Actuarius.PeriodicLogic;
+using Actuarius.Collections;
+using Actuarius.Memory;
+using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Transports.Core;
+using Pontifex.Transports.NetSockets;
+using Scriba;
 using Transport.Utils;
 
 namespace Pontifex.Transports.Udp
@@ -12,40 +16,33 @@ namespace Pontifex.Transports.Udp
     {
         private IPEndPoint mLocalEndPoint;
 
-        private UdpReceiver mReceiver;
-        private UdpAsyncSender mSender;
+        private UdpReceiver? mReceiver;
+        private UdpAsyncSender? mSender;
 
-        private volatile INoAckUnreliableRawServerHandler mHandler;
+        private volatile INoAckUnreliableRawServerHandler? mHandler;
 
-        private Socket mSocket;
+        private Socket? mSocket;
 
         private readonly ThreadSafeDateTime mCurTime = new ThreadSafeDateTime();
         private readonly TemporaryMap<EndPoint, IpEndPoint> mEPointsMap;
 
-        private readonly IPeriodicLogicRunner mLogicRunner;
-
         private readonly TrafficCollectorSlim mTrafficCollector;
 
-        public NoAckUnreliableRawUdpServer(IPAddress ipAddress, int port, IPeriodicLogicRunner runner)
+        public NoAckUnreliableRawUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
+            : base(UdpInfo.TransportName, logger, memoryRental)
         {
             mLocalEndPoint = new IPEndPoint(ipAddress, port);
-            mLogicRunner = runner;
             mEPointsMap = new TemporaryMap<EndPoint, IpEndPoint>(mCurTime, System.TimeSpan.FromSeconds(10));
 
-            mTrafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, mCurTime);
-            AppendControl(mTrafficCollector);
-        }
-
-        public override string Type
-        {
-            get { return UdpInfo.TransportName; }
+            mTrafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, mCurTime); 
+            //AppendControl(mTrafficCollector);
         }
 
         public override string ToString()
         {
             try
             {
-                return string.Format("udp-server[{0}]", mLocalEndPoint);
+                return $"udp-server[{mLocalEndPoint}]";
             }
             catch (Exception)
             {
@@ -56,13 +53,10 @@ namespace Pontifex.Transports.Udp
         bool INoAckUnreliableRawServer.Init(INoAckUnreliableRawServerHandler handler)
         {
             mHandler = handler;
-            return (handler != null);
+            return true; // ???
         }
 
-        public int MessageMaxByteSize
-        {
-            get { return UdpInfo.MessageMaxByteSize; }
-        }
+        public int MessageMaxByteSize => UdpInfo.MessageMaxByteSize;
 
         protected override bool TryStart()
         {
@@ -96,7 +90,7 @@ namespace Pontifex.Transports.Udp
                 }
                 catch (Exception ex)
                 {
-                    Log.e("Socket icmp exception 'MAGIC FIX' throw error!", ex);
+                    Log.wtf("Socket icmp exception 'MAGIC FIX' throw error!", ex);
                 }
 
                 try
@@ -124,18 +118,16 @@ namespace Pontifex.Transports.Udp
                         {
                             Log.e("UDP.Receiver SocketException with code " + ex.ErrorCode + " received. Continue working!!!");
                         }
-                    },
+                    }, Memory.ByteArraysPool, Log,
                     mTrafficCollector);
 
                 mReceiver.OnTick += () => { mCurTime.Time = DateTime.UtcNow; };
 
                 Log.i("UDP.Sender from local={0}", mLocalEndPoint);
 
-                new PeriodicLogicThreadedDriver(DeltaTime.FromMiliseconds(10)).Start(mReceiver, Log);
-
                 mSender = new UdpAsyncSender(mSocket, UdpInfo.MessageMaxByteSize,
                     (ex) => { Log.e("UDP.Sender Exception received. Continue working!!!"); },
-                    mTrafficCollector);
+                    mTrafficCollector, Log);
                 if (mLogicRunner != null)
                 {
                    var runnerCtl= mLogicRunner.Run(mSender, DeltaTime.FromMiliseconds(5));
@@ -146,7 +138,7 @@ namespace Pontifex.Transports.Udp
                 }
                 else
                 {
-                    mSender.Start(Log);
+                    mSender.Start();
                 }
 
                 Log.i("Starting.Result = 'OK'");
@@ -219,9 +211,9 @@ namespace Pontifex.Transports.Udp
             }
         }
 
-        SendResult INoAckUnreliableRawClientEndpoint.Send(IEndPoint client, IMacroOwner<Message> messages)
+        SendResult INoAckUnreliableRawClientEndpoint.Send(IEndPoint client, IProducer<Message> messages)
         {
-            if (messages == null)
+            if (messages == null!)
             {
                 return SendResult.InvalidMessage;
             }
@@ -243,7 +235,7 @@ namespace Pontifex.Transports.Udp
             return SendResult.Error;
         }
 
-        private void OnReceived(EndPoint sender, IMacroOwner<Message> messages)
+        private void OnReceived(EndPoint sender, IProducer<Message> messages)
         {
             var handler = mHandler;
             if (handler != null)

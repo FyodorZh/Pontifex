@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace Pontifex.Utils
+namespace Pontifex.Transports.NetSockets
 {
-    internal static class UrlStringParser
+    public static class UrlStringParser
     {
         // host:port
         public static bool TryParseAddress(string address, [MaybeNullWhen(false)] out System.Net.IPAddress ip, out int port)
