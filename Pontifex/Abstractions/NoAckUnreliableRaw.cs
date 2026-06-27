@@ -2,6 +2,7 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Abstractions.Flags;
 using Pontifex.Abstractions.Handlers;
+using Pontifex.Utils;
 
 namespace Pontifex.Abstractions
 {
@@ -13,12 +14,12 @@ namespace Pontifex.Abstractions
     public interface INoAckUnreliableRawServerEndpoint : INoAckUnreliableRawEndpoint
     {
         IEndPoint ServerEndPoint { get; }
-        SendResult Send(IMultiRefByteArray message);
+        SendResult Send(UnionDataList message);
     }
 
     public interface INoAckUnreliableRawClientEndpoint : INoAckUnreliableRawEndpoint
     {
-        SendResult Send(IEndPoint destination, IMultiRefByteArray message);
+        SendResult Send(IEndPoint destination, UnionDataList message);
     }
 
     public interface INoAckUnreliableRawClientHandler : IHandler
@@ -33,8 +34,8 @@ namespace Pontifex.Abstractions
         /// Информирует об пришедшем сообщении от сервера.
         /// Начинает работать после Started()
         /// </summary>
-        /// <param name="message"> Данные присланные сервером </param>
-        void OnReceived(IMultiRefByteArray message);
+        /// <param name="message"> Данные, присланные сервером. Отдаются во владение обработчику </param>
+        void OnReceived(UnionDataList message);
         /// <summary>
         /// Информирует о разрушении транспорта. Приходит строго после Started()
         /// Эндпоинт становится невалидным
@@ -46,7 +47,7 @@ namespace Pontifex.Abstractions
     {
         void OnStarted(INoAckUnreliableRawClientEndpoint endpoint);
         void OnStopped();
-        void OnReceived(IEndPoint sender, Message message);
+        void OnReceived(IEndPoint sender, UnionDataList message);
     }
 
     public interface INoAckUnreliableRawClient : ITransport, IUnreliable

@@ -6,6 +6,7 @@ using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
+using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
@@ -167,16 +168,29 @@ namespace Pontifex.Transports.Udp
             }
         }
 
-        SendResult INoAckUnreliableRawServerEndpoint.Send(IMultiRefByteArray message)
+        SendResult INoAckUnreliableRawServerEndpoint.Send(UnionDataList message)
         {
+            using var disposer = message.AsDisposable();
+            
             var sender = _sender;
             if (sender == null)
             {
-                message.Release();
                 return SendResult.NotConnected;
             }
 
-            return sender.Send(message);
+            try
+            {
+                if (message.Serialize(Memory.ByteArraysPool, out var serializedMessage))
+                {
+                    return sender.Send(serializedMessage);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.wtf(e);
+            }
+
+            return SendResult.InvalidMessage;
         }
 
         private void OnReceived(EndPoint remoteEp, IMultiRefByteArray message)
@@ -186,9 +200,26 @@ namespace Pontifex.Transports.Udp
             var handler = _handler;
             if (handler != null)
             {
+                UnionDataList deserializedMessage = Memory.SmallObjectsPool.GetPool<UnionDataList>().Acquire();
+                using var disposer2 = deserializedMessage.AsDisposable();
                 try
                 {
-                    handler.OnReceived(message.Acquire());
+                    var byteSource = new ByteSourceFromArray(message);
+                    if (!deserializedMessage.Deserialize(ref byteSource, Memory.ByteArraysPool))
+                    {
+                        Log.w("Failed to deserialize message from {0}", remoteEp);
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                    return;
+                }
+
+                try
+                {
+                    handler.OnReceived(deserializedMessage.Acquire());
                 }
                 catch (Exception e)
                 {

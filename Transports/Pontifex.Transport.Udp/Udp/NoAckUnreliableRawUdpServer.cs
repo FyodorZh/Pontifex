@@ -23,7 +23,6 @@ namespace Pontifex.Transports.Udp
 
         private Socket? mSocket;
 
-        private readonly ThreadSafeDateTime mCurTime = new ThreadSafeDateTime();
         private readonly TemporaryMap<EndPoint, IpEndPoint> mEPointsMap;
 
         private readonly TrafficCollectorSlim mTrafficCollector;
@@ -32,9 +31,9 @@ namespace Pontifex.Transports.Udp
             : base(UdpInfo.TransportName, logger, memoryRental)
         {
             mLocalEndPoint = new IPEndPoint(ipAddress, port);
-            mEPointsMap = new TemporaryMap<EndPoint, IpEndPoint>(mCurTime, System.TimeSpan.FromSeconds(10));
+            mEPointsMap = new TemporaryMap<EndPoint, IpEndPoint>(UtcNowDateTimeProvider.Instance, TimeSpan.FromSeconds(10));
 
-            mTrafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, mCurTime); 
+            mTrafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, UtcNowDateTimeProvider.Instance); 
             //AppendControl(mTrafficCollector);
         }
 
@@ -121,27 +120,12 @@ namespace Pontifex.Transports.Udp
                     }, Memory.ByteArraysPool, Log,
                     mTrafficCollector);
 
-                mReceiver.OnTick += () => { mCurTime.Time = DateTime.UtcNow; };
-
                 Log.i("UDP.Sender from local={0}", mLocalEndPoint);
 
                 mSender = new UdpAsyncSender(mSocket, UdpInfo.MessageMaxByteSize,
                     (ex) => { Log.e("UDP.Sender Exception received. Continue working!!!"); },
-                    mTrafficCollector, Log);
-                if (mLogicRunner != null)
-                {
-                   var runnerCtl= mLogicRunner.Run(mSender, DeltaTime.FromMiliseconds(5));
-                   if (runnerCtl == null)
-                   {
-                       Log.e("UDP.Sender couldn't start sender in runner");
-                   }
-                }
-                else
-                {
-                    mSender.Start();
-                }
-
-                Log.i("Starting.Result = 'OK'");
+                    Log, mTrafficCollector);
+                
                 mHandler.OnStarted(this);
                 return true;
             }
@@ -235,7 +219,7 @@ namespace Pontifex.Transports.Udp
             return SendResult.Error;
         }
 
-        private void OnReceived(EndPoint sender, IProducer<Message> messages)
+        private void OnReceived(EndPoint sender, IMultiRefByteArray messages)
         {
             var handler = mHandler;
             if (handler != null)
