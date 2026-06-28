@@ -7,6 +7,7 @@ using Operarius;
 using Pontifex.Abstractions;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
+using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
@@ -115,7 +116,7 @@ namespace Pontifex.Transports.Udp
                     {
                         if (ex.SocketErrorCode != SocketError.ConnectionReset)
                         {
-                            Log.e("UDP.Receiver SocketException with code " + ex.ErrorCode + " received. Continue working!!!");
+                            Log.e($"UDP.Receiver SocketException with code {ex.ErrorCode} received. Continue working!!!");
                         }
                     }, Memory.ByteArraysPool, Log,
                     mTrafficCollector);
@@ -195,49 +196,61 @@ namespace Pontifex.Transports.Udp
             }
         }
 
-        SendResult INoAckUnreliableRawClientEndpoint.Send(IEndPoint client, IProducer<Message> messages)
+        SendResult INoAckUnreliableRawClientEndpoint.Send(IEndPoint client, UnionDataList message)
         {
-            if (messages == null!)
+            if (message == null! || !message.IsAlive)
             {
+                message?.Release();
                 return SendResult.InvalidMessage;
             }
+
+            using var disposer = message.AsDisposable();
 
             var sender = mSender;
             if (sender != null)
             {
-                IpEndPoint endPoint = client as IpEndPoint;
-                if (endPoint != null)
+                if (client is IpEndPoint endPoint)
                 {
-                    return sender.Send(messages, endPoint.EP);
+                    if (message.Serialize(Memory.ByteArraysPool, out var serializedMessage))
+                    {
+                        return sender.Send(endPoint.EP, serializedMessage);
+                    }
+
+                    return SendResult.InvalidMessage;
                 }
 
-                messages.Release();
                 return SendResult.InvalidAddress;
             }
 
-            messages.Release();
             return SendResult.Error;
         }
 
-        private void OnReceived(EndPoint sender, IMultiRefByteArray messages)
+        private void OnReceived(EndPoint sender, IMultiRefByteArray message)
         {
-            var handler = mHandler;
-            if (handler != null)
-            {
-                IpEndPoint ep;
-                if (!mEPointsMap.TryGetValue(sender, out ep))
-                {
-                    ep = new IpEndPoint(sender);
-                    mEPointsMap.Add(sender, ep);
-                }
+            using var disposer = message.AsDisposable();
 
-                foreach (var message in messages.Enumerate())
-                {
-                    handler.OnReceived(ep, message.Acquire()); // TODO: change ENDPOINT
-                }
+            var handler = mHandler;
+            if (handler == null)
+            {
+                return;
             }
 
-            messages.Release();
+            if (!mEPointsMap.TryGetValue(sender, out var ep))
+            {
+                ep = new IpEndPoint(sender);
+                mEPointsMap.Add(sender, ep);
+            }
+
+            var data = Memory.SmallObjectsPool.GetPool<UnionDataList>().Acquire();
+            var source = new ByteSourceFromArray(message);
+            if (data.Deserialize(ref source, Memory.ByteArraysPool))
+            {
+                handler.OnReceived(ep, data);
+            }
+            else
+            {
+                data.Release();
+            }
         }
     }
 }
