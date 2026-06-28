@@ -1,6 +1,5 @@
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Flags;
 using Pontifex.Abstractions.Handlers;
 using Pontifex.Utils;
 
@@ -50,7 +49,7 @@ namespace Pontifex.Abstractions
         void OnReceived(IEndPoint sender, UnionDataList message);
     }
 
-    public interface INoAckUnreliableRawClient : ITransport, IUnreliable
+    public interface INoAckUnreliableRawClient : ITransport
     {
         /// <summary>
         /// Максимальный допустимый размер еденичного сообщения для отправки (и получения)
@@ -60,7 +59,7 @@ namespace Pontifex.Abstractions
         bool Init(INoAckUnreliableRawClientHandler handler);
     }
 
-    public interface INoAckUnreliableRawServer : ITransport, IUnreliable
+    public interface INoAckUnreliableRawServer : ITransport
     {
         bool Init(INoAckUnreliableRawServerHandler handler);
     }

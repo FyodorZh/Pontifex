@@ -2,10 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
-        <LangVersion>9</LangVersion>
         <Nullable>enable</Nullable>
-        <InvariantGlobalization>true</InvariantGlobalization>
-        <RootNamespace>Pontifex.Transports.NetSockets</RootNamespace>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -19,6 +16,5 @@
     <ItemGroup>
       <ProjectReference Include="..\..\Pontifex.Elements\Pontifex.Elements.csproj" />
     </ItemGroup>
-
 
 </Project>

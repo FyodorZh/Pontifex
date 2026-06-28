@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Scriba.JsonFactory;
+﻿using Scriba.JsonFactory;
 
 namespace Pontifex.StopReasons
 {

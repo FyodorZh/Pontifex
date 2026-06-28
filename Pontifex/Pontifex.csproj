@@ -40,4 +40,8 @@
       <PackageReference Include="Scriba" Version="0.2.1-dev.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\Pontifex.Elements\Pontifex.Elements.csproj" />
+    </ItemGroup>
+
 </Project>
