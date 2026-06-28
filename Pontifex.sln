@@ -32,9 +32,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.NetSocke
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Elements", "Pontifex.Elements\Pontifex.Elements.csproj", "{452122D3-647F-4023-99B6-F83737434552}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.NoAckRaw", "NoAckRaw\Pontifex.NoAckRaw\Pontifex.NoAckRaw.csproj", "{956716DA-358A-4D60-A1D0-53591501901C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.NoAckRaw", "Abstractions\Pontifex.NoAckRaw\Pontifex.NoAckRaw.csproj", "{956716DA-358A-4D60-A1D0-53591501901C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NoAckRaw", "NoAckRaw", "{F6944DF2-4E3C-476A-9CC3-21950940E57D}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Abstractions", "Abstractions", "{F6944DF2-4E3C-476A-9CC3-21950940E57D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

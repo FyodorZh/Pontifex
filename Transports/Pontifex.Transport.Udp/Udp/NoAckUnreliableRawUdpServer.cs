@@ -4,23 +4,22 @@ using System.Net.Sockets;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.Abstractions;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
-namespace Pontifex.Transports.Udp
+namespace Pontifex.NoAckRaw.Udp
 {
-    internal sealed class NoAckUnreliableRawUdpServer : AbstractTransport, INoAckUnreliableRawServer, INoAckUnreliableRawClientEndpoint
+    internal sealed class NoAckUnreliableRawUdpServer : AbstractTransport, INoAckRawServer, INoAckRawServerSideEndpoint
     {
         private IPEndPoint mLocalEndPoint;
 
         private UdpReceiver? mReceiver;
         private UdpAsyncSender? mSender;
 
-        private volatile INoAckUnreliableRawServerHandler? mHandler;
+        private volatile INoAckRawServerSideHandler? mHandler;
 
         private Socket? mSocket;
 
@@ -50,7 +49,7 @@ namespace Pontifex.Transports.Udp
             }
         }
 
-        bool INoAckUnreliableRawServer.Init(INoAckUnreliableRawServerHandler handler)
+        bool INoAckRawServer.Init(INoAckRawServerSideHandler handler)
         {
             mHandler = handler;
             return true; // ???
@@ -196,7 +195,7 @@ namespace Pontifex.Transports.Udp
             }
         }
 
-        SendResult INoAckUnreliableRawClientEndpoint.Send(IEndPoint client, UnionDataList message)
+        SendResult INoAckRawServerSideEndpoint.Send(IEndPoint client, UnionDataList message)
         {
             if (message == null! || !message.IsAlive)
             {

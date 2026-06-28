@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.Abstractions;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
@@ -11,14 +10,14 @@ using Scriba;
 using Transport.Utils;
 
 
-namespace Pontifex.Transports.Udp
+namespace Pontifex.NoAckRaw.Udp
 {
-    internal sealed class NoAckUnreliableRawUdpClient : AbstractTransport, INoAckUnreliableRawClient, INoAckUnreliableRawServerEndpoint
+    internal sealed class NoAckUnreliableRawUdpClient : AbstractTransport, INoAckRawClient, INoAckRawClientSideEndpoint
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;
 
-        private INoAckUnreliableRawClientHandler? _handler;
+        private INoAckRawClientSideHandler? _handler;
 
         private UdpSyncSender? _sender;
         private UdpReceiver? _receiver;
@@ -35,13 +34,13 @@ namespace Pontifex.Transports.Udp
             //AppendControl(mTrafficCollector);
         }
 
-        bool INoAckUnreliableRawClient.Init(INoAckUnreliableRawClientHandler handler)
+        bool INoAckRawClient.Init(INoAckRawClientSideHandler handler)
         {
             _handler = handler;
             return true; //???
         }
 
-        public IEndPoint ServerEndPoint => _managedRemoteEndPoint;
+        public IEndPoint ServerAddress => _managedRemoteEndPoint;
 
         public int MessageMaxByteSize => UdpInfo.MessageMaxByteSize;
 
@@ -168,7 +167,7 @@ namespace Pontifex.Transports.Udp
             }
         }
 
-        SendResult INoAckUnreliableRawServerEndpoint.Send(UnionDataList message)
+        SendResult INoAckRawClientSideEndpoint.Send(UnionDataList message)
         {
             using var disposer = message.AsDisposable();
             

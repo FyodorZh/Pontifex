@@ -1,4 +1,4 @@
-﻿namespace Pontifex.Abstractions.Handlers
+﻿namespace Pontifex
 {
     public interface IHandler
     {

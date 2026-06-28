@@ -9,7 +9,7 @@ using Actuarius.Memory;
 using Pontifex.Abstractions.Controls;
 using Scriba;
 
-namespace Pontifex.Transports.Udp
+namespace Pontifex.NoAckRaw.Udp
 {
     internal class UdpAsyncSender
     {

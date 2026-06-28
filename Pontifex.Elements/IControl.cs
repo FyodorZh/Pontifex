@@ -1,4 +1,4 @@
-﻿namespace Pontifex.Abstractions
+﻿namespace Pontifex
 {
     public interface IControl
     {
