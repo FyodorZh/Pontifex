@@ -3,8 +3,9 @@ using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
 using Pontifex.Abstractions.Controls;
+using Pontifex.Utils;
 
-namespace Pontifex.NoAckRaw.Udp
+namespace Pontifex.Transports.Udp
 {
     internal class UdpSyncSender
     {
@@ -15,16 +16,21 @@ namespace Pontifex.NoAckRaw.Udp
         private readonly ITrafficCollectorSink _trafficCollectorSink;
 
         private readonly int _maxMessageSize;
+        
+        private readonly IPool<IMultiRefByteArray, int> _bytesPool;
 
         private readonly object _locker = new();
 
-        public UdpSyncSender(Socket socket, EndPoint remoteEP, int maxMessageSize, Action<Exception> onException,
+        public UdpSyncSender(Socket socket, EndPoint remoteEP, int maxMessageSize,
+            IPool<IMultiRefByteArray, int> bytesPool,
+            Action<Exception> onException,
             ITrafficCollectorSink trafficCollectorSink)
         {
             _socket = socket;
             _remoteEP = remoteEP;
             _onException = onException;
             _trafficCollectorSink = trafficCollectorSink;
+            _bytesPool = bytesPool;
 
             _maxMessageSize = maxMessageSize;
         }
@@ -32,29 +38,35 @@ namespace Pontifex.NoAckRaw.Udp
         /// <summary>
         /// Sends a message to the remote endpoint.
         /// </summary>
-        /// <param name="bytes">The message to send. Method owns the message and will release it after sending.</param>
+        /// <param name="dataToSend">The message to send. Method owns the message and will release it after sending.</param>
         /// <returns>The result of the send operation.</returns>
-        public SendResult Send(IMultiRefByteArray bytes)
+        public SendResult Send(UnionDataList dataToSend)
         {
-            if (bytes == null!)
+            if (dataToSend == null!)
             {
                 return SendResult.InvalidMessage;
             }
 
-            using var disposer = bytes.AsDisposable();
+            using var disposer = dataToSend.AsDisposable();
             
-            if (bytes.Count > _maxMessageSize)
+            if (dataToSend.GetDataSize() > _maxMessageSize)
             {
                 return SendResult.MessageToBig;
             }
 
+            if (!dataToSend.Serialize(_bytesPool, out var serializedData))
+            {
+                return SendResult.InvalidMessage;
+            }
+            using var serializedDisposer = serializedData.AsDisposable();
+            
             lock (_locker)
             {
                 try
                 {
-                    int sentCount = _socket.SendTo(bytes.ReadOnlyArray, bytes.Offset, bytes.Count, SocketFlags.None, _remoteEP);
+                    int sentCount = _socket.SendTo(serializedData.ReadOnlyArray, serializedData.Offset, serializedData.Count, SocketFlags.None, _remoteEP);
                     _trafficCollectorSink.IncOutTraffic(sentCount);
-                    if (bytes.Count != sentCount)
+                    if (serializedData.Count != sentCount)
                     {
                         return SendResult.Error;
                     }

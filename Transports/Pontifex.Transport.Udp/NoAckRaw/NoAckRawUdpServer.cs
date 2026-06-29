@@ -4,15 +4,16 @@ using System.Net.Sockets;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
+using Pontifex.NoAckRaw;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
-namespace Pontifex.NoAckRaw.Udp
+namespace Pontifex.Transports.Udp.NoAckRaw
 {
-    internal sealed class NoAckUnreliableRawUdpServer : AbstractTransport, INoAckRawServer, INoAckRawServerSideEndpoint
+    internal sealed class NoAckRawUdpServer : AbstractTransport, INoAckRawServer, INoAckRawServerSideEndpoint
     {
         private IPEndPoint mLocalEndPoint;
 
@@ -27,7 +28,7 @@ namespace Pontifex.NoAckRaw.Udp
 
         private readonly TrafficCollectorSlim mTrafficCollector;
 
-        public NoAckUnreliableRawUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
+        public NoAckRawUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(UdpInfo.TransportName, logger, memoryRental)
         {
             mLocalEndPoint = new IPEndPoint(ipAddress, port);
@@ -117,12 +118,14 @@ namespace Pontifex.NoAckRaw.Udp
                         {
                             Log.e($"UDP.Receiver SocketException with code {ex.ErrorCode} received. Continue working!!!");
                         }
-                    }, Memory.ByteArraysPool, Log,
+                    }, Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool,
+                    Log,
                     mTrafficCollector);
 
                 Log.i("UDP.Sender from local={0}", mLocalEndPoint);
 
                 mSender = new UdpAsyncSender(mSocket, UdpInfo.MessageMaxByteSize,
+                    Memory.ByteArraysPool,
                     (ex) => { Log.e("UDP.Sender Exception received. Continue working!!!"); },
                     Log, mTrafficCollector);
                 
@@ -197,9 +200,8 @@ namespace Pontifex.NoAckRaw.Udp
 
         SendResult INoAckRawServerSideEndpoint.Send(IEndPoint client, UnionDataList message)
         {
-            if (message == null! || !message.IsAlive)
+            if (message == null!)
             {
-                message?.Release();
                 return SendResult.InvalidMessage;
             }
 
@@ -210,12 +212,7 @@ namespace Pontifex.NoAckRaw.Udp
             {
                 if (client is IpEndPoint endPoint)
                 {
-                    if (message.Serialize(Memory.ByteArraysPool, out var serializedMessage))
-                    {
-                        return sender.Send(endPoint.EP, serializedMessage);
-                    }
-
-                    return SendResult.InvalidMessage;
+                    return sender.Send(endPoint.EP, message.Acquire());
                 }
 
                 return SendResult.InvalidAddress;
@@ -224,7 +221,7 @@ namespace Pontifex.NoAckRaw.Udp
             return SendResult.Error;
         }
 
-        private void OnReceived(EndPoint sender, IMultiRefByteArray message)
+        private void OnReceived(EndPoint sender, UnionDataList message)
         {
             using var disposer = message.AsDisposable();
 
@@ -240,16 +237,7 @@ namespace Pontifex.NoAckRaw.Udp
                 mEPointsMap.Add(sender, ep);
             }
 
-            var data = Memory.SmallObjectsPool.GetPool<UnionDataList>().Acquire();
-            var source = new ByteSourceFromArray(message);
-            if (data.Deserialize(ref source, Memory.ByteArraysPool))
-            {
-                handler.OnReceived(ep, data);
-            }
-            else
-            {
-                data.Release();
-            }
+            handler.OnReceived(ep, message);
         }
     }
 }

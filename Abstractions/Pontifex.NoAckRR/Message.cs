@@ -1,7 +1,7 @@
 using System;
 using Actuarius.Memory;
 
-namespace Pontifex.Abstractions
+namespace Pontifex.NoAckRR
 {
     public readonly struct MessageId : IEquatable<MessageId>
     {

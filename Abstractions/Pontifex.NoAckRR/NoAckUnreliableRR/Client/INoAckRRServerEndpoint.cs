@@ -1,9 +1,8 @@
 ﻿using Actuarius.Memory;
+using Pontifex.Utils;
 
-namespace Pontifex.Abstractions.Endpoints.Client
+namespace Pontifex.NoAckRR
 {
-    using Handlers.Client;
-
     public interface INoAckRRServerEndpoint
     {
         IEndPoint EndPoint { get; }
@@ -16,13 +15,13 @@ namespace Pontifex.Abstractions.Endpoints.Client
         /// Отправка данных в порядке перечисления.
         /// Данные передаются во владение
         /// </summary>
-        /// <param name="messages"></param>
+        /// <param name="message"></param>
         /// <returns></returns>
-        //SendResult Send(IMacroOwner<Message> messages);
+        SendResult Send(UnionDataList message);
     }
 
     public interface INoAckReliableRRServerEndpoint : INoAckRRServerEndpoint
     {
-        SendResult Send(IMultiRefByteArray data, INoAckReliableRRCallback callback);
+        SendResult Send(UnionDataList data, INoAckReliableRRCallbackOnClient callback);
     }
 }

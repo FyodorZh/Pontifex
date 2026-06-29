@@ -1,12 +1,12 @@
 ﻿using Actuarius.Memory;
 using Pontifex.Utils;
 
-namespace Pontifex.Abstractions.Endpoints.Server
+namespace Pontifex.NoAckRR
 {
     /// <summary>
     /// Инкапсулирует единичный запрос от клиента
     /// </summary>
-    public interface INoAckReliableRRCallback
+    public interface INoAckReliableRRCallbackOnServer
     {
         int MessageMaxByteSize { get; }
             

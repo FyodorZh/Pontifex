@@ -3,9 +3,9 @@ using Pontifex.Abstractions;
 using Pontifex.Transports.NetSockets;
 using Scriba;
 
-namespace Pontifex.NoAckRaw.Udp
+namespace Pontifex.Transports.Udp.NoAckRaw
 {
-    public class NoAckUnreliableRawUdpClientProducer : ITransportProducer
+    public class NoAckRawUdpClientProducer : ITransportProducer
     {
         public string Name => UdpInfo.TransportName;
 
@@ -13,7 +13,7 @@ namespace Pontifex.NoAckRaw.Udp
         {
             if (UrlStringParser.TryParseAddress(@params, out System.Net.IPAddress? ip, out int port))
             {
-                return new NoAckUnreliableRawUdpClient(ip, port, logger, memoryRental);
+                return new NoAckRawUdpClient(ip, port, logger, memoryRental);
             }
 
             return null;
@@ -28,7 +28,7 @@ namespace Pontifex.NoAckRaw.Udp
         {
             if (UrlStringParser.TryParseAddress(@params, out System.Net.IPAddress? ip, out int port))
             {
-                return new NoAckUnreliableRawUdpServer(ip, port, logger, memoryRental);
+                return new NoAckRawUdpServer(ip, port, logger, memoryRental);
             }
             return null;
         }

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
 using Operarius;
+using Pontifex.NoAckRaw;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
@@ -10,9 +11,9 @@ using Scriba;
 using Transport.Utils;
 
 
-namespace Pontifex.NoAckRaw.Udp
+namespace Pontifex.Transports.Udp.NoAckRaw
 {
-    internal sealed class NoAckUnreliableRawUdpClient : AbstractTransport, INoAckRawClient, INoAckRawClientSideEndpoint
+    internal sealed class NoAckRawUdpClient : AbstractTransport, INoAckRawClient, INoAckRawClientSideEndpoint
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;
@@ -26,7 +27,7 @@ namespace Pontifex.NoAckRaw.Udp
 
         private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
-        public NoAckUnreliableRawUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
+        public NoAckRawUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(UdpInfo.TransportName, logger, memoryRental)
         {
             _remoteEndPoint = new IPEndPoint(ipAddress, port);
@@ -88,13 +89,14 @@ namespace Pontifex.NoAckRaw.Udp
 
                 Log.i("UDP.Sender from local='{0}' to remote='{1}'", localEndPoint!, _remoteEndPoint);
                 _sender = new UdpSyncSender(_socket, _remoteEndPoint, UdpInfo.MessageMaxByteSize,
+                    Memory.ByteArraysPool,
                     (ex) => { FailException("Sender.Exception", ex); }, _trafficCollector);
 
                 Log.i("UDP.Listener from local='{0}' of remote='{1}'", localEndPoint!, _remoteEndPoint);
 
                 _receiver = new UdpReceiver(_socket, _remoteEndPoint, 
                     OnReceived, (ex) => { FailException("UDP.Receiver", ex); },
-                    Memory.ByteArraysPool, Log, _trafficCollector);
+                    Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log, _trafficCollector);
 
                 try
                 {
@@ -169,20 +171,16 @@ namespace Pontifex.NoAckRaw.Udp
 
         SendResult INoAckRawClientSideEndpoint.Send(UnionDataList message)
         {
-            using var disposer = message.AsDisposable();
-            
             var sender = _sender;
             if (sender == null)
             {
+                message.Release();
                 return SendResult.NotConnected;
             }
 
             try
             {
-                if (message.Serialize(Memory.ByteArraysPool, out var serializedMessage))
-                {
-                    return sender.Send(serializedMessage);
-                }
+                return sender.Send(message);
             }
             catch (Exception e)
             {
@@ -192,38 +190,23 @@ namespace Pontifex.NoAckRaw.Udp
             return SendResult.InvalidMessage;
         }
 
-        private void OnReceived(EndPoint remoteEp, IMultiRefByteArray message)
+        private void OnReceived(EndPoint remoteEp, UnionDataList message)
         {
-            using var disposer = message.AsDisposable();
-            
             var handler = _handler;
             if (handler != null)
             {
-                UnionDataList deserializedMessage = Memory.SmallObjectsPool.GetPool<UnionDataList>().Acquire();
-                using var disposer2 = deserializedMessage.AsDisposable();
                 try
                 {
-                    var byteSource = new ByteSourceFromArray(message);
-                    if (!deserializedMessage.Deserialize(ref byteSource, Memory.ByteArraysPool))
-                    {
-                        Log.w("Failed to deserialize message from {0}", remoteEp);
-                        return;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                    return;
-                }
-
-                try
-                {
-                    handler.OnReceived(deserializedMessage.Acquire());
+                    handler.OnReceived(message);
                 }
                 catch (Exception e)
                 {
                     FailException((_handler?.GetType().ToString()??"Null-Handler") + ".Received()", e);
                 }
+            }
+            else
+            {
+                message.Release();
             }
         }
 

@@ -64,7 +64,7 @@ namespace Pontifex.Utils
 
         public int GetDataSize()
         {
-            int size = 4;
+            int size = 2;
             foreach (var element in _data.Enumerate())
             {
                 size += element.GetDataSize();
@@ -75,8 +75,8 @@ namespace Pontifex.Utils
         public bool SerializeTo<TByteSink>(ref TByteSink sink)
             where TByteSink : IByteSink
         {
-            UnionDataMemoryAlias alias = _data.Count;
-            if (alias.WriteTo4(ref sink))
+            UnionDataMemoryAlias alias = (ushort)_data.Count;
+            if (alias.WriteTo2(ref sink))
             {
                 foreach (var element in _data.Enumerate())
                 {
@@ -96,8 +96,8 @@ namespace Pontifex.Utils
         {
             ByteSink sink = new ByteSink(buffer);
             
-            UnionDataMemoryAlias alias = _data.Count;
-            if (alias.WriteTo4(ref sink))
+            UnionDataMemoryAlias alias = (ushort)_data.Count;
+            if (alias.WriteTo2(ref sink))
             {
                 foreach (var element in _data.Enumerate())
                 {
@@ -133,12 +133,12 @@ namespace Pontifex.Utils
             Clear();
             
             UnionDataMemoryAlias alias = new();
-            if (!alias.ReadFrom4(ref source))
+            if (!alias.ReadFrom2(ref source))
             {
                 return false;
             }
 
-            int count = alias.IntValue;
+            int count = alias.UShortValue;
             for (int i = 0; i < count; i++)
             {
                 if (!UnionData.ReadFrom(ref source, pool, out var element))

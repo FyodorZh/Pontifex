@@ -7,9 +7,10 @@ using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
 using Pontifex.Abstractions.Controls;
+using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.NoAckRaw.Udp
+namespace Pontifex.Transports.Udp
 {
     internal class UdpAsyncSender
     {
@@ -21,6 +22,8 @@ namespace Pontifex.NoAckRaw.Udp
 
         private readonly ILogger Log;
         private readonly ITrafficCollectorSink _trafficCollectorSink;
+        
+        private readonly IPool<IMultiRefByteArray, int> _bytesPool;
 
         private readonly AutoResetEvent _resetEvent = new AutoResetEvent(false);
         
@@ -28,7 +31,9 @@ namespace Pontifex.NoAckRaw.Udp
         private bool _stopped;
         
 
-        public UdpAsyncSender(Socket socket, int maxMessageSize, Action<SocketException> onSocketFailed, ILogger logger, 
+        public UdpAsyncSender(Socket socket, int maxMessageSize, 
+            IPool<IMultiRefByteArray, int> bytesPool,
+            Action<SocketException> onSocketFailed, ILogger logger, 
             ITrafficCollectorSink trafficCollectorSink)
         {
             _queueToSend = new ConcurrentQueueValve<(EndPoint, IMultiRefByteArray)>(
@@ -37,10 +42,10 @@ namespace Pontifex.NoAckRaw.Udp
             
             Log = logger;
             _trafficCollectorSink = trafficCollectorSink;
+            _bytesPool = bytesPool;
             _socket = socket;
             _maxMessageSize = maxMessageSize;
             _onSocketFailed = onSocketFailed;
-            
             
             Thread thread = new Thread(DoWork, 1024 * 128)
             {
@@ -120,33 +125,38 @@ namespace Pontifex.NoAckRaw.Udp
             }
         }
 
-        public SendResult Send(EndPoint remoteEP, IMultiRefByteArray bytes)
+        public SendResult Send(EndPoint remoteEP, UnionDataList dataToSend)
         {
-            if (bytes == null!)
+            if (dataToSend == null!)
             {
                 return SendResult.InvalidMessage;
             }
-            if (!bytes.IsValid || bytes.Count == 0 || bytes.Count > _maxMessageSize)
-            {
-                bytes.Release();
-                return SendResult.InvalidMessage;
-            }
+            using var disposer = dataToSend.AsDisposable();
+            
             if (remoteEP == null!)
             {
-                bytes.Release();
                 return SendResult.InvalidAddress;
+            }
+            
+            if (dataToSend.GetDataSize() > _maxMessageSize)
+            {
+                return SendResult.MessageToBig;
             }
             
             lock (_lock)
             {
                 if (_stopped)
                 {
-                    bytes.Release();
                     return SendResult.NotConnected;
                 }
             }
             
-            switch (_queueToSend.EnqueueEx((remoteEP, bytes)))
+            if (!dataToSend.Serialize(_bytesPool, out var serializedData))
+            {
+                return SendResult.InvalidMessage;
+            }
+            
+            switch (_queueToSend.EnqueueEx((remoteEP, serializedData)))
             {
                 case ValveEnqueueResult.Ok:
                     _resetEvent.Set();

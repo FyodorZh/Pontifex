@@ -1,6 +1,7 @@
 ﻿using Actuarius.Memory;
+using Pontifex.Utils;
 
-namespace Pontifex.Abstractions.Handlers.Client
+namespace Pontifex.NoAckRR
 {
     public interface INoAckUnreliableRRClientHandler : IHandler
     {
@@ -8,13 +9,13 @@ namespace Pontifex.Abstractions.Handlers.Client
         /// Вызывается после полной инициализации транспорта
         /// </summary>
         /// <param name="endpoint"> Настороенный и готовый к работе эндпоинт для отправки сообщений </param>
-        void Started(Endpoints.Client.INoAckUnreliableRRServerEndpoint endpoint);
+        void Started(INoAckUnreliableRRServerEndpoint endpoint);
         /// <summary>
         /// Информирует об пришедшем ответе от сервера.
         /// Начинает работать после Started()
         /// </summary>
         /// <param name="message"> Данные присланные сервером </param>
-        void Received(Message message);
+        void Received(UnionDataList message);
         /// <summary>
         /// Информирует о разрушении транспорта. Приходит строго после Started()
         /// Эндпоинт становится невалидным
@@ -40,15 +41,15 @@ namespace Pontifex.Abstractions.Handlers.Client
         Timeout
     }
 
-    public interface INoAckReliableRRCallback
+    public interface INoAckReliableRRCallbackOnClient
     {
-        void Response(DeliveryId id, IMultiRefByteArray data);
+        //void Response(DeliveryId id, IMultiRefByteArray data);
         void Failed(NoAckReliableRRFailReason reason);
     }
 
     public interface INoAckReliableRRClientHandler : IHandler
     {
-        void Started(Endpoints.Client.INoAckReliableRRServerEndpoint endpoint);
+        void Started(INoAckReliableRRServerEndpoint endpoint);
         void Stopped();
     }
 }

@@ -1,20 +1,20 @@
 ﻿using Actuarius.Memory;
-using Pontifex.Abstractions.Endpoints.Server;
+using Pontifex.Utils;
 
-namespace Pontifex.Abstractions.Handlers.Server
+namespace Pontifex.NoAckRR
 {
     public interface INoAckUnreliableRRServerHandler : IHandler
     {
         //void Started(); // todo add
         //void Stoped(); // todo add
 
-        void OnRequest(IEndPoint client, Message message);
+        void OnRequest(IEndPoint client, UnionDataList message);
     }
 
     public interface INoAckReliableRRClientSession
     {
         event System.Action<string> OnClosed;
-        void OnRequested(DeliveryId id, IMultiRefByteArray data, INoAckReliableRRCallback callback);
+        //void OnRequested(DeliveryId id, IMultiRefByteArray data, INoAckReliableRRCallback callback);
         void Close(string reason);
     }
 

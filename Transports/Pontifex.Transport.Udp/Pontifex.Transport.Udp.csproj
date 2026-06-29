@@ -36,6 +36,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\Abstractions\Pontifex.NoAckRaw\Pontifex.NoAckRaw.csproj" />
+        <ProjectReference Include="..\..\Abstractions\Pontifex.NoAckRR\Pontifex.NoAckRR.csproj" />
         <ProjectReference Include="..\Pontifex.Transport.NetSockets\Pontifex.Transport.NetSockets.csproj" />
     </ItemGroup>
 

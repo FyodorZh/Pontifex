@@ -5,17 +5,20 @@ using System.Security;
 using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Abstractions.Controls;
+using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.NoAckRaw.Udp
+namespace Pontifex.Transports.Udp
 {
     internal class UdpReceiver
     {
         private readonly Socket _socket;
         private readonly IPEndPoint _anyRemoteEP;
 
-        private readonly Action<EndPoint, IMultiRefByteArray> _onReceived;
+        private readonly Action<EndPoint, UnionDataList> _onReceived;
         private readonly Action<SocketException> _onFail;
+        
+        private readonly IPool<UnionDataList> _unionListPool;
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
 
         private const int mBufferSize = 1024 * 4;
@@ -31,12 +34,14 @@ namespace Pontifex.NoAckRaw.Udp
         /// <param name="remoteEp"></param>
         /// <param name="onReceived"> Показывает пришедшие данные. Отдаёт их во владение. </param>
         /// <param name="onFail"> Информирует о проблемах </param>
-        /// <param name="bytesPool"> Пул байтов для декодирования сообщений </param>
+        /// <param name="unionListPool"> Пул для хранения объединённых данных </param>
+        /// <param name="bytesPool"> Пул байтов для временного хранения данных </param>
         /// <param name="logger"> Логгер для записи сообщений </param>
         /// <param name="trafficCollectorSink"> Сборщик трафика для мониторинга входящего трафика </param>
         public UdpReceiver(Socket socket, IPEndPoint remoteEp, 
-            Action<EndPoint, IMultiRefByteArray> onReceived,
+            Action<EndPoint, UnionDataList> onReceived,
             Action<SocketException> onFail,
+            IPool<UnionDataList> unionListPool,
             IPool<IMultiRefByteArray, int> bytesPool,
             ILogger logger,
             ITrafficCollectorSink trafficCollectorSink)
@@ -46,10 +51,11 @@ namespace Pontifex.NoAckRaw.Udp
 
             _onReceived = onReceived;
             _onFail = onFail;
-            _bytesPool = bytesPool;
+            _unionListPool = unionListPool;
 
             Log = logger;
             _trafficCollectorSink = trafficCollectorSink;
+            _bytesPool = bytesPool;
 
             Thread thread = new Thread(DoWork, 1024 * 128)
             {
@@ -73,12 +79,20 @@ namespace Pontifex.NoAckRaw.Udp
                 {
                     var count = _socket.ReceiveFrom(_buffer, SocketFlags.None, ref ep);
                     _trafficCollectorSink.IncInTraffic(count);
+
+                    var data = _unionListPool.Acquire();
+                    using var disposer = data.AsDisposable();
                     
-                    var bytes = _bytesPool.Acquire(count);
-                    bytes.CopyFrom(_buffer, 0, 0, count);
+                    var byteSource = new ByteSourceFromRealArray(_buffer, 0, count);
+                    if (!data.Deserialize(ref byteSource, _bytesPool))
+                    {
+                        Log.w("Failed to read message from {0}", ep);
+                        continue;
+                    }
+                    
                     try 
                     {
-                        _onReceived(ep, bytes);
+                        _onReceived(ep, data);
                     }
                     catch (Exception ex)
                     {
