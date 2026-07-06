@@ -1,9 +1,8 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.Concurrent;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 
 namespace Pontifex.Handlers
@@ -23,7 +22,7 @@ namespace Pontifex.Handlers
         private bool _disconnectServiced = true;
         private StopReason? _disconnectReason;
 
-        private IAckRawServerEndpoint? _notServicedConnectedEndPoint;
+        private IAckRawClientSideEndpoint? _notServicedConnectedEndPoint;
         private UnionDataList? _ackResponse;
 
         private bool _stopServiced = true;
@@ -45,18 +44,18 @@ namespace Pontifex.Handlers
         /// Не однопоточный
         /// </summary>
         /// <returns></returns>
-        void IAckHandler.WriteAckData(UnionDataList ackData)
+        void IAckRawClientHandler.FillAckData(UnionDataList ackData)
         {
-            _handler.WriteAckData(ackData);
+            _handler.FillAckData(ackData);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             _notServicedConnectedEndPoint = endPoint;
             _ackResponse = ackResponse;
         }
 
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
             _disconnectServiced = false;
             _disconnectReason = reason;
@@ -70,7 +69,7 @@ namespace Pontifex.Handlers
             _receivedDataQueue.CloseValve();
         }
 
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             if (!_receivedDataQueue.Put(receivedBuffer))
             {
@@ -123,7 +122,7 @@ namespace Pontifex.Handlers
         {
             if (!_stopServiced)
             {
-                _handler.OnStopped(_stopReason!);
+                _handler.OnStopped(reason: _stopReason!);
                 _stopServiced = true;
             }
         }

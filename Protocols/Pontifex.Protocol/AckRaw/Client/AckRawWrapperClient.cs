@@ -1,9 +1,7 @@
 ﻿using System;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Clients;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack;
+using Pontifex.Ack.Raw;
 using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
@@ -82,7 +80,7 @@ namespace Pontifex.Protocols
             mBaseTransport.Stop();
         }
 
-        internal void ConnectionFinished_Internal(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        internal void ConnectionFinished_Internal(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             if (mInConnectionProcess)
             {
@@ -99,25 +97,25 @@ namespace Pontifex.Protocols
 
         #region IAckRawClientHandler (for internal usage)
 
-        void IAckHandler.WriteAckData(UnionDataList ackData)
+        void IAckRawClientHandler.FillAckData(UnionDataList ackData)
         {
             ackData.Release();
             Fail("WriteAckData", "this method must not be called");
         }
 
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
-            IAckRawServerEndpoint? ep = mClientHandler;
+            IAckRawClientSideEndpoint? ep = mClientHandler;
             ep?.Disconnect(reason);
         }
 
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             receivedBuffer.Release();
             Fail("OnReceived", "this method must not be called");
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             // DO NOTHING
         }

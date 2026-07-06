@@ -51,7 +51,7 @@ namespace Pontifex.Transports.Udp
             
             if (dataToSend.GetDataSize() > _maxMessageSize)
             {
-                return SendResult.MessageToBig;
+                return SendResult.MessageTooBig;
             }
 
             if (!dataToSend.Serialize(_bytesPool, out var serializedData))

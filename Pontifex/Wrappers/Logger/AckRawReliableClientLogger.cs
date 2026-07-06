@@ -1,11 +1,7 @@
 using System;
-using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Abstractions;
-using Pontifex.Abstractions.Clients;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
@@ -57,28 +53,28 @@ namespace Pontifex
 
         int IAckRawClient.MessageMaxByteSize => _core.MessageMaxByteSize;
 
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
             Log.i("UserHandler.OnDisconnected(" + reason + ")");
             _userHandler?.OnDisconnected(reason);
         }
 
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             Log.i("UserHandler.OnReceived(" + receivedBuffer + ")");
             _userHandler?.OnReceived(receivedBuffer);
         }
 
-        void IAckHandler.WriteAckData(UnionDataList ackData)
+        void IAckRawClientHandler.FillAckData(UnionDataList ackData)
         {
             Log.i("UserHandler.GetAckData()");
-            _userHandler?.WriteAckData(ackData);
+            _userHandler?.FillAckData(ackData);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             Log.i("UserHandler.OnConnected(" + endPoint + ", " + ackResponse + ")");
-            var endPointWrapper = new AckRawServerEndpointWrapper(endPoint, (endpoint, dataToSend) =>
+            var endPointWrapper = new AckRawClientSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
             {
                 Log.i("EndPoint.Send(" + dataToSend + ")");
                 if (endpoint == null)
@@ -100,7 +96,7 @@ namespace Pontifex
         void IAckRawClientHandler.OnStopped(StopReason reason)
         {
             Log.i("UserHandler.OnStopped(" + reason + ")");
-            _userHandler?.OnStopped(reason);
+            _userHandler?.OnStopped(reason: reason);
         }
     }
 }

@@ -1,9 +1,7 @@
 using System;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Endpoints.Server;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Ack.Raw;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 using Scriba;
@@ -17,7 +15,7 @@ namespace Pontifex.Api
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
         
-        private IAckRawClientEndpoint? _endpoint;
+        private IAckRawServerSideEndpoint? _endpoint;
         private TransportPipeSystem? _transportPipeSystem;
 
         public event Action<ServerSideApiInstance<TApi>>? ApiStarted;
@@ -39,7 +37,7 @@ namespace Pontifex.Api
             ackData.PutFirst((long)7777);
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
+        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
         {
             _endpoint = endPoint;
             
@@ -58,12 +56,12 @@ namespace Pontifex.Api
             ApiStarted?.Invoke(this);
         }
         
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _transportPipeSystem!.OnReceived(receivedBuffer);
         }
         
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
             ApiStopped?.Invoke(this);
             _api.Stop();

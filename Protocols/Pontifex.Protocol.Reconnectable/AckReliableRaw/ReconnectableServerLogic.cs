@@ -1,14 +1,13 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Endpoints.Server;
-using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
-    class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawClientEndpoint>, IAckRawServerHandler, IAckRawClientEndpoint
+    class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawServerSideEndpoint>, IAckRawServerHandler, IAckRawServerSideEndpoint
     {
         private IMultiRefReadOnlyByteArray? _secret;
 
@@ -16,7 +15,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         private volatile bool mAttached;
 
-        public event Action<IAckRawClientEndpoint>? OnConnected;
+        public event Action<IAckRawServerSideEndpoint>? OnConnected;
 
         public ReconnectableServerLogic(IAckRawServerHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(userHandler, disconnectTimeout, logger, memoryRental)
@@ -75,7 +74,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             ackData.PutFirst(new UnionData(ReconnectableInfo.AckOKResponse));
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
+        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
         {
             Connect(endPoint, out var isFirstConnection);
             if (isFirstConnection)

@@ -1,11 +1,11 @@
 ﻿using System;
 using Pontifex.Utils;
 
-namespace Pontifex.Abstractions.Endpoints.Client
+namespace Pontifex.Ack.Raw
 {
-    public class AckRawServerEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawServerEndpoint
+    public class AckRawClientSideEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawClientSideEndpoint
     {
-        public AckRawServerEndpointWrapper(IAckRawServerEndpoint? core, 
+        public AckRawClientSideEndpointWrapper(IAckRawClientSideEndpoint? core, 
             Func<IAckRawBaseEndpoint?, UnionDataList, SendResult> sender, 
             Func<IAckRawBaseEndpoint?, StopReason, bool> disconnector)
             : base(core, sender, disconnector)

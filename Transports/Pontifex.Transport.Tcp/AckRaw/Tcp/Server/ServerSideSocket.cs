@@ -5,16 +5,14 @@ using System.Net.Sockets;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Endpoints;
-using Pontifex.Abstractions.Endpoints.Server;
-using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Ack.Raw;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Transports.Tcp
 {
-    internal class ServerSideSocket : IAckRawClientEndpoint, IEquatable<ServerSideSocket>, IComparable<ServerSideSocket>
+    internal class ServerSideSocket : IAckRawServerSideEndpoint, IEquatable<ServerSideSocket>, IComparable<ServerSideSocket>
     {
         private enum ServerSideSocketState
         {
@@ -300,7 +298,7 @@ namespace Pontifex.Transports.Tcp
             return Disconnect(reason);
         }
 
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        void IBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             // EMPTY
         }

@@ -4,9 +4,7 @@ using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
 using Pontifex;
-using Pontifex.Abstractions.Acknowledgers;
-using Pontifex.Abstractions.Endpoints.Server;
-using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Ack.Raw;
 
 namespace TransportAnalyzer.TestLogic
 {
@@ -62,7 +60,7 @@ namespace TransportAnalyzer.TestLogic
 
         private class Handler : AckRawCommonLogic, IAckRawServerHandler, IClientHandler
         {
-            private volatile IAckRawClientEndpoint? mEndpoint;
+            private volatile IAckRawServerSideEndpoint? mEndpoint;
 
             private long mReceiveId = 0;
 
@@ -81,7 +79,7 @@ namespace TransportAnalyzer.TestLogic
                 ackResponse.PutFirst(new UnionData(AckResponse));
             }
 
-            public void OnConnected(IAckRawClientEndpoint endPoint)
+            public void OnConnected(IAckRawServerSideEndpoint endPoint)
             {
                 mEndpoint = endPoint;
                 mText = endPoint.RemoteEndPoint.ToString() ?? "null";

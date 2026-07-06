@@ -2,17 +2,15 @@
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.Abstractions.Clients;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack;
+using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
-    class ReconnectableClientLogic : ReconnectableBaseLogic<IAckRawServerEndpoint>, IAckRawClientHandler, IAckRawServerEndpoint
+    class ReconnectableClientLogic : ReconnectableBaseLogic<IAckRawClientSideEndpoint>, IAckRawClientHandler, IAckRawClientSideEndpoint
     {
         private readonly Func<IAckReliableRawClient?> _underlyingTransportFactory;
         private readonly IAckRawClientHandler _userHandler;
@@ -21,7 +19,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         private IMultiRefReadOnlyByteArray? _secret;
 
-        public event Action<IAckRawServerEndpoint, UnionDataList>? OnConnected;
+        public event Action<IAckRawClientSideEndpoint, UnionDataList>? OnConnected;
 
         public SessionId SessionId => _sessionId;
 
@@ -68,9 +66,9 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         #region IAckRawClientHandler
 
-        void IAckHandler.WriteAckData(UnionDataList ackData)
+        void IAckRawClientHandler.FillAckData(UnionDataList ackData)
         {
-            _userHandler.WriteAckData(ackData);
+            _userHandler.FillAckData(ackData);
             if (_sessionId.IsValid)
             {
                 ackData.PutFirst(_secret ?? throw new InvalidOperationException("Secret must be set before sending ack data"));
@@ -80,7 +78,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             ackData.PutFirst(ReconnectableInfo.AckRequest);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? ackBytes))

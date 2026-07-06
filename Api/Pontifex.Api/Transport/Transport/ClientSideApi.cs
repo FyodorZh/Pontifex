@@ -1,8 +1,7 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack;
+using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
@@ -16,9 +15,9 @@ namespace Pontifex.Api
         private readonly ILogger Log;
         
         private TransportPipeSystem? _transportPipeSystem;
-        private IAckRawServerEndpoint? _endpoint;
+        private IAckRawClientSideEndpoint? _endpoint;
         
-        public event Action<IAckRawServerEndpoint>? Connected;
+        public event Action<IAckRawClientSideEndpoint>? Connected;
         public event Action<StopReason>? Disconnected;
         
         protected virtual void AppendAckData(UnionDataList ackData)
@@ -33,14 +32,14 @@ namespace Pontifex.Api
             Log = logger;
         }
 
-        void IAckHandler.WriteAckData(UnionDataList ackData)
+        void IAckRawClientHandler.FillAckData(UnionDataList ackData)
         {
             AppendAckData(ackData);
             long apiHash = 777;
             ackData.PutFirst(apiHash);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var disposer = ackResponse.AsDisposable();
             if (ackResponse.TryPopFirst(out long value) && value == 7777)
@@ -66,12 +65,12 @@ namespace Pontifex.Api
             }
         }
         
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _transportPipeSystem!.OnReceived(receivedBuffer);
         }
 
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
             _api.Stop();
             _transportPipeSystem = null;

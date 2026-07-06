@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.NoAckRR;
+using Pontifex.NoAck.RR;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Transports.Udp.NoAckRaw;

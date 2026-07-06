@@ -2,22 +2,20 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Endpoints;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Protocols
 {
-    internal class ClientHandler : IAckRawClientHandler, IAckRawServerEndpoint
+    internal class ClientHandler : IAckRawClientHandler, IAckRawClientSideEndpoint
     {
         private readonly AckRawWrapperClient mTransport;
         private readonly IAckRawWrapperClientLogic mWrapperLogic;
         private readonly IAckRawClientHandler mUserHandler;
 
-        private volatile IAckRawServerEndpoint? mTransportEndpoint;
+        private volatile IAckRawClientSideEndpoint? mTransportEndpoint;
 
         private readonly object mSendCallSerializer = new object();
 
@@ -28,13 +26,13 @@ namespace Pontifex.Protocols
             mUserHandler = userHandler;
         }
 
-        void IAckHandler.WriteAckData(UnionDataList ackData)
+        void IAckRawClientHandler.FillAckData(UnionDataList ackData)
         {
-            mUserHandler.WriteAckData(ackData);
+            mUserHandler.FillAckData(ackData);
             mWrapperLogic.UpdateAckData(ackData);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             mTransportEndpoint = endPoint;
             try
@@ -49,7 +47,7 @@ namespace Pontifex.Protocols
             }
         }
 
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
             try
             {
@@ -66,11 +64,11 @@ namespace Pontifex.Protocols
 
         void IAckRawClientHandler.OnStopped(StopReason reason)
         {
-            mUserHandler.OnStopped(reason);
+            mUserHandler.OnStopped(reason: reason);
             mTransport.Stop(reason);
         }
 
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             try
             {
@@ -117,7 +115,7 @@ namespace Pontifex.Protocols
             return false;
         }
 
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        void IBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             mWrapperLogic.GetControls(dst, predicate);
         }

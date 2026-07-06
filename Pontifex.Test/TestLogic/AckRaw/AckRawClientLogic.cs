@@ -2,15 +2,14 @@
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Pontifex;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack.Raw;
 using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
     class AckRawClientLogic : AckRawCommonLogic, IAckRawClientHandler
     {
-        private volatile IAckRawServerEndpoint? _endpoint;
+        private volatile IAckRawClientSideEndpoint? _endpoint;
 
         private long _sendId = 0;
         private long _receiveId = 0;
@@ -18,7 +17,7 @@ namespace TransportAnalyzer.TestLogic
         private readonly int _unconfirmedTicks;
         private readonly long _lastTickId;
         
-        public event Action<IAckRawServerEndpoint>? Connected;
+        public event Action<IAckRawClientSideEndpoint>? Connected;
         public event Action<StopReason>? Disconnected;
 
         public override string ToString()
@@ -33,12 +32,12 @@ namespace TransportAnalyzer.TestLogic
             _lastTickId = lastTickId;
         }
 
-        public void WriteAckData(UnionDataList ackData)
+        public void FillAckData(UnionDataList ackData)
         {
             ackData.PutFirst(new UnionData(AckRequest));
         }
 
-        public void OnConnected(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        public void OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) || !AckResponse.EqualByContent(response))

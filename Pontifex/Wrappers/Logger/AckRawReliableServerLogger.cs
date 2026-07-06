@@ -2,11 +2,7 @@ using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Acknowledgers;
-using Pontifex.Abstractions.Endpoints.Server;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Server;
-using Pontifex.Abstractions.Servers;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
@@ -76,13 +72,13 @@ namespace Pontifex
             return null;
         }
 
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
             Log.i("UserHandler.OnDisconnected(" + reason + ")");
             _userHandler?.OnDisconnected(reason);
         }
 
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             Log.i("UserHandler.OnReceived(" + receivedBuffer + ")");
             _userHandler?.OnReceived(receivedBuffer);
@@ -94,10 +90,10 @@ namespace Pontifex
             _userHandler?.GetAckResponse(ackResponse);
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
+        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
         {
             Log.i("UserHandler.OnConnected()");
-            var endPointWrapper = new AckRawClientEndpointWrapper(endPoint, (endpoint, dataToSend) =>
+            var endPointWrapper = new AckRawServerSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
             {
                 Log.i("EndPoint.Send(" + dataToSend + ")");
                 if (endpoint == null)

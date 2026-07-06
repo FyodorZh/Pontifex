@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 
-namespace Pontifex.Abstractions.Endpoints
+namespace Pontifex.Ack.Raw
 {
     public abstract class AckRawBaseEndpointWrapper : IAckRawBaseEndpoint
     {

@@ -1,5 +1,5 @@
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Clients;
+using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 
 namespace Pontifex

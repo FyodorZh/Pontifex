@@ -1,3 +1,0 @@
-namespace Pontifex.NoAckRR
-{
-}

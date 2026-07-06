@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.NoAckRaw;
+using Pontifex.NoAck.Raw;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;

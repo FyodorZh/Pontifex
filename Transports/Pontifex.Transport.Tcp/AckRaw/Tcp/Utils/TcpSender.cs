@@ -161,7 +161,7 @@ namespace Pontifex.Transports.Tcp
             
             if (packet.GetDataSize() > _messageMaxSize)
             {
-                return SendResult.MessageToBig;
+                return SendResult.MessageTooBig;
             }
 
             switch (_packetsToSend.EnqueueEx(packet.Acquire()))

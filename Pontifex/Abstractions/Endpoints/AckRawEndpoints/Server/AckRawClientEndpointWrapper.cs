@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 
-namespace Pontifex.Abstractions.Endpoints.Server
+namespace Pontifex.Ack.Raw
 {
-    public class AckRawClientEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawClientEndpoint
+    public class AckRawServerSideEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawServerSideEndpoint
     {
         private readonly IControl[] _controls;
         
-        public AckRawClientEndpointWrapper(IAckRawClientEndpoint? core,  
+        public AckRawServerSideEndpointWrapper(IAckRawServerSideEndpoint? core,  
             Func<IAckRawBaseEndpoint?, UnionDataList, SendResult> sender, 
             Func<IAckRawBaseEndpoint?, StopReason, bool> disconnector,
             IControl[] controls)

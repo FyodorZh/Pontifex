@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using Pontifex.Abstractions;
 
 namespace Pontifex.Transports.NetSockets
 {

@@ -2,16 +2,14 @@ using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Endpoints;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Endpoints.Server;
+using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Transports.Direct
 {
-    internal class TransportEndPoint : IAckRawServerEndpoint, IAckRawClientEndpoint
+    internal class TransportEndPoint : IAckRawClientSideEndpoint, IAckRawServerSideEndpoint
     {
         private struct SendReceiveAction: ActionQueue<SendReceiveAction>.IAction
         {
@@ -77,7 +75,7 @@ namespace Pontifex.Transports.Direct
             _ctl.OnDisconnected(reason);
         }
 
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        void IBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             if (_ctl is IClientDirectCtl clientCtl)
             {

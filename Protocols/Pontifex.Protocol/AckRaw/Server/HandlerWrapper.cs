@@ -2,10 +2,7 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Endpoints;
-using Pontifex.Abstractions.Endpoints.Server;
-using Pontifex.Abstractions.Handlers;
-using Pontifex.Abstractions.Handlers.Server;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 
 namespace Pontifex.Protocols
@@ -26,13 +23,13 @@ namespace Pontifex.Protocols
         }
     }
 
-    public abstract class HandlerWrapper : IHandlerWrapper, IAckRawClientEndpoint
+    public abstract class HandlerWrapper : IHandlerWrapper, IAckRawServerSideEndpoint
     {
         private readonly IAckRawWrapperServerLogic _logic;
 
         private volatile IAckRawServerHandler _wrappedHandler = null!;
 
-        private volatile IAckRawClientEndpoint? _wrappedEndpoint;
+        private volatile IAckRawServerSideEndpoint? _wrappedEndpoint;
 
         private readonly object mSendCallSerializer = new ();
 
@@ -56,21 +53,21 @@ namespace Pontifex.Protocols
             _wrappedHandler.GetAckResponse(ackResponse);
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawClientEndpoint endPoint)
+        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
         {
             _wrappedEndpoint = endPoint;
             _wrappedHandler.OnConnected(this);
             _logic.OnConnected();
         }
 
-        void IRawBaseHandler.OnDisconnected(StopReason reason)
+        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
             _logic.OnDisconnected();
             _wrappedHandler.OnDisconnected(reason);
             _wrappedEndpoint = null;
         }
 
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             try
             {
@@ -155,7 +152,7 @@ namespace Pontifex.Protocols
             return false;
         }
         
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        void IBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             _logic.GetControls(dst, predicate);
         }

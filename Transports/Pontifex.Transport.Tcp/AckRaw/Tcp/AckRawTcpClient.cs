@@ -6,9 +6,7 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Clients;
-using Pontifex.Abstractions.Endpoints;
-using Pontifex.Abstractions.Endpoints.Client;
+using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
@@ -18,7 +16,7 @@ using Transport.Utils;
 
 namespace Pontifex.Transports.Tcp
 {
-    internal class AckRawTcpClient : AckRawClient, IAckReliableRawClient, IAckRawServerEndpoint
+    internal class AckRawTcpClient : AckRawClient, IAckReliableRawClient, IAckRawClientSideEndpoint
     {
         public enum State
         {
@@ -338,7 +336,7 @@ namespace Pontifex.Transports.Tcp
                     mSocket.NoDelay = true;
 
                     UnionDataList ackData = Memory.CollectablePool.Acquire<UnionDataList>();
-                    (Handler ?? throw new Exception("Handler is null")).WriteAckData(ackData);
+                    (Handler ?? throw new Exception("Handler is null")).FillAckData(ackData);
                     ackData.PutFirst(TcpInfo.AckRequest);
 
                     mSocket.BeginConnect(mRemoteEP, ConnectCallback, ackData);
@@ -452,7 +450,7 @@ namespace Pontifex.Transports.Tcp
             return Stop(reason);
         }
 
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        void IBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             if (predicate?.Invoke(_transportControl) ?? true)
                 dst.Add(_transportControl);

@@ -5,20 +5,19 @@ using Actuarius.Concurrent;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Endpoints;
-using Pontifex.Abstractions.Handlers;
+using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
-    abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IRawBaseHandler, IAckRawBaseEndpoint, IEndPoint
+    abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IAckRawBaseHandler, IAckRawBaseEndpoint, IEndPoint
         where TEndpoint : class, IAckRawBaseEndpoint
     {
         private readonly LogicEndpoint<TEndpoint> _logicEndpoint;
 
-        private readonly IRawBaseHandler mUserHandler;
+        private readonly IAckRawBaseHandler mUserHandler;
 
         private readonly TimeSpan mDisconnectTimeout;
 
@@ -55,7 +54,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         protected ILogger Log { get; }
         protected IMemoryRental Memory { get; }
 
-        protected ReconnectableBaseLogic(IRawBaseHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        protected ReconnectableBaseLogic(IAckRawBaseHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
         {
             mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
             mSentMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
@@ -250,7 +249,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         public abstract void OnDisconnected(StopReason reason);
 
-        void IRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             if (mState != ReconnectableLogicState.Stopped)
             {
@@ -309,7 +308,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             return wasConnected;
         }
 
-        void IAckRawBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
+        void IBaseEndpoint.GetControls(List<IControl> dst, Predicate<IControl>? predicate)
         {
             _underlyingEndpoint?.GetControls(dst, predicate);
         }

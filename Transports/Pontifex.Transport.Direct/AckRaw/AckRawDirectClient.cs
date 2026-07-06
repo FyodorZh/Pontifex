@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Clients;
+using Pontifex.Ack.Raw;
 using Pontifex.Endpoints;
 using Pontifex.StopReasons;
 using Pontifex.Transports.Core;
@@ -84,7 +84,7 @@ namespace Pontifex.Transports.Direct
 
         void IClientDirectCtl.GetAckData(UnionDataList ackData)
         {
-            Handler?.WriteAckData(ackData);
+            Handler?.FillAckData(ackData);
         }
 
         void IClientDirectCtl.GetTransportControls(List<IControl> dst, Predicate<IControl>? predicate)

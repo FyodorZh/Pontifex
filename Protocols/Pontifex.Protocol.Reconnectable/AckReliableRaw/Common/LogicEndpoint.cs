@@ -1,6 +1,6 @@
 using System;
 using Pontifex.Abstractions;
-using Pontifex.Abstractions.Endpoints;
+using Pontifex.Ack.Raw;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {

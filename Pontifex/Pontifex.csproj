@@ -41,7 +41,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Pontifex.Elements\Pontifex.Elements.csproj" />
+      <ProjectReference Include="..\Abstractions\Pontifex.Transports\Pontifex.Transports.csproj" />
     </ItemGroup>
 
 </Project>

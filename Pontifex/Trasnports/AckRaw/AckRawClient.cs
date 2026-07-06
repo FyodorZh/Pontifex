@@ -1,7 +1,5 @@
 ﻿using Actuarius.Memory;
-using Pontifex.Abstractions.Clients;
-using Pontifex.Abstractions.Endpoints.Client;
-using Pontifex.Abstractions.Handlers.Client;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
@@ -134,7 +132,7 @@ namespace Pontifex.Transports.Core
                     {
                         _handler.OnDisconnected(reason);
                     }
-                    _handler.OnStopped(reason);
+                    _handler.OnStopped(reason: reason);
                 }
 
                 _state = State.Disconnected;
@@ -157,7 +155,7 @@ namespace Pontifex.Transports.Core
             }
         }
 
-        protected void ConnectionFinished(IAckRawServerEndpoint endPoint, UnionDataList ackResponse)
+        protected void ConnectionFinished(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             lock (_locker)

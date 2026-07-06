@@ -1,6 +1,6 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Acknowledgers;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 
 namespace Pontifex.Api
