@@ -2,24 +2,28 @@ using Pontifex.Utils;
 
 namespace Pontifex.NoAck.Raw
 {
+    /// <summary>
+    /// Client-side handler for NoAck raw transport.
+    /// </summary>
     public interface INoAckRawClientSideHandler : IHandler
     {
         /// <summary>
-        /// Вызывается после полной инициализации транспорта
+        /// Called after the transport is fully initialized.
         /// </summary>
-        /// <param name="endpoint"> Настороенный и готовый к работе эндпоинт для отправки сообщений </param>
+        /// <param name="endpoint">The configured and ready-to-use endpoint for sending messages.</param>
         void OnStarted(INoAckRawClientSideEndpoint endpoint);
 
         /// <summary>
-        /// Информирует об пришедшем сообщении от сервера.
-        /// Начинает работать после Started()
+        /// Called when a message is received from the server.
+        /// Starts working after OnStarted().
         /// </summary>
-        /// <param name="message"> Данные, присланные сервером. Отдаются во владение обработчику </param>
+        /// <param name="message">The data sent by the server. Ownership is transferred to the handler.</param>
         void OnReceived(UnionDataList message);
+        
         /// <summary>
-        /// Информирует о разрушении транспорта. Приходит строго после Started()
-        /// Эндпоинт становится невалидным
+        /// Called when the transport is destroyed. Invoked strictly after OnStarted().
+        /// The endpoint becomes invalid.
         /// </summary>
-        void OnStopped();
+        void OnStopped(StopReason reason);
     }
 }

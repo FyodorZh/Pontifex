@@ -166,7 +166,7 @@ namespace Pontifex.Transports.Udp.NoAckRaw
             {
                 try
                 {
-                    handler.OnStopped();
+                    handler.OnStopped(reason);
                 }
                 catch (Exception e)
                 {

@@ -142,7 +142,7 @@ namespace Pontifex.Transports.Udp.NoAckRaw
             {
                 try
                 {
-                    _handler.OnStopped();
+                    _handler.OnStopped(reason);
                 }
                 catch (Exception e)
                 {
@@ -188,6 +188,11 @@ namespace Pontifex.Transports.Udp.NoAckRaw
             }
 
             return SendResult.InvalidMessage;
+        }
+        
+        bool INoAckRawClientSideEndpoint.Disconnect(StopReason reason)
+        {
+            return Stop(reason);
         }
 
         private void OnReceived(EndPoint remoteEp, UnionDataList message)

@@ -6,5 +6,12 @@ namespace Pontifex.NoAck.Raw
     {
         IEndPoint ServerAddress { get; }
         SendResult Send(UnionDataList message);
+        
+        /// <summary>
+        /// Initiates a logical disconnection of this endpoint with the given reason.
+        /// </summary>
+        /// <param name="reason">The reason for the disconnection.</param>
+        /// <returns>True if the disconnect was initiated successfully.</returns>
+        bool Disconnect(StopReason reason);
     }
 }
