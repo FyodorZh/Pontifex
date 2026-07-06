@@ -20,24 +20,24 @@ namespace Pontifex.Protocols
         }
     }
 
-    public abstract class AcknowledgerWrapper : IRawServerAcknowledger<IAckRawServerHandler>
+    public abstract class AcknowledgerWrapper : IRawServerAcknowledger<IAckRawReliableServerHandler>
     {
         private Action<string> _onFail = null!;
-        private IRawServerAcknowledger<IAckRawServerHandler> _wrappedAcknowledger = null!;
+        private IRawServerAcknowledger<IAckRawReliableServerHandler> _wrappedAcknowledger = null!;
 
-        public void Init(IRawServerAcknowledger<IAckRawServerHandler> wrappedAcknowledger, Action<string> onFail)
+        public void Init(IRawServerAcknowledger<IAckRawReliableServerHandler> wrappedAcknowledger, Action<string> onFail)
         {
             _onFail = onFail;
             _wrappedAcknowledger = wrappedAcknowledger;
         }
 
-        public IAckRawServerHandler? TryAck(UnionDataList ackData)
+        public IAckRawReliableServerHandler? TryAck(UnionDataList ackData)
         {
             var wrapper = ConstructWrapper();
             bool isOK = wrapper.CheckAckData(ackData);
             if (isOK)
             {
-                IAckRawServerHandler? coreHandler = _wrappedAcknowledger.TryAck(ackData);
+                IAckRawReliableServerHandler? coreHandler = _wrappedAcknowledger.TryAck(ackData);
                 if (coreHandler != null)
                 {
                     wrapper.Init(coreHandler.Test(_onFail).GetSafe(e => _onFail(e.ToString())));

@@ -10,20 +10,20 @@ using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
-    class ReconnectableClientLogic : ReconnectableBaseLogic<IAckRawClientSideEndpoint>, IAckRawClientHandler, IAckRawClientSideEndpoint
+    class ReconnectableClientLogic : ReconnectableBaseLogic<IAckRawReliableClientSideEndpoint>, IAckRawReliableClientHandler, IAckRawReliableClientSideEndpoint
     {
-        private readonly Func<IAckReliableRawClient?> _underlyingTransportFactory;
-        private readonly IAckRawClientHandler _userHandler;
+        private readonly Func<IAckRawReliableClient?> _underlyingTransportFactory;
+        private readonly IAckRawReliableClientHandler _userHandler;
 
         private readonly ThreadSafeDateTime _nextReconnectionTime = new ThreadSafeDateTime();
 
         private IMultiRefReadOnlyByteArray? _secret;
 
-        public event Action<IAckRawClientSideEndpoint, UnionDataList>? OnConnected;
+        public event Action<IAckRawReliableClientSideEndpoint, UnionDataList>? OnConnected;
 
         public SessionId SessionId => _sessionId;
 
-        public ReconnectableClientLogic(Func<IAckReliableRawClient?> underlyingTransportFactory, IAckRawClientHandler userHandler, TimeSpan disconnectTimeout, 
+        public ReconnectableClientLogic(Func<IAckRawReliableClient?> underlyingTransportFactory, IAckRawReliableClientHandler userHandler, TimeSpan disconnectTimeout, 
             ILogger logger, IMemoryRental memoryRental)
             : base(userHandler, disconnectTimeout, logger, memoryRental)
         {
@@ -41,7 +41,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                 return false;
             }
 
-            IAckReliableRawClient? transport = _underlyingTransportFactory.Invoke();
+            IAckRawReliableClient? transport = _underlyingTransportFactory.Invoke();
             if (transport == null)
             {
                 return false;
@@ -78,7 +78,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             ackData.PutFirst(ReconnectableInfo.AckRequest);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawReliableClientHandler.OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? ackBytes))

@@ -13,7 +13,7 @@ namespace Pontifex.Test
 {
     public class ServerWindow : SmartWindow
     {
-        private readonly IAckRawServer? _server;
+        private readonly IAckRawReliableServer? _server;
         private readonly ILogger _logger;
         
         public ServerWindow(TransportFactory factory, string url, string? api)

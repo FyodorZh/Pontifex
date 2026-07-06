@@ -1,21 +1,19 @@
 using System;
-using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Abstractions;
 using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex
 {
-    public class AckRawReliableServerLogger : IAckReliableRawServer, IRawServerAcknowledger<IAckRawServerHandler>, IAckRawServerHandler
+    public class AckRawReliableServerLogger : IAckRawReliableServer, IRawServerAcknowledger<IAckRawReliableServerHandler>, IAckRawReliableServerHandler
     {
-        private readonly IAckReliableRawServer _core;
+        private readonly IAckRawReliableServer _core;
 
-        private IRawServerAcknowledger<IAckRawServerHandler>? _userAcknowledger;
-        private IAckRawServerHandler? _userHandler;
+        private IRawServerAcknowledger<IAckRawReliableServerHandler>? _userAcknowledger;
+        private IAckRawReliableServerHandler? _userHandler;
 
-        public AckRawReliableServerLogger(IAckReliableRawServer core)
+        public AckRawReliableServerLogger(IAckRawReliableServer core)
         {
             _core = core;
         }
@@ -46,7 +44,7 @@ namespace Pontifex
 
         IMemoryRental ITransport.Memory => _core.Memory;
 
-        bool IAckRawServer.Init(IRawServerAcknowledger<IAckRawServerHandler> acknowledger)
+        bool IAckRawReliableServer.Init(IRawServerAcknowledger<IAckRawReliableServerHandler> acknowledger)
         {
             Log.i("Init()");
             _userAcknowledger = acknowledger;
@@ -55,7 +53,7 @@ namespace Pontifex
 
         int IAckRawServer.MessageMaxByteSize => _core.MessageMaxByteSize;
 
-        public IAckRawServerHandler? TryAck(UnionDataList ackData)
+        public IAckRawReliableServerHandler? TryAck(UnionDataList ackData)
         {
             if (_userAcknowledger == null)
             {
@@ -84,13 +82,13 @@ namespace Pontifex
             _userHandler?.OnReceived(receivedBuffer);
         }
 
-        void IAckRawServerHandler.GetAckResponse(UnionDataList ackResponse)
+        void IAckRawServerHandler.FillAckResponse(UnionDataList ackResponse)
         {
             Log.i("UserHandler.GetAckResponse()");
-            _userHandler?.GetAckResponse(ackResponse);
+            _userHandler?.FillAckResponse(ackResponse);
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
+        void IAckRawReliableServerHandler.OnConnected(IAckRawReliableServerSideEndpoint endPoint)
         {
             Log.i("UserHandler.OnConnected()");
             var endPointWrapper = new AckRawServerSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>

@@ -6,7 +6,7 @@ namespace Pontifex.Ack.Raw
 {
     public static class IAckRawClientHandler_Ext
     {
-        public static IAckRawClientHandler Test(this IAckRawClientHandler core, Action<string> onFail)
+        public static IAckRawReliableClientHandler Test(this IAckRawReliableClientHandler core, Action<string> onFail)
         {
 #if DEBUG
             return new Wrapper(core, onFail);
@@ -15,7 +15,7 @@ namespace Pontifex.Ack.Raw
 #endif
         }
 
-        private class Wrapper : InvariantChecker<Wrapper.HandlerState>, IAckRawClientHandler
+        private class Wrapper : InvariantChecker<Wrapper.HandlerState>, IAckRawReliableClientHandler
         {
             public enum HandlerState
             {
@@ -25,11 +25,11 @@ namespace Pontifex.Ack.Raw
                 Stopped
             }
 
-            private readonly IAckRawClientHandler _core;
+            private readonly IAckRawReliableClientHandler _core;
 
             private int _receiveDepth = 0;
 
-            public Wrapper(IAckRawClientHandler core, Action<string> onFail)
+            public Wrapper(IAckRawReliableClientHandler core, Action<string> onFail)
                 : base(HandlerState.Constructed, onFail)
             {
                 _core = core;
@@ -55,7 +55,7 @@ namespace Pontifex.Ack.Raw
                 _core.FillAckData(ackData);
             }
 
-            public void OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+            public void OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
             {
                 BeginCriticalSection(ref _receiveDepth);
 

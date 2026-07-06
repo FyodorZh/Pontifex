@@ -5,7 +5,7 @@ using Pontifex.Ack.Raw;
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
     internal class LogicEndpoint<TEndpoint> : IEndPoint
-        where TEndpoint : class, IAckRawBaseEndpoint
+        where TEndpoint : class, IAckRawReliableBaseEndpoint
     {
         private readonly ReconnectableBaseLogic<TEndpoint> mOwner;
 

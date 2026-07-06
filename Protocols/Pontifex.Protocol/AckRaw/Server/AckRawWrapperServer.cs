@@ -6,14 +6,14 @@ using Scriba;
 
 namespace Pontifex.Protocols
 {
-    public class AckRawWrapperServer<TAcknowledgerWrapper> : AckRawServer
+    public class AckRawWrapperServer<TAcknowledgerWrapper> : AckRawReliableServer
         where TAcknowledgerWrapper : AcknowledgerWrapper
     {
-        private readonly IAckRawServer _core;
+        private readonly IAckRawReliableServer _core;
 
         private readonly Func<ILogger, IMemoryRental, TAcknowledgerWrapper> mWrapperConstructor;
 
-        public AckRawWrapperServer(string typeName, IAckRawServer core, Func<ILogger, IMemoryRental, TAcknowledgerWrapper> wrapperConstructor)
+        public AckRawWrapperServer(string typeName, IAckRawReliableServer core, Func<ILogger, IMemoryRental, TAcknowledgerWrapper> wrapperConstructor)
             : base(typeName, core.Log, core.Memory)
         {
             _core = core;
@@ -38,7 +38,7 @@ namespace Pontifex.Protocols
             _core.Stop(reason);
         }
 
-        protected override IRawServerAcknowledger<IAckRawServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IAckRawServerHandler> baseAcknowledger)
+        protected override IRawServerAcknowledger<IAckRawReliableServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IAckRawReliableServerHandler> baseAcknowledger)
         {
             var acknowledger = mWrapperConstructor.Invoke(Log, Memory);
             acknowledger.Init(baseAcknowledger, text => Log.e(text));

@@ -9,7 +9,7 @@ using Scriba;
 
 namespace Pontifex.Transports.Direct
 {
-    internal class TransportEndPoint : IAckRawClientSideEndpoint, IAckRawServerSideEndpoint
+    internal class TransportEndPoint : IAckRawReliableClientSideEndpoint, IAckRawReliableServerSideEndpoint
     {
         private struct SendReceiveAction: ActionQueue<SendReceiveAction>.IAction
         {

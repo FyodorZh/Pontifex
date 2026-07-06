@@ -7,9 +7,9 @@ using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class AckRawClientLogic : AckRawCommonLogic, IAckRawClientHandler
+    class AckRawClientLogic : AckRawCommonLogic, IAckRawReliableClientHandler
     {
-        private volatile IAckRawClientSideEndpoint? _endpoint;
+        private volatile IAckRawReliableClientSideEndpoint? _endpoint;
 
         private long _sendId = 0;
         private long _receiveId = 0;
@@ -17,7 +17,7 @@ namespace TransportAnalyzer.TestLogic
         private readonly int _unconfirmedTicks;
         private readonly long _lastTickId;
         
-        public event Action<IAckRawClientSideEndpoint>? Connected;
+        public event Action<IAckRawReliableClientSideEndpoint>? Connected;
         public event Action<StopReason>? Disconnected;
 
         public override string ToString()
@@ -37,7 +37,7 @@ namespace TransportAnalyzer.TestLogic
             ackData.PutFirst(new UnionData(AckRequest));
         }
 
-        public void OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        public void OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) || !AckResponse.EqualByContent(response))

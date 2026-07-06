@@ -6,7 +6,7 @@ namespace Pontifex.Ack.Raw
 {
     public static class IAckRawServerHandler_Ext
     {
-        public static IAckRawServerHandler Test(this IAckRawServerHandler core, Action<string> onFail)
+        public static IAckRawReliableServerHandler Test(this IAckRawReliableServerHandler core, Action<string> onFail)
         {
 #if DEBUG
             return new TestWrapper(core, onFail);
@@ -15,17 +15,17 @@ namespace Pontifex.Ack.Raw
 #endif
         }
 
-        public static IAckRawServerHandler GetSafe(this IAckRawServerHandler core, Action<Exception> onFail)
+        public static IAckRawReliableServerHandler GetSafe(this IAckRawReliableServerHandler core, Action<Exception> onFail)
         {
             return new SafeWrapper(core, onFail);
         }
 
-        private class SafeWrapper : IAckRawServerHandler
+        private class SafeWrapper : IAckRawReliableServerHandler
         {
-            private readonly IAckRawServerHandler _handler;
+            private readonly IAckRawReliableServerHandler _handler;
             private readonly Action<Exception> _onException;
 
-            public SafeWrapper(IAckRawServerHandler handler, Action<Exception> onException)
+            public SafeWrapper(IAckRawReliableServerHandler handler, Action<Exception> onException)
             {
                 _handler = handler;
                 _onException = onException;
@@ -55,18 +55,18 @@ namespace Pontifex.Ack.Raw
                 }
             }
 
-            public void GetAckResponse(UnionDataList ackData)
+            public void FillAckResponse(UnionDataList ackData)
             {
-                _handler.GetAckResponse(ackData);
+                _handler.FillAckResponse(ackData);
             }
 
-            public void OnConnected(IAckRawServerSideEndpoint endPoint)
+            public void OnConnected(IAckRawReliableServerSideEndpoint endPoint)
             {
                 _handler.OnConnected(endPoint);
             }
         }
 
-        private class TestWrapper : InvariantChecker<TestWrapper.HandlerState>, IAckRawServerHandler
+        private class TestWrapper : InvariantChecker<TestWrapper.HandlerState>, IAckRawReliableServerHandler
         {
             public enum HandlerState
             {
@@ -75,11 +75,11 @@ namespace Pontifex.Ack.Raw
                 Disconnected
             }
 
-            private readonly IAckRawServerHandler _core;
+            private readonly IAckRawReliableServerHandler _core;
 
             private int _receiveDepth = 0;
 
-            public TestWrapper(IAckRawServerHandler core, Action<string> onFail)
+            public TestWrapper(IAckRawReliableServerHandler core, Action<string> onFail)
                 : base(HandlerState.Constructed, onFail)
             {
                 _core = core;
@@ -100,12 +100,12 @@ namespace Pontifex.Ack.Raw
                 return $"'{_core}' - '{_core.GetType()}'";
             }
 
-            void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
+            void IAckRawServerHandler.FillAckResponse(UnionDataList ackData)
             {
-                _core.GetAckResponse(ackData);
+                _core.FillAckResponse(ackData);
             }
 
-            void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
+            void IAckRawReliableServerHandler.OnConnected(IAckRawReliableServerSideEndpoint endPoint)
             {
                 ChangeState(HandlerState.Constructed, HandlerState.Connected);
                 _core.OnConnected(endPoint);

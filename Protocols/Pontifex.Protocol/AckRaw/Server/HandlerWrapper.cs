@@ -7,9 +7,9 @@ using Pontifex.Utils;
 
 namespace Pontifex.Protocols
 {
-    public interface IHandlerWrapper : IAckRawServerHandler
+    public interface IHandlerWrapper : IAckRawReliableServerHandler
     {
-        void Init(IAckRawServerHandler wrappedHandler);
+        void Init(IAckRawReliableServerHandler wrappedHandler);
         bool CheckAckData(UnionDataList ackData);
     }
 
@@ -23,13 +23,13 @@ namespace Pontifex.Protocols
         }
     }
 
-    public abstract class HandlerWrapper : IHandlerWrapper, IAckRawServerSideEndpoint
+    public abstract class HandlerWrapper : IHandlerWrapper, IAckRawReliableServerSideEndpoint
     {
         private readonly IAckRawWrapperServerLogic _logic;
 
-        private volatile IAckRawServerHandler _wrappedHandler = null!;
+        private volatile IAckRawReliableServerHandler _wrappedHandler = null!;
 
-        private volatile IAckRawServerSideEndpoint? _wrappedEndpoint;
+        private volatile IAckRawReliableServerSideEndpoint? _wrappedEndpoint;
 
         private readonly object mSendCallSerializer = new ();
 
@@ -38,7 +38,7 @@ namespace Pontifex.Protocols
             _logic = logic;
         }
 
-        public void Init(IAckRawServerHandler wrappedHandler)
+        public void Init(IAckRawReliableServerHandler wrappedHandler)
         {
             _wrappedHandler = wrappedHandler;
         }
@@ -48,12 +48,12 @@ namespace Pontifex.Protocols
             return _logic.ProcessAckData(ackData);
         }
 
-        void IAckRawServerHandler.GetAckResponse(UnionDataList ackResponse)
+        void IAckRawServerHandler.FillAckResponse(UnionDataList ackResponse)
         {
-            _wrappedHandler.GetAckResponse(ackResponse);
+            _wrappedHandler.FillAckResponse(ackResponse);
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
+        void IAckRawReliableServerHandler.OnConnected(IAckRawReliableServerSideEndpoint endPoint)
         {
             _wrappedEndpoint = endPoint;
             _wrappedHandler.OnConnected(this);
@@ -118,7 +118,7 @@ namespace Pontifex.Protocols
             }
         }
 
-        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IAckRawReliableBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             lock (mSendCallSerializer)
             {

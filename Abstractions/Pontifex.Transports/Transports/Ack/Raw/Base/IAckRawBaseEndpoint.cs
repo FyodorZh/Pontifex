@@ -1,12 +1,5 @@
-﻿using Pontifex.Utils;
-
 namespace Pontifex.Ack.Raw
 {
-    /// <summary>
-    /// Represents one side of a raw ACK-based connection.
-    /// Provides send/disconnect capabilities and metadata about the remote peer.
-    /// Implemented by the transport system; consumed by business logic.
-    /// </summary>
     public interface IAckRawBaseEndpoint : IBaseEndpoint
     {
         /// <summary>
@@ -16,6 +9,10 @@ namespace Pontifex.Ack.Raw
 
         /// <summary>
         /// Gets whether the endpoint is currently connected.
+        /// May return true before OnConnected() is invoked (the endpoint reference
+        /// is not available to the caller before OnConnected()).
+        /// Guaranteed to return false during and after OnDisconnected() — the
+        /// IsConnected transition to false is synchronized with the OnDisconnected() call.
         /// </summary>
         bool IsConnected { get; }
 
@@ -23,15 +20,6 @@ namespace Pontifex.Ack.Raw
         /// Gets the maximum message size in bytes supported by the transport.
         /// </summary>
         int MessageMaxByteSize { get; }
-
-        /// <summary>
-        /// Sends a message to the remote peer.
-        /// If a failure occurs asynchronously after the method returns success,
-        /// the transport will be destroyed and OnDisconnected will be raised.
-        /// </summary>
-        /// <param name="bufferToSend">The data to send.</param>
-        /// <returns>SendResult.Ok on success; other values indicate a synchronous failure.</returns>
-        SendResult Send(UnionDataList bufferToSend);
 
         /// <summary>
         /// Initiates a logical disconnection of this endpoint with the given reason.

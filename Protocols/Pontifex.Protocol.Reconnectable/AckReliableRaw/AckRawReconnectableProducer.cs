@@ -34,10 +34,10 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         {
             if (Parse(@params, out var disconnectTimeout, out var otherParams))
             {
-                if (factory.Construct(otherParams, logger, memoryRental) is IAckReliableRawClient)
+                if (factory.Construct(otherParams, logger, memoryRental) is IAckRawReliableClient)
                 {
                     return new AckRawReconnectableClient(
-                        () => factory.Construct(otherParams, logger, memoryRental) as IAckReliableRawClient, 
+                        () => factory.Construct(otherParams, logger, memoryRental) as IAckRawReliableClient, 
                         disconnectTimeout, 
                         logger,
                         memoryRental);
@@ -53,7 +53,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
         {
             if (Parse(@params, out var disconnectTimeout, out var otherParams))
             {
-                if (factory.Construct(otherParams, logger, memoryRental) is IAckReliableRawServer innerTransport)
+                if (factory.Construct(otherParams, logger, memoryRental) is IAckRawReliableServer innerTransport)
                 {
                     return new AckRawReconnectableServer(innerTransport, disconnectTimeout, logger, memoryRental);
                 }

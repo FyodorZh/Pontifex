@@ -9,12 +9,12 @@ namespace Pontifex.Transports.Direct
 {
     internal class Session : IServerDirectCtl//, IAckRawClientEndpoint
     {
-        private readonly IAckRawServerHandler _handler;
+        private readonly IAckRawReliableServerHandler _handler;
         private readonly IMemoryRental _memory;
         
         private DirectTransport _transport = null!;
 
-        public Session(IAckRawServerHandler handler, IMemoryRental memory)
+        public Session(IAckRawReliableServerHandler handler, IMemoryRental memory)
         {
             _handler = handler;
             _memory = memory;
@@ -28,7 +28,7 @@ namespace Pontifex.Transports.Direct
         void IServerDirectCtl.OnClientPrepared()
         {
             UnionDataList ackResponse = _memory.CollectablePool.Acquire<UnionDataList>();
-            _handler.GetAckResponse(ackResponse);
+            _handler.FillAckResponse(ackResponse);
             ackResponse.PutFirst(new UnionData(DirectInfo.AckOKResponse));
 
             _transport.ServerSide.Send(ackResponse);

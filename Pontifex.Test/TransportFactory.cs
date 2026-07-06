@@ -50,14 +50,14 @@ namespace Pontifex.Test
             mServerFactory.Register(new AckRawLoggerServerProducer());
         }
 
-        public IAckRawServer? ConstructServer(string url, ILogger logger, IMemoryRental memoryRental)
+        public IAckRawReliableServer? ConstructServer(string url, ILogger logger, IMemoryRental memoryRental)
         {
-            return mServerFactory.Construct(url, logger, memoryRental) as IAckRawServer;
+            return mServerFactory.Construct(url, logger, memoryRental) as IAckRawReliableServer;
         }
 
-        public IAckRawClient? ConstructClient(string url, ILogger logger, IMemoryRental memoryRental)
+        public IAckRawReliableClient? ConstructClient(string url, ILogger logger, IMemoryRental memoryRental)
         {
-            return mClientFactory.Construct(url, logger, memoryRental) as IAckRawClient;
+            return mClientFactory.Construct(url, logger, memoryRental) as IAckRawReliableClient;
         }
     }
 }

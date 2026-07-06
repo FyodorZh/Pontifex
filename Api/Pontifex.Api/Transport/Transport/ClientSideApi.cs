@@ -8,16 +8,16 @@ using Scriba;
 
 namespace Pontifex.Api
 {
-    public class ClientSideApi : IAckRawClientHandler
+    public class ClientSideApi : IAckRawReliableClientHandler
     {
         private readonly IApiRoot _api;
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
         
         private TransportPipeSystem? _transportPipeSystem;
-        private IAckRawClientSideEndpoint? _endpoint;
+        private IAckRawReliableClientSideEndpoint? _endpoint;
         
-        public event Action<IAckRawClientSideEndpoint>? Connected;
+        public event Action<IAckRawReliableClientSideEndpoint>? Connected;
         public event Action<StopReason>? Disconnected;
         
         protected virtual void AppendAckData(UnionDataList ackData)
@@ -39,7 +39,7 @@ namespace Pontifex.Api
             ackData.PutFirst(apiHash);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawReliableClientHandler.OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var disposer = ackResponse.AsDisposable();
             if (ackResponse.TryPopFirst(out long value) && value == 7777)

@@ -12,8 +12,8 @@ using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
-    abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IAckRawBaseHandler, IAckRawBaseEndpoint, IEndPoint
-        where TEndpoint : class, IAckRawBaseEndpoint
+    abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IAckRawBaseHandler, IAckRawReliableBaseEndpoint, IEndPoint
+        where TEndpoint : class, IAckRawReliableBaseEndpoint
     {
         private readonly LogicEndpoint<TEndpoint> _logicEndpoint;
 
@@ -285,7 +285,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         public int MessageMaxByteSize => _underlyingEndpoint?.MessageMaxByteSize ?? throw new NotImplementedException("TODO: Cache previous session message size");
 
-        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IAckRawReliableBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             if (_underlyingEndpoint != null)
             {
@@ -325,7 +325,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, reason, StopReason.Void);
 
             Log.e("Fail: {@reason}", reason.Print());
-            (this as IAckRawBaseEndpoint).Disconnect(reason);
+            (this as IAckRawReliableBaseEndpoint).Disconnect(reason);
         }
 
         protected void Stop(StopReason reason)
@@ -333,7 +333,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, reason, StopReason.Void);
 
             Log.i("Stop: {@reason}", reason.Print());
-            (this as IAckRawBaseEndpoint).Disconnect(reason);
+            (this as IAckRawReliableBaseEndpoint).Disconnect(reason);
         }
 
         bool IEquatable<IEndPoint>.Equals(IEndPoint other)

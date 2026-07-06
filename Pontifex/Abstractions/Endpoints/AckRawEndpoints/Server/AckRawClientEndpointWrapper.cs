@@ -5,13 +5,13 @@ using Pontifex.Utils;
 
 namespace Pontifex.Ack.Raw
 {
-    public class AckRawServerSideEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawServerSideEndpoint
+    public class AckRawServerSideEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawReliableServerSideEndpoint
     {
         private readonly IControl[] _controls;
         
-        public AckRawServerSideEndpointWrapper(IAckRawServerSideEndpoint? core,  
-            Func<IAckRawBaseEndpoint?, UnionDataList, SendResult> sender, 
-            Func<IAckRawBaseEndpoint?, StopReason, bool> disconnector,
+        public AckRawServerSideEndpointWrapper(IAckRawReliableServerSideEndpoint? core,  
+            Func<IAckRawReliableBaseEndpoint?, UnionDataList, SendResult> sender, 
+            Func<IAckRawReliableBaseEndpoint?, StopReason, bool> disconnector,
             IControl[] controls)
             : base(core, sender, disconnector)
         {

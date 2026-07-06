@@ -7,17 +7,17 @@ using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
-    class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawServerSideEndpoint>, IAckRawServerHandler, IAckRawServerSideEndpoint
+    class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawReliableServerSideEndpoint>, IAckRawReliableServerHandler, IAckRawReliableServerSideEndpoint
     {
         private IMultiRefReadOnlyByteArray? _secret;
 
-        private readonly IAckRawServerHandler mUserHandler;
+        private readonly IAckRawReliableServerHandler mUserHandler;
 
         private volatile bool mAttached;
 
-        public event Action<IAckRawServerSideEndpoint>? OnConnected;
+        public event Action<IAckRawReliableServerSideEndpoint>? OnConnected;
 
-        public ReconnectableServerLogic(IAckRawServerHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        public ReconnectableServerLogic(IAckRawReliableServerHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(userHandler, disconnectTimeout, logger, memoryRental)
         {
             mUserHandler = userHandler;
@@ -65,16 +65,16 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
             return true;
         }
 
-        void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
+        void IAckRawServerHandler.FillAckResponse(UnionDataList ackData)
         {
-            mUserHandler.GetAckResponse(ackData);
+            mUserHandler.FillAckResponse(ackData);
             ackData.PutFirst(new UnionData(_secret));
             ackData.PutFirst(new UnionData(_sessionId.Generation));
             ackData.PutFirst(new UnionData(_sessionId.Id));
             ackData.PutFirst(new UnionData(ReconnectableInfo.AckOKResponse));
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
+        void IAckRawReliableServerHandler.OnConnected(IAckRawReliableServerSideEndpoint endPoint)
         {
             Connect(endPoint, out var isFirstConnection);
             if (isFirstConnection)

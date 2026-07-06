@@ -8,7 +8,7 @@ using Pontifex.Ack.Raw;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class AckRawServerLogic : IRawServerAcknowledger<IAckRawServerHandler>
+    class AckRawServerLogic : IRawServerAcknowledger<IAckRawReliableServerHandler>
     {
         private readonly ConcurrentDictionary<IClientHandler, IClientHandler> mClients = new ConcurrentDictionary<IClientHandler, IClientHandler>();
 
@@ -38,7 +38,7 @@ namespace TransportAnalyzer.TestLogic
             evt?.Invoke(handler);
         }
 
-        public IAckRawServerHandler? TryAck(UnionDataList ackData)
+        public IAckRawReliableServerHandler? TryAck(UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) && AckRawCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
@@ -58,9 +58,9 @@ namespace TransportAnalyzer.TestLogic
             void Disconnect(StopReason reason);
         }
 
-        private class Handler : AckRawCommonLogic, IAckRawServerHandler, IClientHandler
+        private class Handler : AckRawCommonLogic, IAckRawReliableServerHandler, IClientHandler
         {
-            private volatile IAckRawServerSideEndpoint? mEndpoint;
+            private volatile IAckRawReliableServerSideEndpoint? mEndpoint;
 
             private long mReceiveId = 0;
 
@@ -74,15 +74,15 @@ namespace TransportAnalyzer.TestLogic
                 mOwner = owner;
             }
 
-            void IAckRawServerHandler.GetAckResponse(UnionDataList ackResponse)
+            void IAckRawServerHandler.FillAckResponse(UnionDataList ackResponse)
             {
                 ackResponse.PutFirst(new UnionData(AckResponse));
             }
 
-            public void OnConnected(IAckRawServerSideEndpoint endPoint)
+            public void OnConnected(IAckRawReliableServerSideEndpoint endPoint)
             {
                 mEndpoint = endPoint;
-                mText = endPoint.RemoteEndPoint.ToString() ?? "null";
+                mText = endPoint.RemoteEndPoint?.ToString() ?? "null";
                 mOwner.Add(this);
             }
 

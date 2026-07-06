@@ -5,18 +5,18 @@ using Scriba;
 
 namespace Pontifex.Transports.Core
 {
-    public abstract class AckRawServer : AbstractTransport, IAckRawServer
+    public abstract class AckRawReliableServer : AbstractTransport, IAckRawReliableServer
     {
         private bool _isInitialized;
 
-        private IRawServerAcknowledger<IAckRawServerHandler>? _acknowledger;
+        private IRawServerAcknowledger<IAckRawReliableServerHandler>? _acknowledger;
 
-        protected AckRawServer(string typeName, ILogger logger, IMemoryRental memory)
+        protected AckRawReliableServer(string typeName, ILogger logger, IMemoryRental memory)
             :base(typeName, logger, memory)
         {
         }
 
-        protected virtual IRawServerAcknowledger<IAckRawServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IAckRawServerHandler> acknowledger)
+        protected virtual IRawServerAcknowledger<IAckRawReliableServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IAckRawReliableServerHandler> acknowledger)
         {
             return acknowledger;
         }
@@ -32,7 +32,7 @@ namespace Pontifex.Transports.Core
             }
         }
 
-        public bool Init(IRawServerAcknowledger<IAckRawServerHandler> acknowledger)
+        public bool Init(IRawServerAcknowledger<IAckRawReliableServerHandler> acknowledger)
         {
             lock (_locker)
             {
@@ -65,7 +65,7 @@ namespace Pontifex.Transports.Core
 
         public abstract int MessageMaxByteSize { get; }
 
-        protected IAckRawServerHandler? TryConnectNewClient(UnionDataList ackData)
+        protected IAckRawReliableServerHandler? TryConnectNewClient(UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (!IsValid)

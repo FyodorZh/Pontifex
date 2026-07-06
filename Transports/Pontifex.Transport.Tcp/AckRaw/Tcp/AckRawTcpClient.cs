@@ -16,7 +16,7 @@ using Transport.Utils;
 
 namespace Pontifex.Transports.Tcp
 {
-    internal class AckRawTcpClient : AckRawClient, IAckReliableRawClient, IAckRawClientSideEndpoint
+    internal class AckRawTcpClient : AckRawReliableClient, IAckRawReliableClient, IAckRawReliableClientSideEndpoint
     {
         public enum State
         {
@@ -433,7 +433,7 @@ namespace Pontifex.Transports.Tcp
 
         IEndPoint IAckRawBaseEndpoint.RemoteEndPoint => mManagedRemoteEP;
 
-        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IAckRawReliableBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             int len = bufferToSend.GetDataSize();
 

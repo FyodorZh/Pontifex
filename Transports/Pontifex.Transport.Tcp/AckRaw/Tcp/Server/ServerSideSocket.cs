@@ -12,7 +12,7 @@ using Scriba;
 
 namespace Pontifex.Transports.Tcp
 {
-    internal class ServerSideSocket : IAckRawServerSideEndpoint, IEquatable<ServerSideSocket>, IComparable<ServerSideSocket>
+    internal class ServerSideSocket : IAckRawReliableServerSideEndpoint, IEquatable<ServerSideSocket>, IComparable<ServerSideSocket>
     {
         private enum ServerSideSocketState
         {
@@ -30,12 +30,12 @@ namespace Pontifex.Transports.Tcp
         private readonly object mStateLock = new object();
         private volatile ServerSideSocketState mState = ServerSideSocketState.Constructed;
 
-        private IAckRawServerHandler? _handler;
+        private IAckRawReliableServerHandler? _handler;
 
         private readonly ThreadSafeDateTime mLastMessageReceiveTime = new ThreadSafeDateTime(DateTime.UtcNow);
 
         private readonly Action<ServerSideSocket> mOnDisconnected;
-        private readonly Func<EndPoint, UnionDataList, IAckRawServerHandler?> mAcknowledger;
+        private readonly Func<EndPoint, UnionDataList, IAckRawReliableServerHandler?> mAcknowledger;
 
         private static long mPrevClientId = 1;
 
@@ -64,7 +64,7 @@ namespace Pontifex.Transports.Tcp
         public ServerSideSocket(
             Socket socket,
             Action<ServerSideSocket> onDisconnected,
-            Func<EndPoint, UnionDataList, IAckRawServerHandler?> acknowledger,
+            Func<EndPoint, UnionDataList, IAckRawReliableServerHandler?> acknowledger,
             ILogicDriver<INonPeriodicLogicDriverCtl> driver,
             int? messageMaxSize,
             IMemoryRental memoryRental,
@@ -150,7 +150,7 @@ namespace Pontifex.Transports.Tcp
             {
                 case ServerSideSocketState.Constructed:
                 {
-                    IAckRawServerHandler? handler;
+                    IAckRawReliableServerHandler? handler;
                     StopReason reason;
                     try
                     {
@@ -183,7 +183,7 @@ namespace Pontifex.Transports.Tcp
                         State = ServerSideSocketState.Acknowledged;
 
                         UnionDataList ackResponse = Memory.CollectablePool.Acquire<UnionDataList>();
-                        handler.GetAckResponse(ackResponse);
+                        handler.FillAckResponse(ackResponse);
                         ackResponse.PutFirst(TcpInfo.AckOKResponse);
                         ackResponse.PutFirst((byte)PacketType.AckResponse);
                         Send(ackResponse);
@@ -287,7 +287,7 @@ namespace Pontifex.Transports.Tcp
 
         public int MessageMaxByteSize { get; }
 
-        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IAckRawReliableBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             bufferToSend.PutFirst((byte)PacketType.Regular);
             return Send(bufferToSend);

@@ -11,9 +11,9 @@ namespace Pontifex.Handlers
     /// Враппер над клиентским хендлером. Делает взаимодействие однопоточным из подконтрольного треда,
     /// кроме вызова  GetAckData()
     /// </summary>
-    public class SynchronizedAckRawClientHandler : IAckRawClientHandler
+    public class SynchronizedAckRawClientHandler : IAckRawReliableClientHandler
     {
-        private readonly IAckRawClientHandler _handler;
+        private readonly IAckRawReliableClientHandler _handler;
         private readonly ConcurrentQueueValve<UnionDataList> _receivedDataQueue;
 
         private readonly Intention _bufferOverflowIntention = new Intention();
@@ -22,13 +22,13 @@ namespace Pontifex.Handlers
         private bool _disconnectServiced = true;
         private StopReason? _disconnectReason;
 
-        private IAckRawClientSideEndpoint? _notServicedConnectedEndPoint;
+        private IAckRawReliableClientSideEndpoint? _notServicedConnectedEndPoint;
         private UnionDataList? _ackResponse;
 
         private bool _stopServiced = true;
         private StopReason? _stopReason;
 
-        public SynchronizedAckRawClientHandler(IAckRawClientHandler handler, Action onBufferOverflow)
+        public SynchronizedAckRawClientHandler(IAckRawReliableClientHandler handler, Action onBufferOverflow)
         {
             _receivedDataQueue = new ConcurrentQueueValve<UnionDataList>(
                 new LimitedConcurrentQueue<UnionDataList>(500),
@@ -49,7 +49,7 @@ namespace Pontifex.Handlers
             _handler.FillAckData(ackData);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawReliableClientHandler.OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             _notServicedConnectedEndPoint = endPoint;
             _ackResponse = ackResponse;

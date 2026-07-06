@@ -9,15 +9,15 @@ using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 {
-    public class AckRawReconnectableServer : AckRawServer, IAckReliableRawServer, IRawServerAcknowledger<IAckRawServerHandler>
+    public class AckRawReconnectableServer : AckRawReliableServer, IAckRawReliableServer, IRawServerAcknowledger<IAckRawReliableServerHandler>
     {
-        private readonly IAckReliableRawServer _coreTransport;
+        private readonly IAckRawReliableServer _coreTransport;
         private readonly TimeSpan _disconnectTimeout;
 
         private readonly SessionMap<ReconnectableServerLogic> _sessionsMap = new (ReconnectableInfo.ServerConnectionsLimit);
         private ILogicDriver<IPeriodicLogicDriverCtl>? _sessionsLogicDriver;
 
-        public AckRawReconnectableServer(IAckReliableRawServer coreTransport, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        public AckRawReconnectableServer(IAckRawReliableServer coreTransport, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
             _coreTransport = coreTransport;
@@ -56,7 +56,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         public override int MessageMaxByteSize => _coreTransport.MessageMaxByteSize;
 
-        IAckRawServerHandler? IRawServerAcknowledger<IAckRawServerHandler>.TryAck(UnionDataList ackData)
+        IAckRawReliableServerHandler? IRawServerAcknowledger<IAckRawReliableServerHandler>.TryAck(UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ackRequest))
@@ -100,7 +100,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
                 return null;
             }
 
-            IAckRawServerHandler? userHandler = TryConnectNewClient(ackData.Acquire());
+            IAckRawReliableServerHandler? userHandler = TryConnectNewClient(ackData.Acquire());
             if (userHandler != null)
             {
                 ReconnectableServerLogic logic = new ReconnectableServerLogic(userHandler, _disconnectTimeout, Log, Memory);

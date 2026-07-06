@@ -13,7 +13,7 @@ using Scriba;
 
 namespace Pontifex.Transports.Direct
 {
-    public class AckRawDirectClient : AckRawClient, IAckReliableRawClient, IClientDirectCtl
+    public class AckRawDirectClient : AckRawReliableClient, IAckRawReliableClient, IClientDirectCtl
     {
         private enum State
         {

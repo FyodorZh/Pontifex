@@ -7,13 +7,13 @@ using Scriba;
 
 namespace Pontifex
 {
-    internal class AckRawReliableClientLogger : IAckReliableRawClient, IAckRawClientHandler
+    internal class AckRawReliableClientLogger : IAckRawReliableClient, IAckRawReliableClientHandler
     {
-        private readonly IAckReliableRawClient _core;
+        private readonly IAckRawReliableClient _core;
 
-        private volatile IAckRawClientHandler? _userHandler;
+        private volatile IAckRawReliableClientHandler? _userHandler;
         
-        public AckRawReliableClientLogger(IAckReliableRawClient core)
+        public AckRawReliableClientLogger(IAckRawReliableClient core)
         {
             _core = core;
         }
@@ -44,7 +44,7 @@ namespace Pontifex
 
         IMemoryRental ITransport.Memory => _core.Memory;
 
-        bool IAckRawClient.Init(IAckRawClientHandler handler)
+        bool IAckRawReliableClient.Init(IAckRawReliableClientHandler handler)
         {
             _userHandler = handler;
             Log.i("Init()");
@@ -71,7 +71,7 @@ namespace Pontifex
             _userHandler?.FillAckData(ackData);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawReliableClientHandler.OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             Log.i("UserHandler.OnConnected(" + endPoint + ", " + ackResponse + ")");
             var endPointWrapper = new AckRawClientSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>

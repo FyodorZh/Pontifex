@@ -3,11 +3,11 @@ using Pontifex.Utils;
 
 namespace Pontifex.Ack.Raw
 {
-    public class AckRawClientSideEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawClientSideEndpoint
+    public class AckRawClientSideEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawReliableClientSideEndpoint
     {
-        public AckRawClientSideEndpointWrapper(IAckRawClientSideEndpoint? core, 
-            Func<IAckRawBaseEndpoint?, UnionDataList, SendResult> sender, 
-            Func<IAckRawBaseEndpoint?, StopReason, bool> disconnector)
+        public AckRawClientSideEndpointWrapper(IAckRawReliableClientSideEndpoint? core, 
+            Func<IAckRawReliableBaseEndpoint?, UnionDataList, SendResult> sender, 
+            Func<IAckRawReliableBaseEndpoint?, StopReason, bool> disconnector)
             : base(core, sender, disconnector)
         {
         }

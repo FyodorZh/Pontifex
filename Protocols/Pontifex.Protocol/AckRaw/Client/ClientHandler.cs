@@ -1,25 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Abstractions;
-using Pontifex.Ack;
 using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Protocols
 {
-    internal class ClientHandler : IAckRawClientHandler, IAckRawClientSideEndpoint
+    internal class ClientHandler : IAckRawReliableClientHandler, IAckRawReliableClientSideEndpoint
     {
         private readonly AckRawWrapperClient mTransport;
         private readonly IAckRawWrapperClientLogic mWrapperLogic;
-        private readonly IAckRawClientHandler mUserHandler;
+        private readonly IAckRawReliableClientHandler mUserHandler;
 
-        private volatile IAckRawClientSideEndpoint? mTransportEndpoint;
+        private volatile IAckRawReliableClientSideEndpoint? mTransportEndpoint;
 
         private readonly object mSendCallSerializer = new object();
 
-        public ClientHandler(AckRawWrapperClient transport, IAckRawWrapperClientLogic wrapperLogic, IAckRawClientHandler userHandler)
+        public ClientHandler(AckRawWrapperClient transport, IAckRawWrapperClientLogic wrapperLogic, IAckRawReliableClientHandler userHandler)
         {
             mTransport = transport;
             mWrapperLogic = wrapperLogic;
@@ -32,7 +30,7 @@ namespace Pontifex.Protocols
             mWrapperLogic.UpdateAckData(ackData);
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawReliableClientHandler.OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             mTransportEndpoint = endPoint;
             try
@@ -133,7 +131,7 @@ namespace Pontifex.Protocols
             }
         }
 
-        SendResult IAckRawBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IAckRawReliableBaseEndpoint.Send(UnionDataList bufferToSend)
         {
             lock (mSendCallSerializer)
             {

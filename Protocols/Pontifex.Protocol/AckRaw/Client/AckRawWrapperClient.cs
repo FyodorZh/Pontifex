@@ -11,16 +11,16 @@ namespace Pontifex.Protocols
     public class AckRawWrapperClient<TLogic> : AckRawWrapperClient
         where TLogic : IAckRawWrapperClientLogic
     {
-        public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap, Func<ILogger, IMemoryRental, TLogic> constructor)
+        public AckRawWrapperClient(string typeName, IAckRawReliableClient transportToWrap, Func<ILogger, IMemoryRental, TLogic> constructor)
             : base(typeName, transportToWrap)
         {
             SetupLogic(constructor.Invoke(transportToWrap.Log, transportToWrap.Memory));
         }
     }
 
-    public class AckRawWrapperClient : AckRawClient, IAckRawClientHandler
+    public class AckRawWrapperClient : AckRawReliableClient, IAckRawReliableClientHandler
     {
-        private readonly IAckRawClient mBaseTransport;
+        private readonly IAckRawReliableClient mBaseTransport;
         private IAckRawWrapperClientLogic? mLogic;
 
         private bool mInConnectionProcess;
@@ -29,7 +29,7 @@ namespace Pontifex.Protocols
         
         public override int MessageMaxByteSize => mBaseTransport.MessageMaxByteSize;
 
-        public AckRawWrapperClient(string typeName, IAckRawClient transportToWrap)
+        public AckRawWrapperClient(string typeName, IAckRawReliableClient transportToWrap)
             : base(typeName, transportToWrap.Log, transportToWrap.Memory)
         {
             mBaseTransport = transportToWrap;
@@ -40,7 +40,7 @@ namespace Pontifex.Protocols
             mLogic = logic;
         }
 
-        protected override IAckRawClientHandler? SetupHandler(IAckRawClientHandler handler)
+        protected override IAckRawReliableClientHandler? SetupHandler(IAckRawReliableClientHandler handler)
         {
             var logic = mLogic;
             if (logic != null)
@@ -80,7 +80,7 @@ namespace Pontifex.Protocols
             mBaseTransport.Stop();
         }
 
-        internal void ConnectionFinished_Internal(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        internal void ConnectionFinished_Internal(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             if (mInConnectionProcess)
             {
@@ -105,7 +105,7 @@ namespace Pontifex.Protocols
 
         void IAckRawBaseHandler.OnDisconnected(StopReason reason)
         {
-            IAckRawClientSideEndpoint? ep = mClientHandler;
+            IAckRawReliableClientSideEndpoint? ep = mClientHandler;
             ep?.Disconnect(reason);
         }
 
@@ -115,7 +115,7 @@ namespace Pontifex.Protocols
             Fail("OnReceived", "this method must not be called");
         }
 
-        void IAckRawClientHandler.OnConnected(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IAckRawReliableClientHandler.OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             // DO NOTHING
         }

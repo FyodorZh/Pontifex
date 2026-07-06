@@ -5,7 +5,7 @@ using Scriba;
 
 namespace Pontifex.Transports.Core
 {
-    public abstract class AckRawClient : AbstractTransport, IAckRawClient
+    public abstract class AckRawReliableClient : AbstractTransport, IAckRawReliableClient
     {
         private enum State
         {
@@ -18,17 +18,17 @@ namespace Pontifex.Transports.Core
 
         private State _state = State.Constructed;
 
-        private IAckRawClientHandler? _handler;
+        private IAckRawReliableClientHandler? _handler;
 
         
-        protected IAckRawClientHandler? Handler =>  _handler;
+        protected IAckRawReliableClientHandler? Handler =>  _handler;
 
-        protected AckRawClient(string typeName, ILogger logger, IMemoryRental memory)
+        protected AckRawReliableClient(string typeName, ILogger logger, IMemoryRental memory)
             : base(typeName, logger, memory)
         {
         }
 
-        protected virtual IAckRawClientHandler? SetupHandler(IAckRawClientHandler handler)
+        protected virtual IAckRawReliableClientHandler? SetupHandler(IAckRawReliableClientHandler handler)
         {
             return handler;
         }
@@ -68,7 +68,7 @@ namespace Pontifex.Transports.Core
             }
         }
 
-        public bool Init(IAckRawClientHandler handler)
+        public bool Init(IAckRawReliableClientHandler handler)
         {
             lock (_locker)
             {
@@ -155,7 +155,7 @@ namespace Pontifex.Transports.Core
             }
         }
 
-        protected void ConnectionFinished(IAckRawClientSideEndpoint endPoint, UnionDataList ackResponse)
+        protected void ConnectionFinished(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             lock (_locker)

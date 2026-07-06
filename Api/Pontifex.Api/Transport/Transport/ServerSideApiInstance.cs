@@ -8,14 +8,14 @@ using Scriba;
 
 namespace Pontifex.Api
 {
-    public class ServerSideApiInstance<TApi> : IAckRawServerHandler
+    public class ServerSideApiInstance<TApi> : IAckRawReliableServerHandler
         where TApi : IApiRoot
     {
         private readonly TApi _api;
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
         
-        private IAckRawServerSideEndpoint? _endpoint;
+        private IAckRawReliableServerSideEndpoint? _endpoint;
         private TransportPipeSystem? _transportPipeSystem;
 
         public event Action<ServerSideApiInstance<TApi>>? ApiStarted;
@@ -32,12 +32,12 @@ namespace Pontifex.Api
             Log = logger;
         }
 
-        void IAckRawServerHandler.GetAckResponse(UnionDataList ackData)
+        void IAckRawServerHandler.FillAckResponse(UnionDataList ackData)
         {
             ackData.PutFirst((long)7777);
         }
 
-        void IAckRawServerHandler.OnConnected(IAckRawServerSideEndpoint endPoint)
+        void IAckRawReliableServerHandler.OnConnected(IAckRawReliableServerSideEndpoint endPoint)
         {
             _endpoint = endPoint;
             

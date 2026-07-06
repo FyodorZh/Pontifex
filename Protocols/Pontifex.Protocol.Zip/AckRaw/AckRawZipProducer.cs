@@ -32,9 +32,9 @@ namespace Pontifex.Protocols.Zip
 
     public class AckRawZipClientProducer : AckRawZipProducer, ITransportProducer
     {
-        private class ZipClient : AckRawWrapperClient<AckRawZipClientLogic>, IAckReliableRawClient
+        private class ZipClient : AckRawWrapperClient<AckRawZipClientLogic>, IAckRawReliableClient
         {
-            public ZipClient(IAckRawClient transportToWrap, int compressionLevel)
+            public ZipClient(IAckRawReliableClient transportToWrap, int compressionLevel)
                 : base(ZipInfo.TransportName, transportToWrap, 
                     (logger, memoryRental) => new AckRawZipClientLogic(logger, memoryRental, compressionLevel))
             {
@@ -45,7 +45,7 @@ namespace Pontifex.Protocols.Zip
         {
             if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {
-                if (factory.Construct(nestedAddress, logger, memoryRental) is IAckRawClient client)
+                if (factory.Construct(nestedAddress, logger, memoryRental) is IAckRawReliableClient client)
                 {
                     return new ZipClient(client, compressionLevel);
                 }
@@ -56,9 +56,9 @@ namespace Pontifex.Protocols.Zip
 
     public class AckRawZipServerProducer : AckRawZipProducer, ITransportProducer
     {
-        private class ZipServer : AckRawWrapperServer<AcknowledgerWrapper<HandlerWrapper<AckRawZipServerLogic>>>, IAckReliableRawServer
+        private class ZipServer : AckRawWrapperServer<AcknowledgerWrapper<HandlerWrapper<AckRawZipServerLogic>>>, IAckRawReliableServer
         {
-            public ZipServer(IAckRawServer transportToWrap, int compressionLevel)
+            public ZipServer(IAckRawReliableServer transportToWrap, int compressionLevel)
                 : base(
                     ZipInfo.TransportName,
                     transportToWrap,
@@ -73,7 +73,7 @@ namespace Pontifex.Protocols.Zip
         {
             if (Parse(@params, out var compressionLevel, out var nestedAddress))
             {
-                if (factory.Construct(nestedAddress, logger, memoryRental) is IAckRawServer server)
+                if (factory.Construct(nestedAddress, logger, memoryRental) is IAckRawReliableServer server)
                 {
                     return new ZipServer(server, compressionLevel);
                 }

@@ -14,7 +14,7 @@ using Transport.Utils;
 
 namespace Pontifex.Transports.Tcp
 {
-    internal class AckRawTcpServer : AckRawServer, IAckReliableRawServer
+    internal class AckRawTcpServer : AckRawReliableServer, IAckRawReliableServer
     {
         private class ClientSet : PeriodicLogic
         {
@@ -85,7 +85,7 @@ namespace Pontifex.Transports.Tcp
                 _driver.Finish();
             }
 
-            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawServerHandler?> acknowledger, int messageMaxSize, IMemoryRental memoryRental, ILogger logger)
+            public void AddClient(Socket socket, Func<EndPoint, UnionDataList, IAckRawReliableServerHandler?> acknowledger, int messageMaxSize, IMemoryRental memoryRental, ILogger logger)
             {
                 ServerSideSocket client = new ServerSideSocket(socket, OnDisconnected, acknowledger, _driver, messageMaxSize, memoryRental, logger);
                 mClientsToAdd.Put(client);
@@ -280,7 +280,7 @@ namespace Pontifex.Transports.Tcp
             Log.wtf("Server socket failed", ex);
         }
 
-        private IAckRawServerHandler? TryAcknowledge(EndPoint ep, UnionDataList ackData)
+        private IAckRawReliableServerHandler? TryAcknowledge(EndPoint ep, UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             

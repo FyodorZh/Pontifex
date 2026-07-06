@@ -5,7 +5,7 @@
     /// Provides send/disconnect operations scoped to the client's connection.
     /// Implemented by the transport system.
     /// </summary>
-    public interface IAckRawClientSideEndpoint : IAckRawBaseEndpoint
+    public interface IAckRawReliableClientSideEndpoint : IAckRawReliableBaseEndpoint
     {
     }
 }

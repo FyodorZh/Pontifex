@@ -5,15 +5,15 @@ using Pontifex.Utils;
 
 namespace Pontifex.Ack.Raw
 {
-    public abstract class AckRawBaseEndpointWrapper : IAckRawBaseEndpoint
+    public abstract class AckRawBaseEndpointWrapper : IAckRawReliableBaseEndpoint
     {
-        private volatile IAckRawBaseEndpoint? _core;
-        private readonly Func<IAckRawBaseEndpoint?, UnionDataList, SendResult> _sender;
-        private readonly Func<IAckRawBaseEndpoint?, StopReason, bool> _disconnector;
+        private volatile IAckRawReliableBaseEndpoint? _core;
+        private readonly Func<IAckRawReliableBaseEndpoint?, UnionDataList, SendResult> _sender;
+        private readonly Func<IAckRawReliableBaseEndpoint?, StopReason, bool> _disconnector;
 
-        protected AckRawBaseEndpointWrapper(IAckRawBaseEndpoint? core, 
-            Func<IAckRawBaseEndpoint?, UnionDataList, SendResult> sender, 
-            Func<IAckRawBaseEndpoint?, StopReason, bool> disconnector)
+        protected AckRawBaseEndpointWrapper(IAckRawReliableBaseEndpoint? core, 
+            Func<IAckRawReliableBaseEndpoint?, UnionDataList, SendResult> sender, 
+            Func<IAckRawReliableBaseEndpoint?, StopReason, bool> disconnector)
         {
             _core = core;
             _sender = sender;

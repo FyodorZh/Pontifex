@@ -9,7 +9,7 @@ namespace Pontifex.Test
 {
     public class ControlsPanel : FrameView
     {
-        private IAckRawBaseEndpoint? _endpoint;
+        private IAckRawReliableBaseEndpoint? _endpoint;
 
         private readonly List<ControlView> _views = new List<ControlView>();
         private readonly List<IControl> _controls = new();
@@ -28,7 +28,7 @@ namespace Pontifex.Test
             base.Dispose(disposing);
         }
 
-        public void SetEndpoint(IAckRawBaseEndpoint? endpoint)
+        public void SetEndpoint(IAckRawReliableBaseEndpoint? endpoint)
         {
             Application.Invoke(() =>
             {

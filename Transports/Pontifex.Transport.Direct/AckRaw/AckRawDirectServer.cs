@@ -7,7 +7,7 @@ using Scriba;
 
 namespace Pontifex.Transports.Direct
 {
-    public class AckRawDirectServer : AckRawServer, IAckReliableRawServer
+    public class AckRawDirectServer : AckRawReliableServer, IAckRawReliableServer
     {
         private readonly StringEndPoint _localEp;
         private DirectServer? _server;
