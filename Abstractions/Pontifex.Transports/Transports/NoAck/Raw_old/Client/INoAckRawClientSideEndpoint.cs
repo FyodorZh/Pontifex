@@ -1,6 +1,6 @@
 using Pontifex.Utils;
 
-namespace Pontifex.NoAck.Raw
+namespace Pontifex.NoAck.Raw_old
 {
     public interface INoAckRawClientSideEndpoint : INoAckRawEndpoint
     {
@@ -12,6 +12,6 @@ namespace Pontifex.NoAck.Raw
         /// </summary>
         /// <param name="reason">The reason for the disconnection.</param>
         /// <returns>True if the disconnect was initiated successfully.</returns>
-        bool Disconnect(StopReason reason);
+        bool Stop(StopReason reason);
     }
 }

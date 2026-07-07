@@ -13,80 +13,43 @@ using Transport.Utils;
 
 namespace Pontifex.Transports.Udp.NoAckRaw
 {
-    internal sealed class NoAckRawUdpServer : AbstractTransport, INoAckRawServer, INoAckRawServerSideEndpoint
+    internal sealed class NoAckRawUdpServer : AbstractTransport, INoAckRawUnreliableServer
     {
-        private IPEndPoint mLocalEndPoint;
+        private IPEndPoint _localEndPoint;
 
-        private UdpReceiver? mReceiver;
-        private UdpAsyncSender? mSender;
+        private UdpReceiver? _receiver;
+        private UdpAsyncSender? _sender;
 
-        private volatile INoAckRawServerSideHandler? mHandler;
+        private Socket? _socket;
 
-        private Socket? mSocket;
+        private readonly TemporaryMap<EndPoint, IpEndPoint> _endPointsMap;
 
-        private readonly TemporaryMap<EndPoint, IpEndPoint> mEPointsMap;
-
-        private readonly TrafficCollectorSlim mTrafficCollector;
+        private readonly TrafficCollectorSlim _trafficCollector;
 
         public NoAckRawUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
-            : base(UdpInfo.TransportName, logger, memoryRental)
+            : base(RawUdpInfo.TransportName, logger, memoryRental)
         {
-            mLocalEndPoint = new IPEndPoint(ipAddress, port);
-            mEPointsMap = new TemporaryMap<EndPoint, IpEndPoint>(UtcNowDateTimeProvider.Instance, TimeSpan.FromSeconds(10));
-
-            mTrafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, UtcNowDateTimeProvider.Instance); 
-            //AppendControl(mTrafficCollector);
+            _localEndPoint = new IPEndPoint(ipAddress, port);
+            _endPointsMap = new TemporaryMap<EndPoint, IpEndPoint>(UtcNowDateTimeProvider.Instance, TimeSpan.FromSeconds(10));
+            _trafficCollector = new TrafficCollectorSlim(RawUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
         }
 
-        public override string ToString()
-        {
-            try
-            {
-                return $"udp-server[{mLocalEndPoint}]";
-            }
-            catch (Exception)
-            {
-                return "udp-server[unknown]";
-            }
-        }
+        public event Action<IEndPoint, UnionDataList>? OnReceived;
 
-        bool INoAckRawServer.Init(INoAckRawServerSideHandler handler)
-        {
-            mHandler = handler;
-            return true; // ???
-        }
-
-        public int MessageMaxByteSize => UdpInfo.MessageMaxByteSize;
+        public int MessageMaxByteSize => RawUdpInfo.MessageMaxByteSize;
 
         protected override bool TryStart()
         {
-            if (mHandler == null)
-            {
-                Log.e("Starting.Result = 'NULL_HANDLER'");
-                return false;
-            }
-
             try
             {
-                mSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
-                /*
-                 * Есть проблема: если попытаться отправить пакет на адрес который недостижим, то в ответ приходит какое-то специальное сообщение
-                 * icmp об этом, после чего следующий вызов ReceiveFrom на сокете кидает исключение SocketException. UdpReceiver его проглатывает,
-                 * в результате все время пока идут попытки отправить на несуществующие адреса у нас сокет заблокирован постоянно кидает исключения
-                 * и ничего не получает. Сообщения в сокете копятся а потом, когда перестаем пытаться отправить на несуществующий адрес вываливаются
-                 * с большой задержкой. Все это время играть никто не может на сервере.
-                 * В интернетах пишут что это проблема исключительно винды и на линуксе такого не бывает. Собственно на линуксе мы и не ловили.
-                 *
-                 * Это фикс данной проблемы. До конца не разобрался как он работает, но пишут что это низкоуровневая команда виндовому сокету
-                 * чтобы он так не делал.
-                 */
                 try
                 {
                     var sioUdpConnectionReset = -1744830452;
                     var inValue = new byte[] {0};
                     var outValue = new byte[] {0};
-                    mSocket.IOControl(sioUdpConnectionReset, inValue, outValue);
+                    _socket.IOControl(sioUdpConnectionReset, inValue, outValue);
                 }
                 catch (Exception ex)
                 {
@@ -95,15 +58,15 @@ namespace Pontifex.Transports.Udp.NoAckRaw
 
                 try
                 {
-                    mSocket.Bind(mLocalEndPoint);
+                    _socket.Bind(_localEndPoint);
                 }
                 catch (SocketException ex)
                 {
                     if (ex.SocketErrorCode == SocketError.AddressNotAvailable)
                     {
-                        var anyEp = new IPEndPoint(IPAddress.Any, mLocalEndPoint.Port);
-                        mSocket.Bind(anyEp);
-                        mLocalEndPoint = anyEp;
+                        var anyEp = new IPEndPoint(IPAddress.Any, _localEndPoint.Port);
+                        _socket.Bind(anyEp);
+                        _localEndPoint = anyEp;
                     }
                     else
                     {
@@ -112,7 +75,7 @@ namespace Pontifex.Transports.Udp.NoAckRaw
                 }
 
                 IPEndPoint anyRemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                mReceiver = new UdpReceiver(mSocket, anyRemoteEndPoint, OnReceived, (ex) =>
+                _receiver = new UdpReceiver(_socket, anyRemoteEndPoint, OnReceivedInternal, (ex) =>
                     {
                         if (ex.SocketErrorCode != SocketError.ConnectionReset)
                         {
@@ -120,35 +83,34 @@ namespace Pontifex.Transports.Udp.NoAckRaw
                         }
                     }, Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool,
                     Log,
-                    mTrafficCollector);
+                    _trafficCollector);
 
-                Log.i("UDP.Sender from local={0}", mLocalEndPoint);
+                Log.i("UDP.Sender from local={0}", _localEndPoint);
 
-                mSender = new UdpAsyncSender(mSocket, UdpInfo.MessageMaxByteSize,
+                _sender = new UdpAsyncSender(_socket, RawUdpInfo.MessageMaxByteSize,
                     Memory.ByteArraysPool,
                     (ex) => { Log.e("UDP.Sender Exception received. Continue working!!!"); },
-                    Log, mTrafficCollector);
-                
-                mHandler.OnStarted(this);
+                    Log, _trafficCollector);
+
                 return true;
             }
             catch (Exception ex)
             {
                 Log.e("Starting.Result = 'EXCEPTION'");
 
-                if (mSocket != null)
+                if (_socket != null)
                 {
-                    mSocket.Close();
-                    mSocket = null;
+                    _socket.Close();
+                    _socket = null;
                 }
 
-                if (mReceiver != null)
+                if (_receiver != null)
                 {
-                    mReceiver.Stop();
+                    _receiver.Stop();
                 }
 
-                mReceiver = null;
-                mSender = null;
+                _receiver = null;
+                _sender = null;
                 FailException("TryStart", ex);
                 return false;
             }
@@ -156,49 +118,33 @@ namespace Pontifex.Transports.Udp.NoAckRaw
 
         protected override void OnStarted()
         {
-            // DO NOTHING
         }
 
         protected override void OnStopped(StopReason reason)
         {
-            var handler = mHandler;
-            if (handler != null)
-            {
-                try
-                {
-                    handler.OnStopped(reason);
-                }
-                catch (Exception e)
-                {
-                    Log.wtf(e);
-                }
-
-                mHandler = null;
-            }
-
-            var receiver = mReceiver;
+            var receiver = _receiver;
             if (receiver != null)
             {
                 receiver.Stop();
-                mReceiver = null;
+                _receiver = null;
             }
 
-            var sender = mSender;
+            var sender = _sender;
             if (sender != null)
             {
                 sender.Stop();
-                mSender = null;
+                _sender = null;
             }
 
-            var socket = mSocket;
+            var socket = _socket;
             if (socket != null)
             {
                 socket.Close();
-                mSocket = null;
+                _socket = null;
             }
         }
 
-        SendResult INoAckRawServerSideEndpoint.Send(IEndPoint client, UnionDataList message)
+        SendResult INoAckRawUnreliableServer.TrySend(IEndPoint destination, UnionDataList message)
         {
             if (message == null!)
             {
@@ -207,10 +153,10 @@ namespace Pontifex.Transports.Udp.NoAckRaw
 
             using var disposer = message.AsDisposable();
 
-            var sender = mSender;
+            var sender = _sender;
             if (sender != null)
             {
-                if (client is IpEndPoint endPoint)
+                if (destination is IpEndPoint endPoint)
                 {
                     return sender.Send(endPoint.EP, message.Acquire());
                 }
@@ -221,23 +167,40 @@ namespace Pontifex.Transports.Udp.NoAckRaw
             return SendResult.Error;
         }
 
-        private void OnReceived(EndPoint sender, UnionDataList message)
+        private void OnReceivedInternal(EndPoint sender, UnionDataList message)
         {
             using var disposer = message.AsDisposable();
 
-            var handler = mHandler;
-            if (handler == null)
-            {
-                return;
-            }
-
-            if (!mEPointsMap.TryGetValue(sender, out var ep))
+            if (!_endPointsMap.TryGetValue(sender, out var ep))
             {
                 ep = new IpEndPoint(sender);
-                mEPointsMap.Add(sender, ep);
+                _endPointsMap.Add(sender, ep);
             }
 
-            handler.OnReceived(ep, message);
+            var handler = OnReceived;
+            if (handler != null)
+            {
+                try
+                {
+                    handler(ep, message);
+                }
+                catch (Exception e)
+                {
+                    FailException("OnReceived", e);
+                }
+            }
+        }
+
+        public override string ToString()
+        {
+            try
+            {
+                return $"udp-server[{_localEndPoint}]";
+            }
+            catch (Exception)
+            {
+                return "udp-server[unknown]";
+            }
         }
     }
 }

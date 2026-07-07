@@ -1,6 +1,6 @@
 using Pontifex.Utils;
 
-namespace Pontifex.NoAck.Raw
+namespace Pontifex.NoAck.Raw_old
 {
     /// <summary>
     /// Client-side handler for NoAck raw transport.

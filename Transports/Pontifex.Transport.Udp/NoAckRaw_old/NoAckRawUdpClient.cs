@@ -1,43 +1,58 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.NoAck.Raw;
+using Pontifex.NoAck.Raw_old;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
-namespace Pontifex.Transports.Udp.NoAckRaw
+
+namespace Pontifex.Transports.Udp.NoAckRaw_old
 {
-    internal sealed class NoAckRawUdpClient : AbstractTransport, INoAckRawUnreliableClient
+    internal sealed class NoAckRawUdpClient : AbstractTransport, INoAckRawClient, INoAckRawClientSideEndpoint
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;
 
+        private INoAckRawClientSideHandler? _handler;
+
         private UdpSyncSender? _sender;
         private UdpReceiver? _receiver;
+
         private Socket? _socket;
 
-        private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(RawUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
+        private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
         public NoAckRawUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
-            : base(RawUdpInfo.TransportName, logger, memoryRental)
+            : base(UdpInfo.TransportName, logger, memoryRental)
         {
             _remoteEndPoint = new IPEndPoint(ipAddress, port);
             _managedRemoteEndPoint = new IpEndPoint(_remoteEndPoint);
+            //AppendControl(mTrafficCollector);
         }
 
-        public event Action<UnionDataList>? OnReceived;
+        bool INoAckRawClient.Init(INoAckRawClientSideHandler handler)
+        {
+            _handler = handler;
+            return true; //???
+        }
 
         public IEndPoint ServerAddress => _managedRemoteEndPoint;
 
-        public int MessageMaxByteSize => RawUdpInfo.MessageMaxByteSize;
+        public int MessageMaxByteSize => UdpInfo.MessageMaxByteSize;
 
         protected override bool TryStart()
         {
+            if (_handler == null)
+            {
+                return false;
+            }
+
             IPEndPoint? localEndPoint = null;
             try
             {
@@ -49,13 +64,13 @@ namespace Pontifex.Transports.Udp.NoAckRaw
                 bool binded = false;
 
                 Random rnd = new Random();
-                for (int i = 0; i < 30; ++i)
+                for (int i = 0; i < 30; ++i) // do I need to put it in the config?
                 {
                     try
                     {
                         int randomPort = 10000 + rnd.Next(30000);
                         localEndPoint = new IPEndPoint(bindedAddress, randomPort);
-                        _socket.Bind(localEndPoint);
+                        _socket.Bind(localEndPoint); // any port?
                     }
                     catch (Exception)
                     {
@@ -74,14 +89,26 @@ namespace Pontifex.Transports.Udp.NoAckRaw
                 }
 
                 Log.i("UDP.Sender from local='{0}' to remote='{1}'", localEndPoint!, _remoteEndPoint);
-                _sender = new UdpSyncSender(_socket, _remoteEndPoint, RawUdpInfo.MessageMaxByteSize,
+                _sender = new UdpSyncSender(_socket, _remoteEndPoint, UdpInfo.MessageMaxByteSize,
                     Memory.ByteArraysPool,
                     (ex) => { FailException("Sender.Exception", ex); }, _trafficCollector);
 
                 Log.i("UDP.Listener from local='{0}' of remote='{1}'", localEndPoint!, _remoteEndPoint);
-                _receiver = new UdpReceiver(_socket, _remoteEndPoint,
-                    OnReceivedInternal, (ex) => { FailException("UDP.Receiver", ex); },
+
+                _receiver = new UdpReceiver(_socket, _remoteEndPoint, 
+                    OnReceived, (ex) => { FailException("UDP.Receiver", ex); },
                     Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log, _trafficCollector);
+
+                try
+                {
+                    // FailException() в текущем каллстеке не должен сработать до Start() иначе мы получим Stopped() без Started()
+                    _handler.OnStarted(this);
+                }
+                catch (Exception e)
+                {
+                    FailException(_handler.GetType() + ".Started()", e);
+                }
+                
 
                 return true;
             }
@@ -107,10 +134,25 @@ namespace Pontifex.Transports.Udp.NoAckRaw
 
         protected override void OnStarted()
         {
+            // DO NOTHING
         }
 
         protected override void OnStopped(StopReason reason)
         {
+            if (_handler != null)
+            {
+                try
+                {
+                    _handler.OnStopped(reason);
+                }
+                catch (Exception e)
+                {
+                    Log.wtf(e);
+                }
+            }
+
+            _handler = null;
+
             _sender = null;
 
             var receiver = _receiver;
@@ -128,26 +170,7 @@ namespace Pontifex.Transports.Udp.NoAckRaw
             }
         }
 
-        private void OnReceivedInternal(EndPoint remoteEp, UnionDataList message)
-        {
-            var handler = OnReceived;
-            if (handler != null)
-            {
-                try
-                {
-                    handler(message);
-                    return;
-                }
-                catch (Exception e)
-                {
-                    FailException("OnReceived", e);
-                }
-            }
-
-            message.Release();
-        }
-
-        SendResult INoAckRawUnreliableClient.TrySend(UnionDataList message)
+        SendResult INoAckRawClientSideEndpoint.Send(UnionDataList message)
         {
             var sender = _sender;
             if (sender == null)
@@ -167,6 +190,31 @@ namespace Pontifex.Transports.Udp.NoAckRaw
 
             return SendResult.InvalidMessage;
         }
+        
+        bool INoAckRawClientSideEndpoint.Stop(StopReason reason)
+        {
+            return Stop(reason);
+        }
+
+        private void OnReceived(EndPoint remoteEp, UnionDataList message)
+        {
+            var handler = _handler;
+            if (handler != null)
+            {
+                try
+                {
+                    handler.OnReceived(message);
+                }
+                catch (Exception e)
+                {
+                    FailException((_handler?.GetType().ToString()??"Null-Handler") + ".Received()", e);
+                }
+            }
+            else
+            {
+                message.Release();
+            }
+        }
 
         public override string ToString()
         {
@@ -178,6 +226,11 @@ namespace Pontifex.Transports.Udp.NoAckRaw
             {
                 return "udp-client[unknown]";
             }
+        }
+
+        public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        {
+            // DO NOTHING
         }
     }
 }
