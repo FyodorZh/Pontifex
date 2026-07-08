@@ -10,6 +10,8 @@ namespace Pontifex.Transports.Core
         private bool _isInitialized;
 
         private IRawServerAcknowledger<IAckRawReliableServerHandler>? _acknowledger;
+        
+        public override TransportType Type => TransportType.AckRawReliable;
 
         protected AckRawReliableServer(string typeName, ILogger logger, IMemoryRental memory)
             :base(typeName, logger, memory)

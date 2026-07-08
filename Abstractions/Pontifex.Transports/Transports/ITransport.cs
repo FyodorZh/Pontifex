@@ -5,10 +5,12 @@ namespace Pontifex
 {
     public interface ITransport
     {
+        TransportType Type { get; }
+        
         /// <summary>
         /// Transport type. Unique identifier
         /// </summary>
-        string Type { get; }
+        string Name { get; }
 
         /// <summary>
         /// Flag indicating the validity of the transport system. In case of an error, it is set to false.

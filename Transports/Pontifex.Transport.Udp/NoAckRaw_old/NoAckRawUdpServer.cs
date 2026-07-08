@@ -28,6 +28,8 @@ namespace Pontifex.Transports.Udp.NoAckRaw_old
         private readonly TemporaryMap<EndPoint, IpEndPoint> mEPointsMap;
 
         private readonly TrafficCollectorSlim mTrafficCollector;
+        
+        public override TransportType Type => TransportType.NoAckRawUnreliable;
 
         public NoAckRawUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(UdpInfo.TransportName, logger, memoryRental)

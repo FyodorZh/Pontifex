@@ -27,6 +27,8 @@ namespace Pontifex.Transports.Udp
 
         private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
+        public override TransportType Type => TransportType.NoAckRRUnreliable;
+        
         public NoAckRRUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
             :base(UdpInfo.TransportName + "_rr", logger, memory)
         {

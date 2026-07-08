@@ -121,7 +121,7 @@ namespace Pontifex.Transports.Tcp
             DateTime now = DateTime.UtcNow;
             if ((now - mLastMessageReceiveTime.Time) >= mDisconnectTimeout)
             {
-                Stop(new StopReasons.TimeOut(Type));
+                Stop(new StopReasons.TimeOut(Name));
             }
         }
 
@@ -182,7 +182,7 @@ namespace Pontifex.Transports.Tcp
             {
                 string text = $"Failed to parse incoming message type";
                 Log.e(text);
-                Stop(new StopReasons.TextFail(Type, text));
+                Stop(new StopReasons.TextFail(Name, text));
                 return;
             }
 
@@ -205,21 +205,21 @@ namespace Pontifex.Transports.Tcp
                                 }
                             }
                             Log.w("Failed to parse ack response. Disconnecting...");
-                            Stop(new StopReasons.AckRejected(Type));
+                            Stop(new StopReasons.AckRejected(Name));
                         }
                         else if (packetType == PacketType.Disconnect)
                         {
                             Log.w("Failed to Ack on server. Disconnecting...");
-                            Stop(new StopReasons.AckRejected(Type));
+                            Stop(new StopReasons.AckRejected(Name));
                         }
                         else
                         {
-                            Stop(new StopReasons.TextFail(Type, "Wrong first message type. Expected '{0}', received '{1}'", PacketType.AckResponse, packetType));
+                            Stop(new StopReasons.TextFail(Name, "Wrong first message type. Expected '{0}', received '{1}'", PacketType.AckResponse, packetType));
                         }
                     }
                     catch (Exception ex)
                     {
-                        Stop(new StopReasons.ExceptionFail(Type, ex, ""));
+                        Stop(new StopReasons.ExceptionFail(Name, ex, ""));
                     }
                     break;
                 case State.Connected:
@@ -242,7 +242,7 @@ namespace Pontifex.Transports.Tcp
                     }
                     else if (packetType == PacketType.Disconnect)
                     {
-                        Stop(new StopReasons.UnknownRemoteIntention(Type));
+                        Stop(new StopReasons.UnknownRemoteIntention(Name));
                     }
                     else if (packetType == PacketType.Ping)
                     {
@@ -267,7 +267,7 @@ namespace Pontifex.Transports.Tcp
                     }
                     else
                     {
-                        Stop(new StopReasons.TextFail(Type, "Wrong incoming packet type. Received '{0}'", packetType));
+                        Stop(new StopReasons.TextFail(Name, "Wrong incoming packet type. Received '{0}'", packetType));
                     }
 
                     break;
@@ -286,7 +286,7 @@ namespace Pontifex.Transports.Tcp
         {
             if (_gracefulDisconnectAttempt)
             {
-                Stop(new UserIntention(Type, "GracefulDisconnect"));
+                Stop(new UserIntention(Name, "GracefulDisconnect"));
                 return;
             }
             
@@ -317,7 +317,7 @@ namespace Pontifex.Transports.Tcp
                 }
             }
 
-            Stop(new StopReasons.ExceptionFail(Type, ex));
+            Stop(new StopReasons.ExceptionFail(Name, ex));
         }
 
         #region Overrides of AckRawClient

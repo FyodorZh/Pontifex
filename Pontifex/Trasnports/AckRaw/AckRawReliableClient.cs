@@ -22,6 +22,8 @@ namespace Pontifex.Transports.Core
 
         
         protected IAckRawReliableClientHandler? Handler =>  _handler;
+        
+        public override TransportType Type => TransportType.AckRawReliable;
 
         protected AckRawReliableClient(string typeName, ILogger logger, IMemoryRental memory)
             : base(typeName, logger, memory)
@@ -150,7 +152,7 @@ namespace Pontifex.Transports.Core
                 }
                 else
                 {
-                    Stop(new StopReasons.TextFail(Type, "Transport has wrong state '{0}' instead of 'Connecting'", _state));
+                    Stop(new StopReasons.TextFail(Name, "Transport has wrong state '{0}' instead of 'Connecting'", _state));
                 }
             }
         }
@@ -167,7 +169,7 @@ namespace Pontifex.Transports.Core
                 }
                 else
                 {
-                    Stop(new StopReasons.TextFail(Type, "Transport has wrong state '{0}' instead of 'Connecting'", _state));
+                    Stop(new StopReasons.TextFail(Name, "Transport has wrong state '{0}' instead of 'Connecting'", _state));
                 }
             }
         }

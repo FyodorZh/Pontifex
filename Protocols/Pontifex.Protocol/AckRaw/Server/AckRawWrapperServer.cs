@@ -53,7 +53,7 @@ namespace Pontifex.Protocols
         public override string ToString()
         {
             string coreName = _core.ToString();
-            return $"{Type}<{coreName}>";
+            return $"{Name}<{coreName}>";
         }
     }
 }

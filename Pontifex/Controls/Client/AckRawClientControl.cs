@@ -13,7 +13,7 @@ namespace Pontifex
     {
         private readonly IAckRawClient _transport;
 
-        public string Name => _transport.Type + ".Control";
+        public string Name => _transport.Name + ".Control";
         
         public AckRawClientControl(IAckRawClient transport)
         {

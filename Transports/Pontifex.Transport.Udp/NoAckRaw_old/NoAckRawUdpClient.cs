@@ -28,6 +28,8 @@ namespace Pontifex.Transports.Udp.NoAckRaw_old
 
         private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
+        public override TransportType Type => TransportType.NoAckRawUnreliable;
+        
         public NoAckRawUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(UdpInfo.TransportName, logger, memoryRental)
         {

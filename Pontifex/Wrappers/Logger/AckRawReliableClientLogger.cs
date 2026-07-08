@@ -13,12 +13,14 @@ namespace Pontifex
 
         private volatile IAckRawReliableClientHandler? _userHandler;
         
+        public TransportType Type => TransportType.AckRawReliable;
+        
         public AckRawReliableClientLogger(IAckRawReliableClient core)
         {
             _core = core;
         }
 
-        string ITransport.Type => _core.Type;
+        string ITransport.Name => _core.Name;
 
         bool ITransport.IsValid => _core.IsValid;
 

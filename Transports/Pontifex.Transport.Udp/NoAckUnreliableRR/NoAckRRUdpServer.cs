@@ -26,6 +26,8 @@ namespace Pontifex.Transports.Udp
 
         private readonly TemporaryMap<EndPoint, IpEndPoint> mEPointsMap = new (UtcNowDateTimeProvider.Instance, TimeSpan.FromSeconds(10));
 
+        public override TransportType Type => TransportType.NoAckRRUnreliable;
+        
         public NoAckRRUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
             : base(UdpInfo.TransportName + "_rr", logger, memory)
         {

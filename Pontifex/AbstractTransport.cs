@@ -15,6 +15,8 @@ namespace Pontifex.Transports.Core
         private bool _started;
 
         private Action<StopReason>? _onStopped;
+        
+        public abstract TransportType Type { get; }
 
         public ILogger Log { get; }
 
@@ -38,7 +40,7 @@ namespace Pontifex.Transports.Core
         /// </summary>
         protected abstract void OnStopped(StopReason reason);
 
-        public string Type { get; }
+        public string Name { get; }
 
         public bool IsValid
         {
@@ -64,9 +66,9 @@ namespace Pontifex.Transports.Core
 
         protected AbstractTransport(string typeName, ILogger logger, IMemoryRental memory)
         {
-            Type = typeName;
+            Name = typeName;
             Log = logger.Wrap();
-            Log.Tags.Set(Type);
+            Log.Tags.Set(Name);
             Memory = memory;
         }
 
@@ -106,11 +108,11 @@ namespace Pontifex.Transports.Core
 
                         if (reason == null)
                         {
-                            reason = new StopReasons.Unknown(Type);
+                            reason = new StopReasons.Unknown(Name);
                         }
                         else
                         {
-                            reason = new StopReasons.Induced(Type, reason);
+                            reason = new StopReasons.Induced(Name, reason);
                         }
 
                         try
@@ -176,19 +178,19 @@ namespace Pontifex.Transports.Core
 
         public void Fail(StopReason cause, string failMessage)
         {
-            Fail(new StopReasons.ChainFail(Type, cause, failMessage));
+            Fail(new StopReasons.ChainFail(Name, cause, failMessage));
         }
 
         public void Fail(string method, string text, params object[] list)
         {
-            var reason = new StopReasons.TextFail(Type, text, list);
+            var reason = new StopReasons.TextFail(Name, text, list);
             Log.e("[{}()]: {@failReason}", method, reason.Print());
             Fail(reason);
         }
 
         public void FailException(string method, Exception ex, string text = "")
         {
-            var reason = new StopReasons.ExceptionFail(Type, ex, text);
+            var reason = new StopReasons.ExceptionFail(Name, ex, text);
             Log.e("[{}()]: {@failReason}", method, reason.Print());
             Fail(reason);
         }

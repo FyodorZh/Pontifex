@@ -54,6 +54,8 @@ namespace Pontifex.Converters
             private Thread? _retransmitThread;
             private volatile bool _stopped;
             private readonly AutoResetEvent _retransmitEvent = new AutoResetEvent(false);
+            
+            public TransportType Type => TransportType.NoAckRawReliable;
 
             public ReliableClientWrapper(INoAckRawUnreliableClient inner, IMemoryRental? memoryOverride, ILogger? loggerOverride)
             {
@@ -68,7 +70,7 @@ namespace Pontifex.Converters
 
             public int MessageMaxByteSize => _inner.MessageMaxByteSize - HeaderSize;
 
-            public string Type => _inner.Type;
+            public string Name => _inner.Name;
             public bool IsValid => _inner.IsValid;
             public bool IsStarted => _inner.IsStarted;
             public ILogger Log => _log;
@@ -332,6 +334,8 @@ namespace Pontifex.Converters
             private volatile bool _stopped;
             private readonly AutoResetEvent _retransmitEvent = new AutoResetEvent(false);
 
+            public TransportType Type => TransportType.NoAckRawReliable;
+
             public ReliableServerWrapper(INoAckRawUnreliableServer inner, IMemoryRental? memoryOverride, ILogger? loggerOverride)
             {
                 _inner = inner;
@@ -345,7 +349,7 @@ namespace Pontifex.Converters
 
             public int MessageMaxByteSize => _inner.MessageMaxByteSize - HeaderSize;
 
-            public string Type => _inner.Type;
+            public string Name => _inner.Name;
             public bool IsValid => _inner.IsValid;
             public bool IsStarted => _inner.IsStarted;
             public ILogger Log => _log;

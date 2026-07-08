@@ -38,7 +38,7 @@ namespace Pontifex.Transports.Tcp
                     var result = _owner.DoSend(PacketType.Ping, buffer);
                     if (result != SendResult.Ok)
                     {
-                        _owner.Stop(new StopReasons.TextFail(_owner.Type, "{0}: Keep alive send failed with result '{1}'", _owner, result));
+                        _owner.Stop(new StopReasons.TextFail(_owner.Name, "{0}: Keep alive send failed with result '{1}'", _owner, result));
                     }
                 }
 
@@ -46,7 +46,7 @@ namespace Pontifex.Transports.Tcp
             }
             catch (Exception ex)
             {
-                _owner.Stop(new StopReasons.ExceptionFail(_owner.Type, ex, _owner + ": Keep alive failed."));
+                _owner.Stop(new StopReasons.ExceptionFail(_owner.Name, ex, _owner + ": Keep alive failed."));
             }
         }
 

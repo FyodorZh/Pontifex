@@ -1,6 +1,6 @@
 using System;
 
-namespace Pontifex.Converters
+namespace Pontifex
 {
     [Flags]
     public enum TransportType

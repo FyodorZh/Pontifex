@@ -13,6 +13,8 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new ConcurrentDictionary<IEndPoint, Channel>();
 
+        public override TransportType Type => TransportType.NoAckRawReliable;
+        
         public NoAckRawReliableDirectServer(string serverName, ILogger logger, IMemoryRental memoryRental)
             : base(DirectInfo.TransportName, logger, memoryRental)
         {

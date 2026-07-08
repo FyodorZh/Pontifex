@@ -13,6 +13,8 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
         private readonly IEndPoint _clientEp;
 
         private Channel? _channel;
+        
+        public override TransportType Type => TransportType.NoAckRawReliable;
 
         public NoAckRawReliableDirectClient(string serverName, ILogger logger, IMemoryRental memoryRental)
             : base(DirectInfo.TransportName, logger, memoryRental)

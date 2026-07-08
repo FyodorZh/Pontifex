@@ -109,7 +109,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
                     else
                     {
                         Log.w("Failed to parse ack response. Disconnecting...");
-                        Stop(new AckRejected(Type));
+                        Stop(new AckRejected(Name));
                     }
                 }
                     break;

@@ -65,7 +65,7 @@ namespace Pontifex.Protocols
                 }
                 if (IsStarted)
                 {
-                    Stop(new StopReasons.ChainFail(Type, r, "Unexpected underlying transport stop"));
+                    Stop(new StopReasons.ChainFail(Name, r, "Unexpected underlying transport stop"));
                 }
             });
         }
@@ -92,7 +92,7 @@ namespace Pontifex.Protocols
         public override string ToString()
         {
             string coreName = mBaseTransport.ToString();
-            return $"{Type}<{coreName}>";
+            return $"{Name}<{coreName}>";
         }
 
         #region IAckRawClientHandler (for internal usage)

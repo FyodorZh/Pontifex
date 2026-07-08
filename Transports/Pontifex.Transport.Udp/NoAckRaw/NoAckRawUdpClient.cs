@@ -23,6 +23,8 @@ namespace Pontifex.NoAck.Raw.Udp
 
         private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(RawUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
+        public override TransportType Type => TransportType.NoAckRawUnreliable;
+        
         public NoAckRawUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(RawUdpInfo.TransportName, logger, memoryRental)
         {
