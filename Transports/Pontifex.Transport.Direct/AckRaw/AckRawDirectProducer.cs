@@ -2,7 +2,7 @@ using Actuarius.Memory;
 using Pontifex.Abstractions;
 using Scriba;
 
-namespace Pontifex.Transports.Direct
+namespace Pontifex.Ack.Raw.Direct
 {
     public class AckRawDirectServerProducer : ITransportProducer
     {

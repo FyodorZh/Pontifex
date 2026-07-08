@@ -4,7 +4,7 @@ using Pontifex.Ack.Raw;
 using Pontifex.Protocols.Monitoring.AckRaw;
 using Pontifex.Protocols.Reconnectable.AckReliableRaw;
 using Pontifex.Protocols.Zip;
-using Pontifex.Transports.Direct;
+using Pontifex.Ack.Raw.Direct;
 using Pontifex.Transports.Tcp;
 
 namespace Pontifex.Test

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Pontifex.Abstractions;
 using Pontifex.Utils;
 
-namespace Pontifex.Transports.Direct
+namespace Pontifex.Ack.Raw.Direct
 {
     internal interface IAnyDirectCtl
     {

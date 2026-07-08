@@ -3,7 +3,7 @@ using Pontifex.Abstractions;
 using Pontifex.Transports.NetSockets;
 using Scriba;
 
-namespace Pontifex.Transports.Udp.NoAckRaw
+namespace Pontifex.NoAck.Raw.Udp
 {
     public class NoAckRawUdpClientProducer : ITransportProducer
     {

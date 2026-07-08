@@ -4,7 +4,7 @@ using Actuarius.Memory;
 using Pontifex.Abstractions;
 using Pontifex.Utils;
 
-namespace Pontifex.Transports.Direct
+namespace Pontifex.Ack.Raw.Direct
 {
     internal class DirectServer
     {

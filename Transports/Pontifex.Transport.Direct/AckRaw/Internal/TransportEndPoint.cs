@@ -7,7 +7,7 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Transports.Direct
+namespace Pontifex.Ack.Raw.Direct
 {
     internal class TransportEndPoint : IAckRawReliableClientSideEndpoint, IAckRawReliableServerSideEndpoint
     {

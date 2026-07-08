@@ -3,14 +3,14 @@ using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.NoAck.Raw;
 using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
+using Pontifex.Transports.Udp;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
-namespace Pontifex.Transports.Udp.NoAckRaw
+namespace Pontifex.NoAck.Raw.Udp
 {
     internal sealed class NoAckRawUdpClient : AbstractTransport, INoAckRawUnreliableClient
     {

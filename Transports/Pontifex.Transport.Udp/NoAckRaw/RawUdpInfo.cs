@@ -1,4 +1,4 @@
-namespace Pontifex.Transports.Udp.NoAckRaw
+namespace Pontifex.NoAck.Raw.Udp
 {
     internal static class RawUdpInfo
     {
