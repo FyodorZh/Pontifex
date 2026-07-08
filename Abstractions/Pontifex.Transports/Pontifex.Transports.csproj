@@ -14,6 +14,8 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="Converters\NoAck.Raw.Reliable\NoAck.Raw.Unreliable\" />
+      <Folder Include="Converters\NoAck.Raw.Unreliable\NoAck.Raw.Reliable\" />
       <Folder Include="Transports\Ack\RR\" />
     </ItemGroup>
 

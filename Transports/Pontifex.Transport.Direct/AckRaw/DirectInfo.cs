@@ -1,6 +1,6 @@
 using Actuarius.Memory;
 
-namespace Pontifex.Transports.Direct
+namespace Pontifex.Ack.Raw.Direct
 {
     public static class DirectInfo
     {
