@@ -1,7 +1,6 @@
 using System;
-using Pontifex.Abstractions;
 
-namespace Pontifex.Ack.Raw.Direct
+namespace Pontifex.Ack.Raw.Reliable.Direct
 {
     internal class DirectTransport
     {

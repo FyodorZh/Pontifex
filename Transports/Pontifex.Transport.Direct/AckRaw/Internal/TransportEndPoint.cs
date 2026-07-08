@@ -1,13 +1,11 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
-using Pontifex.Abstractions;
-using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Ack.Raw.Direct
+namespace Pontifex.Ack.Raw.Reliable.Direct
 {
     internal class TransportEndPoint : IAckRawReliableClientSideEndpoint, IAckRawReliableServerSideEndpoint
     {

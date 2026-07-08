@@ -1,10 +1,9 @@
 using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Abstractions;
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw.Direct
+namespace Pontifex.Ack.Raw.Reliable.Direct
 {
     internal class DirectServer
     {

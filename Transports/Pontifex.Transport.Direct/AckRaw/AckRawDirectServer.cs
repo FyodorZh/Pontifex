@@ -4,7 +4,7 @@ using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Ack.Raw.Direct
+namespace Pontifex.Ack.Raw.Reliable.Direct
 {
     public class AckRawDirectServer : AckRawReliableServer, IAckRawReliableServer
     {

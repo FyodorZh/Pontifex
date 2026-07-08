@@ -2,25 +2,25 @@ using Actuarius.Memory;
 using Pontifex.Abstractions;
 using Scriba;
 
-namespace Pontifex.Ack.Raw.Reliable.Direct
+namespace Pontifex.NoAck.Raw.Reliable.Direct
 {
-    public class AckRawDirectServerProducer : ITransportProducer
+    public class NoAckRawReliableDirectServerProducer : ITransportProducer
     {
         public string Name => DirectInfo.TransportName;
 
         public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
-            return new AckRawDirectServer(@params, logger, memoryRental);
+            return new NoAckRawReliableDirectServer(@params, logger, memoryRental);
         }
     }
 
-    public class AckRawDirectClientProducer : ITransportProducer
+    public class NoAckRawReliableDirectClientProducer : ITransportProducer
     {
         public string Name => DirectInfo.TransportName;
 
         public ITransport Produce(string @params, ITransportFactory factory, ILogger logger, IMemoryRental memoryRental)
         {
-            return new AckRawDirectClient(@params, logger, memoryRental);
+            return new NoAckRawReliableDirectClient(@params, logger, memoryRental);
         }
     }
 }

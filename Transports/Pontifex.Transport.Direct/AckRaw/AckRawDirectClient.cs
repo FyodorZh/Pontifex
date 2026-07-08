@@ -11,7 +11,7 @@ using Pontifex.Utils;
 using Pontifex.Utils.FSM;
 using Scriba;
 
-namespace Pontifex.Ack.Raw.Direct
+namespace Pontifex.Ack.Raw.Reliable.Direct
 {
     public class AckRawDirectClient : AckRawReliableClient, IAckRawReliableClient, IClientDirectCtl
     {

@@ -4,7 +4,7 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Ack.Raw.Direct
+namespace Pontifex.Ack.Raw.Reliable.Direct
 {
     internal class Session : IServerDirectCtl//, IAckRawClientEndpoint
     {
