@@ -48,8 +48,8 @@ namespace Pontifex.Factory
                 var sub = factory.ParseTransport(subUri);
 
                 Description description = new Description();
-                description.Add("convert_to", new StringElement(typeStr));
-                description.Add("nested", new DescriptionElement(sub));
+                description.Add("type", new StringElement(typeStr));
+                description.Add("from", new DescriptionElement(sub));
 
                 return description;
             });
@@ -107,6 +107,27 @@ namespace Pontifex.Factory
                 if (description.Get("type").EvaluateAsString(out var transportTypeString))
                 {
                     transportType = Enum.Parse<TransportType>(transportTypeString, true);
+                }
+
+                if (transportName == "convert")
+                {
+                    if (transportType == null)
+                    {
+                        throw new ArgumentException("Description must have a 'type' element with a string value when using 'convert'.");
+                    }
+                    if (description.Get("from").EvaluateAsDescription(out var fromDescription))
+                    {
+                        var fromTransport = Build<ITransport>(fromDescription);
+                        var converted = _convertersGraph.TryConvert(fromTransport, transportType.Value, MemoryRental, Logger);
+                        if (converted == null)
+                        {
+                            throw new InvalidOperationException($"No converter registered for transport type '{fromTransport.Type}' to '{transportType}'.");
+                        }
+
+                        return converted as TTransport ?? 
+                               throw new InvalidOperationException($"Converter returned null or incompatible type.");
+                    }
+                    throw new ArgumentException("Description must have a 'from' element with a description value when using 'convert'.");
                 }
 
                 if (transportType != null)
