@@ -1,6 +1,7 @@
+using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Converters;
+using Pontifex.Factory;
 using Scriba;
 
 namespace Pontifex.Converters
@@ -9,6 +10,8 @@ namespace Pontifex.Converters
     {
         ITransport? TryConvert(ITransport transport, TransportType targetType, 
             IMemoryRental? memoryRental = null, ILogger? logger = null);
+
+        bool HasPath(TransportType from, TransportType to, out int length);
     }
     
     public class ConvertersGraph : IConvertersGraph
@@ -16,6 +19,8 @@ namespace Pontifex.Converters
         public static readonly IConvertersGraph Default = new ConvertersGraph(
             new NoAckRawReliableToNoAckRawUnreliableConverter(),
             new NoAckRawUnreliableToNoAckRawReliableConverter());
+        
+        public static readonly IConvertersGraph Empty = new ConvertersGraph();
 
         private readonly List<ITransportConverter>?[][] _convertersMap;
         
@@ -66,7 +71,7 @@ namespace Pontifex.Converters
             }
             
             var list = _convertersMap[(int)transport.Type][(int)targetType];
-            if (list == null || list.Count == 0)
+            if (list == null)
             {
                 return null;
             }
@@ -81,6 +86,19 @@ namespace Pontifex.Converters
             }
 
             return res;
+        }
+
+        public bool HasPath(TransportType from, TransportType to, out int length)
+        {
+            var list = _convertersMap[(int)from][(int)to];
+            if (list == null)
+            {
+                length = 0;
+                return false;
+            }
+
+            length = list.Count;
+            return true;
         }
     }
 }
