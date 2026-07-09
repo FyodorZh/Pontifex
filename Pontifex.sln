@@ -2,7 +2,7 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex", "Pontifex\Pontifex.csproj", "{21F53A44-ED28-4129-A9EE-B2CD5C4E3768}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Test", "Pontifex.Test\Pontifex.Test.csproj", "{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.TestUI", "Pontifex.TestUI\Pontifex.TestUI.csproj", "{3915CF5A-A0C7-4C6F-AC2D-0293E3272CCB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Protocol.Reconnectable", "Protocols\Pontifex.Protocol.Reconnectable\Pontifex.Protocol.Reconnectable.csproj", "{2EFAF53F-1344-4C4B-80F2-907E1DB94575}"
 EndProject
