@@ -30,10 +30,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.Udp", "T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.NetSockets", "Transports\Pontifex.Transport.NetSockets\Pontifex.Transport.NetSockets.csproj", "{78EF71EE-CB28-4EAA-B334-E4540BFE95DB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transports", "Abstractions\Pontifex.Transports\Pontifex.Transports.csproj", "{32DF5417-17DA-412F-8AD4-DA5EAEDF41EF}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.Adapters", "Transports\Pontifex.Transport.Adapters\Pontifex.Transport.Adapters.csproj", "{6601C4F0-1690-47A2-A58A-B86D936DD520}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -88,14 +84,6 @@ Global
 		{78EF71EE-CB28-4EAA-B334-E4540BFE95DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{78EF71EE-CB28-4EAA-B334-E4540BFE95DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{78EF71EE-CB28-4EAA-B334-E4540BFE95DB}.Release|Any CPU.Build.0 = Release|Any CPU
-		{32DF5417-17DA-412F-8AD4-DA5EAEDF41EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{32DF5417-17DA-412F-8AD4-DA5EAEDF41EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{32DF5417-17DA-412F-8AD4-DA5EAEDF41EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{32DF5417-17DA-412F-8AD4-DA5EAEDF41EF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6601C4F0-1690-47A2-A58A-B86D936DD520}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6601C4F0-1690-47A2-A58A-B86D936DD520}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6601C4F0-1690-47A2-A58A-B86D936DD520}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6601C4F0-1690-47A2-A58A-B86D936DD520}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{45E4CA13-158C-4321-B6D1-3D7F8720F8D3} = {E81BF466-7B6C-416B-9264-CDE25C96DC3F}
@@ -107,7 +95,5 @@ Global
 		{7B521253-D68D-40C5-BC3E-EC2C88756156} = {AECBB42A-8A85-4F29-BB0B-104EABCCDF23}
 		{069B1B9D-D49C-47CC-8044-86A1CC74E467} = {E81BF466-7B6C-416B-9264-CDE25C96DC3F}
 		{78EF71EE-CB28-4EAA-B334-E4540BFE95DB} = {E81BF466-7B6C-416B-9264-CDE25C96DC3F}
-		{32DF5417-17DA-412F-8AD4-DA5EAEDF41EF} = {E81BF466-7B6C-416B-9264-CDE25C96DC3F}
-		{6601C4F0-1690-47A2-A58A-B86D936DD520} = {E81BF466-7B6C-416B-9264-CDE25C96DC3F}
 	EndGlobalSection
 EndGlobal

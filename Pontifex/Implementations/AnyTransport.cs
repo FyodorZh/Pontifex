@@ -2,12 +2,12 @@
 using Actuarius.Memory;
 using Scriba;
 
-namespace Pontifex.Transports.Core
+namespace Pontifex
 {
     /// <summary>
     /// Base class for all transport implementations. Provides common functionality for starting, stopping, and managing the transport's state.
     /// </summary>
-    public abstract class AbstractTransport : ITransport
+    public abstract class AnyTransport : ITransport
     {
         protected readonly object _locker = new ();
 
@@ -64,7 +64,7 @@ namespace Pontifex.Transports.Core
             }
         }
 
-        protected AbstractTransport(string typeName, ILogger logger, IMemoryRental memory)
+        protected AnyTransport(string typeName, ILogger logger, IMemoryRental memory)
         {
             Name = typeName;
             Log = logger.Wrap();

@@ -2,7 +2,6 @@
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Ack.Raw;
-using Pontifex.Transports.Core;
 using Scriba;
 
 namespace Pontifex.Protocols.Reconnectable.AckReliableRaw

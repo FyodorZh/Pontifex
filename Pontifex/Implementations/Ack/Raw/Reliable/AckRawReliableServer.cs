@@ -1,11 +1,10 @@
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Transports.Core
+namespace Pontifex.Ack.Raw
 {
-    public abstract class AckRawReliableServer : AbstractTransport, IAckRawReliableServer
+    public abstract class AckRawReliableServer : AnyTransport, IAckRawReliableServer
     {
         private bool _isInitialized;
 

@@ -1,11 +1,9 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.Concurrent;
-using Pontifex.Ack;
-using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 
-namespace Pontifex.Handlers
+namespace Pontifex.Ack.Raw
 {
     /// <summary>
     /// Враппер над клиентским хендлером. Делает взаимодействие однопоточным из подконтрольного треда,

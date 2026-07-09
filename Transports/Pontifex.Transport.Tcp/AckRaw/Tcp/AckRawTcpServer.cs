@@ -7,7 +7,6 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Ack.Raw;
-using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;

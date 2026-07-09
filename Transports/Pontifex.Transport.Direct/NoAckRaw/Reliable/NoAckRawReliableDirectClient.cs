@@ -1,13 +1,12 @@
 using System;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
-using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.NoAck.Raw.Reliable.Direct
 {
-    public sealed class NoAckRawReliableDirectClient : AbstractTransport, INoAckRawReliableClient
+    public sealed class NoAckRawReliableDirectClient : AnyTransport, INoAckRawReliableClient
     {
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;

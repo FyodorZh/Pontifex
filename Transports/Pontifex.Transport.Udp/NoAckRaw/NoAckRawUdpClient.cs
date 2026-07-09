@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Transports.Udp;
 using Pontifex.Utils;
@@ -12,7 +11,7 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.Raw.Udp
 {
-    internal sealed class NoAckRawUdpClient : AbstractTransport, INoAckRawUnreliableClient
+    internal sealed class NoAckRawUdpClient : AnyTransport, INoAckRawUnreliableClient
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;

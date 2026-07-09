@@ -1,11 +1,10 @@
 ﻿using Actuarius.Memory;
-using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Transports.Core
+namespace Pontifex.Ack.Raw
 {
-    public abstract class AckRawReliableClient : AbstractTransport, IAckRawReliableClient
+    public abstract class AckRawReliableClient : AnyTransport, IAckRawReliableClient
     {
         private enum State
         {

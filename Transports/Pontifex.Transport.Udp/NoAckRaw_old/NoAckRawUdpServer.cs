@@ -6,7 +6,6 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.NoAck.Raw_old;
-using Pontifex.Transports.Core;
 using Pontifex.Transports.NetSockets;
 using Pontifex.Utils;
 using Scriba;
@@ -14,7 +13,7 @@ using Transport.Utils;
 
 namespace Pontifex.Transports.Udp.NoAckRaw_old
 {
-    internal sealed class NoAckRawUdpServer : AbstractTransport, INoAckRawServer, INoAckRawServerSideEndpoint
+    internal sealed class NoAckRawUdpServer : AnyTransport, INoAckRawServer, INoAckRawServerSideEndpoint
     {
         private IPEndPoint mLocalEndPoint;
 

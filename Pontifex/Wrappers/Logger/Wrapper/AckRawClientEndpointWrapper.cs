@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 
 namespace Pontifex.Ack.Raw

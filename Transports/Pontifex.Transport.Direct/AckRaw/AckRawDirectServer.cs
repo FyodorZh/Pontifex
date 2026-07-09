@@ -1,6 +1,5 @@
 using Actuarius.Memory;
 using Pontifex.Endpoints;
-using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
 

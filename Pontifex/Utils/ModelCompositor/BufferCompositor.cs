@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading;
 using Actuarius.Memory;
-using Scriba;
 
 namespace Pontifex.Utils
 {

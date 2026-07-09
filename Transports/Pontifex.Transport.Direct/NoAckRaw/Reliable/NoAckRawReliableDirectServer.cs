@@ -2,13 +2,12 @@ using System;
 using System.Collections.Concurrent;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
-using Pontifex.Transports.Core;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.NoAck.Raw.Reliable.Direct
 {
-    public sealed class NoAckRawReliableDirectServer : AbstractTransport, INoAckRawReliableServer
+    public sealed class NoAckRawReliableDirectServer : AnyTransport, INoAckRawReliableServer
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new ConcurrentDictionary<IEndPoint, Channel>();

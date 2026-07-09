@@ -1,7 +1,6 @@
 ﻿using System;
 using Actuarius.Memory;
 using Pontifex.Ack.Raw;
-using Pontifex.Transports.Core;
 using Scriba;
 
 namespace Pontifex.Protocols

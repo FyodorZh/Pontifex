@@ -17,7 +17,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\Abstractions\Pontifex.Transports\Pontifex.Transports.csproj" />
+      <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
     </ItemGroup>
 
 
