@@ -5,12 +5,12 @@ using Actuarius.Memory;
 using Operarius;
 using Pontifex.NoAck.RR;
 using Pontifex.Transports.NetSockets;
-using Pontifex.Transports.Udp.NoAckRaw_old;
+using Pontifex.Transports.Udp;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
-namespace Pontifex.Transports.Udp
+namespace Pontifex.NoAck.RR.Udp
 {
     internal sealed class NoAckRRUdpClient : AnyTransport, INoAckUnreliableRRClient, INoAckUnreliableRRServerEndpoint
     {
@@ -24,12 +24,12 @@ namespace Pontifex.Transports.Udp
 
         private Socket? mSocket;
 
-        private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim(UdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
+        private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim(RRUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
         public override TransportType Type => TransportType.NoAckRRUnreliable;
         
         public NoAckRRUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
-            :base(UdpInfo.TransportName + "_rr", logger, memory)
+            :base(RRUdpInfo.TransportName + "_rr", logger, memory)
         {
             mRemoteEndPoint = new IPEndPoint(ipAddress, port);
             mManagedRemoteEndPoint = new IpEndPoint(mRemoteEndPoint);
@@ -49,7 +49,7 @@ namespace Pontifex.Transports.Udp
 
         public IEndPoint EndPoint => mManagedRemoteEndPoint;
 
-        public int MessageMaxByteSize => UdpInfo.MessageMaxByteSize;
+        public int MessageMaxByteSize => RRUdpInfo.MessageMaxByteSize;
 
         protected override bool TryStart()
         {
@@ -93,7 +93,7 @@ namespace Pontifex.Transports.Udp
                 }
 
                 Log.i("UDP.Sender from local='{0}' to remote='{1}'", localEndPoint, mRemoteEndPoint);
-                mSender = new UdpSyncSender(mSocket, mRemoteEndPoint, UdpInfo.MessageMaxByteSize,
+                mSender = new UdpSyncSender(mSocket, mRemoteEndPoint, RRUdpInfo.MessageMaxByteSize,
                     Memory.ByteArraysPool,
                     (ex) =>
                     {

@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Net;
 using Pontifex.Factory;
 using Pontifex.Transports.NetSockets;
-using Pontifex.Transports.Udp.NoAckRaw_old;
+using Pontifex.Transports.Udp;
 
-namespace Pontifex.Transports.Udp
+namespace Pontifex.NoAck.RR.Udp
 {
     public class NoAckRRUdpConstructor : ITransportConstructor
     {
         public TransportType Type => TransportType.NoAckRRUnreliable;
-        public string Name => UdpInfo.TransportName + "_rr";
+        public string Name => RRUdpInfo.TransportName + "_rr";
 
         public ITransport ConstructServer(ITransportBuilder builder, IDescription description)
         {
@@ -60,7 +60,7 @@ namespace Pontifex.Transports.Udp
 
         public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()
         {
-            yield return (UdpInfo.TransportName + "_rr", (uriBody, factory) =>
+            yield return (RRUdpInfo.TransportName + "_rr", (uriBody, factory) =>
             {
                 if (!UrlStringParser.TryParseAddress(uriBody, out var ip, out var port))
                     return null;
@@ -72,7 +72,7 @@ namespace Pontifex.Transports.Udp
                 return desc;
             });
 
-            yield return (UdpInfo.TransportName, (uriBody, factory) =>
+            yield return (RRUdpInfo.TransportName, (uriBody, factory) =>
             {
                 if (!UrlStringParser.TryParseAddress(uriBody, out var ip, out var port))
                     return null;

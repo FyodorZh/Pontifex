@@ -1,6 +1,6 @@
-﻿namespace Pontifex.Transports.Udp.NoAckRaw_old
+﻿namespace Pontifex.Transports.Udp
 {
-    internal static class UdpInfo
+    internal static class RRUdpInfo
     {
         public const string TransportName = "udp";
         public const int MessageMaxByteSize = 490;

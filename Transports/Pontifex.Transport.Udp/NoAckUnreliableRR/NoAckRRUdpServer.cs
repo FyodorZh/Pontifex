@@ -6,11 +6,11 @@ using Actuarius.Memory;
 using Operarius;
 using Pontifex.NoAck.RR;
 using Pontifex.Transports.NetSockets;
-using Pontifex.Transports.Udp.NoAckRaw_old;
+using Pontifex.Transports.Udp;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Transports.Udp
+namespace Pontifex.NoAck.RR.Udp
 {
     internal sealed class NoAckRRUdpServer : AnyTransport, INoAckUnreliableRRServer
     {
@@ -28,7 +28,7 @@ namespace Pontifex.Transports.Udp
         public override TransportType Type => TransportType.NoAckRRUnreliable;
         
         public NoAckRRUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
-            : base(UdpInfo.TransportName + "_rr", logger, memory)
+            : base(RRUdpInfo.TransportName + "_rr", logger, memory)
         {
             mLocalEndPoint = new IPEndPoint(ipAddress, port);
         }
@@ -51,7 +51,7 @@ namespace Pontifex.Transports.Udp
             return (handler != null!);
         }
 
-        public int MessageMaxByteSize => UdpInfo.MessageMaxByteSize;
+        public int MessageMaxByteSize => RRUdpInfo.MessageMaxByteSize;
 
         protected override bool TryStart()
         {
@@ -94,7 +94,7 @@ namespace Pontifex.Transports.Udp
 
                 Log.i("UDP.Sender from local={0}", mLocalEndPoint);
 
-                mSender = new UdpAsyncSender(mSocket, UdpInfo.MessageMaxByteSize, Memory.ByteArraysPool,
+                mSender = new UdpAsyncSender(mSocket, RRUdpInfo.MessageMaxByteSize, Memory.ByteArraysPool,
                     _ =>
                     {
                         Log.e("UDP.Sender Exception received. Continue working!!!");
