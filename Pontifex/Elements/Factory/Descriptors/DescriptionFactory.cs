@@ -23,7 +23,7 @@ namespace Pontifex.Factory
         
         public void RegisterUriParser(string typeName, Func<string, IDescriptionUriFactory, Description?> parser)
         {
-            _uriParsers.Add(typeName, parser);
+            _uriParsers[typeName] = parser;
         }
 
         public Description ParseTransport(string uri)

@@ -10,7 +10,7 @@ namespace Pontifex.Factory
     {
         IMemoryRental MemoryRental { get; }
         ILogger Logger { get; }
-        ITransport Build(IDescription description);
+        TTransport Build<TTransport>(IDescription description) where TTransport : class, ITransport;
     }
 
     public class TransportBuilder
@@ -59,18 +59,23 @@ namespace Pontifex.Factory
         {
             _serverConstructors.Add((constructor.Type, constructor.Name), constructor.ConstructServer);
             _clientConstructors.Add((constructor.Type, constructor.Name), constructor.ConstructClient);
+
+            foreach (var (name, parser) in constructor.GetUriParsers())
+            {
+                _descriptionFactory.RegisterUriParser(name, parser);
+            }
         }
         
         public ITransport BuildServer(IDescription description, IMemoryRental memoryRental, ILogger logger)
         {
             Builder builder = new Builder(memoryRental, logger, _serverConstructors, _convertersGraph);   
-            return builder.Build(description);
+            return builder.Build<ITransport>(description);
         }
         
         public ITransport BuildClient(IDescription description, IMemoryRental memoryRental, ILogger logger)
         {
             Builder builder = new Builder(memoryRental, logger, _clientConstructors, _convertersGraph);   
-            return builder.Build(description);
+            return builder.Build<ITransport>(description);
         }
 
         private class Builder : ITransportBuilder
@@ -91,7 +96,7 @@ namespace Pontifex.Factory
                 _convertersGraph = convertersGraph;
             }
 
-            public ITransport Build(IDescription description)
+            public TTransport Build<TTransport>(IDescription description) where TTransport : class, ITransport
             {
                 if (!description.Get("name").EvaluateAsString(out var transportName))
                 {
@@ -108,8 +113,8 @@ namespace Pontifex.Factory
                 {
                     if (_constructors.TryGetValue((transportType.Value, transportName), out var constructor))
                     {
-                        return constructor(this, description) ?? 
-                               throw new InvalidOperationException($"Constructor for transport '{transportName}:{transportType}' returned null.");
+                        return constructor(this, description) as TTransport ?? 
+                               throw new InvalidOperationException($"Constructor for transport '{transportName}:{transportType}' returned null or incompatible type.");
                     }
                     throw new InvalidOperationException($"No constructor registered for transport type '{transportName}:{transportType}'.");
                 }
@@ -129,8 +134,8 @@ namespace Pontifex.Factory
                 {
                     if (_constructors.TryGetValue((transportType.Value, transportName), out var constructor))
                     {
-                        return constructor(this, description) ?? 
-                               throw new InvalidOperationException($"Constructor for transport type '{transportName}:{transportType}' returned null.");
+                        return constructor(this, description) as TTransport ?? 
+                               throw new InvalidOperationException($"Constructor for transport type '{transportName}:{transportType}' returned null or incompatible type.");
                     }
                 }
                 throw new InvalidOperationException($"Failed to find transport '{transportName}'.");
