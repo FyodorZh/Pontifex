@@ -1,6 +1,10 @@
+using Actuarius.Memory;
+using Scriba;
 using System.Collections.Concurrent;
 using Pontifex.Ack.Raw;
 using Pontifex.Api;
+using Pontifex.Api.Client;
+using Pontifex.Api.Server;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 
@@ -16,10 +20,6 @@ public class InvariantCheckerTests
         _stack = stack;
     }
 
-    /// <summary>
-    /// Verifies that after a single client connects and performs a graceful shutdown, the client receives <see cref="UserIntention"/>
-    /// and the server receives <see cref="GracefulRemoteIntention"/> as stop reasons.
-    /// </summary>
     [Test]
     [Category("Fast")]
     public async Task ConnectDisconnect()
@@ -28,49 +28,25 @@ public class InvariantCheckerTests
         var logger = TransportRegistry.GetLogger(true);
         var factory = _stack.GetTransportFactory();
 
-        var clientTransport = (IAckRawReliableClient)factory.BuildClient();
         var serverTransport = (IAckRawReliableServer)factory.BuildServer();
-
-        var clientApi = new InvariantCheckerApiClient();
         var serverApi = new InvariantCheckerApiServer();
 
-        var clientHandler = new ClientSideApi(clientApi, memory, logger);
-        var serverInstance = new TestServerSideApiInstance<InvariantCheckerApiServer>(serverApi, memory, logger);
-        var serverFactory = new ServerSideApiFactory<InvariantCheckerApiServer>(_ => serverInstance);
-
-        Assert.That(clientTransport.Init(clientHandler), Is.True,
-            $"{_stack.Id}: ClientTransport.Init failed");
-        Assert.That(serverTransport.Init(serverFactory), Is.True,
-            $"{_stack.Id}: ServerTransport.Init failed");
-
-        var connectedTcs = new TaskCompletionSource();
         var serverConnectedTcs = new TaskCompletionSource();
-        var clientDisconnectedTcs = new TaskCompletionSource<StopReason>();
         var serverDisconnectedTcs = new TaskCompletionSource<StopReason>();
-        var clientStoppedTcs = new TaskCompletionSource<StopReason>();
         var serverStoppedTcs = new TaskCompletionSource<StopReason>();
 
-        clientHandler.Connected += _ => connectedTcs.TrySetResult();
-        serverInstance.ApiStarted += _ => serverConnectedTcs.TrySetResult();
-        clientApi.Disconnected += reason => clientDisconnectedTcs.TrySetResult(reason);
         serverApi.Disconnected += reason => serverDisconnectedTcs.TrySetResult(reason);
 
+        var serverInstance = new TestServerSideApiInstance<InvariantCheckerApiServer>(serverApi, memory, logger);
+        serverInstance.ApiStarted += _ => serverConnectedTcs.TrySetResult();
+        var serverFactory = new ServerSideApiFactory<InvariantCheckerApiServer>(_ => serverInstance);
+
+        Assert.That(serverTransport.Init(serverFactory), Is.True, $"{_stack.Id}: ServerTransport.Init failed");
         Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
             $"{_stack.Id}: ServerTransport.Start failed");
-        Assert.That(clientTransport.Start(reason => clientStoppedTcs.TrySetResult(reason)), Is.True,
-            $"{_stack.Id}: ClientTransport.Start failed");
 
-        try
-        {
-            await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        }
-        catch (TimeoutException)
-        {
-            throw new Exception(
-                $"'{_stack.Id}': Client did not connect within 10s. " +
-                $"ClientTransport.IsStarted={clientTransport.IsStarted}, " +
-                $"ServerTransport.IsStarted={serverTransport.IsStarted}");
-        }
+        var (clientTransport, clientApi, clientDisconnectedTcs, clientStoppedTcs) =
+            await ConnectClientAsync(factory, memory, logger);
 
         try
         {
@@ -78,73 +54,31 @@ public class InvariantCheckerTests
         }
         catch (TimeoutException)
         {
-            throw new Exception(
-                $"'{_stack.Id}': Server did not recognise connection within 10s. " +
-                $"ServerInstance.ApiStarted was not invoked");
+            throw new Exception($"'{_stack.Id}': Server did not recognise connection within 10s.");
         }
 
         clientApi.GracefulShutdown(TimeSpan.FromMilliseconds(100));
 
-        StopReason clientReason;
-        try
-        {
-            clientReason = await clientDisconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        }
-        catch (TimeoutException)
-        {
-            throw new Exception($"'{_stack.Id}': Client API did not disconnect within 5s");
-        }
-
-        StopReason serverReason;
-        try
-        {
-            serverReason = await serverDisconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        }
-        catch (TimeoutException)
-        {
-            throw new Exception($"'{_stack.Id}': Server API did not disconnect within 5s");
-        }
+        var clientReason = await clientDisconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var serverReason = await serverDisconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(clientReason, Is.TypeOf<UserIntention>(),
-            $"'{_stack.Id}': Client API should stop with UserIntention after its own graceful shutdown, got {clientReason}");
+            $"{_stack.Id}: Client should stop with UserIntention, got {clientReason}");
         Assert.That(serverReason, Is.TypeOf<GracefulRemoteIntention>(),
-            $"'{_stack.Id}': Server API should stop with GracefulRemoteIntention after remote client disconnect, got {serverReason}");
+            $"{_stack.Id}: Server should stop with GracefulRemoteIntention, got {serverReason}");
 
-        StopReason clientStopReason;
-        try
-        {
-            clientStopReason = await clientStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        }
-        catch (TimeoutException)
-        {
-            throw new Exception($"'{_stack.Id}': Client transport did not stop within 5s");
-        }
-
+        var clientStopReason = await clientStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.That(clientStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
-            $"'{_stack.Id}': Client transport must not stop with an error, got {clientStopReason}");
+            $"{_stack.Id}: Client transport must not stop with an error, got {clientStopReason}");
 
         serverTransport.Stop(new UserIntention("test", "complete"));
-
-        StopReason serverStopReason;
-        try
-        {
-            serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        }
-        catch (TimeoutException)
-        {
-            throw new Exception($"'{_stack.Id}': Server transport did not stop within 5s");
-        }
-
+        var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
-            $"'{_stack.Id}': Server transport must not stop with an error, got {serverStopReason}");
+            $"{_stack.Id}: Server transport must not stop with an error, got {serverStopReason}");
     }
 
-    /// <summary>
-    /// Verifies that 10,000 clients can connect to a single server concurrently, each performs a graceful shutdown,
-    /// all connections are accepted, and the server stops without errors.
-    /// </summary>
     [Test]
-    public async Task ConnectDisconnectManyClients()
+    public async Task ConnectDisconnectMany()
     {
         const int clientCount = 10000;
         var memory = TransportRegistry.Memory;
@@ -153,6 +87,7 @@ public class InvariantCheckerTests
 
         var serverTransport = (IAckRawReliableServer)factory.BuildServer();
         var connectionCount = 0;
+        var serverStoppedTcs = new TaskCompletionSource<StopReason>();
 
         var serverFactory = new ServerSideApiFactory<InvariantCheckerApiServer>(_ =>
         {
@@ -164,8 +99,6 @@ public class InvariantCheckerTests
 
         Assert.That(serverTransport.Init(serverFactory), Is.True,
             $"{_stack.Id}: ServerTransport.Init failed");
-
-        var serverStoppedTcs = new TaskCompletionSource<StopReason>();
         Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
             $"{_stack.Id}: ServerTransport.Start failed");
 
@@ -176,103 +109,306 @@ public class InvariantCheckerTests
             new ParallelOptions { MaxDegreeOfParallelism = 200 },
             async (_, ct) =>
             {
-                string? error = null;
-                try
-                {
-                    var clientTransport = (IAckRawReliableClient)factory.BuildClient();
-                    var clientApi = new InvariantCheckerApiClient();
-                    var clientHandler = new ClientSideApi(clientApi, memory, logger);
-
-                    if (!clientTransport.Init(clientHandler))
-                    {
-                        error = $"{_stack.Id}: ClientTransport.Init failed";
-                        return;
-                    }
-
-                    var connectedTcs = new TaskCompletionSource();
-                    var disconnectedTcs = new TaskCompletionSource<StopReason>();
-                    var stoppedTcs = new TaskCompletionSource<StopReason>();
-
-                    clientHandler.Connected += _ => connectedTcs.TrySetResult();
-                    clientApi.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
-
-                    if (!clientTransport.Start(reason => stoppedTcs.TrySetResult(reason)))
-                    {
-                        error = $"{_stack.Id}: ClientTransport.Start failed";
-                        return;
-                    }
-
-                    var connectTimeout = TimeSpan.FromSeconds(30);
-                    var completedTask = await Task.WhenAny(
-                        connectedTcs.Task,
-                        disconnectedTcs.Task,
-                        stoppedTcs.Task
-                    ).WaitAsync(connectTimeout, ct);
-
-                    if (completedTask == disconnectedTcs.Task)
-                    {
-                        var failReason = await disconnectedTcs.Task;
-                        error = $"{_stack.Id}: Connection failed: {failReason}";
-                        return;
-                    }
-
-                    if (completedTask == stoppedTcs.Task)
-                    {
-                        var failReason = await stoppedTcs.Task;
-                        error = $"{_stack.Id}: Transport stopped: {failReason}";
-                        return;
-                    }
-
-                    await connectedTcs.Task;
-
-                    clientApi.GracefulShutdown(TimeSpan.FromMilliseconds(100));
-
-                    var reason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
-                    if (reason is not UserIntention)
-                    {
-                        error = $"{_stack.Id}: Expected UserIntention, got {reason.GetType().Name}: {reason}";
-                        return;
-                    }
-
-                    await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                }
-                catch (TimeoutException ex)
-                {
-                    error = $"{_stack.Id}: {ex.Message}";
-                }
-                catch (Exception ex)
-                {
-                    error = $"{_stack.Id}: {ex.GetType().Name}: {ex.Message}";
-                }
-                finally
-                {
-                    if (error != null)
-                        errors.Add(error);
-                }
+                var error = await TryRunClientSessionAsync(factory, memory, logger, ct);
+                if (error != null)
+                    errors.Add(error);
             });
 
         Assert.That(errors, Is.Empty,
             $"{_stack.Id}: {errors.Count}/{clientCount} client iterations failed. First error: {errors.FirstOrDefault()}");
-
         Assert.That(connectionCount, Is.EqualTo(clientCount),
             $"{_stack.Id}: Server should have accepted {clientCount} connections, got {connectionCount}");
 
         serverTransport.Stop(new UserIntention("test", "complete"));
+        var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
+            $"{_stack.Id}: Server transport must not stop with an error, got {serverStopReason}");
+    }
 
-        StopReason serverStopReason;
+    /// <summary>
+    /// Verifies that after a client connects, the server can send a kick message and gracefully disconnect;
+    /// the client receives the kick message and detects <see cref="GracefulRemoteIntention"/> as the stop reason.
+    /// </summary>
+    [Test]
+    [Category("Fast")]
+    public async Task ConnectReceiveKick()
+    {
+        var memory = TransportRegistry.Memory;
+        var logger = TransportRegistry.GetLogger(true);
+        var factory = _stack.GetTransportFactory();
+
+        var serverTransport = (IAckRawReliableServer)factory.BuildServer();
+        var serverApi = new InvariantCheckerApiServer();
+
+        var serverConnectedTcs = new TaskCompletionSource();
+        var serverStoppedTcs = new TaskCompletionSource<StopReason>();
+
+        var serverInstance = new TestServerSideApiInstance<InvariantCheckerApiServer>(serverApi, memory, logger);
+        serverInstance.ApiStarted += _ => serverConnectedTcs.TrySetResult();
+        var serverFactory = new ServerSideApiFactory<InvariantCheckerApiServer>(_ => serverInstance);
+
+        Assert.That(serverTransport.Init(serverFactory), Is.True, $"{_stack.Id}: ServerTransport.Init failed");
+        Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
+            $"{_stack.Id}: ServerTransport.Start failed");
+
+        var (clientTransport, clientApi, clientDisconnectedTcs, clientStoppedTcs) =
+            await ConnectClientAsync(factory, memory, logger);
+
+        _ = Task.Run(async () =>
+        {
+            await serverConnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await Task.Delay(1000);
+            serverApi.OnKick.Send(new KickMessage());
+            await Task.Delay(200);
+            serverApi.GracefulShutdown(TimeSpan.FromMilliseconds(100));
+        });
+
+        var kickReceivedTcs = new TaskCompletionSource();
+        clientApi.OnKick.SetProcessor(_ => kickReceivedTcs.TrySetResult());
+
+        await kickReceivedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var clientReason = await clientDisconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.That(clientReason, Is.TypeOf<GracefulRemoteIntention>(),
+            $"{_stack.Id}: Client should stop with GracefulRemoteIntention after server kick, got {clientReason}");
+
+        var clientStopReason = await clientStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.That(clientStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
+            $"{_stack.Id}: Client transport must not stop with an error, got {clientStopReason}");
+
+        serverTransport.Stop(new UserIntention("test", "complete"));
+        var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
+            $"{_stack.Id}: Server transport must not stop with an error, got {serverStopReason}");
+    }
+
+    /// <summary>
+    /// Verifies that 10,000 clients can each connect, receive a server-initiated kick message,
+    /// and gracefully disconnect with <see cref="GracefulRemoteIntention"/>, all without errors.
+    /// </summary>
+    [Test]
+    public async Task ConnectReceiveKickMany()
+    {
+        const int clientCount = 10000;
+        var memory = TransportRegistry.Memory;
+        var logger = TransportRegistry.GetLogger(true);
+        var factory = _stack.GetTransportFactory();
+
+        var serverTransport = (IAckRawReliableServer)factory.BuildServer();
+        var connectionCount = 0;
+        var serverStoppedTcs = new TaskCompletionSource<StopReason>();
+
+        var serverFactory = new ServerSideApiFactory<InvariantCheckerApiServer>(factoryArg =>
+        {
+            var api = new InvariantCheckerApiServer();
+            var instance = new TestServerSideApiInstance<InvariantCheckerApiServer>(api, memory, logger);
+            instance.ApiStarted += _ =>
+            {
+                Interlocked.Increment(ref connectionCount);
+                var jitterMs = Random.Shared.Next(0, 200);
+                Task.Run(async () =>
+                {
+                    await Task.Delay(1000 + jitterMs);
+                    api.OnKick.Send(new KickMessage());
+                    await Task.Delay(200);
+                    api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
+                });
+            };
+            return instance;
+        });
+
+        Assert.That(serverTransport.Init(serverFactory), Is.True,
+            $"{_stack.Id}: ServerTransport.Init failed");
+        Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
+            $"{_stack.Id}: ServerTransport.Start failed");
+
+        var errors = new ConcurrentBag<string>();
+
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, clientCount),
+            new ParallelOptions { MaxDegreeOfParallelism = 200 },
+            async (_, ct) =>
+            {
+                var error = await TryRunKickClientSessionAsync(factory, memory, logger, ct);
+                if (error != null)
+                    errors.Add(error);
+            });
+
+        Assert.That(errors, Is.Empty,
+            $"{_stack.Id}: {errors.Count}/{clientCount} client iterations failed. First error: {errors.FirstOrDefault()}");
+        Assert.That(connectionCount, Is.EqualTo(clientCount),
+            $"{_stack.Id}: Server should have accepted {clientCount} connections, got {connectionCount}");
+
+        serverTransport.Stop(new UserIntention("test", "complete"));
+        var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
+            $"{_stack.Id}: Server transport must not stop with an error, got {serverStopReason}");
+    }
+
+    private async Task<(IAckRawReliableClient Transport, InvariantCheckerApiClient Api,
+        TaskCompletionSource<StopReason> DisconnectedTcs, TaskCompletionSource<StopReason> StoppedTcs)>
+        ConnectClientAsync(TransportFactory factory, IMemoryRental memory, ILogger logger)
+    {
+        var transport = (IAckRawReliableClient)factory.BuildClient();
+        var api = new InvariantCheckerApiClient();
+        var handler = new ClientSideApi(api, memory, logger);
+
+        var connectedTcs = new TaskCompletionSource();
+        var disconnectedTcs = new TaskCompletionSource<StopReason>();
+        var stoppedTcs = new TaskCompletionSource<StopReason>();
+
+        handler.Connected += _ => connectedTcs.TrySetResult();
+        api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
+
+        Assert.That(transport.Init(handler), Is.True, $"{_stack.Id}: ClientTransport.Init failed");
+        Assert.That(transport.Start(reason => stoppedTcs.TrySetResult(reason)), Is.True,
+            $"{_stack.Id}: ClientTransport.Start failed");
+
         try
         {
-            serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
         }
         catch (TimeoutException)
         {
-            throw new Exception($"'{_stack.Id}': Server transport did not stop within 5s");
+            throw new Exception($"'{_stack.Id}': Client did not connect within 10s.");
         }
 
-        Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
-            $"'{_stack.Id}': Server transport must not stop with an error, got {serverStopReason}");
+        return (transport, api, disconnectedTcs, stoppedTcs);
+    }
+
+    private async Task<string?> TryRunClientSessionAsync(
+        TransportFactory factory, IMemoryRental memory, ILogger logger,
+        CancellationToken ct)
+    {
+        try
+        {
+            var transport = (IAckRawReliableClient)factory.BuildClient();
+            var api = new InvariantCheckerApiClient();
+            var handler = new ClientSideApi(api, memory, logger);
+
+            var connectedTcs = new TaskCompletionSource();
+            var disconnectedTcs = new TaskCompletionSource<StopReason>();
+            var stoppedTcs = new TaskCompletionSource<StopReason>();
+
+            handler.Connected += _ => connectedTcs.TrySetResult();
+            api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
+
+            if (!transport.Init(handler))
+                return $"{_stack.Id}: ClientTransport.Init failed";
+
+            if (!transport.Start(reason => stoppedTcs.TrySetResult(reason)))
+                return $"{_stack.Id}: ClientTransport.Start failed";
+
+            var completedTask = await Task.WhenAny(
+                connectedTcs.Task,
+                disconnectedTcs.Task,
+                stoppedTcs.Task
+            ).WaitAsync(TimeSpan.FromSeconds(30), ct);
+
+            if (completedTask == disconnectedTcs.Task)
+            {
+                var failReason = await disconnectedTcs.Task;
+                return $"{_stack.Id}: Connection failed: {failReason}";
+            }
+
+            if (completedTask == stoppedTcs.Task)
+            {
+                var failReason = await stoppedTcs.Task;
+                return $"{_stack.Id}: Transport stopped: {failReason}";
+            }
+
+            await connectedTcs.Task;
+
+            api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
+
+            var reason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
+            if (reason is not UserIntention)
+                return $"{_stack.Id}: Expected UserIntention, got {reason.GetType().Name}: {reason}";
+
+            await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
+
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (TimeoutException ex)
+        {
+            return $"{_stack.Id}: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            return $"{_stack.Id}: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
+
+    private async Task<string?> TryRunKickClientSessionAsync(
+        TransportFactory factory, IMemoryRental memory, ILogger logger,
+        CancellationToken ct)
+    {
+        try
+        {
+            var transport = (IAckRawReliableClient)factory.BuildClient();
+            var api = new InvariantCheckerApiClient();
+            var handler = new ClientSideApi(api, memory, logger);
+
+            var connectedTcs = new TaskCompletionSource();
+            var kickReceivedTcs = new TaskCompletionSource();
+            var disconnectedTcs = new TaskCompletionSource<StopReason>();
+            var stoppedTcs = new TaskCompletionSource<StopReason>();
+
+            handler.Connected += _ => connectedTcs.TrySetResult();
+            api.OnKick.SetProcessor(_ => kickReceivedTcs.TrySetResult());
+            api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
+
+            if (!transport.Init(handler))
+                return $"{_stack.Id}: ClientTransport.Init failed";
+
+            if (!transport.Start(reason => stoppedTcs.TrySetResult(reason)))
+                return $"{_stack.Id}: ClientTransport.Start failed";
+
+            var completedTask = await Task.WhenAny(
+                connectedTcs.Task,
+                disconnectedTcs.Task,
+                stoppedTcs.Task
+            ).WaitAsync(TimeSpan.FromSeconds(30), ct);
+
+            if (completedTask == disconnectedTcs.Task)
+            {
+                var failReason = await disconnectedTcs.Task;
+                return $"{_stack.Id}: Connection failed: {failReason}";
+            }
+
+            if (completedTask == stoppedTcs.Task)
+            {
+                var failReason = await stoppedTcs.Task;
+                return $"{_stack.Id}: Transport stopped: {failReason}";
+            }
+
+            await connectedTcs.Task;
+
+            await kickReceivedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+
+            var reason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
+            if (reason is not GracefulRemoteIntention)
+                return $"{_stack.Id}: Expected GracefulRemoteIntention, got {reason.GetType().Name}: {reason}";
+
+            await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
+
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (TimeoutException ex)
+        {
+            return $"{_stack.Id}: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            return $"{_stack.Id}: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 }
