@@ -16,6 +16,8 @@ namespace Pontifex.Api
         
         private TransportPipeSystem? _transportPipeSystem;
         private IAckRawReliableClientSideEndpoint? _endpoint;
+
+        private bool _wasConnectedEver;
         
         public event Action<IAckRawReliableClientSideEndpoint>? Connected;
         public event Action<StopReason>? Disconnected;
@@ -44,6 +46,7 @@ namespace Pontifex.Api
             using var disposer = ackResponse.AsDisposable();
             if (ackResponse.TryPopFirst(out long value) && value == 7777)
             {
+                _wasConnectedEver = true;
                 _endpoint = endPoint;
                 _transportPipeSystem = new TransportPipeSystem(dataToSend =>
                 {
@@ -80,7 +83,10 @@ namespace Pontifex.Api
         
         void IAckRawClientHandler.OnStopped(StopReason reason)
         {
-            // DO NOTHING
+            if (!_wasConnectedEver) // prevent double invocation 
+            {
+                Disconnected?.Invoke(reason);
+            }
         }
     }
 }

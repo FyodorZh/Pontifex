@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
@@ -244,11 +245,7 @@ namespace Pontifex.Transports.Tcp
 
             socket.ReceiveTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
             socket.SendTimeout = (int)mDisconnectTimeout.TotalMilliseconds;
-            //socket.SendBufferSize = TcpInfo.DefaultMessageMaxSize * 4;
-            //socket.ReceiveBufferSize = TcpInfo.DefaultMessageMaxSize * 4;
             socket.NoDelay = true;
-
-            mClients.AddClient(socket, TryAcknowledge, MessageMaxByteSize, Memory, Log);
 
             try
             {
@@ -264,8 +261,12 @@ namespace Pontifex.Transports.Tcp
                 if (IsStarted)
                 {
                     Log.wtf(ex);
+                    return;
                 }
             }
+
+            // Offload socket processing to avoid blocking the accept loop
+            Task.Run(() => mClients.AddClient(socket, TryAcknowledge, MessageMaxByteSize, Memory, Log));
         }
 
         private void OnStopped()

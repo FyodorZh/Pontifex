@@ -156,13 +156,18 @@ namespace Pontifex.Transports.Tcp
 
                 ConnectionState = State.Connecting;
 
-                UnionDataList ackData = (UnionDataList)ar.AsyncState;
-                DoSend(PacketType.AckRequest, ackData);
+                var ackData = (UnionDataList)ar.AsyncState;
+                var sendResult = DoSend(PacketType.AckRequest, ackData);
+                if (sendResult != SendResult.Ok)
+                {
+                    Log.w("AckRequest send failed: {0}", sendResult);
+                    Stop(new StopReasons.TextFail(Name, "AckRequest send failed: {0}", sendResult));
+                }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                ConnectionState = State.Disconnected;
-                UnionDataList ackData = (UnionDataList)ar.AsyncState;
+                Stop(new StopReasons.ExceptionFail(Name, ex, "ConnectCallback failed"));
+                var ackData = (UnionDataList)ar.AsyncState;
                 ackData.Release();
             }
         }
@@ -372,7 +377,10 @@ namespace Pontifex.Transports.Tcp
 
         protected override void OnReadyToConnect()
         {
-            // TODO: fix race
+            if (ConnectionState == State.Disconnected)
+            {
+                Stop(new StopReasons.TextFail(Name, "Connection failed during initialization"));
+            }
         }
 
         protected override void DestroyTransport(StopReason reason)

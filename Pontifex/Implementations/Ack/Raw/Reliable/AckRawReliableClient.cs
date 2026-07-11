@@ -139,6 +139,12 @@ namespace Pontifex.Ack.Raw
                 _state = State.Disconnected;
                 DestroyTransport(reason);
             }
+            else if (_state == State.Initialized)
+            {
+                _state = State.Disconnected;
+                DestroyTransport(reason);
+                _handler?.OnStopped(reason);
+            }
         }
 
         protected void ConnectionFailed()

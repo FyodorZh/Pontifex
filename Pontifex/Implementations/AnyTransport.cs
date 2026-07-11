@@ -80,13 +80,20 @@ namespace Pontifex
                 {
                     if (!_started)
                     {
+                        _started = true;
+                        _onStopped = onStopped;
                         if (TryStart())
                         {
-                            _onStopped = onStopped;
-                            _started = true;
+                            if (!_started)
+                            {
+                                _onStopped = null;
+                                return false;
+                            }
                             OnStarted();
                             return true;
                         }
+                        _started = false;
+                        _onStopped = null;
                         Fail("Start", "Failed to start");
                         return false;
                     }
