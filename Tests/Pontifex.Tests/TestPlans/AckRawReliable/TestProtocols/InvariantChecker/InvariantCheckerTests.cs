@@ -16,6 +16,10 @@ public class InvariantCheckerTests
         _stack = stack;
     }
 
+    /// <summary>
+    /// Verifies that after a single client connects and performs a graceful shutdown, the client receives <see cref="UserIntention"/>
+    /// and the server receives <see cref="GracefulRemoteIntention"/> as stop reasons.
+    /// </summary>
     [Test]
     public async Task ConnectDisconnect()
     {
@@ -134,6 +138,10 @@ public class InvariantCheckerTests
             $"'{_stack.Id}': Server transport must not stop with an error, got {serverStopReason}");
     }
 
+    /// <summary>
+    /// Verifies that 10,000 clients can connect to a single server concurrently, each performs a graceful shutdown,
+    /// all connections are accepted, and the server stops without errors.
+    /// </summary>
     [Test]
     public async Task ConnectDisconnectManyClients()
     {

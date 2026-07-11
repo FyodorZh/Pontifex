@@ -12,6 +12,9 @@ public class PingTests
         _stack = stack;
     }
 
+    /// <summary>
+    /// Sends 100 concurrent ping requests and verifies each response carries the correct sequence number.
+    /// </summary>
     [Test]
     public async Task Ping_100_Times()
     {
