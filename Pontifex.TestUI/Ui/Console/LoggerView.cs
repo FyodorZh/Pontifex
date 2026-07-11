@@ -86,7 +86,7 @@ namespace Pontifex.UI
         {
             TextWriter sb = new StringWriter();
             logMessage.WriteMessageTo(sb);
-            this.AddLog(logMessage.Severity, sb.ToString());
+            this.AddLog(logMessage.Severity.ToString(), sb.ToString());
         }
 
         public void AddRef()

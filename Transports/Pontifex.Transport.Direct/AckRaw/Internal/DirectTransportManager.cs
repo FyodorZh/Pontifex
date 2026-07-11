@@ -31,5 +31,13 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             }
             return null;
         }
+
+        public void StopServer(IEndPoint serverEp)
+        {
+            if (_servers.GetAndRemove(serverEp, out var server))
+            {
+                server.Stop();
+            }
+        }
     }
 }

@@ -161,7 +161,10 @@ namespace Pontifex.StopReasons
             base.PrintTo(dst);
             dst.AddElement("Text", _text);
             var nested = dst.AddObject("Nested");
-            _reason.PrintTo(nested);
+            if (nested != null)
+            {
+                _reason.PrintTo(nested);
+            }
         }
     }
 
@@ -184,7 +187,10 @@ namespace Pontifex.StopReasons
         {
             base.PrintTo(dst);
             var cause = dst.AddObject("Cause");
-            _cause.PrintTo(cause);
+            if (cause != null)
+            {
+                _cause.PrintTo(cause);
+            }
         }
     }
 }

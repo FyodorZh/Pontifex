@@ -30,7 +30,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             if (server != null)
             {
                 _server = null;
-                server.Stop();
+                DirectTransportManager.Instance.StopServer(_localEp);
             }
         }
 
