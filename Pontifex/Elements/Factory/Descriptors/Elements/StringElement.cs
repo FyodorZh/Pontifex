@@ -35,5 +35,7 @@ namespace Pontifex.Factory
         {
             return double.TryParse(_value, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         }
+
+        public override string ToString() => $"\"{_value}\"";
     }
 }

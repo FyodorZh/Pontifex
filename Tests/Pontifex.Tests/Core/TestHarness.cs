@@ -5,7 +5,7 @@ using Pontifex.Api;
 using Pontifex.StopReasons;
 using Scriba;
 
-namespace Pontifex.Test;
+namespace Pontifex.Tests;
 
 public class TestServerSideApiInstance<TApi> : ServerSideApiInstance<TApi>
     where TApi : class, IApiRoot
@@ -22,7 +22,7 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
     where TClientApi : class, IApiRoot, new()
     where TServerApi : class, IApiRoot, new()
 {
-    private readonly TransportStack _stack;
+    private readonly ITransportStack _stack;
     private readonly TaskCompletionSource _connectedTcs = new();
     private TestServerSideApiInstance<TServerApi>? _serverInstance;
     private bool _disposed;
@@ -32,21 +32,21 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
     public IAckRawReliableClient ClientTransport { get; }
     public IAckRawReliableServer ServerTransport { get; }
 
-    public ApiTestHarness(TransportStack stack, bool failIfError)
+    public ApiTestHarness(ITransportStack stack, bool failIfError)
     {
         _stack = stack;
         var memory = TransportRegistry.Memory;
         var logger = TransportRegistry.GetLogger(failIfError);
-        var desc = TransportRegistry.DescriptionFactory.FromUri(stack.TransportUri);
+        var factory = stack.GetTransportFactory(failIfError);
 
-        ClientTransport = (IAckRawReliableClient)TransportRegistry.Builder.BuildClient(desc, memory, logger);
-        ServerTransport = (IAckRawReliableServer)TransportRegistry.Builder.BuildServer(desc, memory, logger);
+        ClientTransport = (IAckRawReliableClient)factory.BuildClient();
+        ServerTransport = (IAckRawReliableServer)factory.BuildServer();
 
         ClientApi = new TClientApi();
         var clientHandler = new ClientSideApi(ClientApi, memory, logger);
         clientHandler.Connected += _ => _connectedTcs.TrySetResult();
         Assert.That(ClientTransport.Init(clientHandler), Is.True,
-            $"{stack.Id} ({stack.TransportUri}): ClientTransport.Init failed");
+            $"{stack.Id}: ClientTransport.Init failed");
 
         var serverFactory = new ServerSideApiFactory<TServerApi>(_ =>
         {
@@ -55,15 +55,15 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
             return _serverInstance;
         });
         Assert.That(ServerTransport.Init(serverFactory), Is.True,
-            $"{stack.Id} ({stack.TransportUri}): ServerTransport.Init failed");
+            $"{stack.Id}: ServerTransport.Init failed");
     }
 
     public async Task StartAsync()
     {
         Assert.That(ServerTransport.Start(_ => { }), Is.True,
-            $"{_stack.TransportUri}: ServerTransport.Start failed");
+            $"{_stack.Id}: ServerTransport.Start failed");
         Assert.That(ClientTransport.Start(_ => { }), Is.True,
-            $"{_stack.TransportUri}: ClientTransport.Start failed");
+            $"{_stack.Id}: ClientTransport.Start failed");
 
         try
         {
@@ -71,7 +71,7 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
         }
         catch (TimeoutException)
         {
-            throw new Exception($"'{_stack.TransportUri}': Connection timed out after 10s. " +
+            throw new Exception($"'{_stack.Id}': Connection timed out after 10s. " +
                 $"ClientTransport.IsStarted={ClientTransport.IsStarted}, " +
                 $"ServerTransport.IsStarted={ServerTransport.IsStarted}");
         }

@@ -1,23 +1,13 @@
 using System.Collections;
 
-namespace Pontifex.Test;
+namespace Pontifex.Tests;
 
-public class AckRawReliableStacks : IEnumerable<TransportStack>
+public class AckRawReliableStacks : IEnumerable<ITransportStack>
 {
-    public static readonly TransportStack Direct = new(
-        id: "direct",
-        transportUri: "transport://direct|test-srv"
-    );
-
-    public static readonly TransportStack Tcp = new(
-        id: "tcp",
-        transportUri: $"transport://tcp|127.0.0.1:{DynamicPortAllocator.GetRandomPort()}/10"
-    );
-
-    public IEnumerator<TransportStack> GetEnumerator()
+    public IEnumerator<ITransportStack> GetEnumerator()
     {
-        yield return Direct;
-        yield return Tcp;
+        yield return new DynamicTransportStack("direct", () => $"transport://direct|srv-{Guid.NewGuid()}");
+        yield return new DynamicTransportStack("tcp", () => $"transport://tcp|127.0.0.1:{DynamicPortAllocator.GetRandomPort()}/10");
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

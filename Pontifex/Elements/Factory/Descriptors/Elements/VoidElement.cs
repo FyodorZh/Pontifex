@@ -5,5 +5,7 @@ namespace Pontifex.Factory
         public static readonly VoidElement Instance = new VoidElement();
         
         public override ElementType Type => ElementType.Void;
+
+        public override string ToString() => "";
     }
 }

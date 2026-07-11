@@ -1,13 +1,13 @@
-using Pontifex.Test;
+using Pontifex.Tests;
 
 namespace Pontifex.AckRawReliable.Tests.Ping;
 
 [TestFixtureSource(typeof(AckRawReliableStacks))]
 public class PingTests
 {
-    private readonly TransportStack _stack;
+    private readonly ITransportStack _stack;
 
-    public PingTests(TransportStack stack)
+    public PingTests(ITransportStack stack)
     {
         _stack = stack;
     }

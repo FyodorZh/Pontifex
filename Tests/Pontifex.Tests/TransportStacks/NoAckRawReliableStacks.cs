@@ -1,17 +1,12 @@
 using System.Collections;
 
-namespace Pontifex.Test;
+namespace Pontifex.Tests;
 
-public class NoAckRawReliableStacks : IEnumerable<TransportStack>
+public class NoAckRawReliableStacks : IEnumerable<ITransportStack>
 {
-    public static readonly TransportStack Direct = new(
-        id: "direct-noack",
-        transportUri: "transport://direct-noack-raw-reliable|test-srv"
-    );
-
-    public IEnumerator<TransportStack> GetEnumerator()
+    public IEnumerator<ITransportStack> GetEnumerator()
     {
-        yield return Direct;
+        yield return new DynamicTransportStack("direct-noack-raw-reliable", () => $"transport://direct-noack-raw-reliable|srv-{Guid.NewGuid()}");
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

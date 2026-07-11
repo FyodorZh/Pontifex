@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 
-namespace Pontifex.Test;
+namespace Pontifex.Tests;
 
 public static class DynamicPortAllocator
 {

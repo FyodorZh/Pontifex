@@ -1,7 +1,7 @@
 using Actuarius.Memory;
 using Pontifex.NoAck.Raw;
 using Pontifex.StopReasons;
-using Pontifex.Test;
+using Pontifex.Tests;
 using Pontifex.Utils;
 
 namespace Pontifex.NoAckRawReliable.Tests.Ping;
@@ -9,9 +9,9 @@ namespace Pontifex.NoAckRawReliable.Tests.Ping;
 [TestFixtureSource(typeof(NoAckRawReliableStacks))]
 public class PingTests
 {
-    private readonly TransportStack _stack;
+    private readonly ITransportStack _stack;
 
-    public PingTests(TransportStack stack)
+    public PingTests(ITransportStack stack)
     {
         _stack = stack;
     }
@@ -20,11 +20,10 @@ public class PingTests
     public async Task Ping_100_Times()
     {
         var memory = TransportRegistry.Memory;
-        var logger = TransportRegistry.GetLogger(true);
-        var desc = TransportRegistry.DescriptionFactory.FromUri(_stack.TransportUri);
+        var factory = _stack.GetTransportFactory();
 
-        var server = (INoAckRawReliableServer)TransportRegistry.Builder.BuildServer(desc, memory, logger);
-        var client = (INoAckRawReliableClient)TransportRegistry.Builder.BuildClient(desc, memory, logger);
+        var server = (INoAckRawReliableServer)factory.BuildServer();
+        var client = (INoAckRawReliableClient)factory.BuildClient();
 
         try
         {

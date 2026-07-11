@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Pontifex.Factory
 {
@@ -26,6 +27,11 @@ namespace Pontifex.Factory
         public void Add(string name, IElement element)
         {
             _elements.Add(name, element);
+        }
+
+        public override string ToString()
+        {
+            return "{" + string.Join(", ", _elements.Select(kv => $"{kv.Key}: {kv.Value.ToString()}"));
         }
     }
 }

@@ -7,7 +7,7 @@ using Pontifex.Transports.Tcp;
 using Scriba;
 using Scriba.Consumers;
 
-namespace Pontifex.Test;
+namespace Pontifex.Tests;
 
 public static class TransportRegistry
 {

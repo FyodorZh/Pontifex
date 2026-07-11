@@ -19,5 +19,7 @@ namespace Pontifex.Factory
             value = _value;
             return true;
         }
+
+        public override string ToString() => "[" + string.Join(", ", _value) + "]";
     }
 }
