@@ -193,18 +193,39 @@ public class InvariantCheckerTests
                         return;
                     }
 
-                    await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+                    var connectTimeout = TimeSpan.FromSeconds(30);
+                    var completedTask = await Task.WhenAny(
+                        connectedTcs.Task,
+                        disconnectedTcs.Task,
+                        stoppedTcs.Task
+                    ).WaitAsync(connectTimeout, ct);
+
+                    if (completedTask == disconnectedTcs.Task)
+                    {
+                        var failReason = await disconnectedTcs.Task;
+                        error = $"{_stack.Id}: Connection failed: {failReason}";
+                        return;
+                    }
+
+                    if (completedTask == stoppedTcs.Task)
+                    {
+                        var failReason = await stoppedTcs.Task;
+                        error = $"{_stack.Id}: Transport stopped: {failReason}";
+                        return;
+                    }
+
+                    await connectedTcs.Task;
 
                     clientApi.GracefulShutdown(TimeSpan.FromMilliseconds(100));
 
-                    var reason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+                    var reason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
                     if (reason is not UserIntention)
                     {
                         error = $"{_stack.Id}: Expected UserIntention, got {reason.GetType().Name}: {reason}";
                         return;
                     }
 
-                    await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+                    await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(60), ct);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {

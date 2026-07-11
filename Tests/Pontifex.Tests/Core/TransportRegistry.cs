@@ -17,13 +17,15 @@ public static class TransportRegistry
 
     public static ILogger GetLogger(bool failIfError)
     {
-        return new Logger([new ConsoleConsumer(), new LogConsumer(msg =>
+        var logger = new Logger([new ConsoleConsumer(), new LogConsumer(msg =>
         {
             if (failIfError)
             {
                 Assert.That(msg.Severity > Severity.ERROR);
             }
         })]);
+        logger.LogFor = Severity.WARN;
+        return logger;
     }
 
     static TransportRegistry()
