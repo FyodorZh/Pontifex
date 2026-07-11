@@ -190,7 +190,7 @@ namespace Pontifex.Transports.Tcp
                         }
                     }
 
-                    listener.Listen(100);
+                    listener.Listen(500);
 
                     mSocketListener = new AsyncServerSocketListener(listener);
 
