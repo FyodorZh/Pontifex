@@ -21,6 +21,7 @@ public class InvariantCheckerTests
     /// and the server receives <see cref="GracefulRemoteIntention"/> as stop reasons.
     /// </summary>
     [Test]
+    [Category("Fast")]
     public async Task ConnectDisconnect()
     {
         var memory = TransportRegistry.Memory;

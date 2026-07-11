@@ -16,6 +16,7 @@ public class PingTests
     /// Sends 100 concurrent ping requests and verifies each response carries the correct sequence number.
     /// </summary>
     [Test]
+    [Category("Fast")]
     public async Task Ping_100_Times()
     {
         var harness = new ApiTestHarness<PingApiClient, PingApiServer>(_stack, true);

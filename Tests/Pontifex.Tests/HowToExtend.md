@@ -382,6 +382,15 @@ A good XML doc should:
 - State **what** the expected outcome is
 - Be concise (2-4 lines is sufficient)
 
+Test methods may also carry an NUnit `[Category]` attribute for filtering:
+
+| Category | Meaning | Run command |
+|----------|---------|-------------|
+| `"Fast"` | Quick smoke-level tests (no long waits, no heavy parallelism) | `dotnet test --filter "TestCategory=Fast"` |
+| _(none)_ | Default — no category means general/acceptance test | `dotnet test` (all) |
+
+Categories compose with `AND`/`OR` in the filter expression, e.g. `--filter "TestCategory=Fast|TestCategory=Slow"`.
+
 ---
 
 ## 5. Key Classes Reference

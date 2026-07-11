@@ -20,6 +20,7 @@ public class PingTests
     /// Sends 100 ping messages over raw NoAckRawReliable transport and verifies the server echoes each one back with the correct sequence number.
     /// </summary>
     [Test]
+    [Category("Fast")]
     public async Task Ping_100_Times()
     {
         var memory = TransportRegistry.Memory;
