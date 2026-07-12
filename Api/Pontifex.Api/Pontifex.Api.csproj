@@ -40,7 +40,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Archivarius" Version="0.2.4-dev.0" />
+      <PackageReference Include="Archivarius" Version="0.2.5-dev.0" />
     </ItemGroup>
 
 </Project>

@@ -7,7 +7,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
     {
         private readonly int _capacity;
 
-        private readonly TinyConcurrentQueue<SessionId> _freeSessions = new TinyConcurrentQueue<SessionId>();
+        private readonly IConcurrentQueue<SessionId> _freeSessions = new SystemConcurrentQueue<SessionId>();
 
         private volatile TSession[] _sessions;
         private volatile int[] _generations;

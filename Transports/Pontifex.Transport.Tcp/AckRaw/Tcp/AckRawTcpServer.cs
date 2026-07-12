@@ -19,8 +19,8 @@ namespace Pontifex.Transports.Tcp
         private class ClientSet : PeriodicLogic
         {
             private readonly HashSet<ServerSideSocket> mClients = new HashSet<ServerSideSocket>();
-            private readonly TinyConcurrentQueue<ServerSideSocket> mClientsToAdd = new TinyConcurrentQueue<ServerSideSocket>();
-            private readonly TinyConcurrentQueue<ServerSideSocket> mClientsToRemove = new TinyConcurrentQueue<ServerSideSocket>();
+            private readonly IConcurrentQueue<ServerSideSocket> mClientsToAdd = new SystemConcurrentQueue<ServerSideSocket>();
+            private readonly IConcurrentQueue<ServerSideSocket> mClientsToRemove = new SystemConcurrentQueue<ServerSideSocket>();
 
             private readonly TimeSpan mDisconnectTimeout;
 

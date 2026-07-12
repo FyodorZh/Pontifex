@@ -36,7 +36,7 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         private StopReason mCurrentStopReason = StopReason.Void;
 
-        private readonly TinyConcurrentQueue<Intention> mIntentions = new TinyConcurrentQueue<Intention>();
+        private readonly IConcurrentQueue<Intention> mIntentions = new SystemConcurrentQueue<Intention>();
         private readonly ConcurrentQueueValve<UnionDataList> mReceivedMessages;
         private readonly ConcurrentQueueValve<UnionDataList> mSentMessages;
 
@@ -56,8 +56,8 @@ namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
 
         protected ReconnectableBaseLogic(IAckRawBaseHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
         {
-            mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
-            mSentMessages = new ConcurrentQueueValve<UnionDataList>(new TinyConcurrentQueue<UnionDataList>(), data => data.Release());
+            mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new SystemConcurrentQueue<UnionDataList>(), data => data.Release());
+            mSentMessages = new ConcurrentQueueValve<UnionDataList>(new SystemConcurrentQueue<UnionDataList>(), data => data.Release());
             
             mDelivery = new DeliverySystem(memoryRental.CollectablePool);
 

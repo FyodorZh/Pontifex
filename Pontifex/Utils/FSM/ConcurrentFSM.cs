@@ -52,7 +52,7 @@ namespace Pontifex.Utils.FSM
 
         private readonly AtomicBox<TState> mCurState = new AtomicBox<TState>();
 
-        private readonly ActionQueue<ActionRec> mTicker = new ActionQueue<ActionRec>(new TinyConcurrentQueue<ActionRec>());
+        private readonly ActionQueue<ActionRec> mTicker = new ActionQueue<ActionRec>(new SystemConcurrentQueue<ActionRec>());
 
         public ConcurrentFSM(IFSM<TState> core)
         {

@@ -40,7 +40,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Operarius" Version="0.2.2-dev.0" />
+      <PackageReference Include="Operarius" Version="0.2.3-dev.0" />
     </ItemGroup>
 
     <ItemGroup>
