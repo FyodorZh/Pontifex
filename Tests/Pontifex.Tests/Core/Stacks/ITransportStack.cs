@@ -4,5 +4,9 @@ namespace Pontifex.Tests
     {
         string Id { get; }
         TransportFactory GetTransportFactory(bool failIfError = true);
+
+        (int size, int concurrency) GetSmallTestSize();
+        (int size, int concurrency) GetBigTestSize();
+
     }
 }
