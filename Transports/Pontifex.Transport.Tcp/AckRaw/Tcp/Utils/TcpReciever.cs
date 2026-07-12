@@ -2,6 +2,7 @@
 using System.Net.Sockets;
 using System.Threading;
 using Actuarius.Memory;
+using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
@@ -23,8 +24,14 @@ namespace Pontifex.Transports.Tcp
 
         private readonly ILogger Log;
 
-        public TcpReceiver(Socket socket, Action<UnionDataList> onReceived, Action<Exception> onFailed, Action? onStopped, int messageMaxSize, IMemoryRental memoryRental, ILogger logger)
+        private readonly IAckRawReliableBaseEndpoint _owner;
+
+        public TcpReceiver(Socket socket, 
+            Action<UnionDataList> onReceived, Action<Exception> onFailed, Action? onStopped, 
+            int messageMaxSize, IMemoryRental memoryRental, ILogger logger,
+            IAckRawReliableBaseEndpoint owner)
         {
+            _owner = owner;
             Log = logger;
             if (onReceived == null)
             {
@@ -105,6 +112,11 @@ namespace Pontifex.Transports.Tcp
                 isSyncWork = false;
                 try
                 {
+                    if (_stopped)
+                    {
+                        break;
+                    }
+                    
                     if (args.SocketError != SocketError.Success &&
                         args.SocketError != SocketError.WouldBlock)
                     {

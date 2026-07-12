@@ -90,7 +90,8 @@ namespace Pontifex.Transports.Tcp
                 () => Disconnect(new StopReasons.UnknownRemoteIntention(TcpInfo.TransportName)),
                 MessageMaxByteSize,
                 memoryRental,
-                Log);
+                Log,
+                this);
             mSocketSender = new TcpSender(mSocket, MessageMaxByteSize, mSocket.SendBufferSize, memoryRental, Log);
             mSocketSender.ErrorOccured += OnFailed;
             mSocketSender.Stopped += () =>

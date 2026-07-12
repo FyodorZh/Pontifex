@@ -130,7 +130,8 @@ namespace Pontifex.Transports.Tcp
                 var socket = mSocket ?? throw new Exception("Socket is null");
                 socket.EndConnect(ar);
 
-                mSocketReceiver = new TcpReceiver(socket, OnReceived, OnFailed, null, MessageMaxByteSize, Memory, Log);
+                mSocketReceiver = new TcpReceiver(socket, OnReceived, OnFailed, null, 
+                    MessageMaxByteSize, Memory, Log, this);
                 mSocketReceiver.Start();
 
                 mSocketSender = new TcpSender(socket, MessageMaxByteSize, mSocket.SendBufferSize - 4, Memory, Log);
