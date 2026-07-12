@@ -1,4 +1,5 @@
-﻿using Actuarius.Collections;
+﻿using System.Threading;
+using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Pontifex;
@@ -97,7 +98,7 @@ namespace TransportAnalyzer.TestLogic
             {
                 var endpoint = _endpoint;
 
-                while (_sendId - _receiveId < _unconfirmedTicks)
+                while (_sendId - Volatile.Read(ref _receiveId) < _unconfirmedTicks)
                 {
                     var buffer = GenBuffer(Interlocked.Increment(ref _sendId));
                     var dataToSend = Memory.CollectablePool.Acquire<UnionDataList>();
