@@ -30,8 +30,6 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             _handler.FillAckResponse(ackResponse);
             ackResponse.PutFirst(new UnionData(DirectInfo.AckOKResponse));
 
-            _transport.ServerSide.Send(ackResponse);
-
             try
             {
                 _handler.OnConnected(_transport.ServerSide);
@@ -40,7 +38,10 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             {
                 Log.wtf(ex);
                 _transport.Disconnect(new ExceptionFail("direct-server", ex));
+                return;
             }
+
+            _transport.ServerSide.Send(ackResponse);
         }
 
         void IAnyDirectCtl.OnReceived(UnionDataList buffer)

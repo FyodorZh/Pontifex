@@ -60,7 +60,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             {
                 buffer.Release();
                 Log.e("Direct transport buffer overflow");
-                Disconnect(new TextFail("direct", "Buffer overflow"));
+                ((IAckRawBaseEndpoint)this).Disconnect(new TextFail("direct", "Buffer overflow"));
                 return SendResult.BufferOverflow;
             }
 
