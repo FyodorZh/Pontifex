@@ -100,8 +100,11 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
                     if (buffer.TryPopFirst(out IMultiRefReadOnlyByteArray? ackOk) && ackOk.EqualByContent(DirectInfo.AckOKResponse))  
                     {
                         ackOk.Release();
-                        _state.SetState(State.Connected);
-                        ConnectionFinished(_transport!.ClientSide, buffer.Acquire());
+                        buffer.AddRef();
+                        _state.SetState(State.Connected, null, _ =>
+                        {
+                            ConnectionFinished(_transport!.ClientSide, buffer);
+                        });
                     }
                     else
                     {
