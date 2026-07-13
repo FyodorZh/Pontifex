@@ -1,4 +1,6 @@
 using System;
+using Actuarius.Collections;
+using Actuarius.Concurrent;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
@@ -12,6 +14,9 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
         private readonly IMemoryRental _memory;
         
         private DirectTransport _transport = null!;
+
+        private readonly object _locker = new();
+        private CycleQueue<UnionDataList>? _inAckQueue;
 
         public Session(IAckRawReliableServerHandler handler, IMemoryRental memory)
         {
@@ -30,23 +35,42 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             _handler.FillAckResponse(ackResponse);
             ackResponse.PutFirst(new UnionData(DirectInfo.AckOKResponse));
 
-            try
+            lock (_locker)
             {
-                _handler.OnConnected(_transport.ServerSide);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-                _transport.Disconnect(new ExceptionFail("direct-server", ex));
-                return;
-            }
+                _inAckQueue = new();
+                _transport.ServerSide.Send(ackResponse);
 
-            _transport.ServerSide.Send(ackResponse);
+                try
+                {
+                    _handler.OnConnected(_transport.ServerSide);
+                    var queue = _inAckQueue;
+                    _inAckQueue = null;
+                    while (queue.TryPop(out var data))
+                    {
+                        _handler.OnReceived(data);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                    _transport.Disconnect(new ExceptionFail("direct-server", ex));
+                }
+            }
         }
 
         void IAnyDirectCtl.OnReceived(UnionDataList buffer)
         {
-            _handler.OnReceived(buffer);
+            lock (_locker)
+            {
+                if (_inAckQueue != null)
+                {
+                    _inAckQueue.Put(buffer);
+                }
+                else
+                {
+                    _handler.OnReceived(buffer);
+                }
+            }
         }
 
         void IAnyDirectCtl.OnDisconnected(StopReason reason)
