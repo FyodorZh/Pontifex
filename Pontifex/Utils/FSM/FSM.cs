@@ -19,33 +19,33 @@ namespace Pontifex.Utils.FSM
             }
         }
 
-        private readonly Func<TState, TStateValue> mStateMapper;
-        private readonly StateNode mFirstState;
+        private readonly Func<TState, TStateValue> _stateMapper;
+        private readonly StateNode _firstState;
 
-        private readonly Dictionary<TStateValue, StateNode> mStates = new Dictionary<TStateValue, StateNode>();
+        private readonly Dictionary<TStateValue, StateNode> _states = new Dictionary<TStateValue, StateNode>();
 
-        private StateNode mCurrentState;
+        private StateNode _currentState;
 
         public FSM(TState firstState, Func<TState, TStateValue> stateMapper)
         {
-            mStateMapper = stateMapper;
+            _stateMapper = stateMapper;
 
             var firstStateValue = stateMapper(firstState);
 
-            mFirstState = new StateNode(firstState, firstStateValue);
-            mStates.Add(firstStateValue, mFirstState);
-            mCurrentState = mFirstState;
+            _firstState = new StateNode(firstState, firstStateValue);
+            _states.Add(firstStateValue, _firstState);
+            _currentState = _firstState;
         }
 
-        public TState InitState => mFirstState.State;
+        public TState InitState => _firstState.State;
 
-        public TState State => mCurrentState.State;
+        public TState State => _currentState.State;
 
         public bool AddTransition(TState fromState, TState toState)
         {
-            TStateValue fromStateValue = mStateMapper(fromState);
-            TStateValue toStateValue = mStateMapper(toState);
-            if (mStates.TryGetValue(fromStateValue, out var fromNode))
+            TStateValue fromStateValue = _stateMapper(fromState);
+            TStateValue toStateValue = _stateMapper(toState);
+            if (_states.TryGetValue(fromStateValue, out var fromNode))
             {
                 foreach (var element in fromNode.Transitions)
                 {
@@ -55,10 +55,10 @@ namespace Pontifex.Utils.FSM
                     }
                 }
 
-                if (!mStates.TryGetValue(toStateValue, out var toNode))
+                if (!_states.TryGetValue(toStateValue, out var toNode))
                 {
                     toNode = new StateNode(toState, toStateValue);
-                    mStates.Add(toStateValue, toNode);
+                    _states.Add(toStateValue, toNode);
                 }
 
                 fromNode.Transitions.Add(toNode);
@@ -81,21 +81,22 @@ namespace Pontifex.Utils.FSM
 
         public void Reset()
         {
-            mCurrentState = mFirstState;
+            _currentState = _firstState;
         }
 
-        public void SetState(TState nextState, StateChangeReaction<TState>? onStateChanged)
+        public void SetState(TState nextState, StateChangeReaction<TState>? onStateChanging, Action<TState>? onStateChanged)
         {
-            var nextStateValue = mStateMapper(nextState);
+            var nextStateValue = _stateMapper(nextState);
 
-            var list = mCurrentState.Transitions;
+            var list = _currentState.Transitions;
             foreach (var element in list)
             {
                 if (nextStateValue.Equals(element.StateValue))
                 {
-                    if (onStateChanged == null || onStateChanged(mCurrentState.State, nextState))
+                    if (onStateChanging?.Invoke(_currentState.State, nextState) ?? true)
                     {
-                        mCurrentState = element;
+                        _currentState = element;
+                        onStateChanged?.Invoke(nextState);
                     }
                 }
             }

@@ -1,3 +1,5 @@
+using System;
+
 namespace Pontifex.Utils.FSM
 {
     public delegate bool StateChangeReaction<in TState>(TState oldState, TState newState);
@@ -27,8 +29,8 @@ namespace Pontifex.Utils.FSM
         /// Попытка перевести текущий стейт в новый. При переводе вызывается делегат, который может отменить перевод в новый стейт
         /// </summary>
         /// <param name="nextState"></param>
-        /// <param name="onStateChanged"></param>
-        void SetState(TState nextState, StateChangeReaction<TState>? onStateChanged = null);
+        /// <param name="onStateChanging"></param>
+        void SetState(TState nextState, StateChangeReaction<TState>? onStateChanging = null, Action<TState>? onStateChanged = null);
     }
 
     /// <summary>

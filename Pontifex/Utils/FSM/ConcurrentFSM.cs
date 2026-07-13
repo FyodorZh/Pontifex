@@ -1,3 +1,4 @@
+using System;
 using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
@@ -9,35 +10,38 @@ namespace Pontifex.Utils.FSM
     {
         private readonly struct ActionRec: ActionQueue<ActionRec>.IAction
         {
-            private readonly ConcurrentFSM<TState> mOwner;
-            private readonly bool mReset;
-            private readonly TState mStateToSet;
-            private readonly StateChangeReaction<TState>? mOnStateChanged;
+            private readonly ConcurrentFSM<TState> _owner;
+            private readonly bool _reset;
+            private readonly TState _stateToSet;
+            private readonly StateChangeReaction<TState>? _onStateChanging;
+            private readonly Action<TState>? _onStateChanged;
 
-            public ActionRec(ConcurrentFSM<TState> owner, bool reset, TState state, StateChangeReaction<TState>? onStateChanged)
+            public ActionRec(ConcurrentFSM<TState> owner, bool reset, TState state, 
+                StateChangeReaction<TState>? onStateChanging, Action<TState>? onStateChanged)
             {
-                mOwner = owner;
-                mReset = reset;
-                mStateToSet = state;
-                mOnStateChanged = onStateChanged;
+                _owner = owner;
+                _reset = reset;
+                _stateToSet = state;
+                _onStateChanging = onStateChanging;
+                _onStateChanged = onStateChanged;
             }
 
             public void Invoke()
             {
                 try
                 {
-                    if (mReset)
+                    if (_reset)
                     {
-                        mOwner.mCore.Reset();
+                        _owner._core.Reset();
                     }
                     else
                     {
-                        mOwner.mCore.SetState(mStateToSet, mOnStateChanged);
+                        _owner._core.SetState(_stateToSet, _onStateChanging, _onStateChanged);
                     }
                 }
                 finally
                 {
-                    mOwner.mCurState.Value = mOwner.mCore.State;    
+                    _owner._curState.Value = _owner._core.State;    
                 }
             }
 
@@ -47,40 +51,37 @@ namespace Pontifex.Utils.FSM
             }
         }
 
-        private readonly IFSM<TState> mCore;
-        private readonly TState mInitState;
+        private readonly IFSM<TState> _core;
+        private readonly TState _initState;
 
-        private readonly AtomicBox<TState> mCurState = new AtomicBox<TState>();
+        private readonly AtomicBox<TState> _curState = new AtomicBox<TState>();
 
-        private readonly ActionQueue<ActionRec> mTicker = new ActionQueue<ActionRec>(new SystemConcurrentQueue<ActionRec>());
+        private readonly ActionQueue<ActionRec> _ticker = new ActionQueue<ActionRec>(new SystemConcurrentQueue<ActionRec>());
 
         public ConcurrentFSM(IFSM<TState> core)
         {
-            mCore = core;
-            mInitState = core.InitState;
-            mCurState.Value = core.State;
+            _core = core;
+            _initState = core.InitState;
+            _curState.Value = core.State;
         }
 
-        public TState InitState
-        {
-            get { return mInitState; }
-        }
+        public TState InitState => _initState;
 
-        public TState State => mCurState.Value;
+        public TState State => _curState.Value;
 
         public void Reset()
         {
-            mTicker.Put(new ActionRec(this, true, default, null));
+            _ticker.Put(new ActionRec(this, true, default, null, null));
         }
 
-        public void SetState(TState nextState, StateChangeReaction<TState>? onStateChanged)
+        public void SetState(TState nextState, StateChangeReaction<TState>? onStateChanging, Action<TState>? onStateChanged)
         {
-            mTicker.Put(new ActionRec(this, false, nextState, onStateChanged));
+            _ticker.Put(new ActionRec(this, false, nextState, onStateChanging, onStateChanged));
         }
 
         public void Release()
         {
-            mTicker.Release();
+            _ticker.Release();
         }
     }
 }
