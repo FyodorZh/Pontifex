@@ -7,8 +7,9 @@ TransportStacks/                     ← You curate stacks here (data)
        │
        ├── AckRawReliableStacks     ──→  [TestFixtureSource]
        │       │
-       │       ├── PingTests                          ← Test plan
-       │       └── InvariantCheckerTests              ← Test plan
+        │       ├── ApiPingTests                      ← Test plan (API-based)
+        │       ├── ApiConnectDisconnectTests         ← Test plan (API-based)
+        │       └── ApiConnectReceiveKickTests        ← Test plan (API-based)
        │
        ├── NoAckRawReliableStacks    ──→  [TestFixtureSource]
        │       │
@@ -157,56 +158,160 @@ For raw transport test plans, you handle protocol at the `OnReceived` level usin
 
 ### 2B. API-Based Test Plan (tests through ApiRoot)
 
-Extends an existing API protocol or creates a new one, then uses `ApiTestHarness`.
+Every API-based test plan follows the **canonical structure**:
 
-**Example:** `TestPlans/AckRawReliable/TestProtocols/InvariantChecker/InvariantCheckerTests.cs`:
+1. API types (structs, `ApiRoot`, client/server classes) defined **inline** in the test file — no separate API file
+2. A single `Run*` method with `(int clientCount, int concurrency)` parameters
+3. Creates a shared server, then runs clients via `Parallel.ForEachAsync`
+4. Each client connects, performs work, calls `GracefulShutdown`, asserts no `AnyFail` stop reasons
+5. Three test cases: `Test_Single` (1, 1), `Test_Small` (`GetSmallTestSize()`), `Test_Big` (`GetBigTestSize()`)
+
+**Example:** `TestPlans/AckRawReliable/TestProtocols/ApiPing/PingTests.cs`:
 
 ```csharp
+using System.Collections.Concurrent;
+using Archivarius;
 using Pontifex.Ack.Raw;
 using Pontifex.Api;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 
-namespace Pontifex.AckRawReliable.Tests.InvariantChecker;
+namespace Pontifex.AckRawReliable.Tests.ApiPing;
+
+// --- API definitions (inline, no separate file) ---
+
+public struct PingRequest : IDataStruct
+{
+    public int Seq;
+    public void Serialize(ISerializer serializer) => serializer.Add(ref Seq);
+}
+
+public struct PongResponse : IDataStruct
+{
+    public int Seq;
+    public void Serialize(ISerializer serializer) => serializer.Add(ref Seq);
+}
+
+public class PingApi : ApiRoot
+{
+    public readonly RRDecl<PingRequest, PongResponse> Ping = new();
+}
+
+public class PingApiClient : PingApi
+{
+    public Task<PongResponse> SendPing(int seq)
+        => Ping.RequestAsync(new PingRequest { Seq = seq });
+}
+
+public class PingApiServer : PingApi
+{
+    public PingApiServer()
+    {
+        Ping.SetProcessor(r => r.Response(new PongResponse { Seq = r.Data.Seq }));
+    }
+}
+
+// --- Test fixture ---
 
 [TestFixtureSource(typeof(AckRawReliableStacks))]
-public class InvariantCheckerTests
+public class PingTests
 {
     private readonly ITransportStack _stack;
 
-    public InvariantCheckerTests(ITransportStack stack)
+    public PingTests(ITransportStack stack) => _stack = stack;
+
+    private async Task RunPing(int clientCount, int concurrency)
     {
-        _stack = stack;
+        const int pingCount = 100;
+        Console.WriteLine($"Run '{clientCount}' clients, '{pingCount}' pings each, using '{concurrency}' tasks");
+
+        var memory = TransportRegistry.Memory;
+        var logger = TransportRegistry.GetLogger(true);
+        var factory = _stack.GetTransportFactory(true);
+
+        var serverTransport = (IAckRawReliableServer)factory.BuildServer();
+        var serverStoppedTcs = new TaskCompletionSource<StopReason>();
+
+        var serverFactory = new ServerSideApiFactory<PingApiServer>(
+            _ => new TestServerSideApiInstance<PingApiServer>(new PingApiServer(), memory, logger));
+
+        Assert.That(serverTransport.Init(serverFactory), Is.True);
+        Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True);
+
+        var errors = new ConcurrentBag<string>();
+
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, clientCount),
+            new ParallelOptions { MaxDegreeOfParallelism = concurrency },
+            async (_, ct) =>
+            {
+                try
+                {
+                    var api = new PingApiClient();
+                    var handler = new ClientSideApi(api, memory, logger);
+                    var connectedTcs = new TaskCompletionSource();
+                    var disconnectedTcs = new TaskCompletionSource<StopReason>();
+                    var stoppedTcs = new TaskCompletionSource<StopReason>();
+
+                    handler.Connected += _ => connectedTcs.TrySetResult();
+                    api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
+
+                    var transport = (IAckRawReliableClient)factory.BuildClient();
+                    if (!transport.Init(handler)) { errors.Add("Init failed"); return; }
+                    if (!transport.Start(reason => stoppedTcs.TrySetResult(reason))) { errors.Add("Start failed"); return; }
+
+                    await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+
+                    for (var i = 0; i < pingCount; i++)
+                    {
+                        var response = await api.SendPing(i);
+                        if (response.Seq != i) { errors.Add($"Seq mismatch at {i}"); return; }
+                    }
+
+                    api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
+
+                    var disconnectReason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+                    if (disconnectReason is AnyFail) { errors.Add($"Error: {disconnectReason}"); return; }
+
+                    await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    errors.Add($"{ex.GetType().Name}: {ex.Message}");
+                }
+            });
+
+        Assert.That(errors, Is.Empty);
+        serverTransport.Stop(new UserIntention("test", "complete"));
+        var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)));
     }
 
     [Test]
-    public async Task ConnectDisconnect()
+    [Category("Small")]
+    public async Task Test_Single() => await RunPing(1, 1);
+
+    [Test]
+    [Category("Small")]
+    public async Task Test_Small()
     {
-        var memory = TransportRegistry.Memory;
-        var logger = TransportRegistry.GetLogger(failIfError: true);
-        var factory = _stack.GetTransportFactory();
+        var (count, concurrency) = _stack.GetSmallTestSize();
+        await RunPing(count, concurrency);
+    }
 
-        var clientTransport = (IAckRawReliableClient)factory.BuildClient();
-        var serverTransport = (IAckRawReliableServer)factory.BuildServer();
-
-        var clientApi = new InvariantCheckerApiClient();
-        var serverApi = new InvariantCheckerApiServer();
-
-        var clientHandler = new ClientSideApi(clientApi, memory, logger);
-        var serverInstance = new TestServerSideApiInstance<InvariantCheckerApiServer>(
-            serverApi, memory, logger);
-        var serverFactory = new ServerSideApiFactory<InvariantCheckerApiServer>(
-            _ => serverInstance);
-
-        clientTransport.Init(clientHandler);
-        serverTransport.Init(serverFactory);
-
-        // start, wait for connect, graceful shutdown, verify StopReason types
+    [Test]
+    [Category("Big")]
+    public async Task Test_Big()
+    {
+        var (count, concurrency) = _stack.GetBigTestSize();
+        await RunPing(count, concurrency);
     }
 }
 ```
 
-**Note:** `ApiTestHarness<TClientApi, TServerApi>` is available as a convenience wrapper that handles initialization, connection waiting, and teardown. It requires a `bool failIfError` parameter. Use it when the test plan does not need custom handler wiring:
+**Naming convention:** API-based test directories use the `Api` prefix (e.g. `ApiPing/`, `ApiConnectDisconnect/`, `ApiConnectReceiveKick/`). This distinguishes them from raw transport tests which do not use the API layer.
+
+**Note:** `ApiTestHarness<TClientApi, TServerApi>` is available as a convenience wrapper for simple single-client scenarios:
 
 ```csharp
 var harness = new ApiTestHarness<PingApiClient, PingApiServer>(_stack, failIfError: true);
@@ -318,44 +423,49 @@ public class StreamApiServer : StreamApi
 
 ### Step B: Write the Test Plan
 
+Every API-based test plan must follow the **canonical structure** (see §2B for the full reference):
+
+- API types defined inline in the test file
+- A single `Run*` method with `(int clientCount, int concurrency)` params
+- Server built and started first
+- `Parallel.ForEachAsync` for concurrent clients
+- Each client: connects, performs work, calls `GracefulShutdown`, asserts no `AnyFail` reasons
+- Three test methods: `Test_Single`, `Test_Small`, `Test_Big`
+- `[Category("Small")]` on Single/Small, `[Category("Big")]` on Big
+
+**Example:**
+
 ```csharp
-using Pontifex.Tests;
-
-namespace Pontifex.AckRawReliable.Tests.Stream;
-
 [TestFixtureSource(typeof(AckRawReliableStacks))]
 public class StreamTests
 {
     private readonly ITransportStack _stack;
 
-    public StreamTests(ITransportStack stack)
+    public StreamTests(ITransportStack stack) => _stack = stack;
+
+    private async Task RunStream(int clientCount, int concurrency)
     {
-        _stack = stack;
+        // ... canonical Run* pattern (see §2B) ...
     }
 
     [Test]
-    public async Task Stream_transfers_all_chunks()
+    [Category("Small")]
+    public async Task Test_Single() => await RunStream(1, 1);
+
+    [Test]
+    [Category("Small")]
+    public async Task Test_Small()
     {
-        var harness = new ApiTestHarness<StreamApiClient, StreamApiServer>(_stack, failIfError: true);
-        try
-        {
-            await harness.StartAsync();
+        var (count, concurrency) = _stack.GetSmallTestSize();
+        await RunStream(count, concurrency);
+    }
 
-            var receivedChunks = new List<StreamChunk>();
-            harness.ClientApi.OnChunk.SetProcessor(chunk => receivedChunks.Add(chunk));
-
-            const int chunkCount = 10;
-            const int chunkSize = 1024;
-
-            var totalBytes = await harness.ClientApi.RequestStreamAsync(chunkCount, chunkSize);
-
-            Assert.That(receivedChunks, Has.Count.EqualTo(chunkCount));
-            Assert.That(totalBytes, Is.EqualTo(chunkCount * chunkSize));
-        }
-        finally
-        {
-            harness.Dispose();
-        }
+    [Test]
+    [Category("Big")]
+    public async Task Test_Big()
+    {
+        var (count, concurrency) = _stack.GetBigTestSize();
+        await RunStream(count, concurrency);
     }
 }
 ```
@@ -368,12 +478,14 @@ Every `[Test]` method must have a short but detailed `<summary>` XML doc comment
 
 ```csharp
 /// <summary>
-/// Sends 100 concurrent ping requests and verifies each response carries the correct sequence number.
+/// A single client connects, sends 100 sequential ping requests,
+/// and verifies each response carries the correct sequence number.
 /// </summary>
 [Test]
-public async Task Ping_100_Times()
+[Category("Small")]
+public async Task Test_Single()
 {
-    // ...
+    await RunPing(1, 1);
 }
 ```
 
@@ -473,13 +585,17 @@ Tests/Pontifex.Tests/
 │   └── NoAckRawReliableStacks.cs
 ├── TestPlans/                               # All test plans
 │   ├── AckRawReliable/
-│   │   └── TestProtocols/                   # API-based test plans for AckRawReliable
-│   │       ├── Ping/
-│   │       │   ├── PingApi.cs               # Protocol declarations (structs, ApiRoot, client/server)
-│   │       │   └── PingTests.cs             # Tests using this protocol
-│   │       └── InvariantChecker/
-│   │           ├── InvariantCheckerApi.cs    # Stub ApiRoot for connect/disconnect testing
-│   │           └── InvariantCheckerTests.cs  # Connect/disconnect tests
+│   │   ├── TestProtocols/                   # API-based test plans (name prefix 'Api')
+│   │   │   ├── ApiPing/
+│   │   │   │   └── PingTests.cs             # API + tests in one file (canonical pattern)
+│   │   │   ├── ApiConnectDisconnect/
+│   │   │   │   └── ConnectDisconnectTests.cs
+│   │   │   └── ApiConnectReceiveKick/
+│   │   │       └── ConnectReceiveKickTests.cs
+│   │   ├── Connect_ServerGracefullDisconnect/
+│   │   │   └── Connect_ServerGracefullDisconnect.cs  # Raw handler test
+│   │   └── HighLoadDataTransfer/
+│   │       └── HighLoadDataTransfer.cs               # Raw handler test
 │   └── NoAckRawReliable/
 │       └── Ping/
 │           └── PingTests.cs                 # Raw exchange test (no API layer)

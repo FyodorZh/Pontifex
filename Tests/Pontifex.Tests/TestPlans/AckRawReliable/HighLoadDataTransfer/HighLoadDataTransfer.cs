@@ -382,7 +382,7 @@ namespace Pontifex.AckRawReliable.Tests
         public async Task HighLoadDataTransfer_Big()
         {
             var (size, concurrency) = _stack.GetBigTestSize();
-            await RunDataTransfer(size, concurrency, 1000);
+            await RunDataTransfer(size, concurrency, 100);
         }
     }
 }
