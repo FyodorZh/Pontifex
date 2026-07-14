@@ -53,8 +53,7 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
 
             if (handler != null)
             {
-                using var disposer = message.AsDisposable();
-                handler(message.Acquire());
+                handler(message);
                 return SendResult.Ok;
             }
 
@@ -78,8 +77,7 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
 
             if (handler != null)
             {
-                using var disposer = message.AsDisposable();
-                handler(_clientEp, message.Acquire());
+                handler(_clientEp, message);
                 return SendResult.Ok;
             }
 
