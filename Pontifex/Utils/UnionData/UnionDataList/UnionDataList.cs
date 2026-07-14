@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.Utils
 {
@@ -64,7 +65,7 @@ namespace Pontifex.Utils
 
         public int GetDataSize()
         {
-            int size = 2;
+            int size = ZigZagVarIntSerializer.GetIntEncodedSize(_data.Count);
             foreach (var element in _data.Enumerate())
             {
                 size += element.GetDataSize();
@@ -75,42 +76,36 @@ namespace Pontifex.Utils
         public bool SerializeTo<TByteSink>(ref TByteSink sink)
             where TByteSink : IByteSink
         {
-            UnionDataMemoryAlias alias = (ushort)_data.Count;
-            if (alias.WriteTo2(ref sink))
-            {
-                foreach (var element in _data.Enumerate())
-                {
-                    if (!element.WriteTo(ref sink))
-                    {
-                        return false;
-                    }
-                }
+            if (!ZigZagVarIntSerializer.WriteInt(_data.Count, ref sink))
+                return false;
 
-                return true;
+            foreach (var element in _data.Enumerate())
+            {
+                if (!element.WriteTo(ref sink))
+                {
+                    return false;
+                }
             }
 
-            return false;
+            return true;
         }
 
         public bool SerializeTo(IMultiRefByteArray buffer)
         {
             ByteSink sink = new ByteSink(buffer);
-            
-            UnionDataMemoryAlias alias = (ushort)_data.Count;
-            if (alias.WriteTo2(ref sink))
-            {
-                foreach (var element in _data.Enumerate())
-                {
-                    if (!element.WriteTo(ref sink))
-                    {
-                        return false;
-                    }
-                }
 
-                return true;
+            if (!ZigZagVarIntSerializer.WriteInt(_data.Count, ref sink))
+                return false;
+
+            foreach (var element in _data.Enumerate())
+            {
+                if (!element.WriteTo(ref sink))
+                {
+                    return false;
+                }
             }
 
-            return false;
+            return true;
         }
 
         public bool Serialize(IPool<IMultiRefByteArray, int> bytesPool, [MaybeNullWhen(false)] out IMultiRefByteArray serializedData)
@@ -132,13 +127,8 @@ namespace Pontifex.Utils
         {
             Clear();
             
-            UnionDataMemoryAlias alias = new();
-            if (!alias.ReadFrom2(ref source))
-            {
+            if (!ZigZagVarIntSerializer.ReadInt(ref source, out var count))
                 return false;
-            }
-
-            int count = alias.UShortValue;
             for (int i = 0; i < count; i++)
             {
                 if (!UnionData.ReadFrom(ref source, pool, out var element))

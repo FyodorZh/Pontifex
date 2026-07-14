@@ -54,7 +54,7 @@ public sealed class UnionDataListTests
         using var _ = CreateList().AsDisposable();
         var list = CreateList();
         Assert.That(list.Elements.Count, Is.EqualTo(0));
-        Assert.That(list.GetDataSize(), Is.EqualTo(2));
+        Assert.That(list.GetDataSize(), Is.EqualTo(1));
         Assert.That(list.PeekFirstType(), Is.EqualTo(UnionDataType.Unknown));
         Assert.That(list.TryPopFirst(out UnionData _), Is.False);
         Assert.That(list.ToString(), Is.EqualTo("[]"));
@@ -147,11 +147,11 @@ public sealed class UnionDataListTests
     {
         var list = CreateList();
         using var _ = list.AsDisposable();
-        Assert.That(list.GetDataSize(), Is.EqualTo(2));
+        Assert.That(list.GetDataSize(), Is.EqualTo(1));
         list.PutFirst(new UnionData(true));
-        Assert.That(list.GetDataSize(), Is.EqualTo(2 + 2));
+        Assert.That(list.GetDataSize(), Is.EqualTo(1 + 2));
         list.PutFirst(new UnionData(42));
-        Assert.That(list.GetDataSize(), Is.EqualTo(2 + 2 + 5));
+        Assert.That(list.GetDataSize(), Is.EqualTo(1 + 2 + 5));
     }
 
     [Test]

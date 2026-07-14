@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.Utils
 {
@@ -185,7 +186,7 @@ namespace Pontifex.Utils
                 case UnionDataType.Decimal:
                     return 1 + 16;
                 case UnionDataType.Array:
-                    return 1 + 4 + Bytes!.Count;
+                    return 1 + ZigZagVarIntSerializer.GetIntEncodedSize(Bytes!.Count) + Bytes!.Count;
                 case UnionDataType.NullArray:
                     return 1;
                 default:
@@ -218,12 +219,9 @@ namespace Pontifex.Utils
                     case UnionDataType.Decimal:
                         return _alias.WriteTo16(ref byteSink);
                     case UnionDataType.Array:
-                        UnionDataMemoryAlias size = _bytes!.Count;
-                        if (size.WriteTo4(ref byteSink))
-                        {
-                            return byteSink.PutMany(_bytes);
-                        }
-                        return false;
+                        if (!ZigZagVarIntSerializer.WriteInt(_bytes!.Count, ref byteSink))
+                            return false;
+                        return byteSink.PutMany(_bytes);
                     case UnionDataType.NullArray:
                         return true;
                     default:
@@ -286,12 +284,9 @@ namespace Pontifex.Utils
                     }
                     return false;
                 case UnionDataType.Array:
-                    UnionDataMemoryAlias size = new();
-                    if (!size.ReadFrom4(ref bytes))
-                    {
+                    if (!ZigZagVarIntSerializer.ReadInt(ref bytes, out var arraySize))
                         return false;
-                    }
-                    var buffer = pool.Acquire(size.IntValue);
+                    var buffer = pool.Acquire(arraySize);
                     if (!bytes.TakeMany(buffer))
                     {
                         return false;
