@@ -8,7 +8,7 @@ namespace Pontifex.Converters
 {
     public interface IConvertersGraph
     {
-        ITransport? TryConvert(ITransport transport, TransportType targetType, 
+        Func<ITransport>? TryConvert(TransportType fromType, TransportType toType, Func<ITransport> innerTransportCtor,
             IMemoryRental? memoryRental = null, ILogger? logger = null);
 
         bool HasPath(TransportType from, TransportType to, out int length);
@@ -63,30 +63,28 @@ namespace Pontifex.Converters
             }
         }
 
-        public ITransport? TryConvert(ITransport transport, TransportType targetType, 
+        public Func<ITransport>? TryConvert(TransportType fromType, TransportType toType, Func<ITransport> innerTransportCtor,
             IMemoryRental? memoryRental = null, ILogger? logger = null)
         {
-            if (transport.Type == targetType)
+            if (fromType == toType)
             {
-                return transport;
+                return innerTransportCtor;
             }
-            
-            var list = _convertersMap[(int)transport.Type][(int)targetType];
+
+            var list = _convertersMap[(int)fromType][(int)toType];
             if (list == null)
             {
                 return null;
             }
-            
-            memoryRental ??= transport.Memory;
-            logger ??= transport.Log;
 
-            ITransport res = transport;
+            Func<ITransport> currentFactory = innerTransportCtor;
+
             foreach (var converter in list)
             {
-                res = converter.Convert(res, memoryRental, logger);
+                currentFactory = converter.Convert(currentFactory, memoryRental, logger);
             }
 
-            return res;
+            return currentFactory;
         }
 
         public bool HasPath(TransportType from, TransportType to, out int length)

@@ -13,14 +13,18 @@ namespace Pontifex.Converters
         public TransportType From => TransportType.NoAckRawUnreliable;
         public TransportType To => TransportType.NoAckRawReliable;
 
-        public ITransport Convert(ITransport transport, IMemoryRental? memoryOverride = null, ILogger? loggerOverride = null)
+        public Func<ITransport> Convert(Func<ITransport> innerTransportCtor, IMemoryRental? memoryOverride = null, ILogger? loggerOverride = null)
         {
-            if (transport is INoAckRawUnreliableClient client)
-                return new ReliableClientWrapper(client, memoryOverride, loggerOverride);
-            if (transport is INoAckRawUnreliableServer server)
-                return new ReliableServerWrapper(server, memoryOverride, loggerOverride);
+            return () =>
+            {
+                var transport = innerTransportCtor();
+                if (transport is INoAckRawUnreliableClient client)
+                    return new ReliableClientWrapper(client, memoryOverride, loggerOverride);
+                if (transport is INoAckRawUnreliableServer server)
+                    return new ReliableServerWrapper(server, memoryOverride, loggerOverride);
 
-            throw new ArgumentException($"Transport must implement {nameof(INoAckRawUnreliableClient)} or {nameof(INoAckRawUnreliableServer)}", nameof(transport));
+                throw new ArgumentException($"Transport must implement {nameof(INoAckRawUnreliableClient)} or {nameof(INoAckRawUnreliableServer)}", nameof(transport));
+            };
         }
 
         private static class MessageType

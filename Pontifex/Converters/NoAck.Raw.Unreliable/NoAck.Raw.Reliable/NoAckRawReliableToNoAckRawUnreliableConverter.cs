@@ -11,14 +11,18 @@ namespace Pontifex.Converters
         public TransportType From => TransportType.NoAckRawReliable;
         public TransportType To => TransportType.NoAckRawUnreliable;
 
-        public ITransport Convert(ITransport transport, IMemoryRental? memoryOverride = null, ILogger? loggerOverride = null)
+        public Func<ITransport> Convert(Func<ITransport> innerTransportCtor, IMemoryRental? memoryOverride = null, ILogger? loggerOverride = null)
         {
-            if (transport is INoAckRawReliableClient client)
-                return new UnreliableClientWrapper(client, memoryOverride, loggerOverride);
-            if (transport is INoAckRawReliableServer server)
-                return new UnreliableServerWrapper(server, memoryOverride, loggerOverride);
+            return () =>
+            {
+                var transport = innerTransportCtor();
+                if (transport is INoAckRawReliableClient client)
+                    return new UnreliableClientWrapper(client, memoryOverride, loggerOverride);
+                if (transport is INoAckRawReliableServer server)
+                    return new UnreliableServerWrapper(server, memoryOverride, loggerOverride);
 
-            throw new ArgumentException($"Transport must implement {nameof(INoAckRawReliableClient)} or {nameof(INoAckRawReliableServer)}", nameof(transport));
+                throw new ArgumentException($"Transport must implement {nameof(INoAckRawReliableClient)} or {nameof(INoAckRawReliableServer)}", nameof(transport));
+            };
         }
 
         private sealed class UnreliableClientWrapper : INoAckRawUnreliableClient

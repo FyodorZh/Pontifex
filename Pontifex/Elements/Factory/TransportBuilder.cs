@@ -118,12 +118,15 @@ namespace Pontifex.Factory
                     if (description.Get("from").EvaluateAsDescription(out var fromDescription))
                     {
                         var fromTransport = Build<ITransport>(fromDescription);
-                        var converted = _convertersGraph.TryConvert(fromTransport, transportType.Value, MemoryRental, Logger);
-                        if (converted == null)
+                        var fromType = fromTransport.Type;
+                        var convertedFactory = _convertersGraph.TryConvert(fromType, transportType.Value,
+                            () => Build<ITransport>(fromDescription), MemoryRental, Logger);
+                        if (convertedFactory == null)
                         {
-                            throw new InvalidOperationException($"No converter registered for transport type '{fromTransport.Type}' to '{transportType}'.");
+                            throw new InvalidOperationException($"No converter registered for transport type '{fromType}' to '{transportType}'.");
                         }
 
+                        var converted = convertedFactory();
                         return converted as TTransport ?? 
                                throw new InvalidOperationException($"Converter returned null or incompatible type.");
                     }

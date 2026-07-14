@@ -11,30 +11,33 @@ namespace Pontifex.Converters
         public TransportType From => TransportType.AckRawReliable;
         public TransportType To => TransportType.NoAckRawReliable;
 
-        public ITransport Convert(ITransport transport, IMemoryRental? memoryOverride = null, ILogger? loggerOverride = null)
+        public Func<ITransport> Convert(Func<ITransport> innerTransportCtor, IMemoryRental? memoryOverride = null, ILogger? loggerOverride = null)
         {
-            if (transport is IAckRawReliableClient client)
+            return () =>
             {
-                var log = loggerOverride ?? client.Log;
-                var memory = memoryOverride ?? client.Memory;
-                return new AckRawReliableToNoAckRawReliableClient(
-                    () => client,
-                    client.Name,
-                    log,
-                    memory);
-            }
+                var transport = innerTransportCtor();
 
-            if (transport is IAckRawReliableServer server)
-            {
-                return new AckRawReliableToNoAckRawReliableServer(
-                    server,
-                    loggerOverride,
-                    memoryOverride);
-            }
+                if (transport is IAckRawReliableClient client)
+                {
+                    return new AckRawReliableToNoAckRawReliableClient(
+                        () => (IAckRawReliableClient?)innerTransportCtor(),
+                        client.Name,
+                        loggerOverride ?? client.Log,
+                        memoryOverride ?? client.Memory);
+                }
 
-            throw new ArgumentException(
-                $"Transport must implement {nameof(IAckRawReliableClient)} or {nameof(IAckRawReliableServer)}",
-                nameof(transport));
+                if (transport is IAckRawReliableServer server)
+                {
+                    return new AckRawReliableToNoAckRawReliableServer(
+                        server,
+                        loggerOverride,
+                        memoryOverride);
+                }
+
+                throw new ArgumentException(
+                    $"Transport must implement {nameof(IAckRawReliableClient)} or {nameof(IAckRawReliableServer)}",
+                    nameof(transport));
+            };
         }
     }
 }
