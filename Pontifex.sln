@@ -28,7 +28,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Api.Tests", "Api\P
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Tests", "Tests\Pontifex.Tests\Pontifex.Tests.csproj", "{1BC118E6-F164-4C63-9CB5-DE0CC01CA782}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.Tests", "Tests\Pontifex.Transport.Tests\Pontifex.Transport.Tests.csproj", "{1BC118E6-F164-4C63-9CB5-DE0CC01CA782}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
