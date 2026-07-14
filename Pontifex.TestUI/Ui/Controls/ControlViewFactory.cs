@@ -1,5 +1,4 @@
-using Pontifex.Abstractions;
-using Pontifex.Transports.Tcp;
+using Pontifex.Ack.Raw.Reliable.Tcp;
 
 namespace Pontifex.Test
 {
