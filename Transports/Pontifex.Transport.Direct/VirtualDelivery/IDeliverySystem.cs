@@ -1,7 +1,7 @@
 using System;
 using Pontifex.Utils;
 
-namespace Pontifex.Transports.Direct.Delivery
+namespace Pontifex.VirtualDelivery
 {
     public interface IDeliverySystem
     {
