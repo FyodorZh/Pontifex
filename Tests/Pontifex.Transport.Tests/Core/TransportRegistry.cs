@@ -4,6 +4,7 @@ using Pontifex.Ack.Raw.Reliable.Tcp;
 using Pontifex.Converters;
 using Pontifex.Factory;
 using Pontifex.NoAck.Raw.Reliable.Direct;
+using Pontifex.NoAck.Raw.Unreliable.Direct;
 using Scriba;
 using Scriba.Consumers;
 
@@ -36,6 +37,7 @@ public static class TransportRegistry
         Builder.RegisterTransport(new AckRawDirectConstructor());
         Builder.RegisterTransport(new AckRawTcpConstructor());
         Builder.RegisterTransport(new NoAckRawReliableDirectConstructor());
+        Builder.RegisterTransport(new NoAckRawUnreliableDirectConstructor());
     }
 
     private class LogConsumer : ILogConsumer

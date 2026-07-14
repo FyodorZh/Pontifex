@@ -7,5 +7,6 @@ namespace Pontifex.VirtualDelivery
     {
         event Action<UnionDataList>? Delivered;
         void Deliver(UnionDataList message);
+        void Clear();
     }
 }

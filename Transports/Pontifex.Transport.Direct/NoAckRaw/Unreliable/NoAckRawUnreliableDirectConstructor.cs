@@ -2,19 +2,19 @@ using System;
 using System.Collections.Generic;
 using Pontifex.Factory;
 
-namespace Pontifex.NoAck.Raw.Reliable.Direct
+namespace Pontifex.NoAck.Raw.Unreliable.Direct
 {
-    public class NoAckRawReliableDirectConstructor : ITransportConstructor
+    public class NoAckRawUnreliableDirectConstructor : ITransportConstructor
     {
-        public TransportType Type => TransportType.NoAckRawReliable;
-        public string Name => "direct-noack-raw-reliable";
+        public TransportType Type => TransportType.NoAckRawUnreliable;
+        public string Name => "direct-noack-raw-unreliable";
 
         public ITransport ConstructServer(ITransportBuilder builder, IDescription description)
         {
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
 
-            return new NoAckRawReliableDirectServer(id, builder.Logger, builder.MemoryRental);
+            return new NoAckRawUnreliableDirectServer(id, builder.Logger, builder.MemoryRental);
         }
 
         public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
@@ -22,7 +22,7 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
 
-            return new NoAckRawReliableDirectClient(id, builder.Logger, builder.MemoryRental);
+            return new NoAckRawUnreliableDirectClient(id, builder.Logger, builder.MemoryRental);
         }
 
         public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()
@@ -31,7 +31,7 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
             {
                 var desc = new Description();
                 desc.Add("id", new StringElement(uriBody));
-                desc.Add("type", new StringElement("NoAckRawReliable"));
+                desc.Add("type", new StringElement("NoAckRawUnreliable"));
                 return desc;
             });
         }

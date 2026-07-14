@@ -25,6 +25,7 @@ namespace Pontifex.VirtualDelivery.Netem
         private readonly CorrelatedRandom _dupCrng;
         private readonly CorrelatedRandom _reorderCrng;
         private uint _gapCounter;
+        private volatile bool _cleared;
         private bool _disposed;
 
         public event Action<UnionDataList>? Delivered;
@@ -56,6 +57,12 @@ namespace Pontifex.VirtualDelivery.Netem
 
         public void Deliver(UnionDataList message)
         {
+            if (_cleared)
+            {
+                message.Release();
+                return;
+            }
+
             if (_disposed)
                 throw new ObjectDisposedException(nameof(NetemDeliverySystem));
 
@@ -125,6 +132,27 @@ namespace Pontifex.VirtualDelivery.Netem
                     _signal.Set();
                 }
             }
+        }
+
+        public void Clear()
+        {
+            lock (_lock)
+            {
+                _cleared = true;
+
+                while (_reorderQueue.Count > 0)
+                {
+                    var entry = _reorderQueue.Dequeue();
+                    entry.Message.Release();
+                }
+
+                foreach (var entry in _timeQueue)
+                    entry.Message.Release();
+
+                _timeQueue.Clear();
+            }
+
+            _signal.Set();
         }
 
         public void Dispose()
@@ -274,7 +302,18 @@ namespace Pontifex.VirtualDelivery.Netem
 
                 if (entry != null)
                 {
-                    Delivered?.Invoke(entry.Message);
+                    if (_cleared)
+                    {
+                        entry.Message.Release();
+                    }
+                    else
+                    {
+                        var delivered = Delivered;
+                        if (delivered != null)
+                            delivered(entry.Message);
+                        else
+                            entry.Message.Release();
+                    }
                 }
                 else
                 {
