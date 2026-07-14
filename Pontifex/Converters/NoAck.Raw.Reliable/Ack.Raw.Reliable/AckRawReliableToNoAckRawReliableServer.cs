@@ -161,7 +161,6 @@ namespace Pontifex.Converters
 
             void IAckRawServerHandler.FillAckResponse(UnionDataList ackData)
             {
-                ackData.Release();
             }
 
             public SendResult Send(UnionDataList message)

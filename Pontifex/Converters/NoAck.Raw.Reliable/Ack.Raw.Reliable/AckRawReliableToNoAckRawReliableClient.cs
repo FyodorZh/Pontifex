@@ -143,7 +143,6 @@ namespace Pontifex.Converters
 
         void IAckRawClientHandler.FillAckData(UnionDataList ackData)
         {
-            ackData.Release();
         }
 
         #endregion
