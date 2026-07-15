@@ -2,6 +2,7 @@ using Pontifex.DeliveryManager;
 
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class RetryDeliverySchedulerTests
     {
         private static IDeliveryTask MakeTask(int attempt, DateTime scheduleTime)

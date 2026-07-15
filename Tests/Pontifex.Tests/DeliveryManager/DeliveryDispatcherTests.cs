@@ -4,6 +4,7 @@ using Pontifex.DeliveryManager;
 
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class DeliveryDispatcherTests
     {
         private static IMemoryRental Memory => MemoryRental.Shared;

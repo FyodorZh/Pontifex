@@ -1,5 +1,6 @@
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class DeduplicatorTests
     {
         [Test]

@@ -2,6 +2,7 @@ using Pontifex.DeliveryManager;
 
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class DeliverySorterTests
     {
         private DeliverySorter<string> Create() => new DeliverySorter<string>(DeliveryId.Zero);

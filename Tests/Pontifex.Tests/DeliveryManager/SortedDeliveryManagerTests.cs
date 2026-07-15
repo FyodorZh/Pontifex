@@ -4,6 +4,7 @@ using Pontifex.DeliveryManager;
 
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class SortedDeliveryManagerTests
     {
         private const int MaxMsgSize = 100;

@@ -2,6 +2,7 @@ using Actuarius.Memory;
 
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class UnorderedDeliveryRecipientTests
     {
         private static IMemoryRental Memory => MemoryRental.Shared;
