@@ -74,10 +74,7 @@ namespace Pontifex.DeliveryManager
                 if (topKey.CompareTo(_id) < 0)
                 {
                     _hasError = true;
-                    if (OnError != null)
-                    {
-                        OnError(_id, topKey);
-                    }
+                    OnError?.Invoke(_id, topKey);
 
                     parcelId = topKey;
                     parcel = default;

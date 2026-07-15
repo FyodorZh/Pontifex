@@ -61,8 +61,7 @@ namespace Pontifex.DeliveryManager
         {
             while (_till - _from > 0 && _queue[0])
             {
-                bool tmp;
-                _queue.TryPop(out tmp);
+                _queue.TryPop(out _);
                 _from += 1;
             }
         }

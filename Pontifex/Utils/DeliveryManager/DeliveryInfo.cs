@@ -2,7 +2,7 @@ using System;
 
 namespace Pontifex.DeliveryManager
 {
-    internal struct DeliveryInfo : IComparable<DeliveryInfo>, IEquatable<DeliveryInfo>
+    internal readonly struct DeliveryInfo : IComparable<DeliveryInfo>, IEquatable<DeliveryInfo>
     {
         private readonly DeliveryId _id;
         private readonly byte _chunkId;

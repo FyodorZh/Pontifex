@@ -178,55 +178,80 @@ namespace Pontifex.DeliveryManager
                 return false;
             }
 
-            byte type = data.Elements[0].Alias.ByteValue;
-            if (type != TypeUserSingle && type != TypeUserMulti)
+            short responseProcessTime = 0;
+            DeliveryInfo info;
+            IMultiRefByteArray? userData = null;
+
+            if (data.TryPopFirst(out byte type) &&
+                data.TryPopFirst(out ushort id))
+            {
+                if (type == TypeUserSingle)
+                {
+                    if (data.TryPopFirst(out responseProcessTime) &&
+                        data.TryPopFirst(out IMultiRefReadOnlyByteArray? userBytes) && userBytes != null)
+                    {
+                        info = new DeliveryInfo(new DeliveryId(id), 0);
+                        _confirmationList.Add(info);
+
+                        if (duplicity == Deduplicator.Result.New)
+                        {
+                            userData = _recipient.ReceivedSingle((IMultiRefByteArray)userBytes);
+                            userBytes.Release();
+                        }
+                    }
+                    else
+                    {
+                        data.Release();
+                        return false;
+                    }
+                }
+                else if (type == TypeUserMulti)
+                {
+                    if (data.TryPopFirst(out responseProcessTime) &&
+                        data.TryPopFirst(out byte partId) &&
+                        data.TryPopFirst(out byte partsNumber) &&
+                        data.TryPopFirst(out IMultiRefReadOnlyByteArray? chunkBytes) && chunkBytes != null)
+                    {
+                        info = new DeliveryInfo(new DeliveryId(id), partId);
+                        _confirmationList.Add(info);
+
+                        if (duplicity == Deduplicator.Result.New)
+                        {
+                            userData = _recipient.ReceivedMulti(new DeliveryId(id), partId, partsNumber, (IMultiRefByteArray)chunkBytes);
+                            chunkBytes.Release();
+                        }
+                    }
+                    else
+                    {
+                        data.Release();
+                        return false;
+                    }
+                }
+                else
+                {
+                    data.Release();
+                    return false;
+                }
+            }
+            else
             {
                 data.Release();
                 return false;
             }
 
-            var info = ParseDeliveryInfo(data);
-            _confirmationList.Add(info);
-
-            if (duplicity == Deduplicator.Result.New)
+            if (userData != null)
             {
-                short responseProcessTime;
-                IMultiRefByteArray? userData;
+                var deserialized = _collectablePool.Acquire<UnionDataList>();
+                var source = new ByteSourceFromArray(userData);
+                deserialized.Deserialize(ref source, _bytesPool);
 
-                if (type == TypeUserMulti)
+                var onReceived = Received;
+                if (onReceived != null)
                 {
-                    DeliveryId msgId;
-                    byte partId, partsNumber;
-                    IMultiRefByteArray chunkData;
-                    ParseUserMulti(data, out msgId, out responseProcessTime, out partId, out partsNumber, out chunkData);
-
-                    userData = _recipient.ReceivedMulti(msgId, partId, partsNumber, chunkData);
-                    chunkData.Release();
+                    onReceived(info.Id, deserialized, responseProcessTime);
                 }
-                else
-                {
-                    DeliveryId msgId;
-                    IMultiRefByteArray msgData;
-                    ParseUserSingle(data, out msgId, out responseProcessTime, out msgData);
-
-                    userData = _recipient.ReceivedSingle(msgData);
-                    msgData.Release();
-                }
-
-                if (userData != null)
-                {
-                    var deserialized = _collectablePool.Acquire<UnionDataList>();
-                    var source = new ByteSourceFromArray(userData);
-                    deserialized.Deserialize(ref source, _bytesPool);
-
-                    var onReceived = Received;
-                    if (onReceived != null)
-                    {
-                        onReceived(info.Id, deserialized, responseProcessTime);
-                    }
-                    deserialized.Release();
-                    userData.Release();
-                }
+                deserialized.Release();
+                userData.Release();
             }
 
             data.Release();
@@ -299,8 +324,7 @@ namespace Pontifex.DeliveryManager
             msg.PutLast(new UnionData(TypeUserSingle));
             msg.PutLast(new UnionData(id.Id));
             msg.PutLast(new UnionData(responseProcessTime));
-            data.AddRef();
-            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)data));
+            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)data.Acquire()));
             return msg;
         }
 
@@ -312,8 +336,7 @@ namespace Pontifex.DeliveryManager
             msg.PutLast(new UnionData(responseProcessTime));
             msg.PutLast(new UnionData(partId));
             msg.PutLast(new UnionData(partsNumber));
-            chunkData.AddRef();
-            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)chunkData));
+            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)chunkData.Acquire()));
             return msg;
         }
 
@@ -334,6 +357,11 @@ namespace Pontifex.DeliveryManager
 
         private static DeliveryInfo ParseDeliveryInfo(UnionDataList data)
         {
+            if (data.Elements.Count < 2)
+            {
+                return default;
+            }
+
             byte type = data.Elements[0].Alias.ByteValue;
             ushort id = data.Elements[1].Alias.UShortValue;
 
@@ -342,33 +370,13 @@ namespace Pontifex.DeliveryManager
                 return new DeliveryInfo(new DeliveryId(id), 0);
             }
 
-            if (type == TypeUserMulti)
+            if (type == TypeUserMulti && data.Elements.Count >= 4)
             {
                 byte chunkId = data.Elements[3].Alias.ByteValue;
                 return new DeliveryInfo(new DeliveryId(id), chunkId);
             }
 
             return default;
-        }
-
-        private static void ParseUserSingle(UnionDataList data, out DeliveryId id, out short responseProcessTime, out IMultiRefByteArray userData)
-        {
-            id = new DeliveryId(data.Elements[1].Alias.UShortValue);
-            responseProcessTime = data.Elements[2].Alias.ShortValue;
-            var readOnlyData = data.Elements[3].Bytes!;
-            readOnlyData.AddRef();
-            userData = (IMultiRefByteArray)readOnlyData;
-        }
-
-        private static void ParseUserMulti(UnionDataList data, out DeliveryId id, out short responseProcessTime, out byte partId, out byte partsNumber, out IMultiRefByteArray chunkData)
-        {
-            id = new DeliveryId(data.Elements[1].Alias.UShortValue);
-            responseProcessTime = data.Elements[2].Alias.ShortValue;
-            partId = data.Elements[3].Alias.ByteValue;
-            partsNumber = data.Elements[4].Alias.ByteValue;
-            var readOnlyData = data.Elements[5].Bytes!;
-            readOnlyData.AddRef();
-            chunkData = (IMultiRefByteArray)readOnlyData;
         }
 
         private IMultiRefByteArray CopySegment(IMultiRefByteArray source, int relativeOffset, int count)

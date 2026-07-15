@@ -84,17 +84,17 @@ namespace Pontifex.DeliveryManager
 
         public int DeliveryMaxByteSize => _deliveryMan.DeliveryMaxByteSize;
 
-        SendResult IDeliveryManager.ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId, short responseProcessTime)
+        SendResult IDeliveryManagerUserSide.ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId, short responseProcessTime)
         {
             return _deliveryMan.ScheduleDelivery(data, out deliveryId, responseProcessTime);
         }
 
-        bool IDeliveryManager.ProcessIncoming(Message message)
+        bool IDeliveryManagerTransportSide.ProcessIncoming(Message message)
         {
             return _deliveryMan.ProcessIncoming(message);
         }
 
-        void IDeliveryManager.ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<Message> dst)
+        void IDeliveryManagerTransportSide.ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<Message> dst)
         {
             _deliveryMan.ProcessOutgoing(scheduler, now, dst);
         }

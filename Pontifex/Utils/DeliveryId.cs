@@ -2,7 +2,7 @@
 
 namespace Pontifex
 {
-    public struct DeliveryId : IComparable<DeliveryId>, IEquatable<DeliveryId>
+    public readonly struct DeliveryId : IComparable<DeliveryId>, IEquatable<DeliveryId>
     {
         private const int Range = UInt16.MaxValue;
         private const int HalfRange = Range / 2;
