@@ -1,6 +1,7 @@
 using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
@@ -11,13 +12,13 @@ namespace Pontifex.DeliveryManager
 
     internal class SortedDeliveryManager : ISortedDeliveryManager
     {
-        public event Action<DeliveryId, IMultiRefByteArray, short>? Received;
+        public event Action<DeliveryId, UnionDataList, short>? Received;
         public event Action<DeliveryId>? FailedToDeliver;
         public event Action<DeliveryId>? Delivered;
         public event Action? FailedToSort;
 
         private readonly IDeliveryManager _deliveryMan;
-        private readonly DeliverySorter<IMultiRefByteArray> _sorter;
+        private readonly DeliverySorter<UnionDataList> _sorter;
 
         public SortedDeliveryManager(IDeliveryManager deliveryMan)
         {
@@ -26,14 +27,14 @@ namespace Pontifex.DeliveryManager
             _deliveryMan.FailedToDeliver += OnFailedToDeliver;
             _deliveryMan.Delivered += OnDelivered;
 
-            _sorter = new DeliverySorter<IMultiRefByteArray>(DeliveryId.Zero.Next);
+            _sorter = new DeliverySorter<UnionDataList>(DeliveryId.Zero.Next);
             _sorter.OnError += (id, unexpectedId) =>
             {
                 OnFailedToSort();
             };
         }
 
-        private void OnReceived(DeliveryId id, IMultiRefByteArray message, short processTime)
+        private void OnReceived(DeliveryId id, UnionDataList message, short processTime)
         {
             if (!_sorter.Push(id, message))
             {
@@ -42,7 +43,7 @@ namespace Pontifex.DeliveryManager
             }
 
             DeliveryId nextId;
-            IMultiRefByteArray? nextBuffer;
+            UnionDataList? nextBuffer;
             while (_sorter.TryPop(out nextId, out nextBuffer))
             {
                 var onReceived = Received;
@@ -83,9 +84,9 @@ namespace Pontifex.DeliveryManager
 
         public int DeliveryMaxByteSize => _deliveryMan.DeliveryMaxByteSize;
 
-        SendResult IDeliveryManager.ScheduleDelivery(DeliveryId id, IMultiRefByteArray data, short responseProcessTime)
+        SendResult IDeliveryManager.ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId, short responseProcessTime)
         {
-            return _deliveryMan.ScheduleDelivery(id, data, responseProcessTime);
+            return _deliveryMan.ScheduleDelivery(data, out deliveryId, responseProcessTime);
         }
 
         bool IDeliveryManager.ProcessIncoming(Message message)

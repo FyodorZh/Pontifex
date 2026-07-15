@@ -1,18 +1,19 @@
 using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
     internal interface IDeliveryManager
     {
-        event Action<DeliveryId, IMultiRefByteArray, short>? Received;
+        event Action<DeliveryId, UnionDataList, short>? Received;
         event Action<DeliveryId>? FailedToDeliver;
         event Action<DeliveryId>? Delivered;
 
         int DeliveryMaxByteSize { get; }
 
-        SendResult ScheduleDelivery(DeliveryId id, IMultiRefByteArray data, short responseProcessTime = 0);
+        SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId, short responseProcessTime = 0);
 
         bool ProcessIncoming(Message message);
 

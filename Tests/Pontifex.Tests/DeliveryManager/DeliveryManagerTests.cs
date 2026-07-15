@@ -23,6 +23,20 @@ namespace Pontifex.DeliveryManager.Tests
             return buf;
         }
 
+        private static UnionDataList DataList(params byte[] bytes)
+        {
+            var data = CPool.Acquire<UnionDataList>();
+            if (bytes.Length > 0)
+            {
+                var buf = Pool.Acquire(bytes.Length);
+                Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
+                buf.AddRef();
+                data.PutLast(new UnionData((IMultiRefReadOnlyByteArray)buf));
+                buf.Release();
+            }
+            return data;
+        }
+
         private static List<Message> Capture(DeliveryManager dm, IDeliveryAttemptScheduler? scheduler = null, DateTime? now = null)
         {
             var sent = new List<Message>();
@@ -35,28 +49,28 @@ namespace Pontifex.DeliveryManager.Tests
         public void ScheduleDelivery_SingleChunk_Ok()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            Assert.That(dm.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3)), Is.EqualTo(SendResult.Ok));
+            Assert.That(dm.ScheduleDelivery(DataList(1, 2, 3), out _), Is.EqualTo(SendResult.Ok));
         }
 
         [Test]
         public void ScheduleDelivery_InvalidData_ReturnsInvalidMessage()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            Assert.That(dm.ScheduleDelivery(new DeliveryId(1), VoidByteArray.Instance), Is.EqualTo(SendResult.InvalidMessage));
+            Assert.That(dm.ScheduleDelivery(null!, out _), Is.EqualTo(SendResult.InvalidMessage));
         }
 
         [Test]
         public void ScheduleDelivery_MessageTooBig_ReturnsMessageTooBig()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            Assert.That(dm.ScheduleDelivery(new DeliveryId(1), Data(new byte[30000])), Is.EqualTo(SendResult.MessageTooBig));
+            Assert.That(dm.ScheduleDelivery(DataList(new byte[30000]), out _), Is.EqualTo(SendResult.MessageTooBig));
         }
 
         [Test]
         public void ProcessOutgoing_ProducesBuffer()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            dm.ScheduleDelivery(new DeliveryId(1), Data(10, 20, 30));
+            dm.ScheduleDelivery(DataList(10, 20, 30), out _);
             var sent = Capture(dm);
             Assert.That(sent, Has.Count.EqualTo(1));
             foreach (var m in sent) m.Data.Release();
@@ -68,7 +82,7 @@ namespace Pontifex.DeliveryManager.Tests
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3, 4, 5));
+            sender.ScheduleDelivery(DataList(1, 2, 3, 4, 5), out _);
             var outbound = Capture(sender);
             Assert.That(outbound, Has.Count.EqualTo(1));
 
@@ -80,8 +94,9 @@ namespace Pontifex.DeliveryManager.Tests
             receiver.Received += (id, d, _) =>
             {
                 receivedId = id;
-                receivedBytes = new byte[d.Count];
-                d.CopyTo(receivedBytes, 0, 0, d.Count);
+                var element = d.Elements[0].Bytes!;
+                receivedBytes = new byte[element.Count];
+                element.CopyTo(receivedBytes, 0, 0, element.Count);
             };
 
             receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
@@ -97,7 +112,7 @@ namespace Pontifex.DeliveryManager.Tests
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3));
+            sender.ScheduleDelivery(DataList(1, 2, 3), out _);
             var outbound = Capture(sender);
             var msg = outbound[0];
 
@@ -122,7 +137,7 @@ namespace Pontifex.DeliveryManager.Tests
             DeliveryId? deliveredId = null;
             sender.Delivered += id => deliveredId = id;
 
-            sender.ScheduleDelivery(new DeliveryId(42), Data(1, 2, 3));
+            sender.ScheduleDelivery(DataList(1, 2, 3), out var deliveryId);
             var toReceiver = Capture(sender);
             Assert.That(toReceiver, Has.Count.EqualTo(1));
 
@@ -141,7 +156,7 @@ namespace Pontifex.DeliveryManager.Tests
                 ack.Data.Release();
             }
 
-            Assert.That(deliveredId, Is.EqualTo(new DeliveryId(42)));
+            Assert.That(deliveredId, Is.EqualTo(deliveryId));
         }
 
         [Test]
@@ -154,21 +169,21 @@ namespace Pontifex.DeliveryManager.Tests
             DeliveryId? failedId = null;
             dm.FailedToDeliver += id => failedId = id;
 
-            dm.ScheduleDelivery(new DeliveryId(7), Data(1));
+            dm.ScheduleDelivery(DataList(1), out var dmFailedId);
             var batch1 = Capture(dm, scheduler, now);
             foreach (var m in batch1) m.Data.Release();
 
             var batch2 = Capture(dm, scheduler, now + TimeSpan.FromMilliseconds(200));
             foreach (var m in batch2) m.Data.Release();
 
-            Assert.That(failedId, Is.EqualTo(new DeliveryId(7)));
+            Assert.That(failedId, Is.EqualTo(dmFailedId));
         }
 
         [Test]
         public void Clear_ThenProcessOutgoing_ProducesNothing()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            dm.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3));
+            dm.ScheduleDelivery(DataList(1, 2, 3), out _);
             dm.Clear();
             Assert.That(Capture(dm), Is.Empty);
         }
@@ -180,7 +195,7 @@ namespace Pontifex.DeliveryManager.Tests
             var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             for (ushort i = 1; i <= 5; i++)
-                sender.ScheduleDelivery(new DeliveryId(i), Data((byte)i));
+                sender.ScheduleDelivery(DataList((byte)i), out _);
 
             var outbound = Capture(sender);
             Assert.That(outbound, Has.Count.EqualTo(5));
@@ -202,11 +217,8 @@ namespace Pontifex.DeliveryManager.Tests
         public void GarbageBytes_DoesNotCrash()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var garbage = Data(new byte[100]);
-            garbage.Array[garbage.Offset] = 0xFF;
             bool result = dm.ProcessIncoming(new Message(1, CreateGarbageList()));
             Assert.That(result, Is.False);
-            garbage.Release();
         }
 
         private static UnionDataList CreateGarbageList()
@@ -222,7 +234,7 @@ namespace Pontifex.DeliveryManager.Tests
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(1), Data());
+            sender.ScheduleDelivery(DataList(), out _);
             var outbound = Capture(sender);
             var msg = outbound[0];
             msg.Data.AddRef();
@@ -230,8 +242,16 @@ namespace Pontifex.DeliveryManager.Tests
             byte[]? receivedBytes = null;
             receiver.Received += (_, d, _) =>
             {
-                receivedBytes = new byte[d.Count];
-                d.CopyTo(receivedBytes, 0, 0, d.Count);
+                if (d.Elements.Count > 0)
+                {
+                    var element = d.Elements[0].Bytes!;
+                    receivedBytes = new byte[element.Count];
+                    element.CopyTo(receivedBytes, 0, 0, element.Count);
+                }
+                else
+                {
+                    receivedBytes = Array.Empty<byte>();
+                }
             };
 
             receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
@@ -253,7 +273,7 @@ namespace Pontifex.DeliveryManager.Tests
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3));
+            sender.ScheduleDelivery(DataList(1, 2, 3), out _);
             var batch1 = Capture(sender);
             Assert.That(batch1, Has.Count.EqualTo(1));
             var msg = batch1[0];
@@ -277,17 +297,21 @@ namespace Pontifex.DeliveryManager.Tests
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
-            var largeData = Data(bytes);
+            var largeData = DataList(bytes);
 
-            sender.ScheduleDelivery(new DeliveryId(1), largeData);
+            sender.ScheduleDelivery(largeData, out _);
             var outbound = Capture(sender);
             Assert.That(outbound.Count, Is.GreaterThan(1));
 
             byte[]? resultData = null;
             receiver.Received += (_, d, _) =>
             {
-                resultData = new byte[d.Count];
-                d.CopyTo(resultData, 0, 0, d.Count);
+                if (d.Elements.Count > 0)
+                {
+                    var element = d.Elements[0].Bytes!;
+                    resultData = new byte[element.Count];
+                    element.CopyTo(resultData, 0, 0, element.Count);
+                }
             };
 
             foreach (var msg in outbound)
@@ -311,17 +335,21 @@ namespace Pontifex.DeliveryManager.Tests
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
-            var largeData = Data(bytes);
+            var largeData = DataList(bytes);
 
-            sender.ScheduleDelivery(new DeliveryId(1), largeData);
+            sender.ScheduleDelivery(largeData, out _);
             var outbound = Capture(sender);
             Assert.That(outbound.Count, Is.GreaterThan(1));
 
             byte[]? resultData = null;
             receiver.Received += (_, d, _) =>
             {
-                resultData = new byte[d.Count];
-                d.CopyTo(resultData, 0, 0, d.Count);
+                if (d.Elements.Count > 0)
+                {
+                    var element = d.Elements[0].Bytes!;
+                    resultData = new byte[element.Count];
+                    element.CopyTo(resultData, 0, 0, element.Count);
+                }
             };
 
             for (int i = outbound.Count - 1; i >= 0; i--)
@@ -346,9 +374,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
-            var largeData = Data(bytes);
+            var largeData = DataList(bytes);
 
-            sender.ScheduleDelivery(new DeliveryId(1), largeData);
+            sender.ScheduleDelivery(largeData, out _);
             var outbound = Capture(sender);
             Assert.That(outbound.Count, Is.GreaterThan(1));
 
@@ -381,9 +409,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
-            var largeData = Data(bytes);
+            var largeData = DataList(bytes);
 
-            sender.ScheduleDelivery(new DeliveryId(1), largeData);
+            sender.ScheduleDelivery(largeData, out _);
             var toReceiver = Capture(sender);
             Assert.That(toReceiver.Count, Is.GreaterThan(1));
 
@@ -418,9 +446,9 @@ namespace Pontifex.DeliveryManager.Tests
             dm.FailedToDeliver += id => failedId = id;
 
             var bytes = new byte[150];
-            var largeData = Data(bytes);
+            var largeData = DataList(bytes);
 
-            dm.ScheduleDelivery(new DeliveryId(1), largeData);
+            dm.ScheduleDelivery(largeData, out _);
             var batch1 = Capture(dm, scheduler, now);
             Assert.That(batch1.Count, Is.GreaterThan(1));
             foreach (var m in batch1) m.Data.Release();

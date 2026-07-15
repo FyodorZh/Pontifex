@@ -23,6 +23,20 @@ namespace Pontifex.DeliveryManager.Tests
             return buf;
         }
 
+        private static UnionDataList DataList(params byte[] bytes)
+        {
+            var data = CPool.Acquire<UnionDataList>();
+            if (bytes.Length > 0)
+            {
+                var buf = Pool.Acquire(bytes.Length);
+                Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
+                buf.AddRef();
+                data.PutLast(new UnionData((IMultiRefReadOnlyByteArray)buf));
+                buf.Release();
+            }
+            return data;
+        }
+
         private static List<Message> CaptureAll(DeliveryManager dm)
         {
             var sent = new List<Message>();
@@ -38,17 +52,18 @@ namespace Pontifex.DeliveryManager.Tests
             var sorted = new SortedDeliveryManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(1), Data(1));
-            sender.ScheduleDelivery(new DeliveryId(3), Data(3));
-            sender.ScheduleDelivery(new DeliveryId(2), Data(2));
+            sender.ScheduleDelivery(DataList(1), out _);
+            sender.ScheduleDelivery(DataList(3), out _);
+            sender.ScheduleDelivery(DataList(2), out _);
             var outbound = CaptureAll(sender);
             Assert.That(outbound, Has.Count.EqualTo(3));
 
             var received = new List<(DeliveryId id, byte[] data)>();
             sorted.Received += (id, d, _) =>
             {
-                var bytes = new byte[d.Count];
-                d.CopyTo(bytes, 0, 0, d.Count);
+                var element = d.Elements[0].Bytes!;
+                var bytes = new byte[element.Count];
+                element.CopyTo(bytes, 0, 0, element.Count);
                 received.Add((id, bytes));
             };
 
@@ -72,14 +87,15 @@ namespace Pontifex.DeliveryManager.Tests
             var sorted = new SortedDeliveryManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(5), Data(42));
+            sender.ScheduleDelivery(DataList(42), out _);
             var outbound = CaptureAll(sender);
 
             byte[]? received = null;
             sorted.Received += (_, d, _) =>
             {
-                received = new byte[d.Count];
-                d.CopyTo(received, 0, 0, d.Count);
+                var element = d.Elements[0].Bytes!;
+                received = new byte[element.Count];
+                element.CopyTo(received, 0, 0, element.Count);
             };
 
             var msg = outbound[0];
@@ -98,7 +114,7 @@ namespace Pontifex.DeliveryManager.Tests
             var sorted = new SortedDeliveryManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(1), Data(1));
+            sender.ScheduleDelivery(DataList(1), out _);
             var outbound = CaptureAll(sender);
 
             sorted.Clear();
@@ -123,7 +139,7 @@ namespace Pontifex.DeliveryManager.Tests
             var sorted = new SortedDeliveryManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(new DeliveryId(1), Data(1));
+            sender.ScheduleDelivery(DataList(1), out _);
             var outbound = CaptureAll(sender);
             var msg = outbound[0];
 
@@ -147,7 +163,7 @@ namespace Pontifex.DeliveryManager.Tests
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             for (ushort i = 1; i <= 10; i++)
-                sender.ScheduleDelivery(new DeliveryId(i), Data((byte)i));
+                sender.ScheduleDelivery(DataList((byte)i), out _);
             var outbound = CaptureAll(sender);
             Assert.That(outbound, Has.Count.EqualTo(10));
 
