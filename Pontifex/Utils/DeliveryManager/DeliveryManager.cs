@@ -128,81 +128,77 @@ namespace Pontifex.DeliveryManager
             }
         }
 
-        public bool ProcessIncoming(IMultiRefByteArray incomingData)
+        public bool ProcessIncoming(Message message)
         {
-            byte type = incomingData.Array[incomingData.Offset];
+            var data = message.Data;
 
-            if (type == TypeDeliveryInfo)
+            if (message.IsDeliveryInfo)
             {
-                ProcessDeliveryInfo(incomingData);
-                incomingData.Release();
+                ProcessDeliveryInfo(data);
+                data.Release();
                 return true;
             }
 
-            if (type == TypeUserSingle || type == TypeUserMulti)
+            var duplicity = _deduplicator.Received(message.PacketId);
+            if (duplicity == Deduplicator.Result.Overflow)
             {
-                DeliveryId packetId;
-                if (TryParseDeliveryId(incomingData, out packetId))
+                data.Release();
+                return false;
+            }
+
+            byte type = data.Array[data.Offset];
+            if (type != TypeUserSingle && type != TypeUserMulti)
+            {
+                data.Release();
+                return false;
+            }
+
+            var info = ParseDeliveryInfo(data);
+            _confirmationList.Add(info);
+
+            if (duplicity == Deduplicator.Result.New)
+            {
+                short responseProcessTime;
+                IMultiRefByteArray? userData;
+
+                if (type == TypeUserMulti)
                 {
-                    var duplicity = _deduplicator.Received(packetId.Id);
-                    if (duplicity == Deduplicator.Result.Overflow)
-                    {
-                        incomingData.Release();
-                        return false;
-                    }
+                    DeliveryId msgId;
+                    byte partId, partsNumber;
+                    IMultiRefByteArray chunkData;
+                    ParseUserMulti(data, out msgId, out responseProcessTime, out partId, out partsNumber, out chunkData);
 
-                    _confirmationList.Add(ParseDeliveryInfo(incomingData));
+                    userData = _recipient.ReceivedMulti(msgId, partId, partsNumber, chunkData);
+                    chunkData.Release();
+                }
+                else
+                {
+                    DeliveryId msgId;
+                    IMultiRefByteArray msgData;
+                    ParseUserSingle(data, out msgId, out responseProcessTime, out msgData);
 
-                    if (duplicity == Deduplicator.Result.New)
-                    {
-                        IMultiRefByteArray? userData;
-
-                        if (type == TypeUserMulti)
-                        {
-                            DeliveryId msgId;
-                            byte partId, partsNumber;
-                            short responseProcessTime;
-                            IMultiRefByteArray chunkData;
-                            ParseUserMulti(incomingData, out msgId, out responseProcessTime, out partId, out partsNumber, out chunkData);
-
-                            userData = _recipient.ReceivedMulti(msgId, partId, partsNumber, chunkData);
-                            chunkData.Release();
-                        }
-                        else
-                        {
-                            DeliveryId msgId;
-                            short responseProcessTime;
-                            IMultiRefByteArray msgData;
-                            ParseUserSingle(incomingData, out msgId, out responseProcessTime, out msgData);
-
-                            userData = _recipient.ReceivedSingle(msgData);
-                            msgData.Release();
-                        }
-
-                        if (userData != null)
-                        {
-                            var onReceived = Received;
-                            if (onReceived != null)
-                            {
-                                onReceived(packetId, userData, 0);
-                            }
-                            userData.Release();
-                        }
-                    }
+                    userData = _recipient.ReceivedSingle(msgData);
+                    msgData.Release();
                 }
 
-                incomingData.Release();
-                return true;
+                if (userData != null)
+                {
+                    var onReceived = Received;
+                    if (onReceived != null)
+                    {
+                        onReceived(info.Id, userData, responseProcessTime);
+                    }
+                    userData.Release();
+                }
             }
 
-            incomingData.Release();
-            return false;
+            data.Release();
+            return true;
         }
 
-        public void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<IMultiRefByteArray> dst)
+        public void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<Message> dst)
         {
-            IMultiRefByteArray? userMessage;
-            while (_queueToSend.TryPop(out userMessage))
+            while (_queueToSend.TryPop(out var userMessage))
             {
                 DeliveryInfo info = ParseDeliveryInfo(userMessage);
                 userMessage.AddRef();
@@ -236,7 +232,7 @@ namespace Pontifex.DeliveryManager
                 {
                     int len = Math.Min(packSize, _confirmationList.Count - pos);
                     var infoMsg = SerializeDeliveryInfo(_confirmationList, pos, len);
-                    dst.Put(infoMsg);
+                    dst.Put(new Message(Message.VoidId, infoMsg));
                     pos += len;
                 }
 
@@ -314,18 +310,6 @@ namespace Pontifex.DeliveryManager
             return buffer;
         }
 
-        private static bool TryParseDeliveryId(IMultiRefByteArray data, out DeliveryId id)
-        {
-            id = default;
-            if (data.Count < 2)
-            {
-                return false;
-            }
-            ushort rawId = ReadUInt16LE(data.Array, data.Offset + 1);
-            id = new DeliveryId(rawId);
-            return true;
-        }
-
         private static DeliveryInfo ParseDeliveryInfo(IMultiRefByteArray data)
         {
             int offset = data.Offset;
@@ -345,12 +329,6 @@ namespace Pontifex.DeliveryManager
             }
 
             return default;
-        }
-
-        private static DeliveryId ParseDeliveryId(IMultiRefByteArray data)
-        {
-            ushort id = ReadUInt16LE(data.Array, data.Offset + 1);
-            return new DeliveryId(id);
         }
 
         private static void ParseUserSingle(IMultiRefByteArray data, out DeliveryId id, out short responseProcessTime, out IMultiRefByteArray userData)

@@ -26,22 +26,24 @@ namespace Pontifex.DeliveryManager
             private DeliveryInfo _id;
             private DateTime _scheduleTime;
             private IMultiRefByteArray _data = null!;
+            private ushort _packetId;
 
-            public void Init(DeliveryInfo id, DateTime scheduleTime, IMultiRefByteArray data)
+            public void Init(DeliveryInfo id, DateTime scheduleTime, IMultiRefByteArray data, ushort packetId)
             {
                 _id = id;
                 _scheduleTime = scheduleTime;
                 _data = data;
+                _packetId = packetId;
                 DeliveryAttempts = 0;
             }
 
             public DeliveryInfo Id => _id;
             public DateTime ScheduleTime => _scheduleTime;
 
-            public IMultiRefByteArray AcquireData()
+            public Message AcquireMessage()
             {
                 _data.AddRef();
-                return _data;
+                return new Message(_packetId, _data);
             }
 
             public int DeliveryAttempts { get; set; }
@@ -58,6 +60,7 @@ namespace Pontifex.DeliveryManager
         }
 
         private readonly int _capacity;
+        private ushort _nextSeq = 1;
         private readonly PriorityQueue<DateTime, DeliveryTask> _deliveryQueue = new PriorityQueue<DateTime, DeliveryTask>();
         private readonly HashSet<DeliveryInfo> _unfinishedDeliveries = new HashSet<DeliveryInfo>();
         private readonly Dictionary<DeliveryId, int> _unfinishedLogicDeliveries = new Dictionary<DeliveryId, int>();
@@ -85,8 +88,9 @@ namespace Pontifex.DeliveryManager
             {
                 if (_unfinishedDeliveries.Add(id))
                 {
+                    ushort seq = _nextSeq++;
                     var task = new DeliveryTask();
-                    task.Init(id, now, data);
+                    task.Init(id, now, data, seq);
                     _deliveryQueue.Enqueue(now, task);
 
                     if (_unfinishedLogicDeliveries.ContainsKey(id.Id))
@@ -109,7 +113,7 @@ namespace Pontifex.DeliveryManager
             return ScheduleResult.BufferOverflow;
         }
 
-        public void TryToDeliver(IConsumer<IMultiRefByteArray> dst, IDeliveryAttemptScheduler scheduler, DateTime now)
+        public void TryToDeliver(IConsumer<Message> dst, IDeliveryAttemptScheduler scheduler, DateTime now)
         {
             while (_deliveryQueue.Count > 0)
             {
@@ -127,7 +131,7 @@ namespace Pontifex.DeliveryManager
                     continue;
                 }
 
-                dst.Put(task.AcquireData());
+                dst.Put(task.AcquireMessage());
 
                 task.DeliveryAttempts += 1;
 

@@ -35,6 +35,12 @@
     </ItemGroup>
 
     <ItemGroup>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Tests</_Parameter1>
+      </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="Actuarius.Memory" Version="0.1.5-dev.0" />
       <PackageReference Include="Operarius" Version="0.2.3-dev.0" />
       <PackageReference Include="Scriba" Version="0.2.4-dev.0" />

@@ -88,12 +88,12 @@ namespace Pontifex.DeliveryManager
             return _deliveryMan.ScheduleDelivery(id, data, responseProcessTime);
         }
 
-        bool IDeliveryManager.ProcessIncoming(IMultiRefByteArray incomingData)
+        bool IDeliveryManager.ProcessIncoming(Message message)
         {
-            return _deliveryMan.ProcessIncoming(incomingData);
+            return _deliveryMan.ProcessIncoming(message);
         }
 
-        void IDeliveryManager.ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<IMultiRefByteArray> dst)
+        void IDeliveryManager.ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<Message> dst)
         {
             _deliveryMan.ProcessOutgoing(scheduler, now, dst);
         }

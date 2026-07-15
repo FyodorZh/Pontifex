@@ -14,9 +14,9 @@ namespace Pontifex.DeliveryManager
 
         SendResult ScheduleDelivery(DeliveryId id, IMultiRefByteArray data, short responseProcessTime = 0);
 
-        bool ProcessIncoming(IMultiRefByteArray incomingData);
+        bool ProcessIncoming(Message message);
 
-        void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<IMultiRefByteArray> dst);
+        void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<Message> dst);
 
         void Clear();
     }
