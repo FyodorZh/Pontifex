@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
-using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
@@ -25,10 +25,10 @@ namespace Pontifex.DeliveryManager
         {
             private DeliveryInfo _id;
             private DateTime _scheduleTime;
-            private IMultiRefByteArray _data = null!;
+            private UnionDataList _data = null!;
             private ushort _packetId;
 
-            public void Init(DeliveryInfo id, DateTime scheduleTime, IMultiRefByteArray data, ushort packetId)
+            public void Init(DeliveryInfo id, DateTime scheduleTime, UnionDataList data, ushort packetId)
             {
                 _id = id;
                 _scheduleTime = scheduleTime;
@@ -82,7 +82,7 @@ namespace Pontifex.DeliveryManager
             _unfinishedLogicDeliveries.Clear();
         }
 
-        public ScheduleResult ScheduleDeliver(DeliveryInfo id, IMultiRefByteArray data, DateTime now)
+        public ScheduleResult ScheduleDeliver(DeliveryInfo id, UnionDataList data, DateTime now)
         {
             if (_deliveryQueue.Count < _capacity)
             {

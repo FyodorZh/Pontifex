@@ -1,6 +1,9 @@
+using System;
+using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.DeliveryManager;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager.Tests
 {
@@ -10,6 +13,7 @@ namespace Pontifex.DeliveryManager.Tests
         private const int MaxMsgSize = 100;
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
+        private static ICollectablePool CPool => Memory.CollectablePool;
         private static IDeliveryAttemptScheduler RetryScheduler => new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
         private static IMultiRefByteArray Data(params byte[] bytes)
@@ -30,28 +34,28 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void ScheduleDelivery_SingleChunk_Ok()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool);
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             Assert.That(dm.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3)), Is.EqualTo(SendResult.Ok));
         }
 
         [Test]
         public void ScheduleDelivery_InvalidData_ReturnsInvalidMessage()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool);
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             Assert.That(dm.ScheduleDelivery(new DeliveryId(1), VoidByteArray.Instance), Is.EqualTo(SendResult.InvalidMessage));
         }
 
         [Test]
         public void ScheduleDelivery_MessageTooBig_ReturnsMessageTooBig()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool);
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             Assert.That(dm.ScheduleDelivery(new DeliveryId(1), Data(new byte[30000])), Is.EqualTo(SendResult.MessageTooBig));
         }
 
         [Test]
         public void ProcessOutgoing_ProducesBuffer()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool);
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             dm.ScheduleDelivery(new DeliveryId(1), Data(10, 20, 30));
             var sent = Capture(dm);
             Assert.That(sent, Has.Count.EqualTo(1));
@@ -61,8 +65,8 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void RoundTrip_SingleChunk_ReceivedFires()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3, 4, 5));
             var outbound = Capture(sender);
@@ -90,8 +94,8 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void DuplicateInbound_ReceivedFiresOnce()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3));
             var outbound = Capture(sender);
@@ -112,8 +116,8 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void AckRoundTrip_DeliveredFires()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             DeliveryId? deliveredId = null;
             sender.Delivered += id => deliveredId = id;
@@ -143,7 +147,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void DeliveryFailure_FiresFailedToDeliver()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool);
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var now = DateTime.UtcNow;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromMilliseconds(50), baseIntervalMs: 100);
 
@@ -163,7 +167,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Clear_ThenProcessOutgoing_ProducesNothing()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool);
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             dm.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3));
             dm.Clear();
             Assert.That(Capture(dm), Is.Empty);
@@ -172,10 +176,9 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void MultipleSends_AllReceived()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            ushort nextPacket = 1;
             for (ushort i = 1; i <= 5; i++)
                 sender.ScheduleDelivery(new DeliveryId(i), Data((byte)i));
 
@@ -198,18 +201,26 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void GarbageBytes_DoesNotCrash()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool);
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var garbage = Data(new byte[100]);
             garbage.Array[garbage.Offset] = 0xFF;
-            bool result = dm.ProcessIncoming(new Message(1, garbage));
+            bool result = dm.ProcessIncoming(new Message(1, CreateGarbageList()));
             Assert.That(result, Is.False);
+            garbage.Release();
+        }
+
+        private static UnionDataList CreateGarbageList()
+        {
+            var data = CPool.Acquire<UnionDataList>();
+            data.PutLast(new UnionData((byte)0xFF));
+            return data;
         }
 
         [Test]
         public void EmptyDataRoundTrip_Works()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(1), Data());
             var outbound = Capture(sender);
@@ -233,14 +244,14 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void ProcessOutgoing_WithoutSchedule_ProducesNothing()
         {
-            Assert.That(Capture(new DeliveryManager(MaxMsgSize, Pool)), Is.Empty);
+            Assert.That(Capture(new DeliveryManager(MaxMsgSize, Pool, CPool)), Is.Empty);
         }
 
         [Test]
         public void MultipleProcessOutgoing_ConfirmationsAccumulate()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(1), Data(1, 2, 3));
             var batch1 = Capture(sender);
@@ -261,8 +272,8 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void MultiChunkRoundTrip_WithLargeData()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);

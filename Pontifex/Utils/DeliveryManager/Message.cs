@@ -1,4 +1,4 @@
-using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
@@ -7,9 +7,9 @@ namespace Pontifex.DeliveryManager
         public const ushort VoidId = 0;
 
         public ushort PacketId { get; }
-        public IMultiRefByteArray Data { get; }
+        public UnionDataList Data { get; }
 
-        public Message(ushort packetId, IMultiRefByteArray data)
+        public Message(ushort packetId, UnionDataList data)
         {
             PacketId = packetId;
             Data = data;

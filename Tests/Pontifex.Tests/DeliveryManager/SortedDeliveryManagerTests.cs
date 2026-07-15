@@ -1,6 +1,9 @@
+using System;
+using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.DeliveryManager;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager.Tests
 {
@@ -10,6 +13,7 @@ namespace Pontifex.DeliveryManager.Tests
         private const int MaxMsgSize = 100;
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
+        private static ICollectablePool CPool => Memory.CollectablePool;
         private static IDeliveryAttemptScheduler Scheduler => new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
         private static IMultiRefByteArray Data(params byte[] bytes)
@@ -30,9 +34,9 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void AheadIdsBuffered_ReceivedInOrder()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool);
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new SortedDeliveryManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(1), Data(1));
             sender.ScheduleDelivery(new DeliveryId(3), Data(3));
@@ -64,9 +68,9 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void SingleMessage_PassesThrough()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool);
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new SortedDeliveryManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(5), Data(42));
             var outbound = CaptureAll(sender);
@@ -90,9 +94,9 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Clear_StopsFurtherProcessing()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool);
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new SortedDeliveryManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(1), Data(1));
             var outbound = CaptureAll(sender);
@@ -115,9 +119,9 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void DuplicateMessage_NotSentToSorter()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool);
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new SortedDeliveryManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(new DeliveryId(1), Data(1));
             var outbound = CaptureAll(sender);
@@ -138,9 +142,9 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void BusyOrder_MultipleBatches()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool);
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new SortedDeliveryManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             for (ushort i = 1; i <= 10; i++)
                 sender.ScheduleDelivery(new DeliveryId(i), Data((byte)i));

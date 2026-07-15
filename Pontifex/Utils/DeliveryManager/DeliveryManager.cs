@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
@@ -15,32 +16,34 @@ namespace Pontifex.DeliveryManager
         private const byte TypeUserMulti = 1;
         private const byte TypeDeliveryInfo = 2;
 
-        private const int SingleOverhead = 5;
-        private const int MultiOverhead = 7;
-        private const int DeliveryInfoOverhead = 3;
-        private const int DeliveryInfoElementSize = 3;
-
         private const int SafetyMargin = 4;
         private const int DeduplicatorCapacity = 1024;
         private const int TransportMessageQueueCapacity = 5000;
+
+        private const int SingleElementCount = 4;
+        private const int MultiElementCount = 6;
+        private const int DeliveryInfoFixedOverhead = 6;
+        private const int DeliveryInfoElementSize = 5;
 
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
         private readonly UnorderedDeliveryRecipient _recipient;
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
+        private readonly ICollectablePool _collectablePool;
 
         private readonly int _messageMaxByteSize;
         private readonly List<DeliveryInfo> _confirmationList = new List<DeliveryInfo>();
-        private readonly IQueue<IMultiRefByteArray> _queueToSend;
+        private readonly IQueue<UnionDataList> _queueToSend;
 
-        public DeliveryManager(int messageMaxByteSize, IPool<IMultiRefByteArray, int> bytesPool)
+        public DeliveryManager(int messageMaxByteSize, IPool<IMultiRefByteArray, int> bytesPool, ICollectablePool collectablePool)
         {
             _messageMaxByteSize = messageMaxByteSize;
             _bytesPool = bytesPool;
+            _collectablePool = collectablePool;
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity);
             _recipient = new UnorderedDeliveryRecipient(bytesPool);
-            _queueToSend = new SystemQueue<IMultiRefByteArray>();
+            _queueToSend = new SystemQueue<UnionDataList>();
 
             _dispatcher.OnDelivered += id =>
             {
@@ -72,9 +75,23 @@ namespace Pontifex.DeliveryManager
             }
         }
 
-        private int SingleChunkDeliveryMaxSize => _messageMaxByteSize - SingleOverhead - SafetyMargin;
+        private int SingleChunkDeliveryMaxSize
+        {
+            get
+            {
+                int overhead = 1 + 2 + 3 + 3;
+                return _messageMaxByteSize - overhead - SafetyMargin;
+            }
+        }
 
-        private int MultiChunkDeliveryChunkMaxSize => _messageMaxByteSize - MultiOverhead - SafetyMargin;
+        private int MultiChunkDeliveryChunkMaxSize
+        {
+            get
+            {
+                int overhead = 1 + 2 + 3 + 3 + 2 + 2;
+                return _messageMaxByteSize - overhead - SafetyMargin;
+            }
+        }
 
         public int DeliveryMaxByteSize => MultiChunkDeliveryChunkMaxSize * 255;
 
@@ -113,7 +130,6 @@ namespace Pontifex.DeliveryManager
 
                         var chunkData = CopySegment(data, offset, count);
                         var serialized = SerializeUserMulti(id, chunkData, (byte)i, (byte)chunksNumber, responseProcessTime);
-                        chunkData.Release();
                         _queueToSend.Put(serialized);
                     }
 
@@ -146,7 +162,7 @@ namespace Pontifex.DeliveryManager
                 return false;
             }
 
-            byte type = data.Array[data.Offset];
+            byte type = data.Elements[0].Alias.ByteValue;
             if (type != TypeUserSingle && type != TypeUserMulti)
             {
                 data.Release();
@@ -225,7 +241,7 @@ namespace Pontifex.DeliveryManager
 
             if (_confirmationList.Count > 0)
             {
-                int packSize = (_messageMaxByteSize - DeliveryInfoOverhead - SafetyMargin) / DeliveryInfoElementSize;
+                int packSize = (_messageMaxByteSize - DeliveryInfoFixedOverhead - SafetyMargin) / DeliveryInfoElementSize;
 
                 int pos = 0;
                 while (pos < _confirmationList.Count)
@@ -242,144 +258,102 @@ namespace Pontifex.DeliveryManager
             _dispatcher.TryToDeliver(dst, scheduler, now);
         }
 
-        private void ProcessDeliveryInfo(IMultiRefByteArray data)
+        private void ProcessDeliveryInfo(UnionDataList data)
         {
-            int offset = data.Offset + 1;
-            ushort count = ReadUInt16LE(data.Array, offset);
-            offset += 2;
+            data.TryPopFirst(out byte _);
+            data.TryPopFirst(out ushort count);
 
             for (int i = 0; i < count; ++i)
             {
-                ushort id = ReadUInt16LE(data.Array, offset);
-                offset += 2;
-                byte chunkId = data.Array[offset];
-                offset += 1;
+                data.TryPopFirst(out ushort id);
+                data.TryPopFirst(out byte chunkId);
 
                 _dispatcher.ConfirmDelivered(new DeliveryInfo(new DeliveryId(id), chunkId));
             }
         }
 
-        private IMultiRefByteArray SerializeUserSingle(DeliveryId id, IMultiRefByteArray data, short responseProcessTime)
+        private UnionDataList SerializeUserSingle(DeliveryId id, IMultiRefByteArray data, short responseProcessTime)
         {
-            int totalSize = SingleOverhead + data.Count;
-            var buffer = _bytesPool.Acquire(totalSize);
-
-            int offset = buffer.Offset;
-            buffer.Array[offset] = TypeUserSingle;
-            WriteUInt16LE(buffer.Array, offset + 1, id.Id);
-            WriteInt16LE(buffer.Array, offset + 3, responseProcessTime);
-            data.CopyTo(buffer.Array, offset + SingleOverhead, 0, data.Count);
-
-            return buffer;
+            var msg = _collectablePool.Acquire<UnionDataList>();
+            msg.PutLast(new UnionData(TypeUserSingle));
+            msg.PutLast(new UnionData(id.Id));
+            msg.PutLast(new UnionData(responseProcessTime));
+            data.AddRef();
+            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)data));
+            return msg;
         }
 
-        private IMultiRefByteArray SerializeUserMulti(DeliveryId id, IMultiRefByteArray chunkData, byte partId, byte partsNumber, short responseProcessTime)
+        private UnionDataList SerializeUserMulti(DeliveryId id, IMultiRefByteArray chunkData, byte partId, byte partsNumber, short responseProcessTime)
         {
-            int totalSize = MultiOverhead + chunkData.Count;
-            var buffer = _bytesPool.Acquire(totalSize);
-
-            int offset = buffer.Offset;
-            buffer.Array[offset] = TypeUserMulti;
-            WriteUInt16LE(buffer.Array, offset + 1, id.Id);
-            WriteInt16LE(buffer.Array, offset + 3, responseProcessTime);
-            buffer.Array[offset + 5] = partId;
-            buffer.Array[offset + 6] = partsNumber;
-            chunkData.CopyTo(buffer.Array, offset + MultiOverhead, 0, chunkData.Count);
-
-            return buffer;
+            var msg = _collectablePool.Acquire<UnionDataList>();
+            msg.PutLast(new UnionData(TypeUserMulti));
+            msg.PutLast(new UnionData(id.Id));
+            msg.PutLast(new UnionData(responseProcessTime));
+            msg.PutLast(new UnionData(partId));
+            msg.PutLast(new UnionData(partsNumber));
+            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)chunkData));
+            return msg;
         }
 
-        private IMultiRefByteArray SerializeDeliveryInfo(List<DeliveryInfo> confirmations, int start, int count)
+        private UnionDataList SerializeDeliveryInfo(List<DeliveryInfo> confirmations, int start, int count)
         {
-            int totalSize = DeliveryInfoOverhead + count * DeliveryInfoElementSize;
-            var buffer = _bytesPool.Acquire(totalSize);
+            var msg = _collectablePool.Acquire<UnionDataList>();
+            msg.PutLast(new UnionData(TypeDeliveryInfo));
+            msg.PutLast(new UnionData((ushort)count));
 
-            int offset = buffer.Offset;
-            buffer.Array[offset] = TypeDeliveryInfo;
-            WriteUInt16LE(buffer.Array, offset + 1, (ushort)count);
-
-            int pos = offset + DeliveryInfoOverhead;
             for (int i = start; i < start + count; ++i)
             {
-                WriteUInt16LE(buffer.Array, pos, confirmations[i].Id.Id);
-                pos += 2;
-                buffer.Array[pos] = confirmations[i].ChunkId;
-                pos += 1;
+                msg.PutLast(new UnionData(confirmations[i].Id.Id));
+                msg.PutLast(new UnionData(confirmations[i].ChunkId));
             }
 
-            return buffer;
+            return msg;
         }
 
-        private static DeliveryInfo ParseDeliveryInfo(IMultiRefByteArray data)
+        private static DeliveryInfo ParseDeliveryInfo(UnionDataList data)
         {
-            int offset = data.Offset;
-            byte type = data.Array[offset];
+            byte type = data.Elements[0].Alias.ByteValue;
+            ushort id = data.Elements[1].Alias.UShortValue;
 
             if (type == TypeUserSingle)
             {
-                ushort id = ReadUInt16LE(data.Array, offset + 1);
                 return new DeliveryInfo(new DeliveryId(id), 0);
             }
 
             if (type == TypeUserMulti)
             {
-                ushort id = ReadUInt16LE(data.Array, offset + 1);
-                byte chunkId = data.Array[offset + 5];
+                byte chunkId = data.Elements[3].Alias.ByteValue;
                 return new DeliveryInfo(new DeliveryId(id), chunkId);
             }
 
             return default;
         }
 
-        private static void ParseUserSingle(IMultiRefByteArray data, out DeliveryId id, out short responseProcessTime, out IMultiRefByteArray userData)
+        private static void ParseUserSingle(UnionDataList data, out DeliveryId id, out short responseProcessTime, out IMultiRefByteArray userData)
         {
-            int offset = data.Offset;
-            id = new DeliveryId(ReadUInt16LE(data.Array, offset + 1));
-            responseProcessTime = ReadInt16LE(data.Array, offset + 3);
-            int dataOffset = offset + SingleOverhead;
-            int dataCount = data.Count - SingleOverhead;
-            userData = CopySegment(data, dataOffset - data.Offset, dataCount);
+            id = new DeliveryId(data.Elements[1].Alias.UShortValue);
+            responseProcessTime = data.Elements[2].Alias.ShortValue;
+            var readOnlyData = data.Elements[3].Bytes!;
+            readOnlyData.AddRef();
+            userData = (IMultiRefByteArray)readOnlyData;
         }
 
-        private static void ParseUserMulti(IMultiRefByteArray data, out DeliveryId id, out short responseProcessTime, out byte partId, out byte partsNumber, out IMultiRefByteArray chunkData)
+        private static void ParseUserMulti(UnionDataList data, out DeliveryId id, out short responseProcessTime, out byte partId, out byte partsNumber, out IMultiRefByteArray chunkData)
         {
-            int offset = data.Offset;
-            id = new DeliveryId(ReadUInt16LE(data.Array, offset + 1));
-            responseProcessTime = ReadInt16LE(data.Array, offset + 3);
-            partId = data.Array[offset + 5];
-            partsNumber = data.Array[offset + 6];
-            int dataOffset = offset + MultiOverhead;
-            int dataCount = data.Count - MultiOverhead;
-            chunkData = CopySegment(data, dataOffset - data.Offset, dataCount);
+            id = new DeliveryId(data.Elements[1].Alias.UShortValue);
+            responseProcessTime = data.Elements[2].Alias.ShortValue;
+            partId = data.Elements[3].Alias.ByteValue;
+            partsNumber = data.Elements[4].Alias.ByteValue;
+            var readOnlyData = data.Elements[5].Bytes!;
+            readOnlyData.AddRef();
+            chunkData = (IMultiRefByteArray)readOnlyData;
         }
 
-        private static IMultiRefByteArray CopySegment(IMultiRefByteArray source, int relativeOffset, int count)
+        private IMultiRefByteArray CopySegment(IMultiRefByteArray source, int relativeOffset, int count)
         {
-            var copy = new byte[count];
-            Buffer.BlockCopy(source.Array, source.Offset + relativeOffset, copy, 0, count);
-            return new MultiRefByteArray(copy);
-        }
-
-        private static void WriteUInt16LE(byte[] buffer, int offset, ushort value)
-        {
-            buffer[offset] = (byte)(value & 0xFF);
-            buffer[offset + 1] = (byte)((value >> 8) & 0xFF);
-        }
-
-        private static void WriteInt16LE(byte[] buffer, int offset, short value)
-        {
-            buffer[offset] = (byte)(value & 0xFF);
-            buffer[offset + 1] = (byte)((value >> 8) & 0xFF);
-        }
-
-        private static ushort ReadUInt16LE(byte[] buffer, int offset)
-        {
-            return (ushort)(buffer[offset] | (buffer[offset + 1] << 8));
-        }
-
-        private static short ReadInt16LE(byte[] buffer, int offset)
-        {
-            return (short)(buffer[offset] | (buffer[offset + 1] << 8));
+            var copy = _bytesPool.Acquire(count);
+            Buffer.BlockCopy(source.Array, source.Offset + relativeOffset, copy.Array, copy.Offset, count);
+            return copy;
         }
     }
 }
