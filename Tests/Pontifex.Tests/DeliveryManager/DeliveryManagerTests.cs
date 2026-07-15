@@ -302,5 +302,133 @@ namespace Pontifex.DeliveryManager.Tests
             for (int i = 0; i < 150; i++)
                 Assert.That(resultData[i], Is.EqualTo((byte)(i % 256)));
         }
+
+        [Test]
+        public void MultiChunkRoundTrip_OutOfOrder()
+        {
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            var bytes = new byte[150];
+            for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
+            var largeData = Data(bytes);
+
+            sender.ScheduleDelivery(new DeliveryId(1), largeData);
+            var outbound = Capture(sender);
+            Assert.That(outbound.Count, Is.GreaterThan(1));
+
+            byte[]? resultData = null;
+            receiver.Received += (_, d, _) =>
+            {
+                resultData = new byte[d.Count];
+                d.CopyTo(resultData, 0, 0, d.Count);
+            };
+
+            for (int i = outbound.Count - 1; i >= 0; i--)
+            {
+                var msg = outbound[i];
+                msg.Data.AddRef();
+                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
+                msg.Data.Release();
+            }
+
+            Assert.That(resultData, Is.Not.Null);
+            Assert.That(resultData!.Length, Is.EqualTo(150));
+            for (int i = 0; i < 150; i++)
+                Assert.That(resultData[i], Is.EqualTo((byte)(i % 256)));
+        }
+
+        [Test]
+        public void MultiChunk_DuplicateChunk_ReceivedFiresOnce()
+        {
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            var bytes = new byte[150];
+            for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
+            var largeData = Data(bytes);
+
+            sender.ScheduleDelivery(new DeliveryId(1), largeData);
+            var outbound = Capture(sender);
+            Assert.That(outbound.Count, Is.GreaterThan(1));
+
+            int received = 0;
+            receiver.Received += (_, _, _) => received++;
+
+            foreach (var msg in outbound)
+            {
+                msg.Data.AddRef();
+                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
+                msg.Data.Release();
+            }
+
+            var first = outbound[0];
+            first.Data.AddRef();
+            receiver.ProcessIncoming(new Message(first.PacketId, first.Data));
+            first.Data.Release();
+
+            Assert.That(received, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void MultiChunkAckRoundTrip_DeliveredFires()
+        {
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            DeliveryId? deliveredId = null;
+            sender.Delivered += id => deliveredId = id;
+
+            var bytes = new byte[150];
+            for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
+            var largeData = Data(bytes);
+
+            sender.ScheduleDelivery(new DeliveryId(1), largeData);
+            var toReceiver = Capture(sender);
+            Assert.That(toReceiver.Count, Is.GreaterThan(1));
+
+            foreach (var msg in toReceiver)
+            {
+                msg.Data.AddRef();
+                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
+                msg.Data.Release();
+            }
+
+            var toSender = Capture(receiver);
+            Assert.That(toSender.Count, Is.GreaterThanOrEqualTo(1));
+
+            foreach (var ack in toSender)
+            {
+                ack.Data.AddRef();
+                sender.ProcessIncoming(new Message(ack.PacketId, ack.Data));
+                ack.Data.Release();
+            }
+
+            Assert.That(deliveredId, Is.EqualTo(new DeliveryId(1)));
+        }
+
+        [Test]
+        public void MultiChunkRetryTimeout_FiresFailedToDeliver()
+        {
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var now = DateTime.UtcNow;
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromMilliseconds(50), baseIntervalMs: 100);
+
+            DeliveryId? failedId = null;
+            dm.FailedToDeliver += id => failedId = id;
+
+            var bytes = new byte[150];
+            var largeData = Data(bytes);
+
+            dm.ScheduleDelivery(new DeliveryId(1), largeData);
+            var batch1 = Capture(dm, scheduler, now);
+            Assert.That(batch1.Count, Is.GreaterThan(1));
+            foreach (var m in batch1) m.Data.Release();
+
+            var batch2 = Capture(dm, scheduler, now + TimeSpan.FromMilliseconds(200));
+            foreach (var m in batch2) m.Data.Release();
+
+            Assert.That(failedId, Is.EqualTo(new DeliveryId(1)));
+        }
     }
 }
