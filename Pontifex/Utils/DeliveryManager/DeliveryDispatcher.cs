@@ -88,7 +88,8 @@ namespace Pontifex.DeliveryManager
             {
                 if (_unfinishedDeliveries.Add(id))
                 {
-                    ushort seq = _nextSeq++;
+                    ushort seq = _nextSeq;
+                    _nextSeq = seq == ushort.MaxValue ? (ushort)1 : (ushort)(seq + 1);
                     var task = new DeliveryTask();
                     task.Init(id, now, data, seq);
                     _deliveryQueue.Enqueue(now, task);
