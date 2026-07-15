@@ -8,7 +8,7 @@ using Pontifex.Utils;
 namespace Pontifex.DeliveryManager.Tests
 {
     [Category("DeliveryManager")]
-    public class SortedDeliveryManagerTests
+    public class DeliverySortingManagerTests
     {
         private const int MaxMsgSize = 100;
         private static IMemoryRental Memory => MemoryRental.Shared;
@@ -49,7 +49,7 @@ namespace Pontifex.DeliveryManager.Tests
         public void AheadIdsBuffered_ReceivedInOrder()
         {
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new SortedDeliveryManager(inner);
+            var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(DataList(1), out _);
@@ -84,7 +84,7 @@ namespace Pontifex.DeliveryManager.Tests
         public void SingleMessage_PassesThrough()
         {
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new SortedDeliveryManager(inner);
+            var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(DataList(42), out _);
@@ -111,7 +111,7 @@ namespace Pontifex.DeliveryManager.Tests
         public void Clear_StopsFurtherProcessing()
         {
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new SortedDeliveryManager(inner);
+            var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(DataList(1), out _);
@@ -136,7 +136,7 @@ namespace Pontifex.DeliveryManager.Tests
         public void DuplicateMessage_NotSentToSorter()
         {
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new SortedDeliveryManager(inner);
+            var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             sender.ScheduleDelivery(DataList(1), out _);
@@ -159,7 +159,7 @@ namespace Pontifex.DeliveryManager.Tests
         public void BusyOrder_MultipleBatches()
         {
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new SortedDeliveryManager(inner);
+            var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
             for (ushort i = 1; i <= 10; i++)
@@ -180,6 +180,141 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(received.Count, Is.EqualTo(10));
             for (int i = 0; i < 10; i++)
                 Assert.That(received[i].Id, Is.EqualTo(i + 1));
+        }
+
+        [Test]
+        public void GapInSequence_FiresFailedToSort()
+        {
+            // Transport reordering causes non-sequential DeliveryId delivery:
+            // packet 2 arrives before packet 1 → sorter advances past DeliveryId(1)
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sorted = new DeliverySortingManager(inner);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1, PacketId=1
+            sender.ScheduleDelivery(DataList(2), out _); // DeliveryId=2, PacketId=2
+            var outbound = CaptureAll(sender);
+            Assert.That(outbound, Has.Count.EqualTo(2));
+
+            bool failed = false;
+            sorted.FailedToSort += () => failed = true;
+
+            // deliver packet 2 first (reordered)
+            var msg2 = outbound[1];
+            msg2.Data.AddRef();
+            inner.ProcessIncoming(new Message(msg2.PacketId, msg2.Data));
+            msg2.Data.Release();
+
+            // now deliver packet 1 — sorter._id advanced to 3, Push(1) fails
+            var msg1 = outbound[0];
+            msg1.Data.AddRef();
+            inner.ProcessIncoming(new Message(msg1.PacketId, msg1.Data));
+            msg1.Data.Release();
+
+            Assert.That(failed, Is.True);
+        }
+
+        [Test]
+        public void AfterGap_SorterStillDeliversLaterMessages()
+        {
+            // Push failure (id < _id) fires FailedToSort but does NOT kill the sorter.
+            // Future messages with higher IDs are still accepted and delivered.
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sorted = new DeliverySortingManager(inner);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1, PacketId=1
+            sender.ScheduleDelivery(DataList(2), out _); // DeliveryId=2, PacketId=2
+            var outbound = CaptureAll(sender);
+            Assert.That(outbound, Has.Count.EqualTo(2));
+
+            // deliver packet 2 first — sorter advances past DeliveryId=1
+            var msg2 = outbound[1];
+            msg2.Data.AddRef();
+            inner.ProcessIncoming(new Message(msg2.PacketId, msg2.Data));
+            msg2.Data.Release();
+
+            // deliver packet 1 — Push(1) fails because 1 < _id(3), fires FailedToSort
+            var msg1 = outbound[0];
+            msg1.Data.AddRef();
+            inner.ProcessIncoming(new Message(msg1.PacketId, msg1.Data));
+            msg1.Data.Release();
+
+            // sorter is NOT dead — send a new message with higher DeliveryId
+            sender.ScheduleDelivery(DataList(3), out _); // DeliveryId=3, PacketId=3
+            var third = CaptureAll(sender);
+
+            int receivedAfterGap = 0;
+            sorted.Received += (_, _, _) => receivedAfterGap++;
+
+            foreach (var msg in third)
+            {
+                msg.Data.AddRef();
+                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
+                msg.Data.Release();
+            }
+
+            Assert.That(receivedAfterGap, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ResponseProcessTime_DroppedToZero()
+        {
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sorted = new DeliverySortingManager(inner);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            sender.ScheduleDelivery(DataList(1), out _, responseProcessTime: 42);
+            var outbound = CaptureAll(sender);
+
+            short? actualProcessTime = null;
+            sorted.Received += (_, _, pt) => actualProcessTime = pt;
+
+            foreach (var msg in outbound)
+            {
+                msg.Data.AddRef();
+                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
+                msg.Data.Release();
+            }
+
+            Assert.That(actualProcessTime, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AfterClear_FailedToSortFiresOnNextMessage()
+        {
+            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sorted = new DeliverySortingManager(inner);
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            // send two messages so the dedup window has entries
+            sender.ScheduleDelivery(DataList(1), out _); // PacketId=1
+            sender.ScheduleDelivery(DataList(2), out _); // PacketId=2
+            var outbound = CaptureAll(sender);
+            // process both so dedup window covers 1..2
+            foreach (var msg in outbound)
+            {
+                msg.Data.AddRef();
+                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
+                msg.Data.Release();
+            }
+
+            sorted.Clear();
+
+            bool failed = false;
+            sorted.FailedToSort += () => failed = true;
+
+            // send a third message with fresh PacketId=3 → passes Deduplicator as New
+            sender.ScheduleDelivery(DataList(3), out _);
+            var third = CaptureAll(sender);
+            foreach (var msg in third)
+            {
+                msg.Data.AddRef();
+                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
+                msg.Data.Release();
+            }
+
+            Assert.That(failed, Is.True);
         }
     }
 }
