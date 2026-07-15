@@ -1,5 +1,4 @@
 using System;
-using Actuarius.Memory;
 using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
@@ -16,10 +15,10 @@ namespace Pontifex.DeliveryManager
         public event Action<DeliveryId, UnionDataList, short>? Received;
         public event Action? FailedToSort;
 
-        private readonly IDeliveryManager _deliveryMan;
+        private readonly IDeliveryManagerUserSide _deliveryMan;
         private readonly DeliverySorter<UnionDataList> _sorter;
 
-        public DeliverySortingManager(IDeliveryManager deliveryMan)
+        public DeliverySortingManager(IDeliveryManagerUserSide deliveryMan)
         {
             _deliveryMan = deliveryMan;
             _deliveryMan.Received += OnReceived;
@@ -60,7 +59,6 @@ namespace Pontifex.DeliveryManager
         public void Clear()
         {
             _sorter.Clear(parcel => parcel.Release());
-            _deliveryMan.Clear();
         }
     }
 }
