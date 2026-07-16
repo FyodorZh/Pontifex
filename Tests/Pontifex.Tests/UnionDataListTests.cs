@@ -656,6 +656,112 @@ public sealed class UnionDataListTests
         UnionDataType t = default;
         Assert.That(t, Is.EqualTo(UnionDataType.Unknown));
     }
+
+    [Test]
+    public void Clone_WithPool_ReturnsEqualIndependentCopy()
+    {
+        var source = CreateList();
+        using var _s = source.AsDisposable();
+        source.PutLast(new UnionData(10));
+        source.PutLast(new UnionData(20));
+        source.PutLast(new UnionData(30));
+
+        var clone = source.Clone(Memory.CollectablePool);
+
+        Assert.That(clone.IsAlive, Is.True);
+        Assert.That(clone.Elements.Count, Is.EqualTo(3));
+        Assert.That(source.EqualByContent(clone), Is.True);
+
+        clone.Release();
+    }
+
+    [Test]
+    public void Clone_WithoutPool_ReturnsEqualIndependentCopy()
+    {
+        var source = CreateList();
+        using var _s = source.AsDisposable();
+        source.PutLast(new UnionData(42));
+        source.PutLast(new UnionData(true));
+        source.PutLast(new UnionData(3.14));
+
+        var clone = source.Clone(null);
+
+        Assert.That(clone.Elements.Count, Is.EqualTo(3));
+        Assert.That(source.EqualByContent(clone), Is.True);
+
+        clone.Release();
+    }
+
+    [Test]
+    public void Clone_EmptyList_ReturnsEmptyList()
+    {
+        var source = CreateList();
+        using var _s = source.AsDisposable();
+
+        var clone = source.Clone(Memory.CollectablePool);
+
+        Assert.That(clone.Elements.Count, Is.EqualTo(0));
+        Assert.That(clone.PeekFirstType(), Is.EqualTo(UnionDataType.Unknown));
+
+        clone.Release();
+    }
+
+    [Test]
+    public void Clone_IsIndependentFromSource()
+    {
+        var source = CreateList();
+        using var _s = source.AsDisposable();
+        source.PutLast(new UnionData(1));
+        source.PutLast(new UnionData(2));
+        source.PutLast(new UnionData(3));
+
+        var clone = (UnionDataList)source.Clone(Memory.CollectablePool);
+        using var _c = clone.AsDisposable();
+
+        source.Clear();
+
+        Assert.That(source.Elements.Count, Is.EqualTo(0));
+        Assert.That(clone.Elements.Count, Is.EqualTo(3));
+        Assert.That(clone.PopFirst().Alias.IntValue, Is.EqualTo(1));
+        Assert.That(clone.PopFirst().Alias.IntValue, Is.EqualTo(2));
+        Assert.That(clone.PopFirst().Alias.IntValue, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Clone_MultipleTimes_EachIsIndependent()
+    {
+        var source = CreateList();
+        using var _s = source.AsDisposable();
+        source.PutLast(new UnionData(100));
+
+        var clone1 = (UnionDataList)source.Clone(Memory.CollectablePool);
+        var clone2 = (UnionDataList)source.Clone(null);
+
+        using var _c1 = clone1.AsDisposable();
+        using var _c2 = clone2.AsDisposable();
+
+        Assert.That(source.EqualByContent(clone1), Is.True);
+        Assert.That(source.EqualByContent(clone2), Is.True);
+        Assert.That(clone1.EqualByContent(clone2), Is.True);
+    }
+
+    [Test]
+    public void Clone_WithPool_CanBePopped()
+    {
+        var source = CreateList();
+        using var _s = source.AsDisposable();
+        source.PutLast(new UnionData(5));
+        source.PutLast(new UnionData(10));
+        source.PutLast(new UnionData(15));
+
+        var clone = (UnionDataList)source.Clone(Memory.CollectablePool);
+        using var _c = clone.AsDisposable();
+
+        Assert.That(clone.PopFirst().Alias.IntValue, Is.EqualTo(5));
+        Assert.That(clone.PopFirst().Alias.IntValue, Is.EqualTo(10));
+        Assert.That(clone.PopFirst().Alias.IntValue, Is.EqualTo(15));
+        Assert.That(clone.Elements.Count, Is.EqualTo(0));
+    }
 }
 
 file static class EncodingUTF8
