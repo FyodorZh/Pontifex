@@ -16,7 +16,6 @@ namespace Pontifex.DeliveryManager
         private const int DeduplicatorCapacity = 1024;
         private const int TransportMessageQueueCapacity = 5000;
 
-        private readonly IWireMessageSerializer _serializer;
         private readonly DeliveryInfoSerializer _deliveryInfoSerializer;
         private readonly MessagePacker _packer;
         private readonly Deduplicator _deduplicator;
@@ -34,15 +33,16 @@ namespace Pontifex.DeliveryManager
             _messageMaxByteSize = messageMaxByteSize;
             _bytesPool = bytesPool;
             _collectablePool = collectablePool;
-            _serializer = new WireMessageSerializer(collectablePool);
             _deliveryInfoSerializer = new DeliveryInfoSerializer(collectablePool);
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
-            int singleMax = messageMaxByteSize - _serializer.UserSingleOverhead - SafetyMargin;
-            int multiMax = messageMaxByteSize - _serializer.UserMultiOverhead - SafetyMargin;
+            const int userSingleOverhead = 6;
+            const int userMultiOverhead = 10;
+            int singleMax = messageMaxByteSize - userSingleOverhead - SafetyMargin;
+            int multiMax = messageMaxByteSize - userMultiOverhead - SafetyMargin;
             var splitter = new MessageSplitter(bytesPool, multiMax);
             var merger = new MessageMerger(bytesPool);
-            _packer = new MessagePacker(bytesPool, collectablePool, _serializer, splitter, merger, singleMax, multiMax);
+            _packer = new MessagePacker(bytesPool, collectablePool, splitter, merger, singleMax, multiMax);
             _queueToSend = new SystemQueue<QueuedMessage>();
 
             _dispatcher.OnDelivered += id =>
@@ -81,11 +81,6 @@ namespace Pontifex.DeliveryManager
         public SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId)
         {
             deliveryId = default;
-
-            if (data == null)
-            {
-                return SendResult.InvalidMessage;
-            }
 
             DeliveryId id = _nextId;
             _nextId = _nextId.Next;
