@@ -33,7 +33,8 @@ namespace Pontifex.DeliveryManager
                 _id = id;
                 _scheduleTime = scheduleTime;
                 _data = data.Clone(pool);
-                _data.PutFirst(new UnionData(packetId));
+                _data.PutFirst(new UnionData(packetId));  // wireChunkId
+                _data.PutFirst(new UnionData(true));       // isUser = true
                 data.Release();
                 DeliveryAttempts = 0;
             }

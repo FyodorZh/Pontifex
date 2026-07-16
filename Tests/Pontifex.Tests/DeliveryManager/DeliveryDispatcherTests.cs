@@ -54,37 +54,7 @@ namespace Pontifex.DeliveryManager.Tests
             data.Release();
         }
 
-        [Test]
-        public void Retry_AfterConsumerPopsPacketId_StillHasPacketId()
-        {
-            var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
-            var data = DummyData();
-            data.AddRef();
-            d.ScheduleDeliver(Info(1), data, DateTime.UtcNow);
-            data.Release();
 
-            // First send — simulate consumer that pops packetId (as ProcessIncoming does)
-            var consumer = new ConsumerDelegate<UnionDataList>(x =>
-            {
-                x.TryPopFirst(out ushort _);
-                x.Release();
-                return true;
-            });
-            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10), baseIntervalMs: 50);
-
-            d.TryToDeliver(consumer, scheduler, now);
-
-            // Retry — data was shared with consumer via AddRef; packetId should still be there
-            UnionDataList? retried = null;
-            var retryConsumer = new ConsumerDelegate<UnionDataList>(x => { retried = x; return true; });
-            d.TryToDeliver(retryConsumer, scheduler, now + TimeSpan.FromMilliseconds(100));
-
-            Assert.That(retried, Is.Not.Null);
-            retried!.TryPopFirst(out ushort packetId);
-            Assert.That(packetId, Is.EqualTo(1));
-            retried.Release();
-        }
 
         [Test]
         public void ScheduleDeliver_AtCapacity_ReturnsBufferOverflow()
@@ -263,6 +233,90 @@ namespace Pontifex.DeliveryManager.Tests
 
             Assert.That(sent, Has.Count.EqualTo(3));
             foreach (var b in sent) b.Release();
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  New wire format target tests
+        //  Target: Dispatcher prepends [bool(true), ushort(seq)]
+        //  then the serializer's elements follow.
+        // ════════════════════════════════════════════════════════════════
+
+        [Test]
+        public void NewFormat_DispatchedData_HasDiscriminatorAndWireChunkId()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+
+            UnionDataList? dispatched = null;
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { dispatched = x; return true; });
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
+            d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
+
+            Assert.That(dispatched, Is.Not.Null);
+            // Element 0: bool(true) — isUser discriminator
+            Assert.That(dispatched!.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));
+            Assert.That(dispatched.Elements[0].Alias.BoolValue, Is.True);
+            // Element 1: ushort — wireChunkId (starts at 1)
+            Assert.That(dispatched.Elements[1].Type, Is.EqualTo(UnionDataType.UShort));
+            Assert.That(dispatched.Elements[1].Alias.UShortValue, Is.EqualTo(1));
+            // Original data (the byte from DummyData) follows
+            Assert.That(dispatched.Elements[2].Type, Is.EqualTo(UnionDataType.Byte));
+            dispatched.Release();
+        }
+
+        [Test]
+        public void NewFormat_Retry_PreservesDiscriminator()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+
+            // First send — consumer just releases without popping (production transport clones)
+            var consumer1 = new ConsumerDelegate<UnionDataList>(x =>
+            {
+                x.Release();
+                return true;
+            });
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10), baseIntervalMs: 50);
+            d.TryToDeliver(consumer1, scheduler, now);
+
+            // Retry — discriminator/wireChunkId should still be intact
+            UnionDataList? retried = null;
+            var retryConsumer = new ConsumerDelegate<UnionDataList>(x => { retried = x; return true; });
+            d.TryToDeliver(retryConsumer, scheduler, now + TimeSpan.FromMilliseconds(100));
+
+            Assert.That(retried, Is.Not.Null);
+            Assert.That(retried!.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));
+            Assert.That(retried.Elements[0].Alias.BoolValue, Is.True);
+            Assert.That(retried.Elements[1].Type, Is.EqualTo(UnionDataType.UShort));
+            Assert.That(retried.Elements[1].Alias.UShortValue, Is.EqualTo(1));
+            retried.Release();
+        }
+
+        [Test]
+        public void NewFormat_SequentialDispatches_HaveUniqueWireChunkIds()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+            d.ScheduleDeliver(Info(2), DummyData(), now);
+            d.ScheduleDeliver(Info(3), DummyData(), now);
+
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
+            d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
+
+            Assert.That(sent, Has.Count.EqualTo(3));
+            var ids = new HashSet<ushort>();
+            foreach (var msg in sent)
+            {
+                Assert.That(msg.Elements[0].Alias.BoolValue, Is.True);
+                ids.Add(msg.Elements[1].Alias.UShortValue);
+                msg.Release();
+            }
+            Assert.That(ids, Is.EquivalentTo(new ushort[] { 1, 2, 3 }));
         }
     }
 }

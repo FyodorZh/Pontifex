@@ -99,14 +99,15 @@ namespace Pontifex.DeliveryManager
 
         public bool ProcessIncoming(UnionDataList data)
         {
-            if (!data.TryPopFirst(out ushort packetId))
+            if (!data.TryPopFirst(out bool isUser))
             {
                 data.Release();
                 return false;
             }
 
-            if (packetId == 0)
+            if (!isUser)
             {
+                data.PutFirst(new UnionData(false));
                 var confirmations = new List<DeliveryInfo>();
                 bool success = _packer.TryUnpackDeliveryInfo(data, confirmations);
                 data.Release();
@@ -118,7 +119,13 @@ namespace Pontifex.DeliveryManager
                 return success;
             }
 
-            var duplicity = _deduplicator.Received(packetId);
+            if (!data.TryPopFirst(out ushort wireChunkId))
+            {
+                data.Release();
+                return false;
+            }
+
+            var duplicity = _deduplicator.Received(wireChunkId);
             if (duplicity == Deduplicator.Result.Overflow)
             {
                 data.Release();

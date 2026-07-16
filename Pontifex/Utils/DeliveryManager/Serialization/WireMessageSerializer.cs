@@ -6,6 +6,9 @@ namespace Pontifex.DeliveryManager
 {
     internal class WireMessageSerializer : IWireMessageSerializer
     {
+        // Types are no longer used — discriminator is now bool(false) for
+        // DeliveryInfo and partsNumber (byte) for user messages.
+        // Constants kept for reference but unused in production code.
         private const byte TypeUserSingle = 0;
         private const byte TypeUserMulti = 1;
         private const byte TypeDeliveryInfo = 2;
@@ -25,7 +28,7 @@ namespace Pontifex.DeliveryManager
         public UnionDataList CreateUserSingle(DeliveryId id, IMultiRefByteArray data)
         {
             var msg = _pool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData(TypeUserSingle));
+            msg.PutLast(new UnionData((byte)1));    // partsNumber = 1 (single chunk)
             msg.PutLast(new UnionData(id.Id));
             msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)data.Acquire()));
             return msg;
@@ -34,10 +37,9 @@ namespace Pontifex.DeliveryManager
         public UnionDataList CreateUserMulti(DeliveryId id, IMultiRefByteArray chunkData, byte partId, byte partsNumber)
         {
             var msg = _pool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData(TypeUserMulti));
-            msg.PutLast(new UnionData(id.Id));
-            msg.PutLast(new UnionData(partId));
             msg.PutLast(new UnionData(partsNumber));
+            msg.PutLast(new UnionData(partId));
+            msg.PutLast(new UnionData(id.Id));
             msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)chunkData.Acquire()));
             return msg;
         }
@@ -45,8 +47,7 @@ namespace Pontifex.DeliveryManager
         public UnionDataList CreateDeliveryInfo(IReadOnlyList<DeliveryInfo> confirmations, int start, int count)
         {
             var msg = _pool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData((ushort)0));
-            msg.PutLast(new UnionData(TypeDeliveryInfo));
+            msg.PutLast(new UnionData(false));       // isUser = false
             msg.PutLast(new UnionData((ushort)count));
 
             for (int i = start; i < start + count; ++i)
@@ -60,7 +61,7 @@ namespace Pontifex.DeliveryManager
 
         public bool TryParseDeliveryInfo(UnionDataList data, List<DeliveryInfo> confirmations)
         {
-            if (!data.TryPopFirst(out byte type) || type != TypeDeliveryInfo)
+            if (!data.TryPopFirst(out bool isUser) || isUser)
                 return false;
 
             if (!data.TryPopFirst(out ushort count))
@@ -81,35 +82,28 @@ namespace Pontifex.DeliveryManager
         {
             result = default;
 
-            if (!data.TryPopFirst(out byte type))
-                return false;
-
-            if (type != TypeUserSingle && type != TypeUserMulti)
-                return false;
-
-            if (!data.TryPopFirst(out ushort id))
+            if (!data.TryPopFirst(out byte partsNumber))
                 return false;
 
             byte partId = 0;
-            byte partsNumber = 0;
-
-            if (type == TypeUserMulti)
+            if (partsNumber > 1)
             {
                 if (!data.TryPopFirst(out partId))
                     return false;
-                if (!data.TryPopFirst(out partsNumber))
-                    return false;
             }
+
+            if (!data.TryPopFirst(out ushort id))
+                return false;
 
             if (!data.TryPopFirst(out IMultiRefReadOnlyByteArray? payload) || payload == null)
                 return false;
 
             result = new ParsedUserMessage(
-                type,
+                type: 0,
                 new DeliveryId(id),
                 partId,
                 partsNumber,
-                isMultiChunk: type == TypeUserMulti,
+                isMultiChunk: partsNumber > 1,
                 payload);
 
             return true;

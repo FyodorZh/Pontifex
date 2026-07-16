@@ -41,47 +41,53 @@ All types live in namespace `Pontifex.DeliveryManager` and are `internal` (not p
 
 ## Wire Format
 
-Every message sent over the wire is a single `IMultiRefByteArray` with the following structure:
+Every message is a `UnionDataList` — a sequence of `UnionData` tagged elements. The first element is always a `ushort` packetId (added by `DeliveryDispatcher` when scheduling a delivery). The internal structure of each message type (what comes after the packetId) is described below.
 
 ### UserSingle (type = 0x00)
-For messages that fit in one chunk.
-```
-Offset  Size  Field
-0       1     type (0x00)
-1       2     DeliveryId (ushort LE)
-3       N     user data (raw bytes)
-```
+For messages that fit in one chunk. Created by `WireMessageSerializer.CreateUserSingle()`.
+
+| Index | UnionData type | Field |
+|---|---|---|
+| 0 | `byte` | type = `0x00` |
+| 1 | `ushort` | DeliveryId |
+| 2 | `Array` | serialized user data (bytes) |
+
+**Wire byte-size overhead**: 6 bytes (1 byte type + 2 byte id + ~3 bytes UnionData framing)
 
 ### UserMulti (type = 0x01)
-For messages split across multiple chunks. Each chunk carries the same `DeliveryId` plus chunk metadata.
-```
-Offset  Size  Field
-0       1     type (0x01)
-1       2     DeliveryId (ushort LE)
-3       1     partId (byte) — which chunk this is (0-based)
-4       1     partsNumber (byte) — total number of chunks
-5       N     chunk data (raw bytes)
-```
+For messages split across multiple chunks. Created by `WireMessageSerializer.CreateUserMulti()`.
+
+| Index | UnionData type | Field |
+|---|---|---|
+| 0 | `byte` | type = `0x01` |
+| 1 | `ushort` | DeliveryId |
+| 2 | `byte` | partId — which chunk this is (0-based) |
+| 3 | `byte` | partsNumber — total number of chunks |
+| 4 | `Array` | chunk data (bytes) |
+
+**Wire byte-size overhead**: 10 bytes (1 + 2 + 1 + 1 + ~5 bytes UnionData framing)
 
 ### DeliveryInfo (type = 0x02)
-Batched delivery confirmations (ACKs).
-```
-Offset  Size  Field
-0       1     type (0x02)
-1       2     count (ushort LE) — number of confirmations in this batch
-3       for each confirmation:
-        2     DeliveryId (ushort LE)
-        1     chunkId (byte)
-```
+Batched delivery confirmations (ACKs). Created by `WireMessageSerializer.CreateDeliveryInfo()`. Note: this message includes the packetId (`ushort 0`) as its first element — it's the only type where the serializer includes the packetId.
+
+| Index | UnionData type | Field |
+|---|---|---|
+| 0 | `ushort` | packetId = `0` (reserved for ACK messages) |
+| 1 | `byte` | type = `0x02` |
+| 2 | `ushort` | count — number of confirmations in this batch |
+| 3..N | per confirmation: `ushort` DeliveryId, `byte` chunkId | repeated `count` times |
+
+**Wire byte-size overhead**: 6 bytes fixed (2 packetId + 1 type + 2 count + ~1 byte framing)  
+**Per-confirmation element size**: 5 bytes (2 DeliveryId + 1 chunkId + ~2 bytes framing)
 
 ### Size constraints
 
 | Constant | Value | Description |
 |---|---|---|
-| `UserSingleOverhead` | 6 | Header bytes for UserSingle |
-| `UserMultiOverhead` | 10 | Header bytes for UserMulti |
-| `DeliveryInfoFixedOverhead` | 6 | Header bytes for DeliveryInfo |
-| `DeliveryInfoElementSize` | 5 | Each confirmation entry |
+| `UserSingleOverhead` | 6 | Byte overhead for UserSingle header (excl. payload) |
+| `UserMultiOverhead` | 10 | Byte overhead for UserMulti header (excl. payload) |
+| `DeliveryInfoFixedOverhead` | 6 | Byte overhead for DeliveryInfo header (excl. entries) |
+| `DeliveryInfoElementSize` | 5 | Byte overhead per confirmation entry |
 | `SafetyMargin` | 4 | Padding to avoid MTU edge cases |
 | `DeduplicatorCapacity` | 1024 | Sliding window size |
 | `TransportMessageQueueCapacity` | 5000 | Max pending deliveries |
