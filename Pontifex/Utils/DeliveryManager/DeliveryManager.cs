@@ -35,9 +35,9 @@ namespace Pontifex.DeliveryManager
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
         private readonly ICollectablePool _collectablePool;
 
+        private readonly AckCollector _ackCollector = new AckCollector();
         private DeliveryId _nextId = DeliveryId.Zero.Next;
         private readonly int _messageMaxByteSize;
-        private readonly List<DeliveryInfo> _confirmationList = new List<DeliveryInfo>();
         private readonly IQueue<QueuedMessage> _queueToSend;
 
         public DeliveryManager(int messageMaxByteSize, IPool<IMultiRefByteArray, int> bytesPool, ICollectablePool collectablePool)
@@ -74,6 +74,7 @@ namespace Pontifex.DeliveryManager
         {
             _dispatcher.Clear();
             _chunker.Clear();
+            _ackCollector.Clear();
 
             while (_queueToSend.TryPop(out var queued))
             {
@@ -186,7 +187,7 @@ namespace Pontifex.DeliveryManager
             var info = parsed.IsMultiChunk
                 ? new DeliveryInfo(parsed.Id, parsed.PartId)
                 : new DeliveryInfo(parsed.Id, 0);
-            _confirmationList.Add(info);
+            _ackCollector.Add(info);
 
             IMultiRefByteArray? userData = null;
             if (duplicity == Deduplicator.Result.New)
@@ -251,21 +252,7 @@ namespace Pontifex.DeliveryManager
                 userMessage.Release();
             }
 
-            if (_confirmationList.Count > 0)
-            {
-                int packSize = (_messageMaxByteSize - _serializer.DeliveryInfoFixedOverhead - SafetyMargin) / _serializer.DeliveryInfoElementSize;
-
-                int pos = 0;
-                while (pos < _confirmationList.Count)
-                {
-                    int len = Math.Min(packSize, _confirmationList.Count - pos);
-                    var infoMsg = _serializer.CreateDeliveryInfo(_confirmationList, pos, len);
-                    dst.Put(infoMsg);
-                    pos += len;
-                }
-
-                _confirmationList.Clear();
-            }
+            _ackCollector.Flush(_serializer, _messageMaxByteSize, SafetyMargin, dst);
 
             _dispatcher.TryToDeliver(dst, scheduler, now);
         }
