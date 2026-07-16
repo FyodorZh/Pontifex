@@ -42,7 +42,7 @@ namespace Pontifex.DeliveryManager
             _bytesPool = bytesPool;
             _collectablePool = collectablePool;
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
-            _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity);
+            _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
             _chunker = new MessageChunker(bytesPool, MultiChunkDeliveryChunkMaxSize);
             _queueToSend = new SystemQueue<UnionDataList>();
 
@@ -156,18 +156,18 @@ namespace Pontifex.DeliveryManager
             }
         }
 
-        public bool ProcessIncoming(Message message)
+        public bool ProcessIncoming(UnionDataList data)
         {
-            var data = message.Data;
+            data.TryPopFirst(out ushort packetId);
 
-            if (message.IsDeliveryInfo)
+            if (packetId == 0)
             {
                 ProcessDeliveryInfo(data);
                 data.Release();
                 return true;
             }
 
-            var duplicity = _deduplicator.Received(message.PacketId);
+            var duplicity = _deduplicator.Received(packetId);
             if (duplicity == Deduplicator.Result.Overflow)
             {
                 data.Release();
@@ -255,7 +255,7 @@ namespace Pontifex.DeliveryManager
             return true;
         }
 
-        public void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<Message> dst)
+        public void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<UnionDataList> dst)
         {
             while (_queueToSend.TryPop(out var userMessage))
             {
@@ -291,7 +291,7 @@ namespace Pontifex.DeliveryManager
                 {
                     int len = Math.Min(packSize, _confirmationList.Count - pos);
                     var infoMsg = SerializeDeliveryInfo(_confirmationList, pos, len);
-                    dst.Put(new Message(Message.VoidId, infoMsg));
+                    dst.Put(infoMsg);
                     pos += len;
                 }
 
@@ -340,6 +340,7 @@ namespace Pontifex.DeliveryManager
         private UnionDataList SerializeDeliveryInfo(List<DeliveryInfo> confirmations, int start, int count)
         {
             var msg = _collectablePool.Acquire<UnionDataList>();
+            msg.PutLast(new UnionData((ushort)0));
             msg.PutLast(new UnionData(TypeDeliveryInfo));
             msg.PutLast(new UnionData((ushort)count));
 

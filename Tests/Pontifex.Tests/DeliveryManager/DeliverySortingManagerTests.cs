@@ -37,11 +37,11 @@ namespace Pontifex.DeliveryManager.Tests
             return data;
         }
 
-        private static List<Message> CaptureAll(DeliveryManager dm)
+        private static List<UnionDataList> CaptureAll(DeliveryManager dm)
         {
-            var sent = new List<Message>();
+            var sent = new List<UnionDataList>();
             dm.ProcessOutgoing(Scheduler, DateTime.UtcNow,
-                new ConsumerDelegate<Message>(x => { sent.Add(x); return true; }));
+                new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
             return sent;
         }
 
@@ -69,9 +69,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                inner.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(received.Count, Is.EqualTo(3));
@@ -99,9 +99,9 @@ namespace Pontifex.DeliveryManager.Tests
             };
 
             var msg = outbound[0];
-            msg.Data.AddRef();
-            inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.Release();
+            msg.AddRef();
+            inner.ProcessIncoming(msg);
+            msg.Release();
 
             Assert.That(received, Is.Not.Null);
             Assert.That(received![0], Is.EqualTo(42));
@@ -124,9 +124,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                inner.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(receivedCount, Is.EqualTo(0));
@@ -146,11 +146,11 @@ namespace Pontifex.DeliveryManager.Tests
             int received = 0;
             sorted.Received += (_, _, _) => received++;
 
-            msg.Data.AddRef();
-            inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.AddRef();
-            inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.Release();
+            msg.AddRef();
+            inner.ProcessIncoming(msg);
+            msg.AddRef();
+            inner.ProcessIncoming(msg);
+            msg.Release();
 
             Assert.That(received, Is.EqualTo(1));
         }
@@ -172,9 +172,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                inner.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(received.Count, Is.EqualTo(10));
@@ -201,15 +201,15 @@ namespace Pontifex.DeliveryManager.Tests
 
             // deliver packet 2 first (reordered)
             var msg2 = outbound[1];
-            msg2.Data.AddRef();
-            inner.ProcessIncoming(new Message(msg2.PacketId, msg2.Data));
-            msg2.Data.Release();
+            msg2.AddRef();
+            inner.ProcessIncoming(msg2);
+            msg2.Release();
 
             // now deliver packet 1 — sorter._id advanced to 3, Push(1) fails
             var msg1 = outbound[0];
-            msg1.Data.AddRef();
-            inner.ProcessIncoming(new Message(msg1.PacketId, msg1.Data));
-            msg1.Data.Release();
+            msg1.AddRef();
+            inner.ProcessIncoming(msg1);
+            msg1.Release();
 
             Assert.That(failed, Is.True);
         }
@@ -230,15 +230,15 @@ namespace Pontifex.DeliveryManager.Tests
 
             // deliver packet 2 first — sorter advances past DeliveryId=1
             var msg2 = outbound[1];
-            msg2.Data.AddRef();
-            inner.ProcessIncoming(new Message(msg2.PacketId, msg2.Data));
-            msg2.Data.Release();
+            msg2.AddRef();
+inner.ProcessIncoming(msg2);
+            msg2.Release();
 
             // deliver packet 1 — Push(1) fails because 1 < _id(3), fires FailedToSort
             var msg1 = outbound[0];
-            msg1.Data.AddRef();
-            inner.ProcessIncoming(new Message(msg1.PacketId, msg1.Data));
-            msg1.Data.Release();
+            msg1.AddRef();
+            inner.ProcessIncoming(msg1);
+            msg1.Release();
 
             // sorter is NOT dead — send a new message with higher DeliveryId
             sender.ScheduleDelivery(DataList(3), out _); // DeliveryId=3, PacketId=3
@@ -249,9 +249,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in third)
             {
-                msg.Data.AddRef();
-                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                inner.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(receivedAfterGap, Is.EqualTo(1));
@@ -272,9 +272,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                inner.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(actualProcessTime, Is.EqualTo(0));
@@ -294,9 +294,9 @@ namespace Pontifex.DeliveryManager.Tests
             // process both so dedup window covers 1..2
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                inner.ProcessIncoming(msg);
+                msg.Release();
             }
 
             sorted.Clear();
@@ -309,9 +309,9 @@ namespace Pontifex.DeliveryManager.Tests
             var third = CaptureAll(sender);
             foreach (var msg in third)
             {
-                msg.Data.AddRef();
-                inner.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                inner.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(failed, Is.True);

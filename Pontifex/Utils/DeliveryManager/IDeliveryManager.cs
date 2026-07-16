@@ -52,23 +52,25 @@ namespace Pontifex.DeliveryManager
     internal interface IDeliveryManagerTransportSide
     {
         /// <summary>
-        /// Feed an incoming wire packet into the delivery system. The message data is released
-        /// internally — do not release it yourself after this call.
+        /// Feed an incoming wire packet into the delivery system. The first element
+        /// must be the <c>ushort</c> packetId. The data is released internally —
+        /// do not release it yourself after this call.
         /// </summary>
-        /// <param name="message">The incoming wire packet.</param>
+        /// <param name="data">The incoming wire packet with packetId as first element.</param>
         /// <returns>true if the packet was recognized (user data, ACK) and processed;
         /// false if it was malformed or caused a deduplicator overflow.</returns>
-        bool ProcessIncoming(Message message);
+        bool ProcessIncoming(UnionDataList data);
 
         /// <summary>
         /// Pump outgoing wire packets (new deliveries, retransmissions, and batched delivery
-        /// confirmations) into the provided consumer. Call this periodically (e.g., every 10-50ms).
+        /// confirmations) into the provided consumer. Each outgoing packet has the
+        /// <c>ushort</c> packetId as its first element. Call periodically (e.g., every 10-50ms).
         /// Must be called from the same thread as <see cref="ProcessIncoming"/>.
         /// </summary>
         /// <param name="scheduler">Controls retry timing per delivery attempt.</param>
         /// <param name="now">Current UTC time used for scheduling decisions.</param>
         /// <param name="dst">Consumer that receives wire packets ready for transmission.</param>
-        void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<Message> dst);
+        void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<UnionDataList> dst);
     }
 
     /// <summary>

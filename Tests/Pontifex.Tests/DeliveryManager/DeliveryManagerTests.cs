@@ -37,11 +37,11 @@ namespace Pontifex.DeliveryManager.Tests
             return data;
         }
 
-        private static List<Message> Capture(DeliveryManager dm, IDeliveryAttemptScheduler? scheduler = null, DateTime? now = null)
+        private static List<UnionDataList> Capture(DeliveryManager dm, IDeliveryAttemptScheduler? scheduler = null, DateTime? now = null)
         {
-            var sent = new List<Message>();
+            var sent = new List<UnionDataList>();
             dm.ProcessOutgoing(scheduler ?? RetryScheduler, now ?? DateTime.UtcNow,
-                new ConsumerDelegate<Message>(x => { sent.Add(x); return true; }));
+                new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
             return sent;
         }
 
@@ -73,7 +73,7 @@ namespace Pontifex.DeliveryManager.Tests
             dm.ScheduleDelivery(DataList(10, 20, 30), out _);
             var sent = Capture(dm);
             Assert.That(sent, Has.Count.EqualTo(1));
-            foreach (var m in sent) m.Data.Release();
+            foreach (var m in sent) m.Release();
         }
 
         [Test]
@@ -87,7 +87,7 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(outbound, Has.Count.EqualTo(1));
 
             var msg = outbound[0];
-            msg.Data.AddRef();
+            msg.AddRef();
 
             DeliveryId? receivedId = null;
             byte[]? receivedBytes = null;
@@ -99,8 +99,8 @@ namespace Pontifex.DeliveryManager.Tests
                 element.CopyTo(receivedBytes, 0, 0, element.Count);
             };
 
-            receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.Release();
+            receiver.ProcessIncoming(msg);
+            msg.Release();
 
             Assert.That(receivedId, Is.EqualTo(new DeliveryId(1)));
             Assert.That(receivedBytes, Is.EqualTo(new byte[] { 1, 2, 3, 4, 5 }));
@@ -119,11 +119,11 @@ namespace Pontifex.DeliveryManager.Tests
             int received = 0;
             receiver.Received += (_, _, _) => received++;
 
-            msg.Data.AddRef();
-            receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.AddRef();
-            receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.Release();
+            msg.AddRef();
+            receiver.ProcessIncoming(msg);
+            msg.AddRef();
+            receiver.ProcessIncoming(msg);
+            msg.Release();
 
             Assert.That(received, Is.EqualTo(1));
         }
@@ -142,18 +142,18 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(toReceiver, Has.Count.EqualTo(1));
 
             var msg = toReceiver[0];
-            msg.Data.AddRef();
-            receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.Release();
+            msg.AddRef();
+            receiver.ProcessIncoming(msg);
+            msg.Release();
 
             var toSender = Capture(receiver);
             Assert.That(toSender, Has.Count.GreaterThanOrEqualTo(1));
 
             foreach (var ack in toSender)
             {
-                ack.Data.AddRef();
-                sender.ProcessIncoming(new Message(ack.PacketId, ack.Data));
-                ack.Data.Release();
+                ack.AddRef();
+                sender.ProcessIncoming(ack);
+                ack.Release();
             }
 
             Assert.That(deliveredId, Is.EqualTo(deliveryId));
@@ -171,10 +171,10 @@ namespace Pontifex.DeliveryManager.Tests
 
             dm.ScheduleDelivery(DataList(1), out var dmFailedId);
             var batch1 = Capture(dm, scheduler, now);
-            foreach (var m in batch1) m.Data.Release();
+            foreach (var m in batch1) m.Release();
 
             var batch2 = Capture(dm, scheduler, now + TimeSpan.FromMilliseconds(200));
-            foreach (var m in batch2) m.Data.Release();
+            foreach (var m in batch2) m.Release();
 
             Assert.That(failedId, Is.EqualTo(dmFailedId));
         }
@@ -205,9 +205,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                receiver.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(received, Is.EqualTo(5));
@@ -217,13 +217,14 @@ namespace Pontifex.DeliveryManager.Tests
         public void GarbageBytes_DoesNotCrash()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            bool result = dm.ProcessIncoming(new Message(1, CreateGarbageList()));
+            bool result = dm.ProcessIncoming(CreateGarbageList());
             Assert.That(result, Is.False);
         }
 
         private static UnionDataList CreateGarbageList()
         {
             var data = CPool.Acquire<UnionDataList>();
+            data.PutLast(new UnionData((ushort)1));
             data.PutLast(new UnionData((byte)0xFF));
             return data;
         }
@@ -237,7 +238,7 @@ namespace Pontifex.DeliveryManager.Tests
             sender.ScheduleDelivery(DataList(), out _);
             var outbound = Capture(sender);
             var msg = outbound[0];
-            msg.Data.AddRef();
+            msg.AddRef();
 
             byte[]? receivedBytes = null;
             receiver.Received += (_, d, _) =>
@@ -254,8 +255,8 @@ namespace Pontifex.DeliveryManager.Tests
                 }
             };
 
-            receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.Release();
+            receiver.ProcessIncoming(msg);
+            msg.Release();
 
             Assert.That(receivedBytes, Is.Not.Null);
             Assert.That(receivedBytes!.Length, Is.EqualTo(0));
@@ -278,13 +279,13 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(batch1, Has.Count.EqualTo(1));
             var msg = batch1[0];
 
-            msg.Data.AddRef();
-            receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-            msg.Data.Release();
+            msg.AddRef();
+            receiver.ProcessIncoming(msg);
+            msg.Release();
 
             var ack1 = Capture(receiver);
             Assert.That(ack1, Has.Count.EqualTo(1));
-            foreach (var a in ack1) a.Data.Release();
+            foreach (var a in ack1) a.Release();
 
             Assert.That(Capture(receiver), Is.Empty);
         }
@@ -316,9 +317,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                receiver.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(resultData, Is.Not.Null);
@@ -355,9 +356,9 @@ namespace Pontifex.DeliveryManager.Tests
             for (int i = outbound.Count - 1; i >= 0; i--)
             {
                 var msg = outbound[i];
-                msg.Data.AddRef();
-                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                receiver.ProcessIncoming(msg);
+                msg.Release();
             }
 
             Assert.That(resultData, Is.Not.Null);
@@ -385,15 +386,15 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in outbound)
             {
-                msg.Data.AddRef();
-                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                receiver.ProcessIncoming(msg);
+                msg.Release();
             }
 
             var first = outbound[0];
-            first.Data.AddRef();
-            receiver.ProcessIncoming(new Message(first.PacketId, first.Data));
-            first.Data.Release();
+            first.AddRef();
+            receiver.ProcessIncoming(first);
+            first.Release();
 
             Assert.That(received, Is.EqualTo(1));
         }
@@ -417,9 +418,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var msg in toReceiver)
             {
-                msg.Data.AddRef();
-                receiver.ProcessIncoming(new Message(msg.PacketId, msg.Data));
-                msg.Data.Release();
+                msg.AddRef();
+                receiver.ProcessIncoming(msg);
+                msg.Release();
             }
 
             var toSender = Capture(receiver);
@@ -427,9 +428,9 @@ namespace Pontifex.DeliveryManager.Tests
 
             foreach (var ack in toSender)
             {
-                ack.Data.AddRef();
-                sender.ProcessIncoming(new Message(ack.PacketId, ack.Data));
-                ack.Data.Release();
+                ack.AddRef();
+                sender.ProcessIncoming(ack);
+                ack.Release();
             }
 
             Assert.That(deliveredId, Is.EqualTo(new DeliveryId(1)));
@@ -451,10 +452,10 @@ namespace Pontifex.DeliveryManager.Tests
             dm.ScheduleDelivery(largeData, out _);
             var batch1 = Capture(dm, scheduler, now);
             Assert.That(batch1.Count, Is.GreaterThan(1));
-            foreach (var m in batch1) m.Data.Release();
+            foreach (var m in batch1) m.Release();
 
             var batch2 = Capture(dm, scheduler, now + TimeSpan.FromMilliseconds(200));
-            foreach (var m in batch2) m.Data.Release();
+            foreach (var m in batch2) m.Release();
 
             Assert.That(failedId, Is.EqualTo(new DeliveryId(1)));
         }
