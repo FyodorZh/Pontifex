@@ -16,19 +16,8 @@ namespace Pontifex.DeliveryManager
         private const int DeduplicatorCapacity = 1024;
         private const int TransportMessageQueueCapacity = 5000;
 
-        private readonly struct QueuedMessage
-        {
-            public readonly DeliveryInfo Info;
-            public readonly IReadOnlyUnionDataList Data;
-
-            public QueuedMessage(DeliveryInfo info, UnionDataList data)
-            {
-                Info = info;
-                Data = data;
-            }
-        }
-
         private readonly IWireMessageSerializer _serializer;
+        private readonly MessagePacker _packer;
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
         private readonly MessageChunker _chunker;
@@ -48,7 +37,10 @@ namespace Pontifex.DeliveryManager
             _serializer = new WireMessageSerializer(collectablePool);
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
-            _chunker = new MessageChunker(bytesPool, MultiChunkDeliveryChunkMaxSize);
+            int singleMax = messageMaxByteSize - _serializer.UserSingleOverhead - SafetyMargin;
+            int multiMax = messageMaxByteSize - _serializer.UserMultiOverhead - SafetyMargin;
+            _chunker = new MessageChunker(bytesPool, multiMax);
+            _packer = new MessagePacker(bytesPool, collectablePool, _serializer, _chunker, singleMax, multiMax);
             _queueToSend = new SystemQueue<QueuedMessage>();
 
             _dispatcher.OnDelivered += id =>
@@ -73,7 +65,7 @@ namespace Pontifex.DeliveryManager
         public void Clear()
         {
             _dispatcher.Clear();
-            _chunker.Clear();
+            _packer.Clear();
             _ackCollector.Clear();
 
             while (_queueToSend.TryPop(out var queued))
@@ -82,13 +74,7 @@ namespace Pontifex.DeliveryManager
             }
         }
 
-        private int SingleChunkDeliveryMaxSize =>
-            _messageMaxByteSize - _serializer.UserSingleOverhead - SafetyMargin;
-
-        private int MultiChunkDeliveryChunkMaxSize =>
-            _messageMaxByteSize - _serializer.UserMultiOverhead - SafetyMargin;
-
-        public int DeliveryMaxByteSize => MultiChunkDeliveryChunkMaxSize * 255;
+        public int DeliveryMaxByteSize => _packer.DeliveryMaxByteSize;
 
         public SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId)
         {
@@ -99,55 +85,16 @@ namespace Pontifex.DeliveryManager
                 return SendResult.InvalidMessage;
             }
 
-            if (!data.Serialize(_bytesPool, out var serializedBytes))
-            {
-                data.Release();
-                return SendResult.InvalidMessage;
-            }
-
             DeliveryId id = _nextId;
             _nextId = _nextId.Next;
 
-            try
+            SendResult result = _packer.Pack(id, data, _queueToSend);
+            if (result == SendResult.Ok)
             {
-                int dataSize = serializedBytes.Count;
-
-                if (dataSize <= SingleChunkDeliveryMaxSize)
-                {
-                    var wireMsg = _serializer.CreateUserSingle(id, serializedBytes);
-                    _queueToSend.Put(new QueuedMessage(new DeliveryInfo(id, 0), wireMsg));
-                    deliveryId = id;
-                    return SendResult.Ok;
-                }
-
-                if (dataSize <= DeliveryMaxByteSize)
-                {
-                    int chunksNumber = _chunker.GetChunkCount(dataSize);
-                    if (chunksNumber > 255)
-                    {
-                        return SendResult.MessageTooBig;
-                    }
-
-                    int chunkId = 0;
-                    while (_chunker.GetNextChunk(serializedBytes, chunkId, out var chunk))
-                    {
-                        var wireMsg = _serializer.CreateUserMulti(id, chunk, (byte)chunkId, (byte)chunksNumber);
-                        chunk.Release();
-                        _queueToSend.Put(new QueuedMessage(new DeliveryInfo(id, (byte)chunkId), wireMsg));
-                        chunkId += 1;
-                    }
-
-                    deliveryId = id;
-                    return SendResult.Ok;
-                }
-
-                return SendResult.MessageTooBig;
+                deliveryId = id;
             }
-            finally
-            {
-                data.Release();
-                serializedBytes.Release();
-            }
+
+            return result;
         }
 
         public bool ProcessIncoming(UnionDataList data)
@@ -161,7 +108,7 @@ namespace Pontifex.DeliveryManager
             if (packetId == 0)
             {
                 var confirmations = new List<DeliveryInfo>();
-                bool success = _serializer.TryParseDeliveryInfo(data, confirmations);
+                bool success = _packer.TryUnpackDeliveryInfo(data, confirmations);
                 data.Release();
                 if (success)
                 {
@@ -178,46 +125,22 @@ namespace Pontifex.DeliveryManager
                 return false;
             }
 
-            if (!_serializer.TryParseUserMessage(data, out var parsed))
+            if (!_packer.TryUnpackUserMessage(data, duplicity, out var unpacked))
             {
                 data.Release();
                 return false;
             }
 
-            var info = parsed.IsMultiChunk
-                ? new DeliveryInfo(parsed.Id, parsed.PartId)
-                : new DeliveryInfo(parsed.Id, 0);
-            _ackCollector.Add(info);
+            _ackCollector.Add(unpacked.Info);
 
-            IMultiRefByteArray? userData = null;
-            if (duplicity == Deduplicator.Result.New)
+            if (unpacked.UserData != null)
             {
-                if (parsed.IsMultiChunk)
-                {
-                    userData = _chunker.Combine(parsed.Id, parsed.PartId, parsed.PartsNumber, (IMultiRefByteArray)parsed.Payload);
-                }
-                else
-                {
-                    userData = (IMultiRefByteArray)parsed.Payload;
-                    userData.AddRef();
-                }
-            }
-
-            parsed.Payload.Release();
-
-            if (userData != null)
-            {
-                var deserialized = _collectablePool.Acquire<UnionDataList>();
-                var source = new ByteSourceFromArray(userData);
-                deserialized.Deserialize(ref source, _bytesPool);
-
                 var onReceived = Received;
                 if (onReceived != null)
                 {
-                    onReceived(info.Id, deserialized);
+                    onReceived(unpacked.Info.Id, unpacked.UserData);
                 }
-                deserialized.Release();
-                userData.Release();
+                unpacked.UserData.Release();
             }
 
             data.Release();
