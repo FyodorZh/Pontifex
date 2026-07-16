@@ -27,7 +27,7 @@ namespace Pontifex.DeliveryManager
 
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
-        private readonly UnorderedDeliveryRecipient _recipient;
+        private readonly MessageChunker _chunker;
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
         private readonly ICollectablePool _collectablePool;
 
@@ -43,7 +43,7 @@ namespace Pontifex.DeliveryManager
             _collectablePool = collectablePool;
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity);
-            _recipient = new UnorderedDeliveryRecipient(bytesPool);
+            _chunker = new MessageChunker(bytesPool, MultiChunkDeliveryChunkMaxSize);
             _queueToSend = new SystemQueue<UnionDataList>();
 
             _dispatcher.OnDelivered += id =>
@@ -68,7 +68,7 @@ namespace Pontifex.DeliveryManager
         public void Clear()
         {
             _dispatcher.Clear();
-            _recipient.Clear();
+            _chunker.Clear();
 
             while (_queueToSend.TryPop(out var msg))
             {
@@ -128,23 +128,19 @@ namespace Pontifex.DeliveryManager
 
                 if (dataSize <= DeliveryMaxByteSize)
                 {
-                    int maxChunkSize = MultiChunkDeliveryChunkMaxSize;
-
-                    int chunksNumber = (dataSize + maxChunkSize - 1) / maxChunkSize;
+                    int chunksNumber = _chunker.GetChunkCount(dataSize);
                     if (chunksNumber > 255)
                     {
                         return SendResult.MessageTooBig;
                     }
 
-                    for (int i = 0; i < chunksNumber; ++i)
+                    int chunkId = 0;
+                    while (_chunker.GetNextChunk(serializedBytes, chunkId, out var chunk))
                     {
-                        int offset = i * maxChunkSize;
-                        int count = Math.Min(maxChunkSize, dataSize - offset);
-
-                        var chunkData = CopySegment(serializedBytes, offset, count);
-                        var wireMsg = SerializeUserMulti(id, chunkData, (byte)i, (byte)chunksNumber, responseProcessTime);
-                        chunkData.Release();
+                        var wireMsg = SerializeUserMulti(id, chunk, (byte)chunkId, (byte)chunksNumber, responseProcessTime);
+                        chunk.Release();
                         _queueToSend.Put(wireMsg);
+                        chunkId += 1;
                     }
 
                     deliveryId = id;
@@ -195,7 +191,8 @@ namespace Pontifex.DeliveryManager
 
                         if (duplicity == Deduplicator.Result.New)
                         {
-                            userData = _recipient.ReceivedSingle((IMultiRefByteArray)userBytes);
+                            userData = (IMultiRefByteArray)userBytes;
+                            userData.AddRef();
                             userBytes.Release();
                         }
                     }
@@ -217,7 +214,7 @@ namespace Pontifex.DeliveryManager
 
                         if (duplicity == Deduplicator.Result.New)
                         {
-                            userData = _recipient.ReceivedMulti(new DeliveryId(id), partId, partsNumber, (IMultiRefByteArray)chunkBytes);
+                            userData = _chunker.Combine(new DeliveryId(id), partId, partsNumber, (IMultiRefByteArray)chunkBytes);
                             chunkBytes.Release();
                         }
                     }
@@ -379,11 +376,5 @@ namespace Pontifex.DeliveryManager
             return default;
         }
 
-        private IMultiRefByteArray CopySegment(IMultiRefByteArray source, int relativeOffset, int count)
-        {
-            var copy = _bytesPool.Acquire(count);
-            Buffer.BlockCopy(source.Array, source.Offset + relativeOffset, copy.Array, copy.Offset, count);
-            return copy;
-        }
     }
 }

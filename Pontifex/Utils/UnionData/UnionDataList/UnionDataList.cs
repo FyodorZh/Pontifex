@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Utils;
 
 namespace Pontifex.Utils
 {

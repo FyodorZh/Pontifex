@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Actuarius.Memory;
 
 namespace Pontifex.DeliveryManager
 {
-    internal class UnorderedDeliveryRecipient
+    internal class MessageChunker
     {
         private class MessageConstructor
         {
@@ -74,16 +76,38 @@ namespace Pontifex.DeliveryManager
 
         private readonly Dictionary<DeliveryId, MessageConstructor> _unfinishedMultimessages = new Dictionary<DeliveryId, MessageConstructor>();
         private readonly IPool<IMultiRefByteArray, int> _pool;
+        private readonly int _maxChunkSize;
 
-        public UnorderedDeliveryRecipient(IPool<IMultiRefByteArray, int> pool)
+        public MessageChunker(IPool<IMultiRefByteArray, int> pool, int maxChunkSize)
         {
             _pool = pool;
+            _maxChunkSize = maxChunkSize;
         }
 
-        public IMultiRefByteArray? ReceivedMulti(DeliveryId id, byte partId, byte partsNumber, IMultiRefByteArray data)
+        public int GetChunkCount(int dataSize)
         {
-            MessageConstructor? ctor;
-            if (!_unfinishedMultimessages.TryGetValue(id, out ctor))
+            return (dataSize + _maxChunkSize - 1) / _maxChunkSize;
+        }
+
+        public bool GetNextChunk(IMultiRefByteArray data, int chunkId, [NotNullWhen(true)]out IMultiRefByteArray? chunk)
+        {
+            int dataSize = data.Count;
+            int offset = chunkId * _maxChunkSize;
+            if (offset >= dataSize)
+            {
+                chunk = null;
+                return false;
+            }
+
+            int count = Math.Min(_maxChunkSize, dataSize - offset);
+            chunk = _pool.Acquire(count);
+            Buffer.BlockCopy(data.Array, data.Offset + offset, chunk.Array, chunk.Offset, count);
+            return true;
+        }
+
+        public IMultiRefByteArray? Combine(DeliveryId id, byte partId, byte partsNumber, IMultiRefByteArray data)
+        {
+            if (!_unfinishedMultimessages.TryGetValue(id, out var ctor))
             {
                 ctor = new MessageConstructor(partsNumber, _pool);
                 _unfinishedMultimessages.Add(id, ctor);
@@ -96,12 +120,6 @@ namespace Pontifex.DeliveryManager
             }
 
             return null;
-        }
-
-        public IMultiRefByteArray ReceivedSingle(IMultiRefByteArray data)
-        {
-            data.AddRef();
-            return data;
         }
 
         public void Clear()
