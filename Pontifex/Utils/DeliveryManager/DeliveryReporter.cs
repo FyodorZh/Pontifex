@@ -5,7 +5,7 @@ using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
-    internal class AckCollector
+    internal class DeliveryReporter
     {
         private readonly List<DeliveryInfo> _confirmations = new List<DeliveryInfo>();
 
