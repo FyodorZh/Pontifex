@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.DeliveryManager;
 using Pontifex.Utils;
@@ -163,79 +162,6 @@ namespace Pontifex.DeliveryManager.Tests
             msg.Release();
         }
 
-        // ── CreateDeliveryInfo tests ──
-
-        [Test]
-        public void CreateDeliveryInfo_SingleConfirmation()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo> { new DeliveryInfo(new DeliveryId(42), 7) };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 1);
-            Assert.That(msg.Elements.Count, Is.EqualTo(4)); // bool + count + id + chunkId
-            Assert.That(msg.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));   // isUser = false
-            Assert.That(msg.Elements[0].Alias.BoolValue, Is.False);
-            Assert.That(msg.Elements[1].Alias.UShortValue, Is.EqualTo(1));       // count
-            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(42));      // id
-            Assert.That(msg.Elements[3].Alias.ByteValue, Is.EqualTo(7));         // chunkId
-            msg.Release();
-        }
-
-        [Test]
-        public void CreateDeliveryInfo_MultipleConfirmations()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(1), 0),
-                new DeliveryInfo(new DeliveryId(2), 1),
-                new DeliveryInfo(new DeliveryId(3), 2)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 3);
-            Assert.That(msg.Elements.Count, Is.EqualTo(2 + 2 * 3)); // bool + count + pairs
-            Assert.That(msg.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));   // isUser = false
-            Assert.That(msg.Elements[0].Alias.BoolValue, Is.False);
-            Assert.That(msg.Elements[1].Alias.UShortValue, Is.EqualTo(3));       // count
-
-            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(1));
-            Assert.That(msg.Elements[3].Alias.ByteValue, Is.EqualTo(0));
-            Assert.That(msg.Elements[4].Alias.UShortValue, Is.EqualTo(2));
-            Assert.That(msg.Elements[5].Alias.ByteValue, Is.EqualTo(1));
-            Assert.That(msg.Elements[6].Alias.UShortValue, Is.EqualTo(3));
-            Assert.That(msg.Elements[7].Alias.ByteValue, Is.EqualTo(2));
-            msg.Release();
-        }
-
-        [Test]
-        public void CreateDeliveryInfo_PartialRange()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(10), 0),
-                new DeliveryInfo(new DeliveryId(20), 1),
-                new DeliveryInfo(new DeliveryId(30), 2)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 1, 2);
-            Assert.That(msg.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));
-            Assert.That(msg.Elements[0].Alias.BoolValue, Is.False);
-            Assert.That(msg.Elements[1].Alias.UShortValue, Is.EqualTo(2));       // count
-            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(20));
-            Assert.That(msg.Elements[4].Alias.UShortValue, Is.EqualTo(30));
-            msg.Release();
-        }
-
-        [Test]
-        public void CreateDeliveryInfo_ZeroCount()
-        {
-            var ser = CreateSerializer();
-            var msg = ser.CreateDeliveryInfo(new List<DeliveryInfo>(), 0, 0);
-            Assert.That(msg.Elements.Count, Is.EqualTo(2)); // bool + count
-            Assert.That(msg.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));
-            Assert.That(msg.Elements[0].Alias.BoolValue, Is.False);
-            Assert.That(msg.Elements[1].Alias.UShortValue, Is.EqualTo(0));
-            msg.Release();
-        }
-
         // ── TryParseUserMessage tests ──
 
         [Test]
@@ -359,113 +285,6 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(parsed, Is.False);
         }
 
-        // ── TryParseDeliveryInfo tests ──
-
-        [Test]
-        public void TryParseDeliveryInfo_ParseValid_ReturnsTrueAndPopulatesList()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(7), 3)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 1);
-            msg.TryPopFirst(out ushort _); // pop packetId
-            msg.AddRef();
-
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(msg, result);
-            msg.Release();
-
-            Assert.That(parsed, Is.True);
-            Assert.That(result.Count, Is.EqualTo(1));
-            Assert.That(result[0].Id, Is.EqualTo(new DeliveryId(7)));
-            Assert.That(result[0].ChunkId, Is.EqualTo(3));
-        }
-
-        [Test]
-        public void TryParseDeliveryInfo_MultipleConfirmations()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(1), 0),
-                new DeliveryInfo(new DeliveryId(2), 1),
-                new DeliveryInfo(new DeliveryId(3), 2)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 3);
-            msg.TryPopFirst(out ushort _); // pop packetId
-            msg.AddRef();
-
-            var result = new List<DeliveryInfo>();
-            ser.TryParseDeliveryInfo(msg, result);
-            msg.Release();
-
-            Assert.That(result.Count, Is.EqualTo(3));
-            for (int i = 0; i < 3; i++)
-            {
-                Assert.That(result[i].Id, Is.EqualTo(new DeliveryId((ushort)(i + 1))));
-                Assert.That(result[i].ChunkId, Is.EqualTo((byte)i));
-            }
-        }
-
-        [Test]
-        public void TryParseDeliveryInfo_WrongTypeByte_ReturnsFalse()
-        {
-            var ser = CreateSerializer();
-            var data = CPool.Acquire<UnionDataList>();
-            data.PutLast(new UnionData((byte)0xFF)); // not TypeDeliveryInfo
-            data.PutLast(new UnionData((ushort)1));
-            data.PutLast(new UnionData((ushort)100));
-            data.PutLast(new UnionData((byte)0));
-
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(data, result);
-            data.Release();
-            Assert.That(parsed, Is.False);
-            Assert.That(result, Is.Empty);
-        }
-
-        [Test]
-        public void TryParseDeliveryInfo_TruncatedAfterCount_ReturnsFalse()
-        {
-            var ser = CreateSerializer();
-            var data = CPool.Acquire<UnionDataList>();
-            data.PutLast(new UnionData((byte)2)); // TypeDeliveryInfo
-            data.PutLast(new UnionData((ushort)5)); // count = 5, but no more elements
-
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(data, result);
-            data.Release();
-            Assert.That(parsed, Is.False);
-        }
-
-        [Test]
-        public void TryParseDeliveryInfo_CountZero_ReturnsTrueEmptyList()
-        {
-            var ser = CreateSerializer();
-            var data = CPool.Acquire<UnionDataList>();
-            data.PutLast(new UnionData(false)); // isUser = false
-            data.PutLast(new UnionData((ushort)0)); // count = 0
-
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(data, result);
-            data.Release();
-            Assert.That(parsed, Is.True);
-            Assert.That(result, Is.Empty);
-        }
-
-        [Test]
-        public void TryParseDeliveryInfo_EmptyData_ReturnsFalse()
-        {
-            var ser = CreateSerializer();
-            var data = CPool.Acquire<UnionDataList>();
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(data, result);
-            data.Release();
-            Assert.That(parsed, Is.False);
-        }
-
         // ── Round-trip tests ──
 
         [Test]
@@ -515,30 +334,6 @@ namespace Pontifex.DeliveryManager.Tests
         }
 
         [Test]
-        public void RoundTrip_DeliveryInfo()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(100), 5),
-                new DeliveryInfo(new DeliveryId(200), 6)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 2);
-            msg.TryPopFirst(out ushort _); // pop packetId
-            msg.AddRef();
-
-            var result = new List<DeliveryInfo>();
-            Assert.That(ser.TryParseDeliveryInfo(msg, result), Is.True);
-            msg.Release();
-
-            Assert.That(result.Count, Is.EqualTo(2));
-            Assert.That(result[0].Id, Is.EqualTo(new DeliveryId(100)));
-            Assert.That(result[0].ChunkId, Is.EqualTo(5));
-            Assert.That(result[1].Id, Is.EqualTo(new DeliveryId(200)));
-            Assert.That(result[1].ChunkId, Is.EqualTo(6));
-        }
-
-        [Test]
         public void RoundTrip_UserSingle_ZeroDeliveryId()
         {
             var ser = CreateSerializer();
@@ -558,7 +353,6 @@ namespace Pontifex.DeliveryManager.Tests
         //
         //  CreateUserSingle → [byte(partsNumber=1), ushort(deliveryId), array]
         //  CreateUserMulti  → [byte(partsNum), byte(partId), ushort(deliveryId), array]
-        //  CreateDeliveryInfo → [bool(false), ushort(count), pairs...]
         // ════════════════════════════════════════════════════════════════
 
         [Test]
@@ -590,29 +384,6 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(msg.Elements[2].Type, Is.EqualTo(UnionDataType.UShort)); // deliveryId
             Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(7));
             Assert.That(msg.Elements[3].Type, Is.EqualTo(UnionDataType.Array));  // chunk data
-            msg.Release();
-        }
-
-        [Test]
-        public void NewFormat_CreateDeliveryInfo_Structure()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(42), 7),
-                new DeliveryInfo(new DeliveryId(100), 3)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 2);
-
-            Assert.That(msg.Elements.Count, Is.EqualTo(6)); // bool + count + 2 * 2 pairs
-            Assert.That(msg.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));    // isUser = false
-            Assert.That(msg.Elements[0].Alias.BoolValue, Is.False);
-            Assert.That(msg.Elements[1].Type, Is.EqualTo(UnionDataType.UShort));  // count
-            Assert.That(msg.Elements[1].Alias.UShortValue, Is.EqualTo(2));
-            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(42));       // first id
-            Assert.That(msg.Elements[3].Alias.ByteValue, Is.EqualTo(7));          // first chunkId
-            Assert.That(msg.Elements[4].Alias.UShortValue, Is.EqualTo(100));      // second id
-            Assert.That(msg.Elements[5].Alias.ByteValue, Is.EqualTo(3));          // second chunkId
             msg.Release();
         }
 
@@ -672,53 +443,6 @@ namespace Pontifex.DeliveryManager.Tests
             ser.TryParseUserMessage(msg, out var result);
             msg.Release();
             Assert.That(result.IsMultiChunk, Is.True);
-        }
-
-        [Test]
-        public void NewFormat_TryParseDeliveryInfo_Valid()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(7), 3)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 1);
-
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(msg, result);
-
-            Assert.That(parsed, Is.True);
-            Assert.That(result.Count, Is.EqualTo(1));
-            Assert.That(result[0].Id, Is.EqualTo(new DeliveryId(7)));
-            Assert.That(result[0].ChunkId, Is.EqualTo(3));
-        }
-
-        [Test]
-        public void NewFormat_TryParseDeliveryInfo_CountZero()
-        {
-            var ser = CreateSerializer();
-            var msg = ser.CreateDeliveryInfo(new List<DeliveryInfo>(), 0, 0);
-
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(msg, result);
-
-            Assert.That(parsed, Is.True);
-            Assert.That(result, Is.Empty);
-        }
-
-        [Test]
-        public void NewFormat_TryParseDeliveryInfo_WrongDiscriminator_ReturnsFalse()
-        {
-            // A user message (bool=true) should not parse as DeliveryInfo
-            var ser = CreateSerializer();
-            var msg = ser.CreateUserSingle(new DeliveryId(1), Data(1));
-
-            var result = new List<DeliveryInfo>();
-            bool parsed = ser.TryParseDeliveryInfo(msg, result);
-
-            Assert.That(parsed, Is.False);
-            Assert.That(result, Is.Empty);
-            msg.Release();
         }
 
         [Test]
@@ -783,25 +507,5 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(resultBytes, Is.EqualTo(originalData));
         }
 
-        [Test]
-        public void NewFormat_RoundTrip_DeliveryInfo()
-        {
-            var ser = CreateSerializer();
-            var confirmations = new List<DeliveryInfo>
-            {
-                new DeliveryInfo(new DeliveryId(100), 5),
-                new DeliveryInfo(new DeliveryId(200), 6)
-            };
-            var msg = ser.CreateDeliveryInfo(confirmations, 0, 2);
-
-            var result = new List<DeliveryInfo>();
-            Assert.That(ser.TryParseDeliveryInfo(msg, result), Is.True);
-
-            Assert.That(result.Count, Is.EqualTo(2));
-            Assert.That(result[0].Id, Is.EqualTo(new DeliveryId(100)));
-            Assert.That(result[0].ChunkId, Is.EqualTo(5));
-            Assert.That(result[1].Id, Is.EqualTo(new DeliveryId(200)));
-            Assert.That(result[1].ChunkId, Is.EqualTo(6));
-        }
     }
 }

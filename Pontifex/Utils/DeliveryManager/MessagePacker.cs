@@ -106,11 +106,6 @@ namespace Pontifex.DeliveryManager
 
         // ── Unpack (receive direction) ──
 
-        public bool TryUnpackDeliveryInfo(UnionDataList data, List<DeliveryInfo> confirmations)
-        {
-            return _serializer.TryParseDeliveryInfo(data, confirmations);
-        }
-
         public bool TryUnpackUserMessage(UnionDataList data, Deduplicator.Result duplicity, out UnpackedUserMessage result)
         {
             result = default;

@@ -17,6 +17,7 @@ namespace Pontifex.DeliveryManager
         private const int TransportMessageQueueCapacity = 5000;
 
         private readonly IWireMessageSerializer _serializer;
+        private readonly DeliveryInfoSerializer _deliveryInfoSerializer;
         private readonly MessagePacker _packer;
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
@@ -34,6 +35,7 @@ namespace Pontifex.DeliveryManager
             _bytesPool = bytesPool;
             _collectablePool = collectablePool;
             _serializer = new WireMessageSerializer(collectablePool);
+            _deliveryInfoSerializer = new DeliveryInfoSerializer(collectablePool);
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
             int singleMax = messageMaxByteSize - _serializer.UserSingleOverhead - SafetyMargin;
@@ -99,59 +101,60 @@ namespace Pontifex.DeliveryManager
 
         public bool ProcessIncoming(UnionDataList data)
         {
+            using var disposer = data.AsDisposable();
+
             if (!data.TryPopFirst(out bool isUser))
-            {
-                data.Release();
                 return false;
-            }
 
             if (!isUser)
             {
-                data.PutFirst(new UnionData(false));
-                var confirmations = new List<DeliveryInfo>();
-                bool success = _packer.TryUnpackDeliveryInfo(data, confirmations);
-                data.Release();
-                if (success)
-                {
-                    foreach (var confirmation in confirmations)
-                        _dispatcher.ConfirmDelivered(confirmation);
-                }
-                return success;
+                if (!_deliveryInfoSerializer.LoadDeliveryReport(data))
+                    return false;
+
+                foreach (var confirmation in _deliveryInfoSerializer.CurrentDeliveryReport)
+                    _dispatcher.ConfirmDelivered(confirmation);
+                return true;
             }
 
             if (!data.TryPopFirst(out ushort wireChunkId))
-            {
-                data.Release();
                 return false;
-            }
 
-            var duplicity = _deduplicator.Received(wireChunkId);
-            if (duplicity == Deduplicator.Result.Overflow)
+            switch (_deduplicator.Received(wireChunkId))
             {
-                data.Release();
-                return false;
-            }
+                case Deduplicator.Result.Overflow:
+                    return false;
 
-            if (!_packer.TryUnpackUserMessage(data, duplicity, out var unpacked))
-            {
-                data.Release();
-                return false;
-            }
-
-            _ackCollector.Add(unpacked.Info);
-
-            if (unpacked.UserData != null)
-            {
-                var onReceived = Received;
-                if (onReceived != null)
+                case Deduplicator.Result.New:
                 {
-                    onReceived(unpacked.Info.Id, unpacked.UserData);
-                }
-                unpacked.UserData.Release();
-            }
+                    if (!_packer.TryUnpackUserMessage(data, Deduplicator.Result.New, out var unpacked))
+                        return false;
 
-            data.Release();
-            return true;
+                    _ackCollector.Add(unpacked.Info);
+
+                    if (unpacked.UserData != null)
+                    {
+                        var onReceived = Received;
+                        if (onReceived != null)
+                            onReceived(unpacked.Info.Id, unpacked.UserData);
+
+                        unpacked.UserData.Release();
+                    }
+
+                    return true;
+                }
+
+                case Deduplicator.Result.Duplicate:
+                {
+                    if (!_packer.TryUnpackUserMessage(data, Deduplicator.Result.Duplicate, out var unpacked))
+                        return false;
+
+                    _ackCollector.Add(unpacked.Info);
+                    return true;
+                }
+
+                default:
+                    return false;
+            }
         }
 
         public void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<UnionDataList> dst)
@@ -182,7 +185,7 @@ namespace Pontifex.DeliveryManager
                 userMessage.Release();
             }
 
-            _ackCollector.Flush(_serializer, _messageMaxByteSize, SafetyMargin, dst);
+            _ackCollector.Flush(_deliveryInfoSerializer, _messageMaxByteSize, SafetyMargin, dst);
 
             _dispatcher.TryToDeliver(dst, scheduler, now);
         }

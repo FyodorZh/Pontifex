@@ -14,19 +14,20 @@ namespace Pontifex.DeliveryManager
             _confirmations.Add(info);
         }
 
-        public void Flush(IWireMessageSerializer serializer, int messageMaxByteSize, int safetyMargin, IConsumer<UnionDataList> dst)
+        public void Flush(DeliveryInfoSerializer deliveryInfoSerializer, int messageMaxByteSize, int safetyMargin, IConsumer<UnionDataList> dst)
         {
             int count = _confirmations.Count;
             if (count == 0)
                 return;
 
-            int packSize = (messageMaxByteSize - serializer.DeliveryInfoFixedOverhead - safetyMargin) / serializer.DeliveryInfoElementSize;
+            int packSize = (messageMaxByteSize - deliveryInfoSerializer.DeliveryInfoFixedOverhead - safetyMargin) / deliveryInfoSerializer.DeliveryInfoElementSize;
 
             int pos = 0;
             while (pos < count)
             {
                 int len = Math.Min(packSize, count - pos);
-                var infoMsg = serializer.CreateDeliveryInfo(_confirmations, pos, len);
+                var infoMsg = deliveryInfoSerializer.CreateDeliveryReport(_confirmations, pos, len);
+                infoMsg.PutFirst(new UnionData(false));
                 dst.Put(infoMsg);
                 pos += len;
             }
