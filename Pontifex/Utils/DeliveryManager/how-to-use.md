@@ -317,10 +317,12 @@ class MyProtocol
 
 ## Configuration Constants
 
-If you need different values, modify `DeliveryManager.cs`:
+If you need different values, modify `DeliveryManager.cs` or the respective component:
 
-| Constant | Default | Notes |
-|---|---|---|
-| `DeduplicatorCapacity` | 1024 | Must cover max in-flight packets |
-| `TransportMessageQueueCapacity` | 5000 | Max pending sends before overflow |
-| `SafetyMargin` | 4 | Additional headroom below MTU |
+| Constant | Default | Location | Notes |
+|---|---|---|---|
+| `DeduplicatorCapacity` | 1024 | `DeliveryManager.cs` | Must cover max in-flight packets |
+| `TransportMessageQueueCapacity` | 5000 | `DeliveryManager.cs` | Max pending sends before overflow |
+| `SafetyMargin` | 4 | `DeliveryManager.cs` | Additional headroom below MTU |
+| `UserSingleOverhead` | 6 | `UserMessageHandler.cs` | Per-chunk byte overhead for single messages |
+| `UserMultiOverhead` | 10 | `UserMessageHandler.cs` | Per-chunk byte overhead for multi messages |

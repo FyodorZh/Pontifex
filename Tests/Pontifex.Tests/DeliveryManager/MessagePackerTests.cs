@@ -37,14 +37,12 @@ namespace Pontifex.DeliveryManager.Tests
             return data;
         }
 
-        private static (MessagePacker packer, IWireMessageSerializer serializer, MessageChunker chunker) CreatePackEnvironment()
+        private static (MessagePacker packer, UserMessageHandler handler) CreatePackEnvironment()
         {
-            var serializer = new WireMessageSerializer(CPool);
-            int singleMax = MaxMsgSize - serializer.UserSingleOverhead - SafetyMargin;
-            int multiMax = MaxMsgSize - serializer.UserMultiOverhead - SafetyMargin;
-            var chunker = new MessageChunker(Pool, multiMax);
-            var packer = new MessagePacker(Pool, CPool, serializer, chunker, singleMax, multiMax);
-            return (packer, serializer, chunker);
+            int multiMax = MaxMsgSize - UserMessageHandler.UserMultiOverhead - SafetyMargin;
+            var handler = new UserMessageHandler(Pool, CPool, multiMax);
+            var packer = new MessagePacker(Pool, CPool, MaxMsgSize, SafetyMargin);
+            return (packer, handler);
         }
 
         // ── DeliveryMaxByteSize ──
@@ -52,8 +50,8 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void DeliveryMaxByteSize_ComputedCorrectly()
         {
-            var (packer, serializer, _) = CreatePackEnvironment();
-            int multiMax = MaxMsgSize - serializer.UserMultiOverhead - SafetyMargin;
+            var (packer, _) = CreatePackEnvironment();
+            int multiMax = MaxMsgSize - UserMessageHandler.UserMultiOverhead - SafetyMargin;
             Assert.That(packer.DeliveryMaxByteSize, Is.EqualTo(multiMax * 255));
         }
 
@@ -62,7 +60,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_SmallData_ProducesOneQueuedMessage()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
 
             var result = packer.Pack(new DeliveryId(1), DataList(1, 2, 3),
@@ -76,7 +74,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_SingleChunk_HasCorrectDeliveryId()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
 
             packer.Pack(new DeliveryId(42), DataList(1, 2, 3),
@@ -90,7 +88,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_SingleChunk_EmptyData_Works()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
 
             var result = packer.Pack(new DeliveryId(1), DataList(),
@@ -106,7 +104,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_LargeData_ProducesMultipleQueuedMessages()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
             var data = new byte[200];
             for (int i = 0; i < 200; i++) data[i] = (byte)i;
@@ -122,7 +120,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_MultiChunk_AllHaveSameDeliveryId()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
             var data = new byte[200];
 
@@ -137,7 +135,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_MultiChunk_ChunkIdsAreSequential()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
             var data = new byte[200];
 
@@ -152,7 +150,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_MultiChunk_PayloadSizesSumToOriginal()
         {
-            var (packer, serializer, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
             var originalBytes = new byte[200];
             for (int i = 0; i < 200; i++) originalBytes[i] = (byte)(i % 256);
@@ -184,7 +182,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_DataAtSingleChunkLimit_ProducesOneChunk()
         {
-            var (packer, serializer, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             // 86 data bytes → serialized = 1(count) + 1(type) + 2(varint86) + 86 = 90 = singleMax
             var sent = new List<QueuedMessage>();
 
@@ -199,7 +197,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_DataJustOverSingleChunkLimit_ProducesMultipleChunks()
         {
-            var (packer, serializer, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             // 87 data bytes → serialized = 1+1+2+87 = 91 > singleMax(90) → multi-chunk
             var sent = new List<QueuedMessage>();
 
@@ -216,7 +214,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_DataTooBig_ReturnsMessageTooBig()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
 
             var result = packer.Pack(new DeliveryId(1), DataList(new byte[30000]),
@@ -229,7 +227,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_NullData_ReturnsInvalidMessage()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var sent = new List<QueuedMessage>();
 
             var result = packer.Pack(new DeliveryId(1), null!,
@@ -244,7 +242,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Clear_DoesNotThrow()
         {
-            var (packer, _, chunker) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             // Put something in the chunker's reassembly state
             var sent = new List<QueuedMessage>();
             packer.Pack(new DeliveryId(1), DataList(new byte[200]),
@@ -259,7 +257,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Pack_ReleasesDataOnSuccess()
         {
-            var (packer, _, _) = CreatePackEnvironment();
+            var (packer, _) = CreatePackEnvironment();
             var data = DataList(1, 2, 3);
 
             var result = packer.Pack(new DeliveryId(1), data,

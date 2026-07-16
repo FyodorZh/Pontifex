@@ -16,15 +16,12 @@ namespace Pontifex.DeliveryManager
         private const int DeduplicatorCapacity = 1024;
         private const int TransportMessageQueueCapacity = 5000;
 
-        private readonly IWireMessageSerializer _serializer;
+        private readonly AckBuffer _ackBuffer;
         private readonly MessagePacker _packer;
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
-        private readonly MessageChunker _chunker;
-        private readonly IPool<IMultiRefByteArray, int> _bytesPool;
         private readonly ICollectablePool _collectablePool;
 
-        private readonly AckCollector _ackCollector = new AckCollector();
         private DeliveryId _nextId = DeliveryId.Zero.Next;
         private readonly int _messageMaxByteSize;
         private readonly IQueue<QueuedMessage> _queueToSend;
@@ -32,15 +29,11 @@ namespace Pontifex.DeliveryManager
         public DeliveryManager(int messageMaxByteSize, IPool<IMultiRefByteArray, int> bytesPool, ICollectablePool collectablePool)
         {
             _messageMaxByteSize = messageMaxByteSize;
-            _bytesPool = bytesPool;
             _collectablePool = collectablePool;
-            _serializer = new WireMessageSerializer(collectablePool);
+            _ackBuffer = new AckBuffer(collectablePool);
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
-            int singleMax = messageMaxByteSize - _serializer.UserSingleOverhead - SafetyMargin;
-            int multiMax = messageMaxByteSize - _serializer.UserMultiOverhead - SafetyMargin;
-            _chunker = new MessageChunker(bytesPool, multiMax);
-            _packer = new MessagePacker(bytesPool, collectablePool, _serializer, _chunker, singleMax, multiMax);
+            _packer = new MessagePacker(bytesPool, collectablePool, messageMaxByteSize, SafetyMargin);
             _queueToSend = new SystemQueue<QueuedMessage>();
 
             _dispatcher.OnDelivered += id =>
@@ -66,7 +59,7 @@ namespace Pontifex.DeliveryManager
         {
             _dispatcher.Clear();
             _packer.Clear();
-            _ackCollector.Clear();
+            _ackBuffer.Clear();
 
             while (_queueToSend.TryPop(out var queued))
             {
@@ -108,7 +101,7 @@ namespace Pontifex.DeliveryManager
             if (packetId == 0)
             {
                 var confirmations = new List<DeliveryInfo>();
-                bool success = _packer.TryUnpackDeliveryInfo(data, confirmations);
+                bool success = _ackBuffer.TryParseDeliveryInfo(data, confirmations);
                 data.Release();
                 if (success)
                 {
@@ -131,7 +124,7 @@ namespace Pontifex.DeliveryManager
                 return false;
             }
 
-            _ackCollector.Add(unpacked.Info);
+            _ackBuffer.Add(unpacked.Info);
 
             if (unpacked.UserData != null)
             {
@@ -175,7 +168,7 @@ namespace Pontifex.DeliveryManager
                 userMessage.Release();
             }
 
-            _ackCollector.Flush(_serializer, _messageMaxByteSize, SafetyMargin, dst);
+            _ackBuffer.Flush(_messageMaxByteSize, SafetyMargin, dst);
 
             _dispatcher.TryToDeliver(dst, scheduler, now);
         }

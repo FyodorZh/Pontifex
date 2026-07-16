@@ -27,13 +27,14 @@ namespace Pontifex.DeliveryManager
             private DeliveryInfo _id;
             private DateTime _scheduleTime;
             private UnionDataList _data = null!;
+            private ushort _packetId;
 
             public void Init(DeliveryInfo id, DateTime scheduleTime, IReadOnlyUnionDataList data, ushort packetId, ICollectablePool pool)
             {
                 _id = id;
                 _scheduleTime = scheduleTime;
                 _data = data.Clone(pool);
-                _data.PutFirst(new UnionData(packetId));
+                _packetId = packetId;
                 data.Release();
                 DeliveryAttempts = 0;
             }
@@ -44,6 +45,7 @@ namespace Pontifex.DeliveryManager
             public UnionDataList AcquireMessage()
             {
                 _data.AddRef();
+                _data.PutFirst(new UnionData(_packetId));
                 return _data;
             }
 

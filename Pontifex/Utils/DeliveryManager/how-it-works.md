@@ -17,24 +17,32 @@ All types live in namespace `Pontifex.DeliveryManager` and are `internal` (not p
 ## Architecture
 
 ```
-                    ┌─────────────────────────────────────┐
-                    │         SortedDeliveryManager        │  (optional ordering wrapper)
-                    │  (adds DeliverySorter on top)        │
-                    └──────────┬──────────────────────────┘
-                               │
-                    ┌──────────▼──────────────────────────┐
-                    │           DeliveryManager            │  (orchestrator)
-                    │                                     │
-                    │  ┌────────────┐  ┌────────────────┐ │
-                    │  │ Deduplicator│  │ DeliveryDispatcher│ │
-                    │  │ (sliding   │  │ (priority queue │ │
-                    │  │  window)   │  │  + retry logic) │ │
-                    │  └────────────┘  └────────────────┘ │
-                    │  ┌──────────────────────────────┐   │
-                    │  │ UnorderedDeliveryRecipient    │   │
-                    │  │ (multi-chunk reassembly)     │   │
-                    │  └──────────────────────────────┘   │
-                    └─────────────────────────────────────┘
+                     ┌─────────────────────────────────────┐
+                     │         DeliverySortingManager        │  (optional ordering wrapper)
+                     │  (adds DeliverySorter on top)         │
+                     └──────────┬──────────────────────────┘
+                                │
+                     ┌──────────▼──────────────────────────┐
+                     │           DeliveryManager            │  (orchestrator)
+                     │                                     │
+                     │  ┌────────────┐  ┌────────────────┐ │
+                     │  │ Deduplicator│  │ DeliveryDispatcher│ │
+                     │  │ (sliding   │  │ (priority queue │ │
+                     │  │  window)   │  │  + retry logic) │ │
+                     │  └────────────┘  └────────────────┘ │
+                     │  ┌──────────────────────────────┐   │
+                     │  │        MessagePacker          │   │
+                     │  │  ┌────────────────────────┐   │   │
+                     │  │  │   UserMessageHandler    │   │   │
+                     │  │  │  (chunk + reassemble +  │   │   │
+                     │  │  │   serialize + parse)    │   │   │
+                     │  │  └────────────────────────┘   │   │
+                     │  └──────────────────────────────┘   │
+                     │  ┌──────────────────────────────┐   │
+                     │  │         AckBuffer             │   │
+                     │  │  (accumulate + batch ACKs)    │   │
+                     │  └──────────────────────────────┘   │
+                     └─────────────────────────────────────┘
 ```
 
 ---
@@ -253,15 +261,31 @@ Ensures messages are delivered to the upper layer in `DeliveryId` order.
 
 **Error state**: Once `_hasError` is set, all subsequent `Push()` and `TryPop()` fail. The sorter must be replaced.
 
-### UnorderedDeliveryRecipient
+### UserMessageHandler
 
-Reassembles multi-chunk messages into a single contiguous buffer.
+Handles both send-direction and receive-direction user message processing.
 
-**MessageConstructor:**
-- Stores chunks in an array indexed by `partId`
-- `AddChunk(chunkId, data)`: Stores a reference (AddRef) if slot is empty; returns true when all slots filled
-- `Combine()`: Allocates a pooled buffer of totalSize, copies all chunks into it sequentially, releases chunk refs
-- `Clear()`: Releases all stored chunks (for cleanup of incomplete messages)
+**Send (chunking + serialization):**
+- `GetChunkCount(dataSize)` — number of chunks needed
+- `GetNextChunk(data, chunkId, out chunk)` — extract one chunk
+- `CreateUserSingle(id, data)` — build single-chunk wire message
+- `CreateUserMulti(id, data, partId, partsNumber)` — build multi-chunk wire message
+
+**Receive (reassembly + deserialization):**
+- `Combine(id, partId, partsNumber, chunkData)` — stores chunk; returns combined buffer when all chunks ready (same semantics as legacy `UnorderedDeliveryRecipient`)
+- `TryParseUserMessage(data, out parsed)` — parse wire message into fields
+- `Deserialize(data)` — deserialize bytes back to `UnionDataList`
+
+All reassembly state is cleared via `Clear()`.
+
+### AckBuffer
+
+Accumulates delivery confirmations (ACKs) received from the remote side and flushes them as batched `DeliveryInfo` wire messages.
+
+- `Add(info)` — record a confirmation (called from `ProcessIncoming`)
+- `Flush(messageMaxByteSize, safetyMargin, dst)` — batch and send pending ACKs (called from `ProcessOutgoing`)
+- `TryParseDeliveryInfo(data, confirmations)` — parse incoming `DeliveryInfo` wire message into confirmations
+- `Clear()` — discard all pending ACKs
 
 ---
 
