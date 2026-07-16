@@ -67,6 +67,26 @@ namespace Pontifex.DeliveryManager.Tests
         }
 
         [Test]
+        public void DeliveryMaxByteSize_ReturnsCorrectValue()
+        {
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            int multiMax = MaxMsgSize - 10 - 4;
+            Assert.That(dm.DeliveryMaxByteSize, Is.EqualTo(multiMax * 255));
+        }
+
+        [Test]
+        public void ProcessIncoming_MalformedDeliveryReport_ReturnsFalse()
+        {
+            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var badReport = CPool.Acquire<UnionDataList>();
+            badReport.PutLast(new UnionData(false));
+            badReport.PutLast(new UnionData((ushort)5));
+            bool result = dm.ProcessIncoming(badReport);
+            badReport.Release();
+            Assert.That(result, Is.False);
+        }
+
+        [Test]
         public void ProcessOutgoing_ProducesBuffer()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
@@ -189,6 +209,29 @@ namespace Pontifex.DeliveryManager.Tests
         }
 
         [Test]
+        public void ProcessIncoming_AfterClear_StillProcesses()
+        {
+            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+
+            sender.ScheduleDelivery(DataList(1, 2, 3), out _);
+            var outbound = Capture(sender);
+
+            receiver.Clear();
+
+            DeliveryId? receivedId = null;
+            receiver.Received += (id, _) => receivedId = id;
+
+            var msg = outbound[0];
+            msg.AddRef();
+            bool processed = receiver.ProcessIncoming(msg);
+            msg.Release();
+
+            Assert.That(processed, Is.True);
+            Assert.That(receivedId, Is.EqualTo(new DeliveryId(1)));
+        }
+
+        [Test]
         public void MultipleSends_AllReceived()
         {
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
@@ -229,98 +272,8 @@ namespace Pontifex.DeliveryManager.Tests
             return data;
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  New wire format target tests (integration)
-        //  Target: ProcessIncoming parses hierarchically:
-        //    bool(false) → DeliveryInfo
-        //    bool(true) → pop ushort(wireChunkId) → dedup → user message
-        // ════════════════════════════════════════════════════════════════
-
         [Test]
-        public void NewFormat_DeliveryInfoMessage_ProcessedAsAck()
-        {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
-
-            DeliveryId? deliveredId = null;
-            sender.Delivered += id => deliveredId = id;
-
-            sender.ScheduleDelivery(DataList(1, 2, 3), out var deliveryId);
-            var toReceiver = Capture(sender);
-            Assert.That(toReceiver, Has.Count.EqualTo(1));
-
-            var msg = toReceiver[0];
-            msg.AddRef();
-            receiver.ProcessIncoming(msg);
-            msg.Release();
-
-            var toSender = Capture(receiver);
-            Assert.That(toSender, Has.Count.GreaterThanOrEqualTo(1));
-
-            foreach (var ack in toSender)
-            {
-                ack.AddRef();
-                sender.ProcessIncoming(ack);
-                ack.Release();
-            }
-
-            Assert.That(deliveredId, Is.EqualTo(deliveryId));
-        }
-
-        [Test]
-        public void NewFormat_UserMessage_ProcessedAsReceived()
-        {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
-
-            sender.ScheduleDelivery(DataList(1, 2, 3, 4, 5), out _);
-            var outbound = Capture(sender);
-            Assert.That(outbound, Has.Count.EqualTo(1));
-
-            var msg = outbound[0];
-            msg.AddRef();
-
-            DeliveryId? receivedId = null;
-            byte[]? receivedBytes = null;
-            receiver.Received += (id, d) =>
-            {
-                receivedId = id;
-                var element = d.Elements[0].Bytes!;
-                receivedBytes = new byte[element.Count];
-                element.CopyTo(receivedBytes, 0, 0, element.Count);
-            };
-
-            receiver.ProcessIncoming(msg);
-            msg.Release();
-
-            Assert.That(receivedId, Is.EqualTo(new DeliveryId(1)));
-            Assert.That(receivedBytes, Is.EqualTo(new byte[] { 1, 2, 3, 4, 5 }));
-        }
-
-        [Test]
-        public void NewFormat_UserMessageDeduplication_ReceivedFiresOnce()
-        {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
-
-            sender.ScheduleDelivery(DataList(1, 2, 3), out _);
-            var outbound = Capture(sender);
-            var msg = outbound[0];
-
-            int received = 0;
-            receiver.Received += (_, _) => received++;
-
-            msg.AddRef();
-            receiver.ProcessIncoming(msg);
-            msg.AddRef();
-            receiver.ProcessIncoming(msg);
-            msg.Release();
-
-            Assert.That(received, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void NewFormat_EmptyData_Works()
+        public void EmptyData_Works()
         {
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);

@@ -37,10 +37,10 @@ namespace Pontifex.DeliveryManager.Tests
             return data;
         }
 
-        private static List<UnionDataList> CaptureAll(DeliveryManager dm)
+        private static List<UnionDataList> CaptureAll(DeliveryManager dm, DateTime? now = null)
         {
             var sent = new List<UnionDataList>();
-            dm.ProcessOutgoing(Scheduler, DateTime.UtcNow,
+            dm.ProcessOutgoing(Scheduler, now ?? DateTime.UtcNow,
                 new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
             return sent;
         }
@@ -191,22 +191,27 @@ namespace Pontifex.DeliveryManager.Tests
             var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1, PacketId=1
-            sender.ScheduleDelivery(DataList(2), out _); // DeliveryId=2, PacketId=2
-            var outbound = CaptureAll(sender);
-            Assert.That(outbound, Has.Count.EqualTo(2));
+            var t0 = DateTime.UtcNow;
+
+            sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1
+            var msg1batch = CaptureAll(sender, t0);
+            Assert.That(msg1batch, Has.Count.EqualTo(1));
+
+            sender.ScheduleDelivery(DataList(2), out _); // DeliveryId=2
+            var msg2batch = CaptureAll(sender, t0 + TimeSpan.FromMilliseconds(50));
+            Assert.That(msg2batch, Has.Count.EqualTo(1));
 
             bool failed = false;
             sorted.FailedToSort += () => failed = true;
 
-            // deliver packet 2 first (reordered)
-            var msg2 = outbound[1];
+            // deliver packet 2 first (reordered) — guaranteed by separate captures
+            var msg2 = msg2batch[0];
             msg2.AddRef();
             inner.ProcessIncoming(msg2);
             msg2.Release();
 
             // now deliver packet 1 — sorter._id advanced to 3, Push(1) fails
-            var msg1 = outbound[0];
+            var msg1 = msg1batch[0];
             msg1.AddRef();
             inner.ProcessIncoming(msg1);
             msg1.Release();
@@ -223,25 +228,30 @@ namespace Pontifex.DeliveryManager.Tests
             var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1, PacketId=1
-            sender.ScheduleDelivery(DataList(2), out _); // DeliveryId=2, PacketId=2
-            var outbound = CaptureAll(sender);
-            Assert.That(outbound, Has.Count.EqualTo(2));
+            var t0 = DateTime.UtcNow;
+
+            sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1
+            var msg1batch = CaptureAll(sender, t0);
+            Assert.That(msg1batch, Has.Count.EqualTo(1));
+
+            sender.ScheduleDelivery(DataList(2), out _); // DeliveryId=2
+            var msg2batch = CaptureAll(sender, t0 + TimeSpan.FromMilliseconds(50));
+            Assert.That(msg2batch, Has.Count.EqualTo(1));
 
             // deliver packet 2 first — sorter advances past DeliveryId=1
-            var msg2 = outbound[1];
+            var msg2 = msg2batch[0];
             msg2.AddRef();
-inner.ProcessIncoming(msg2);
+            inner.ProcessIncoming(msg2);
             msg2.Release();
 
             // deliver packet 1 — Push(1) fails because 1 < _id(3), fires FailedToSort
-            var msg1 = outbound[0];
+            var msg1 = msg1batch[0];
             msg1.AddRef();
             inner.ProcessIncoming(msg1);
             msg1.Release();
 
             // sorter is NOT dead — send a new message with higher DeliveryId
-            sender.ScheduleDelivery(DataList(3), out _); // DeliveryId=3, PacketId=3
+            sender.ScheduleDelivery(DataList(3), out _); // DeliveryId=3
             var third = CaptureAll(sender);
 
             int receivedAfterGap = 0;

@@ -199,6 +199,23 @@ namespace Pontifex.DeliveryManager.Tests
         }
 
         [Test]
+        public void ConfirmDelivered_DoubleAck_IsNoOp()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+
+            int delivered = 0;
+            d.OnDelivered += _ => delivered++;
+
+            d.ConfirmDelivered(Info(1));
+            Assert.That(delivered, Is.EqualTo(1));
+
+            d.ConfirmDelivered(Info(1));
+            Assert.That(delivered, Is.EqualTo(1));
+        }
+
+        [Test]
         public void Clear_EmptiesQueue()
         {
             var d = new DeliveryDispatcher(10, CPool);
