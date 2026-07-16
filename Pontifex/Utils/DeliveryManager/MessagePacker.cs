@@ -22,7 +22,8 @@ namespace Pontifex.DeliveryManager
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
         private readonly ICollectablePool _collectablePool;
         private readonly IWireMessageSerializer _serializer;
-        private readonly MessageChunker _chunker;
+        private readonly MessageSplitter _splitter;
+        private readonly MessageMerger _merger;
         private readonly int _singleChunkMaxSize;
         private readonly int _multiChunkMaxSize;
         private readonly int _maxByteSize;
@@ -31,14 +32,16 @@ namespace Pontifex.DeliveryManager
             IPool<IMultiRefByteArray, int> bytesPool,
             ICollectablePool collectablePool,
             IWireMessageSerializer serializer,
-            MessageChunker chunker,
+            MessageSplitter splitter,
+            MessageMerger merger,
             int singleChunkMaxSize,
             int multiChunkMaxSize)
         {
             _bytesPool = bytesPool;
             _collectablePool = collectablePool;
             _serializer = serializer;
-            _chunker = chunker;
+            _splitter = splitter;
+            _merger = merger;
             _singleChunkMaxSize = singleChunkMaxSize;
             _multiChunkMaxSize = multiChunkMaxSize;
             _maxByteSize = multiChunkMaxSize * 255;
@@ -74,14 +77,14 @@ namespace Pontifex.DeliveryManager
 
                 if (dataSize <= _maxByteSize)
                 {
-                    int chunksNumber = _chunker.GetChunkCount(dataSize);
+                    int chunksNumber = _splitter.GetChunkCount(dataSize);
                     if (chunksNumber > 255)
                     {
                         return SendResult.MessageTooBig;
                     }
 
                     int chunkId = 0;
-                    while (_chunker.GetNextChunk(serializedBytes, chunkId, out var chunk))
+                    while (_splitter.GetNextChunk(serializedBytes, chunkId, out var chunk))
                     {
                         var wireMsg = _serializer.CreateUserMulti(id, chunk, (byte)chunkId, (byte)chunksNumber);
                         chunk.Release();
@@ -124,7 +127,7 @@ namespace Pontifex.DeliveryManager
             {
                 if (parsed.IsMultiChunk)
                 {
-                    var combined = _chunker.Combine(parsed.Id, parsed.PartId, parsed.PartsNumber, (IMultiRefByteArray)parsed.Payload);
+                    var combined = _merger.Combine(parsed.Id, parsed.PartId, parsed.PartsNumber, (IMultiRefByteArray)parsed.Payload);
                     if (combined != null)
                     {
                         userData = _collectablePool.Acquire<UnionDataList>();
@@ -149,7 +152,7 @@ namespace Pontifex.DeliveryManager
 
         public void Clear()
         {
-            _chunker.Clear();
+            _merger.Clear();
         }
     }
 }

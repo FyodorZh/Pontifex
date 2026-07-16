@@ -20,7 +20,6 @@ namespace Pontifex.DeliveryManager
         private readonly MessagePacker _packer;
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
-        private readonly MessageChunker _chunker;
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
         private readonly ICollectablePool _collectablePool;
 
@@ -39,8 +38,9 @@ namespace Pontifex.DeliveryManager
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
             int singleMax = messageMaxByteSize - _serializer.UserSingleOverhead - SafetyMargin;
             int multiMax = messageMaxByteSize - _serializer.UserMultiOverhead - SafetyMargin;
-            _chunker = new MessageChunker(bytesPool, multiMax);
-            _packer = new MessagePacker(bytesPool, collectablePool, _serializer, _chunker, singleMax, multiMax);
+            var splitter = new MessageSplitter(bytesPool, multiMax);
+            var merger = new MessageMerger(bytesPool);
+            _packer = new MessagePacker(bytesPool, collectablePool, _serializer, splitter, merger, singleMax, multiMax);
             _queueToSend = new SystemQueue<QueuedMessage>();
 
             _dispatcher.OnDelivered += id =>
