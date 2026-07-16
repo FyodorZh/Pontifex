@@ -20,21 +20,27 @@ namespace Pontifex.DeliveryManager
         private readonly MessagePacker _packer;
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
-        private readonly ICollectablePool _collectablePool;
 
         private DeliveryId _nextId = DeliveryId.Zero.Next;
         private readonly int _messageMaxByteSize;
         private readonly IQueue<QueuedMessage> _queueToSend;
 
+        // Cached outgoing interceptors — no allocation per ProcessOutgoing call
+        private IConsumer<UnionDataList>? _outgoingDst;
+        private readonly IConsumer<UnionDataList> _ackInterceptor;
+        private readonly IConsumer<UnionDataList> _userMsgInterceptor;
+
         public DeliveryManager(int messageMaxByteSize, IPool<IMultiRefByteArray, int> bytesPool, ICollectablePool collectablePool)
         {
             _messageMaxByteSize = messageMaxByteSize;
-            _collectablePool = collectablePool;
             _ackBuffer = new AckBuffer(collectablePool);
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
             _packer = new MessagePacker(bytesPool, collectablePool, messageMaxByteSize, SafetyMargin);
             _queueToSend = new SystemQueue<QueuedMessage>();
+
+            _ackInterceptor = new ConsumerDelegate<UnionDataList>(OnAckOutgoing);
+            _userMsgInterceptor = new ConsumerDelegate<UnionDataList>(OnUserMessageOutgoing);
 
             _dispatcher.OnDelivered += id =>
             {
@@ -73,11 +79,6 @@ namespace Pontifex.DeliveryManager
         {
             deliveryId = default;
 
-            if (data == null)
-            {
-                return SendResult.InvalidMessage;
-            }
-
             DeliveryId id = _nextId;
             _nextId = _nextId.Next;
 
@@ -90,58 +91,71 @@ namespace Pontifex.DeliveryManager
             return result;
         }
 
+        private bool OnAckOutgoing(UnionDataList data)
+        {
+            _deduplicator.MarkAckList(data);
+            return _outgoingDst!.Put(data);
+        }
+
+        private bool OnUserMessageOutgoing(UnionDataList data)
+        {
+            _deduplicator.MarkUserMessage(data);
+            return _outgoingDst!.Put(data);
+        }
+
         public bool ProcessIncoming(UnionDataList data)
         {
-            if (!data.TryPopFirst(out ushort packetId))
+            using var disposer = data.AsDisposable(); 
+            switch (_deduplicator.Check(data, out bool isUserMessage))
             {
-                data.Release();
-                return false;
+                case Deduplicator.Result.New:
+                    if (isUserMessage)
+                    {
+                        if (!_packer.TryUnpackUserMessage(data, out var unpacked))
+                        {
+                            return false;
+                        }
+
+                        _ackBuffer.Add(unpacked.Info);
+
+                        if (unpacked.UserData != null)
+                        {
+                            Received?.Invoke(unpacked.Info.Id, unpacked.UserData);
+                            unpacked.UserData.Release();
+                        }
+
+                        return true;
+                    }
+                    var confirmations = new List<DeliveryInfo>();
+                    bool success = _ackBuffer.TryParseDeliveryInfo(data, confirmations);
+                    if (success)
+                    {
+                        foreach (var confirmation in confirmations)
+                            _dispatcher.ConfirmDelivered(confirmation);
+                    }
+                    return success;
+                case Deduplicator.Result.Duplicate:
+                    if (isUserMessage)
+                    {
+                        if (!_packer.TryGetDeliveryInfo(data, out var info))
+                        {
+                            return false;
+                        }
+
+                        _ackBuffer.Add(info);
+                    }
+                    return true;
+                case Deduplicator.Result.Overflow:
+                    return false;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
-
-            if (packetId == 0)
-            {
-                var confirmations = new List<DeliveryInfo>();
-                bool success = _ackBuffer.TryParseDeliveryInfo(data, confirmations);
-                data.Release();
-                if (success)
-                {
-                    foreach (var confirmation in confirmations)
-                        _dispatcher.ConfirmDelivered(confirmation);
-                }
-                return success;
-            }
-
-            var duplicity = _deduplicator.Received(packetId);
-            if (duplicity == Deduplicator.Result.Overflow)
-            {
-                data.Release();
-                return false;
-            }
-
-            if (!_packer.TryUnpackUserMessage(data, duplicity, out var unpacked))
-            {
-                data.Release();
-                return false;
-            }
-
-            _ackBuffer.Add(unpacked.Info);
-
-            if (unpacked.UserData != null)
-            {
-                var onReceived = Received;
-                if (onReceived != null)
-                {
-                    onReceived(unpacked.Info.Id, unpacked.UserData);
-                }
-                unpacked.UserData.Release();
-            }
-
-            data.Release();
-            return true;
         }
 
         public void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<UnionDataList> dst)
         {
+            _outgoingDst = dst;
+
             while (_queueToSend.TryPop(out var queued))
             {
                 var info = queued.Info;
@@ -152,11 +166,7 @@ namespace Pontifex.DeliveryManager
                 {
                     case DeliveryDispatcher.ScheduleResult.BufferOverflow:
                     {
-                        var onFailed = FailedToDeliver;
-                        if (onFailed != null)
-                        {
-                            onFailed(info.Id);
-                        }
+                        FailedToDeliver?.Invoke(info.Id);
                         break;
                     }
                     case DeliveryDispatcher.ScheduleResult.IdIsNotUnique:
@@ -168,10 +178,11 @@ namespace Pontifex.DeliveryManager
                 userMessage.Release();
             }
 
-            _ackBuffer.Flush(_messageMaxByteSize, SafetyMargin, dst);
+            _ackBuffer.Flush(_messageMaxByteSize, SafetyMargin, _ackInterceptor);
 
-            _dispatcher.TryToDeliver(dst, scheduler, now);
+            _dispatcher.TryToDeliver(_userMsgInterceptor, scheduler, now);
+
+            _outgoingDst = null;
         }
-
     }
 }

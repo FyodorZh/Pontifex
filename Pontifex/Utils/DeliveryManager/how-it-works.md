@@ -195,14 +195,29 @@ ProcessIncoming(incomingData)
 
 ### Deduplicator
 
-Sliding-window deduplicator backed by `CycleQueue<bool>`.
+Sliding-window deduplicator backed by `CycleQueue<bool>`. Owns the entire **packetId lifecycle**:
+generates and prepends IDs on outgoing messages, pops and validates IDs on incoming messages.
 
 **State:**
 - `_queue[bool]` — tracks which IDs in the window have been seen
 - `_from (uint)` — first ID in the window
 - `_till (uint)` — last ID in the window
+- `_nextPacketId (ushort)` — next packetId to assign (auto-incrementing, wraps from MaxValue to 1, never 0)
 
-**Algorithm (`Received(id)`):**
+**Result enum:**
+- `New` — first-time delivery
+- `Duplicate` — already seen
+- `Overflow` — window exceeded (fatal)
+- `Ack` — delivery confirmation packet (packetId == 0)
+
+**Outgoing API (called before data hits the wire):**
+- `MarkAckList(data)` — prepends `packetId = 0` to an ACK batch
+- `MarkUserMessage(data)` — prepends the next `_nextPacketId` and advances the counter
+
+**Incoming API (called as the first step of `ProcessIncoming`):**
+- `Check(data)` — pops the first `ushort` as packetId. If `0` returns `Ack`; otherwise runs the dedup window check (`Received(id)`) and returns `New`/`Duplicate`/`Overflow`.
+
+**Internal algorithm (`Received(id)`):****
 
 ```
 if queue is empty OR id > _till:

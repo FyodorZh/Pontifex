@@ -27,14 +27,12 @@ namespace Pontifex.DeliveryManager
             private DeliveryInfo _id;
             private DateTime _scheduleTime;
             private UnionDataList _data = null!;
-            private ushort _packetId;
 
-            public void Init(DeliveryInfo id, DateTime scheduleTime, IReadOnlyUnionDataList data, ushort packetId, ICollectablePool pool)
+            public void Init(DeliveryInfo id, DateTime scheduleTime, IReadOnlyUnionDataList data, ICollectablePool pool)
             {
                 _id = id;
                 _scheduleTime = scheduleTime;
                 _data = data.Clone(pool);
-                _packetId = packetId;
                 data.Release();
                 DeliveryAttempts = 0;
             }
@@ -45,7 +43,6 @@ namespace Pontifex.DeliveryManager
             public UnionDataList AcquireMessage()
             {
                 _data.AddRef();
-                _data.PutFirst(new UnionData(_packetId));
                 return _data;
             }
 
@@ -64,7 +61,6 @@ namespace Pontifex.DeliveryManager
 
         private readonly int _capacity;
         private readonly ICollectablePool _pool;
-        private ushort _nextSeq = 1;
         private readonly PriorityQueue<DateTime, DeliveryTask> _deliveryQueue = new PriorityQueue<DateTime, DeliveryTask>();
         private readonly HashSet<DeliveryInfo> _unfinishedDeliveries = new HashSet<DeliveryInfo>();
         private readonly Dictionary<DeliveryId, int> _unfinishedLogicDeliveries = new Dictionary<DeliveryId, int>();
@@ -93,10 +89,8 @@ namespace Pontifex.DeliveryManager
             {
                 if (_unfinishedDeliveries.Add(id))
                 {
-                    ushort seq = _nextSeq;
-                    _nextSeq = seq == ushort.MaxValue ? (ushort)1 : (ushort)(seq + 1);
                     var task = new DeliveryTask();
-                    task.Init(id, now, data, seq, _pool);
+                    task.Init(id, now, data, _pool);
                     _deliveryQueue.Enqueue(now, task);
 
                     if (_unfinishedLogicDeliveries.ContainsKey(id.Id))

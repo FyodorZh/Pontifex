@@ -55,7 +55,7 @@ namespace Pontifex.DeliveryManager.Tests
         }
 
         [Test]
-        public void Retry_AfterConsumerPopsPacketId_StillHasPacketId()
+        public void Retry_PreservesDataContentAcrossAttempts()
         {
             var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
@@ -64,10 +64,9 @@ namespace Pontifex.DeliveryManager.Tests
             d.ScheduleDeliver(Info(1), data, DateTime.UtcNow);
             data.Release();
 
-            // First send — simulate consumer that pops packetId (as ProcessIncoming does)
+            // First send — consume fully
             var consumer = new ConsumerDelegate<UnionDataList>(x =>
             {
-                x.TryPopFirst(out ushort _);
                 x.Release();
                 return true;
             });
@@ -75,14 +74,14 @@ namespace Pontifex.DeliveryManager.Tests
 
             d.TryToDeliver(consumer, scheduler, now);
 
-            // Retry — data was shared with consumer via AddRef; packetId should still be there
+            // Retry — data was shared via AddRef; content should still be intact
             UnionDataList? retried = null;
             var retryConsumer = new ConsumerDelegate<UnionDataList>(x => { retried = x; return true; });
             d.TryToDeliver(retryConsumer, scheduler, now + TimeSpan.FromMilliseconds(100));
 
             Assert.That(retried, Is.Not.Null);
-            retried!.TryPopFirst(out ushort packetId);
-            Assert.That(packetId, Is.EqualTo(1));
+            Assert.That(retried!.Elements.Count, Is.EqualTo(1));
+            Assert.That(retried.Elements[0].Alias.ByteValue, Is.EqualTo(0));
             retried.Release();
         }
 
@@ -125,7 +124,6 @@ namespace Pontifex.DeliveryManager.Tests
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
 
             Assert.That(sent, Has.Count.EqualTo(1));
-            Assert.That(sent[0].Elements[0].Alias.UShortValue, Is.EqualTo(1));
             sent[0].Release();
         }
 

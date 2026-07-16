@@ -29,12 +29,11 @@ namespace Pontifex.DeliveryManager.Tests
 
             Assert.That(sent.Count, Is.EqualTo(1));
             var msg = sent[0];
-            Assert.That(msg.Elements.Count, Is.EqualTo(5));
-            Assert.That(msg.Elements[0].Alias.UShortValue, Is.EqualTo(0)); // packetId
-            Assert.That(msg.Elements[1].Alias.ByteValue, Is.EqualTo(2)); // type = TypeDeliveryInfo
-            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(1)); // count
-            Assert.That(msg.Elements[3].Alias.UShortValue, Is.EqualTo(42)); // id
-            Assert.That(msg.Elements[4].Alias.ByteValue, Is.EqualTo(7)); // chunkId
+            Assert.That(msg.Elements.Count, Is.EqualTo(4));
+            Assert.That(msg.Elements[0].Alias.ByteValue, Is.EqualTo(2)); // type = TypeDeliveryInfo
+            Assert.That(msg.Elements[1].Alias.UShortValue, Is.EqualTo(1)); // count
+            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(42)); // id
+            Assert.That(msg.Elements[3].Alias.ByteValue, Is.EqualTo(7)); // chunkId
             msg.Release();
         }
 
@@ -51,14 +50,14 @@ namespace Pontifex.DeliveryManager.Tests
 
             Assert.That(sent.Count, Is.EqualTo(1));
             var msg = sent[0];
-            Assert.That(msg.Elements.Count, Is.EqualTo(3 + 2 * 3));
-            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(3));
-            Assert.That(msg.Elements[3].Alias.UShortValue, Is.EqualTo(1));
-            Assert.That(msg.Elements[4].Alias.ByteValue, Is.EqualTo(0));
-            Assert.That(msg.Elements[5].Alias.UShortValue, Is.EqualTo(2));
-            Assert.That(msg.Elements[6].Alias.ByteValue, Is.EqualTo(1));
-            Assert.That(msg.Elements[7].Alias.UShortValue, Is.EqualTo(3));
-            Assert.That(msg.Elements[8].Alias.ByteValue, Is.EqualTo(2));
+            Assert.That(msg.Elements.Count, Is.EqualTo(1 + 1 + 2 * 3));
+            Assert.That(msg.Elements[1].Alias.UShortValue, Is.EqualTo(3));
+            Assert.That(msg.Elements[2].Alias.UShortValue, Is.EqualTo(1));
+            Assert.That(msg.Elements[3].Alias.ByteValue, Is.EqualTo(0));
+            Assert.That(msg.Elements[4].Alias.UShortValue, Is.EqualTo(2));
+            Assert.That(msg.Elements[5].Alias.ByteValue, Is.EqualTo(1));
+            Assert.That(msg.Elements[6].Alias.UShortValue, Is.EqualTo(3));
+            Assert.That(msg.Elements[7].Alias.ByteValue, Is.EqualTo(2));
             msg.Release();
         }
 
@@ -77,7 +76,7 @@ namespace Pontifex.DeliveryManager.Tests
             int totalConfirmations = 0;
             foreach (var msg in sent)
             {
-                totalConfirmations += msg.Elements[2].Alias.UShortValue;
+                totalConfirmations += msg.Elements[1].Alias.UShortValue;
                 msg.Release();
             }
             Assert.That(totalConfirmations, Is.EqualTo(30));
@@ -118,7 +117,6 @@ namespace Pontifex.DeliveryManager.Tests
             buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             var msg = sent[0];
-            msg.TryPopFirst(out ushort _); // pop packetId
             msg.AddRef();
 
             var result = new List<DeliveryInfo>();
@@ -143,7 +141,6 @@ namespace Pontifex.DeliveryManager.Tests
             buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             var msg = sent[0];
-            msg.TryPopFirst(out ushort _); // pop packetId
             msg.AddRef();
 
             var result = new List<DeliveryInfo>();
@@ -228,7 +225,6 @@ namespace Pontifex.DeliveryManager.Tests
             buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             var msg = sent[0];
-            msg.TryPopFirst(out ushort _); // pop packetId
             msg.AddRef();
 
             var result = new List<DeliveryInfo>();

@@ -53,7 +53,6 @@ namespace Pontifex.DeliveryManager
         private UnionDataList CreateDeliveryInfo(IReadOnlyList<DeliveryInfo> confirmations, int start, int count)
         {
             var msg = _pool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData((ushort)0));
             msg.PutLast(new UnionData(TypeDeliveryInfo));
             msg.PutLast(new UnionData((ushort)count));
 

@@ -97,7 +97,7 @@ namespace Pontifex.DeliveryManager
 
         // ── Unpack (receive direction) ──
 
-        public bool TryUnpackUserMessage(UnionDataList data, Deduplicator.Result duplicity, out UnpackedUserMessage result)
+        public bool TryUnpackUserMessage(UnionDataList data, out UnpackedUserMessage result)
         {
             result = default;
 
@@ -109,26 +109,42 @@ namespace Pontifex.DeliveryManager
                 : new DeliveryInfo(parsed.Id, 0);
 
             UnionDataList? userData = null;
-            if (duplicity == Deduplicator.Result.New)
+            if (parsed.IsMultiChunk)
             {
-                if (parsed.IsMultiChunk)
+                var combined = _userMessages.Combine(parsed.Id, parsed.PartId, parsed.PartsNumber, (IMultiRefByteArray)parsed.Payload);
+                if (combined != null)
                 {
-                    var combined = _userMessages.Combine(parsed.Id, parsed.PartId, parsed.PartsNumber, (IMultiRefByteArray)parsed.Payload);
-                    if (combined != null)
-                    {
-                        userData = _userMessages.Deserialize(combined);
-                        combined.Release();
-                    }
+                    userData = _userMessages.Deserialize(combined);
+                    combined.Release();
                 }
-                else
-                {
-                    userData = _userMessages.Deserialize((IMultiRefByteArray)parsed.Payload);
-                }
+            }
+            else
+            {
+                userData = _userMessages.Deserialize((IMultiRefByteArray)parsed.Payload);
             }
 
             parsed.Payload.Release();
 
             result = new UnpackedUserMessage(info, userData);
+            return true;
+        }
+
+        /// <summary>
+        /// Light-weight variant for duplicates: extracts only the DeliveryInfo header
+        /// without calling Combine or Deserialize. No allocations, no orphan constructors.
+        /// </summary>
+        public bool TryGetDeliveryInfo(UnionDataList data, out DeliveryInfo info)
+        {
+            info = default;
+
+            if (!_userMessages.TryParseUserMessage(data, out var parsed))
+                return false;
+
+            info = parsed.IsMultiChunk
+                ? new DeliveryInfo(parsed.Id, parsed.PartId)
+                : new DeliveryInfo(parsed.Id, 0);
+
+            parsed.Payload.Release();
             return true;
         }
 

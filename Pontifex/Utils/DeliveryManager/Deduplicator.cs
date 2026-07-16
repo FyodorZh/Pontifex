@@ -1,4 +1,5 @@
 using Actuarius.Collections;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
@@ -14,12 +15,42 @@ namespace Pontifex.DeliveryManager
         private readonly CycleQueue<bool> _queue;
         private uint _from;
         private uint _till;
+        private ushort _nextPacketId = 1;
 
         public Deduplicator(int capacity)
         {
             _queue = new CycleQueue<bool>(capacity, false);
             _from = 1;
             _till = 0;
+        }
+
+        // ── Outgoing marking ──
+
+        public void MarkAckList(UnionDataList data)
+        {
+            data.PutFirst(new UnionData((ushort)0));
+        }
+
+        public void MarkUserMessage(UnionDataList data)
+        {
+            data.PutFirst(new UnionData(_nextPacketId));
+            _nextPacketId = _nextPacketId == ushort.MaxValue ? (ushort)1 : (ushort)(_nextPacketId + 1);
+        }
+
+        // ── Incoming check ──
+
+        public Result Check(UnionDataList data, out bool isUserMessage)
+        {
+            isUserMessage = false;
+            
+            if (!data.TryPopFirst(out ushort packetId))
+                return Result.Overflow;
+
+            if (packetId == 0)
+                return Result.New;
+
+            isUserMessage = true;
+            return Received(packetId);
         }
 
         public Result Received(uint id)
