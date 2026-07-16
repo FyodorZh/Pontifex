@@ -82,6 +82,9 @@ namespace Pontifex.DeliveryManager
         {
             deliveryId = default;
 
+            if (data == null)
+                return SendResult.InvalidMessage;
+
             DeliveryId id = _nextId;
             _nextId = _nextId.Next;
 
@@ -121,7 +124,7 @@ namespace Pontifex.DeliveryManager
 
                 case Deduplicator.Result.New:
                 {
-                    if (!_packer.TryUnpackUserMessage(data, Deduplicator.Result.New, out var unpacked))
+                    if (!_packer.TryUnpackUserMessage(data, out var unpacked))
                         return false;
 
                     _reporter.Add(unpacked.Info);
@@ -140,10 +143,10 @@ namespace Pontifex.DeliveryManager
 
                 case Deduplicator.Result.Duplicate:
                 {
-                    if (!_packer.TryUnpackUserMessage(data, Deduplicator.Result.Duplicate, out var unpacked))
+                    if (!_packer.TryPeekDeliveryInfo(data, out var info))
                         return false;
 
-                    _reporter.Add(unpacked.Info);
+                    _reporter.Add(info);
                     return true;
                 }
 

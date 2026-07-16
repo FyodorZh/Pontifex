@@ -228,19 +228,6 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(sent, Is.Empty);
         }
 
-        [Test]
-        public void Pack_NullData_ReturnsInvalidMessage()
-        {
-            var packer = CreatePackEnvironment();
-            var sent = new List<QueuedMessage>();
-
-            var result = packer.Pack(new DeliveryId(1), null!,
-                new ConsumerDelegate<QueuedMessage>(x => { sent.Add(x); return true; }));
-
-            Assert.That(result, Is.EqualTo(SendResult.InvalidMessage));
-            Assert.That(sent, Is.Empty);
-        }
-
         // ── Clear ──
 
         [Test]

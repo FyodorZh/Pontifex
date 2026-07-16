@@ -52,8 +52,7 @@ namespace Pontifex.DeliveryManager
 
         public SendResult Pack(DeliveryId id, UnionDataList data, IConsumer<QueuedMessage> dst)
         {
-            if (data == null)
-                return SendResult.InvalidMessage;
+            using var disposer = data.AsDisposable();
 
             int rawSize = data.GetDataSize();
 
@@ -62,16 +61,12 @@ namespace Pontifex.DeliveryManager
                 var wireMsg = data.Clone(_collectablePool);
                 wireMsg.PutFirst(new UnionData(id.Id));
                 wireMsg.PutFirst(new UnionData((byte)1));
-                data.Release();
                 dst.Put(new QueuedMessage(new DeliveryInfo(id, 0), wireMsg));
                 return SendResult.Ok;
             }
 
             if (!data.Serialize(_bytesPool, out var serializedBytes))
-            {
-                data.Release();
                 return SendResult.InvalidMessage;
-            }
 
             try
             {
@@ -100,14 +95,13 @@ namespace Pontifex.DeliveryManager
             }
             finally
             {
-                data.Release();
                 serializedBytes.Release();
             }
         }
 
         // ── Unpack (receive direction) ──
 
-        public bool TryUnpackUserMessage(UnionDataList data, Deduplicator.Result duplicity, out UnpackedUserMessage result)
+        public bool TryUnpackUserMessage(UnionDataList data, out UnpackedUserMessage result)
         {
             result = default;
 
@@ -115,11 +109,11 @@ namespace Pontifex.DeliveryManager
                 return false;
 
             return partsNumber == 1
-                ? ReadUserSingle(data, duplicity, out result)
-                : ReadUserMulti(data, duplicity, partsNumber, out result);
+                ? ReadUserSingle(data, out result)
+                : ReadUserMulti(data, partsNumber, out result);
         }
 
-        private bool ReadUserSingle(UnionDataList data, Deduplicator.Result duplicity, out UnpackedUserMessage result)
+        private bool ReadUserSingle(UnionDataList data, out UnpackedUserMessage result)
         {
             if (!data.TryPopFirst(out ushort idValue))
             {
@@ -127,54 +121,59 @@ namespace Pontifex.DeliveryManager
                 return false;
             }
 
-            var info = new DeliveryInfo(new DeliveryId(idValue), 0);
-
-            UnionDataList? userData = null;
-            if (duplicity == Deduplicator.Result.New)
-            {
-                data.AddRef();
-                userData = data;
-            }
-
-            result = new UnpackedUserMessage(info, userData);
+            data.AddRef();
+            result = new UnpackedUserMessage(
+                new DeliveryInfo(new DeliveryId(idValue), 0),
+                data);
             return true;
         }
 
-        private bool ReadUserMulti(UnionDataList data, Deduplicator.Result duplicity, byte partsNumber, out UnpackedUserMessage result)
+        private bool ReadUserMulti(UnionDataList data, byte partsNumber, out UnpackedUserMessage result)
         {
-            if (!data.TryPopFirst(out byte partId))
-            {
-                result = default;
-                return false;
-            }
-            if (!data.TryPopFirst(out ushort idValue))
-            {
-                result = default;
-                return false;
-            }
-            if (!data.TryPopFirst(out IMultiRefReadOnlyByteArray? payload) || payload == null)
+            if (!data.TryPopFirst(out byte partId) || !data.TryPopFirst(out ushort idValue) ||
+                !data.TryPopFirst(out IMultiRefReadOnlyByteArray? payload))
             {
                 result = default;
                 return false;
             }
 
-            var info = new DeliveryInfo(new DeliveryId(idValue), partId);
+            var id = new DeliveryId(idValue);
+            var combined = _merger.Combine(id, partId, partsNumber, (IMultiRefByteArray)payload);
+            payload.Release();
 
             UnionDataList? userData = null;
-            if (duplicity == Deduplicator.Result.New)
+            if (combined != null)
             {
-                var combined = _merger.Combine(new DeliveryId(idValue), partId, partsNumber, (IMultiRefByteArray)payload);
-                if (combined != null)
-                {
-                    userData = _collectablePool.Acquire<UnionDataList>();
-                    var source = new ByteSourceFromArray(combined);
-                    userData.Deserialize(ref source, _bytesPool);
-                    combined.Release();
-                }
+                userData = _collectablePool.Acquire<UnionDataList>();
+                var source = new ByteSourceFromArray(combined);
+                userData.Deserialize(ref source, _bytesPool);
+                combined.Release();
             }
 
-            payload.Release();
-            result = new UnpackedUserMessage(info, userData);
+            result = new UnpackedUserMessage(new DeliveryInfo(id, partId), userData);
+            return true;
+        }
+
+        public bool TryPeekDeliveryInfo(UnionDataList data, out DeliveryInfo info)
+        {
+            info = default;
+
+            if (!data.TryPopFirst(out byte partsNumber))
+                return false;
+
+            if (partsNumber == 1)
+            {
+                if (!data.TryPopFirst(out ushort singleId))
+                    return false;
+                info = new DeliveryInfo(new DeliveryId(singleId), 0);
+                return true;
+            }
+
+            if (!data.TryPopFirst(out byte partId))
+                return false;
+            if (!data.TryPopFirst(out ushort multiId))
+                return false;
+            info = new DeliveryInfo(new DeliveryId(multiId), partId);
             return true;
         }
 
