@@ -20,10 +20,20 @@ namespace Pontifex.DeliveryManager
         private const int DeduplicatorCapacity = 1024;
         private const int TransportMessageQueueCapacity = 5000;
 
-        private const int SingleElementCount = 4;
-        private const int MultiElementCount = 6;
         private const int DeliveryInfoFixedOverhead = 6;
         private const int DeliveryInfoElementSize = 5;
+
+        private readonly struct QueuedMessage
+        {
+            public readonly DeliveryInfo Info;
+            public readonly IReadOnlyUnionDataList Data;
+
+            public QueuedMessage(DeliveryInfo info, UnionDataList data)
+            {
+                Info = info;
+                Data = data;
+            }
+        }
 
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
@@ -34,7 +44,7 @@ namespace Pontifex.DeliveryManager
         private DeliveryId _nextId = DeliveryId.Zero.Next;
         private readonly int _messageMaxByteSize;
         private readonly List<DeliveryInfo> _confirmationList = new List<DeliveryInfo>();
-        private readonly IQueue<UnionDataList> _queueToSend;
+        private readonly IQueue<QueuedMessage> _queueToSend;
 
         public DeliveryManager(int messageMaxByteSize, IPool<IMultiRefByteArray, int> bytesPool, ICollectablePool collectablePool)
         {
@@ -44,7 +54,7 @@ namespace Pontifex.DeliveryManager
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
             _chunker = new MessageChunker(bytesPool, MultiChunkDeliveryChunkMaxSize);
-            _queueToSend = new SystemQueue<UnionDataList>();
+            _queueToSend = new SystemQueue<QueuedMessage>();
 
             _dispatcher.OnDelivered += id =>
             {
@@ -70,9 +80,9 @@ namespace Pontifex.DeliveryManager
             _dispatcher.Clear();
             _chunker.Clear();
 
-            while (_queueToSend.TryPop(out var msg))
+            while (_queueToSend.TryPop(out var queued))
             {
-                msg.Release();
+                queued.Data.Release();
             }
         }
 
@@ -121,7 +131,7 @@ namespace Pontifex.DeliveryManager
                 if (dataSize <= SingleChunkDeliveryMaxSize)
                 {
                     var wireMsg = SerializeUserSingle(id, serializedBytes, responseProcessTime);
-                    _queueToSend.Put(wireMsg);
+                    _queueToSend.Put(new QueuedMessage(new DeliveryInfo(id, 0), wireMsg));
                     deliveryId = id;
                     return SendResult.Ok;
                 }
@@ -139,7 +149,7 @@ namespace Pontifex.DeliveryManager
                     {
                         var wireMsg = SerializeUserMulti(id, chunk, (byte)chunkId, (byte)chunksNumber, responseProcessTime);
                         chunk.Release();
-                        _queueToSend.Put(wireMsg);
+                        _queueToSend.Put(new QueuedMessage(new DeliveryInfo(id, (byte)chunkId), wireMsg));
                         chunkId += 1;
                     }
 
@@ -158,13 +168,17 @@ namespace Pontifex.DeliveryManager
 
         public bool ProcessIncoming(UnionDataList data)
         {
-            data.TryPopFirst(out ushort packetId);
+            if (!data.TryPopFirst(out ushort packetId))
+            {
+                data.Release();
+                return false;
+            }
 
             if (packetId == 0)
             {
-                ProcessDeliveryInfo(data);
+                bool success = ProcessDeliveryInfo(data);
                 data.Release();
-                return true;
+                return success;
             }
 
             var duplicity = _deduplicator.Received(packetId);
@@ -257,9 +271,10 @@ namespace Pontifex.DeliveryManager
 
         public void ProcessOutgoing(IDeliveryAttemptScheduler scheduler, DateTime now, IConsumer<UnionDataList> dst)
         {
-            while (_queueToSend.TryPop(out var userMessage))
+            while (_queueToSend.TryPop(out var queued))
             {
-                DeliveryInfo info = ParseDeliveryInfo(userMessage);
+                var info = queued.Info;
+                var userMessage = queued.Data;
                 userMessage.AddRef();
                 var result = _dispatcher.ScheduleDeliver(info, userMessage, now);
                 switch (result)
@@ -301,18 +316,23 @@ namespace Pontifex.DeliveryManager
             _dispatcher.TryToDeliver(dst, scheduler, now);
         }
 
-        private void ProcessDeliveryInfo(UnionDataList data)
+        private bool ProcessDeliveryInfo(UnionDataList data)
         {
-            data.TryPopFirst(out byte _);
-            data.TryPopFirst(out ushort count);
+            if (!data.TryPopFirst(out byte type) || type != TypeDeliveryInfo)
+                return false;
+
+            if (!data.TryPopFirst(out ushort count))
+                return false;
 
             for (int i = 0; i < count; ++i)
             {
-                data.TryPopFirst(out ushort id);
-                data.TryPopFirst(out byte chunkId);
+                if (!data.TryPopFirst(out ushort id) || !data.TryPopFirst(out byte chunkId))
+                    return false;
 
                 _dispatcher.ConfirmDelivered(new DeliveryInfo(new DeliveryId(id), chunkId));
             }
+
+            return true;
         }
 
         private UnionDataList SerializeUserSingle(DeliveryId id, IMultiRefByteArray data, short responseProcessTime)
@@ -351,30 +371,6 @@ namespace Pontifex.DeliveryManager
             }
 
             return msg;
-        }
-
-        private static DeliveryInfo ParseDeliveryInfo(UnionDataList data)
-        {
-            if (data.Elements.Count < 2)
-            {
-                return default;
-            }
-
-            byte type = data.Elements[0].Alias.ByteValue;
-            ushort id = data.Elements[1].Alias.UShortValue;
-
-            if (type == TypeUserSingle)
-            {
-                return new DeliveryInfo(new DeliveryId(id), 0);
-            }
-
-            if (type == TypeUserMulti && data.Elements.Count >= 4)
-            {
-                byte chunkId = data.Elements[3].Alias.ByteValue;
-                return new DeliveryInfo(new DeliveryId(id), chunkId);
-            }
-
-            return default;
         }
 
     }

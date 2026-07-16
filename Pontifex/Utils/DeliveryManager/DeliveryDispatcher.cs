@@ -28,16 +28,12 @@ namespace Pontifex.DeliveryManager
             private DateTime _scheduleTime;
             private UnionDataList _data = null!;
 
-            public void Init(DeliveryInfo id, DateTime scheduleTime, UnionDataList data, ushort packetId, ICollectablePool pool)
+            public void Init(DeliveryInfo id, DateTime scheduleTime, IReadOnlyUnionDataList data, ushort packetId, ICollectablePool pool)
             {
                 _id = id;
                 _scheduleTime = scheduleTime;
-                _data = pool.Acquire<UnionDataList>();
-                _data.PutLast(new UnionData(packetId));
-                foreach (var element in data.Elements.Enumerate())
-                {
-                    _data.PutLast(element.Clone());
-                }
+                _data = data.Clone(pool);
+                _data.PutFirst(new UnionData(packetId));
                 data.Release();
                 DeliveryAttempts = 0;
             }
@@ -89,7 +85,7 @@ namespace Pontifex.DeliveryManager
             _unfinishedLogicDeliveries.Clear();
         }
 
-        public ScheduleResult ScheduleDeliver(DeliveryInfo id, UnionDataList data, DateTime now)
+        public ScheduleResult ScheduleDeliver(DeliveryInfo id, IReadOnlyUnionDataList data, DateTime now)
         {
             if (_deliveryQueue.Count < _capacity)
             {
