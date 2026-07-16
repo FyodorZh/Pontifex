@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
@@ -81,9 +80,10 @@ namespace Pontifex.DeliveryManager
         public SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId)
         {
             deliveryId = default;
-
-            if (data == null)
+            if (data == null!)
+            {
                 return SendResult.InvalidMessage;
+            }
 
             DeliveryId id = _nextId;
             _nextId = _nextId.Next;
@@ -102,20 +102,28 @@ namespace Pontifex.DeliveryManager
             using var disposer = data.AsDisposable();
 
             if (!data.TryPopFirst(out bool isUser))
+            {
                 return false;
+            }
 
             if (!isUser)
             {
                 if (!_deliveryInfoSerializer.LoadDeliveryReport(data))
+                {
                     return false;
+                }
 
                 foreach (var confirmation in _deliveryInfoSerializer.CurrentDeliveryReport)
+                {
                     _dispatcher.ConfirmDelivered(confirmation);
+                }
                 return true;
             }
 
             if (!data.TryPopFirst(out ushort wireChunkId))
+            {
                 return false;
+            }
 
             switch (_deduplicator.Received(wireChunkId))
             {
@@ -125,16 +133,15 @@ namespace Pontifex.DeliveryManager
                 case Deduplicator.Result.New:
                 {
                     if (!_packer.TryUnpackUserMessage(data, out var unpacked))
+                    {
                         return false;
+                    }
 
                     _reporter.Add(unpacked.Info);
 
                     if (unpacked.UserData != null)
                     {
-                        var onReceived = Received;
-                        if (onReceived != null)
-                            onReceived(unpacked.Info.Id, unpacked.UserData);
-
+                        Received?.Invoke(unpacked.Info.Id, unpacked.UserData);
                         unpacked.UserData.Release();
                     }
 
@@ -144,7 +151,9 @@ namespace Pontifex.DeliveryManager
                 case Deduplicator.Result.Duplicate:
                 {
                     if (!_packer.TryPeekDeliveryInfo(data, out var info))
+                    {
                         return false;
+                    }
 
                     _reporter.Add(info);
                     return true;
@@ -187,6 +196,5 @@ namespace Pontifex.DeliveryManager
 
             _dispatcher.TryToDeliver(dst, scheduler, now);
         }
-
     }
 }

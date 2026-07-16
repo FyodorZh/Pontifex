@@ -66,17 +66,23 @@ namespace Pontifex.DeliveryManager
             }
 
             if (!data.Serialize(_bytesPool, out var serializedBytes))
+            {
                 return SendResult.InvalidMessage;
+            }
 
             try
             {
                 int dataSize = serializedBytes.Count;
                 if (dataSize > _maxByteSize)
+                {
                     return SendResult.MessageTooBig;
+                }
 
                 int chunksNumber = _splitter.GetChunkCount(dataSize);
                 if (chunksNumber > 255)
+                {
                     return SendResult.MessageTooBig;
+                }
 
                 int chunkId = 0;
                 while (_splitter.GetNextChunk(serializedBytes, chunkId, out var chunk))
@@ -106,7 +112,9 @@ namespace Pontifex.DeliveryManager
             result = default;
 
             if (!data.TryPopFirst(out byte partsNumber))
+            {
                 return false;
+            }
 
             return partsNumber == 1
                 ? ReadUserSingle(data, out result)
@@ -159,7 +167,9 @@ namespace Pontifex.DeliveryManager
             info = default;
 
             if (!data.TryPopFirst(out byte partsNumber))
+            {
                 return false;
+            }
 
             if (partsNumber == 1)
             {
@@ -169,10 +179,10 @@ namespace Pontifex.DeliveryManager
                 return true;
             }
 
-            if (!data.TryPopFirst(out byte partId))
+            if (!data.TryPopFirst(out byte partId) || !data.TryPopFirst(out ushort multiId))
+            {
                 return false;
-            if (!data.TryPopFirst(out ushort multiId))
-                return false;
+            }
             info = new DeliveryInfo(new DeliveryId(multiId), partId);
             return true;
         }
