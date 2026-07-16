@@ -6,14 +6,14 @@ using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
-    internal class AckBuffer
+    internal class DeliveryRporter
     {
-        private const byte TypeDeliveryInfo = 2;
+        private const byte TypeDeliveryReport = 2;
 
         private readonly ICollectablePool _pool;
         private readonly List<DeliveryInfo> _confirmations = new List<DeliveryInfo>();
 
-        public AckBuffer(ICollectablePool pool)
+        public DeliveryRporter(ICollectablePool pool)
         {
             _pool = pool;
         }
@@ -30,7 +30,7 @@ namespace Pontifex.DeliveryManager
 
         // ── Serialization + flush ──
 
-        public void Flush(int messageMaxByteSize, int safetyMargin, IConsumer<UnionDataList> dst)
+        public void FlushDeliveryReports(int messageMaxByteSize, int safetyMargin, IConsumer<UnionDataList> dst)
         {
             int count = _confirmations.Count;
             if (count == 0)
@@ -42,7 +42,7 @@ namespace Pontifex.DeliveryManager
             while (pos < count)
             {
                 int len = Math.Min(packSize, count - pos);
-                var infoMsg = CreateDeliveryInfo(_confirmations, pos, len);
+                var infoMsg = CreateDeliveryReport(_confirmations, pos, len);
                 dst.Put(infoMsg);
                 pos += len;
             }
@@ -50,10 +50,10 @@ namespace Pontifex.DeliveryManager
             _confirmations.Clear();
         }
 
-        private UnionDataList CreateDeliveryInfo(IReadOnlyList<DeliveryInfo> confirmations, int start, int count)
+        private UnionDataList CreateDeliveryReport(IReadOnlyList<DeliveryInfo> confirmations, int start, int count)
         {
             var msg = _pool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData(TypeDeliveryInfo));
+            msg.PutLast(new UnionData(TypeDeliveryReport));
             msg.PutLast(new UnionData((ushort)count));
 
             for (int i = start; i < start + count; ++i)
@@ -67,9 +67,9 @@ namespace Pontifex.DeliveryManager
 
         // ── Parsing (receive direction) ──
 
-        public bool TryParseDeliveryInfo(UnionDataList data, List<DeliveryInfo> confirmations)
+        public bool ParseDeliveryReport(UnionDataList data, List<DeliveryInfo> confirmations)
         {
-            if (!data.TryPopFirst(out byte type) || type != TypeDeliveryInfo)
+            if (!data.TryPopFirst(out byte type) || type != TypeDeliveryReport)
                 return false;
 
             if (!data.TryPopFirst(out ushort count))

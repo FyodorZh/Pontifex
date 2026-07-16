@@ -16,7 +16,7 @@ namespace Pontifex.DeliveryManager
         private const int DeduplicatorCapacity = 1024;
         private const int TransportMessageQueueCapacity = 5000;
 
-        private readonly AckBuffer _ackBuffer;
+        private readonly DeliveryRporter _deliveryRporter;
         private readonly MessagePacker _packer;
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
@@ -33,7 +33,7 @@ namespace Pontifex.DeliveryManager
         public DeliveryManager(int messageMaxByteSize, IPool<IMultiRefByteArray, int> bytesPool, ICollectablePool collectablePool)
         {
             _messageMaxByteSize = messageMaxByteSize;
-            _ackBuffer = new AckBuffer(collectablePool);
+            _deliveryRporter = new DeliveryRporter(collectablePool);
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
             _packer = new MessagePacker(bytesPool, collectablePool, messageMaxByteSize, SafetyMargin);
@@ -65,7 +65,7 @@ namespace Pontifex.DeliveryManager
         {
             _dispatcher.Clear();
             _packer.Clear();
-            _ackBuffer.Clear();
+            _deliveryRporter.Clear();
 
             while (_queueToSend.TryPop(out var queued))
             {
@@ -116,7 +116,7 @@ namespace Pontifex.DeliveryManager
                             return false;
                         }
 
-                        _ackBuffer.Add(unpacked.Info);
+                        _deliveryRporter.Add(unpacked.Info);
 
                         if (unpacked.UserData != null)
                         {
@@ -127,13 +127,15 @@ namespace Pontifex.DeliveryManager
                         return true;
                     }
                     var confirmations = new List<DeliveryInfo>();
-                    bool success = _ackBuffer.TryParseDeliveryInfo(data, confirmations);
-                    if (success)
+                    if (_deliveryRporter.ParseDeliveryReport(data, confirmations))
                     {
                         foreach (var confirmation in confirmations)
+                        {
                             _dispatcher.ConfirmDelivered(confirmation);
+                        }
+                        return true;
                     }
-                    return success;
+                    return false;
                 case Deduplicator.Result.Duplicate:
                     if (isUserMessage)
                     {
@@ -142,7 +144,7 @@ namespace Pontifex.DeliveryManager
                             return false;
                         }
 
-                        _ackBuffer.Add(info);
+                        _deliveryRporter.Add(info);
                     }
                     return true;
                 case Deduplicator.Result.Overflow:
@@ -178,7 +180,7 @@ namespace Pontifex.DeliveryManager
                 userMessage.Release();
             }
 
-            _ackBuffer.Flush(_messageMaxByteSize, SafetyMargin, _ackInterceptor);
+            _deliveryRporter.FlushDeliveryReports(_messageMaxByteSize, SafetyMargin, _ackInterceptor);
 
             _dispatcher.TryToDeliver(_userMsgInterceptor, scheduler, now);
 

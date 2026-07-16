@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;

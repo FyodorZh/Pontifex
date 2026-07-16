@@ -135,8 +135,7 @@ namespace Pontifex.DeliveryManager
 
                 task.DeliveryAttempts += 1;
 
-                TimeSpan retryDeltaTime;
-                if (scheduler.Reschedule(task, now, out retryDeltaTime))
+                if (scheduler.Reschedule(task, now, out var retryDeltaTime))
                 {
                     _deliveryQueue.Enqueue(sendTime + retryDeltaTime, task);
                 }
@@ -160,8 +159,7 @@ namespace Pontifex.DeliveryManager
         {
             _unfinishedDeliveries.Remove(id);
 
-            int cnt;
-            if (_unfinishedLogicDeliveries.TryGetValue(id.Id, out cnt))
+            if (_unfinishedLogicDeliveries.TryGetValue(id.Id, out var cnt))
             {
                 if (cnt == 1)
                 {

@@ -8,7 +8,7 @@ using Pontifex.Utils;
 namespace Pontifex.DeliveryManager.Tests
 {
     [Category("DeliveryManager")]
-    public class AckBufferTests
+    public class DeliveryRporterTests
     {
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
@@ -21,11 +21,11 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void CreateDeliveryInfo_SingleConfirmation()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             buffer.Add(Info(42, 7));
 
             var sent = new List<UnionDataList>();
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             Assert.That(sent.Count, Is.EqualTo(1));
             var msg = sent[0];
@@ -40,13 +40,13 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Flush_MultipleConfirmations()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             buffer.Add(Info(1, 0));
             buffer.Add(Info(2, 1));
             buffer.Add(Info(3, 2));
 
             var sent = new List<UnionDataList>();
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             Assert.That(sent.Count, Is.EqualTo(1));
             var msg = sent[0];
@@ -64,13 +64,13 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Flush_BatchingAcrossMultiplePackets()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             // Flood enough confirmations to need multiple packets
             for (ushort i = 0; i < 30; i++)
                 buffer.Add(Info(i, (byte)(i % 256)));
 
             var sent = new List<UnionDataList>();
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             Assert.That(sent.Count, Is.GreaterThan(1));
             int totalConfirmations = 0;
@@ -85,10 +85,10 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Flush_Empty_DoesNothing()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             bool called = false;
 
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(_ => { called = true; return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(_ => { called = true; return true; }));
 
             Assert.That(called, Is.False);
         }
@@ -96,12 +96,12 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Flush_ClearsAfterSending()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             buffer.Add(Info(1));
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(_ => true));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(_ => true));
 
             bool called = false;
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(_ => { called = true; return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(_ => { called = true; return true; }));
             Assert.That(called, Is.False);
         }
 
@@ -110,17 +110,17 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryParseDeliveryInfo_ParseValid_ReturnsTrueAndPopulatesList()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             buffer.Add(Info(7, 3));
 
             var sent = new List<UnionDataList>();
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             var msg = sent[0];
             msg.AddRef();
 
             var result = new List<DeliveryInfo>();
-            bool parsed = buffer.TryParseDeliveryInfo(msg, result);
+            bool parsed = buffer.ParseDeliveryReport(msg, result);
             msg.Release();
 
             Assert.That(parsed, Is.True);
@@ -132,19 +132,19 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryParseDeliveryInfo_MultipleConfirmations()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             buffer.Add(Info(1, 0));
             buffer.Add(Info(2, 1));
             buffer.Add(Info(3, 2));
 
             var sent = new List<UnionDataList>();
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             var msg = sent[0];
             msg.AddRef();
 
             var result = new List<DeliveryInfo>();
-            buffer.TryParseDeliveryInfo(msg, result);
+            buffer.ParseDeliveryReport(msg, result);
             msg.Release();
 
             Assert.That(result.Count, Is.EqualTo(3));
@@ -158,7 +158,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryParseDeliveryInfo_WrongTypeByte_ReturnsFalse()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             var data = CPool.Acquire<UnionDataList>();
             data.PutLast(new UnionData((byte)0xFF)); // not TypeDeliveryInfo
             data.PutLast(new UnionData((ushort)1));
@@ -166,7 +166,7 @@ namespace Pontifex.DeliveryManager.Tests
             data.PutLast(new UnionData((byte)0));
 
             var result = new List<DeliveryInfo>();
-            bool parsed = buffer.TryParseDeliveryInfo(data, result);
+            bool parsed = buffer.ParseDeliveryReport(data, result);
             data.Release();
             Assert.That(parsed, Is.False);
             Assert.That(result, Is.Empty);
@@ -175,13 +175,13 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryParseDeliveryInfo_TruncatedAfterCount_ReturnsFalse()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             var data = CPool.Acquire<UnionDataList>();
             data.PutLast(new UnionData((byte)2)); // TypeDeliveryInfo
             data.PutLast(new UnionData((ushort)5)); // count = 5, but no more elements
 
             var result = new List<DeliveryInfo>();
-            bool parsed = buffer.TryParseDeliveryInfo(data, result);
+            bool parsed = buffer.ParseDeliveryReport(data, result);
             data.Release();
             Assert.That(parsed, Is.False);
         }
@@ -189,13 +189,13 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryParseDeliveryInfo_CountZero_ReturnsTrueEmptyList()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             var data = CPool.Acquire<UnionDataList>();
             data.PutLast(new UnionData((byte)2)); // TypeDeliveryInfo
             data.PutLast(new UnionData((ushort)0)); // count = 0
 
             var result = new List<DeliveryInfo>();
-            bool parsed = buffer.TryParseDeliveryInfo(data, result);
+            bool parsed = buffer.ParseDeliveryReport(data, result);
             data.Release();
             Assert.That(parsed, Is.True);
             Assert.That(result, Is.Empty);
@@ -204,10 +204,10 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryParseDeliveryInfo_EmptyData_ReturnsFalse()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             var data = CPool.Acquire<UnionDataList>();
             var result = new List<DeliveryInfo>();
-            bool parsed = buffer.TryParseDeliveryInfo(data, result);
+            bool parsed = buffer.ParseDeliveryReport(data, result);
             data.Release();
             Assert.That(parsed, Is.False);
         }
@@ -217,18 +217,18 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void RoundTrip_DeliveryInfo()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             buffer.Add(Info(100, 5));
             buffer.Add(Info(200, 6));
 
             var sent = new List<UnionDataList>();
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
 
             var msg = sent[0];
             msg.AddRef();
 
             var result = new List<DeliveryInfo>();
-            Assert.That(buffer.TryParseDeliveryInfo(msg, result), Is.True);
+            Assert.That(buffer.ParseDeliveryReport(msg, result), Is.True);
             msg.Release();
 
             Assert.That(result.Count, Is.EqualTo(2));
@@ -243,12 +243,12 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void Clear_EmptiesBuffer()
         {
-            var buffer = new AckBuffer(CPool);
+            var buffer = new DeliveryRporter(CPool);
             buffer.Add(Info(1));
             buffer.Clear();
 
             bool called = false;
-            buffer.Flush(100, 4, new ConsumerDelegate<UnionDataList>(_ => { called = true; return true; }));
+            buffer.FlushDeliveryReports(100, 4, new ConsumerDelegate<UnionDataList>(_ => { called = true; return true; }));
             Assert.That(called, Is.False);
         }
     }
