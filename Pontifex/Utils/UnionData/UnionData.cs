@@ -6,11 +6,11 @@ using Actuarius.Memory;
 
 namespace Pontifex.Utils
 {
-    public struct UnionData : IEquatable<UnionData>
+    public readonly struct UnionData : IEquatable<UnionData>
     {
-        private UnionDataType _type;
-        private UnionDataMemoryAlias _alias;
-        private IMultiRefReadOnlyByteArray? _bytes;
+        private readonly UnionDataType _type;
+        private readonly UnionDataMemoryAlias _alias;
+        private readonly IMultiRefReadOnlyByteArray? _bytes;
         
         public UnionDataType Type => _type;
         public UnionDataMemoryAlias Alias => _alias;
@@ -105,6 +105,13 @@ namespace Pontifex.Utils
             _type = value != null ? UnionDataType.Array : UnionDataType.NullArray;
             _alias = 0;
             _bytes = value;
+        }
+        
+        private UnionData(UnionDataType type, UnionDataMemoryAlias alias, IMultiRefReadOnlyByteArray? bytes)
+        {
+            _type = type;
+            _alias = alias;
+            _bytes = bytes;
         }
         
         public static implicit operator UnionData(bool value) => new(value);
@@ -233,70 +240,59 @@ namespace Pontifex.Utils
         public static bool ReadFrom<TByteSource>(ref TByteSource bytes, IPool<IMultiRefByteArray, int> pool, out UnionData unionData)
             where TByteSource : IByteSource
         {
-            unionData = new UnionData();
+            unionData = default;
             if (!bytes.TryPop(out var typeByte))
                 return false;
-            unionData._type = (UnionDataType)typeByte;
-            UnionDataMemoryAlias alias = new();
-            switch (unionData._type)
+            var type = (UnionDataType)typeByte;
+            UnionDataMemoryAlias alias = default;
+            IMultiRefByteArray? buffer = null;
+
+            switch (type)
             {
                 case UnionDataType.Bool:
                 case UnionDataType.Byte:
-                    if (alias.ReadFrom1(ref bytes))
-                    {
-                        unionData._alias = alias;
-                        return true;
-                    }
-                    return false;
+                    if (!alias.ReadFrom1(ref bytes))
+                        return false;
+                    break;
                 case UnionDataType.Char:
                 case UnionDataType.Short:
                 case UnionDataType.UShort:
-                    if (alias.ReadFrom2(ref bytes))
-                    {
-                        unionData._alias = alias;
-                        return true;
-                    }
-                    return false;
+                    if (!alias.ReadFrom2(ref bytes))
+                        return false;
+                    break;
                 case UnionDataType.Int:
                 case UnionDataType.UInt:
                 case UnionDataType.Float:
-                    if (alias.ReadFrom4(ref bytes))
-                    {
-                        unionData._alias = alias;
-                        return true;
-                    }
-                    return false;
+                    if (!alias.ReadFrom4(ref bytes))
+                        return false;
+                    break;
                 case UnionDataType.Long:
                 case UnionDataType.ULong:
                 case UnionDataType.Double:
-                    if (alias.ReadFrom8(ref bytes))
-                    {
-                        unionData._alias = alias;
-                        return true;
-                    }
-                    return false;
+                    if (!alias.ReadFrom8(ref bytes))
+                        return false;
+                    break;
                 case UnionDataType.Decimal:
-                    if (alias.ReadFrom16(ref bytes))
-                    {
-                        unionData._alias = alias;
-                        return true;
-                    }
-                    return false;
+                    if (!alias.ReadFrom16(ref bytes))
+                        return false;
+                    break;
                 case UnionDataType.Array:
+                {
                     if (!ZigZagVarIntSerializer.ReadInt(ref bytes, out var arraySize))
                         return false;
-                    var buffer = pool.Acquire(arraySize);
+                    buffer = pool.Acquire(arraySize);
                     if (!bytes.TakeMany(buffer))
-                    {
                         return false;
-                    }
-                    unionData._bytes = buffer;
-                    return true;
+                    break;
+                }
                 case UnionDataType.NullArray:
-                    return true;
+                    break;
                 default:
                     return false;
             }
+
+            unionData = new UnionData(type, alias, buffer);
+            return true;
         }
         
         public string ValueToString()
