@@ -8,20 +8,13 @@ namespace Pontifex.DeliveryManager
 {
     internal class DeliveryManager : IDeliveryManager
     {
-        public event Action<DeliveryId, UnionDataList, short>? Received;
+        public event Action<DeliveryId, UnionDataList>? Received;
         public event Action<DeliveryId>? FailedToDeliver;
         public event Action<DeliveryId>? Delivered;
-
-        private const byte TypeUserSingle = 0;
-        private const byte TypeUserMulti = 1;
-        private const byte TypeDeliveryInfo = 2;
 
         private const int SafetyMargin = 4;
         private const int DeduplicatorCapacity = 1024;
         private const int TransportMessageQueueCapacity = 5000;
-
-        private const int DeliveryInfoFixedOverhead = 6;
-        private const int DeliveryInfoElementSize = 5;
 
         private readonly struct QueuedMessage
         {
@@ -35,6 +28,7 @@ namespace Pontifex.DeliveryManager
             }
         }
 
+        private readonly IWireMessageSerializer _serializer;
         private readonly Deduplicator _deduplicator;
         private readonly DeliveryDispatcher _dispatcher;
         private readonly MessageChunker _chunker;
@@ -51,6 +45,7 @@ namespace Pontifex.DeliveryManager
             _messageMaxByteSize = messageMaxByteSize;
             _bytesPool = bytesPool;
             _collectablePool = collectablePool;
+            _serializer = new WireMessageSerializer(collectablePool);
             _deduplicator = new Deduplicator(DeduplicatorCapacity);
             _dispatcher = new DeliveryDispatcher(TransportMessageQueueCapacity, collectablePool);
             _chunker = new MessageChunker(bytesPool, MultiChunkDeliveryChunkMaxSize);
@@ -86,27 +81,15 @@ namespace Pontifex.DeliveryManager
             }
         }
 
-        private int SingleChunkDeliveryMaxSize
-        {
-            get
-            {
-                int overhead = 1 + 2 + 3 + 3;
-                return _messageMaxByteSize - overhead - SafetyMargin;
-            }
-        }
+        private int SingleChunkDeliveryMaxSize =>
+            _messageMaxByteSize - _serializer.UserSingleOverhead - SafetyMargin;
 
-        private int MultiChunkDeliveryChunkMaxSize
-        {
-            get
-            {
-                int overhead = 1 + 2 + 3 + 3 + 2 + 2;
-                return _messageMaxByteSize - overhead - SafetyMargin;
-            }
-        }
+        private int MultiChunkDeliveryChunkMaxSize =>
+            _messageMaxByteSize - _serializer.UserMultiOverhead - SafetyMargin;
 
         public int DeliveryMaxByteSize => MultiChunkDeliveryChunkMaxSize * 255;
 
-        public SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId, short responseProcessTime = 0)
+        public SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId)
         {
             deliveryId = default;
 
@@ -130,7 +113,7 @@ namespace Pontifex.DeliveryManager
 
                 if (dataSize <= SingleChunkDeliveryMaxSize)
                 {
-                    var wireMsg = SerializeUserSingle(id, serializedBytes, responseProcessTime);
+                    var wireMsg = _serializer.CreateUserSingle(id, serializedBytes);
                     _queueToSend.Put(new QueuedMessage(new DeliveryInfo(id, 0), wireMsg));
                     deliveryId = id;
                     return SendResult.Ok;
@@ -147,7 +130,7 @@ namespace Pontifex.DeliveryManager
                     int chunkId = 0;
                     while (_chunker.GetNextChunk(serializedBytes, chunkId, out var chunk))
                     {
-                        var wireMsg = SerializeUserMulti(id, chunk, (byte)chunkId, (byte)chunksNumber, responseProcessTime);
+                        var wireMsg = _serializer.CreateUserMulti(id, chunk, (byte)chunkId, (byte)chunksNumber);
                         chunk.Release();
                         _queueToSend.Put(new QueuedMessage(new DeliveryInfo(id, (byte)chunkId), wireMsg));
                         chunkId += 1;
@@ -176,8 +159,14 @@ namespace Pontifex.DeliveryManager
 
             if (packetId == 0)
             {
-                bool success = ProcessDeliveryInfo(data);
+                var confirmations = new List<DeliveryInfo>();
+                bool success = _serializer.TryParseDeliveryInfo(data, confirmations);
                 data.Release();
+                if (success)
+                {
+                    foreach (var confirmation in confirmations)
+                        _dispatcher.ConfirmDelivered(confirmation);
+                }
                 return success;
             }
 
@@ -188,67 +177,32 @@ namespace Pontifex.DeliveryManager
                 return false;
             }
 
-            short responseProcessTime = 0;
-            DeliveryInfo info;
-            IMultiRefByteArray? userData = null;
-
-            if (data.TryPopFirst(out byte type) &&
-                data.TryPopFirst(out ushort id))
-            {
-                if (type == TypeUserSingle)
-                {
-                    if (data.TryPopFirst(out responseProcessTime) &&
-                        data.TryPopFirst(out IMultiRefReadOnlyByteArray? userBytes) && userBytes != null)
-                    {
-                        info = new DeliveryInfo(new DeliveryId(id), 0);
-                        _confirmationList.Add(info);
-
-                        if (duplicity == Deduplicator.Result.New)
-                        {
-                            userData = (IMultiRefByteArray)userBytes;
-                            userData.AddRef();
-                            userBytes.Release();
-                        }
-                    }
-                    else
-                    {
-                        data.Release();
-                        return false;
-                    }
-                }
-                else if (type == TypeUserMulti)
-                {
-                    if (data.TryPopFirst(out responseProcessTime) &&
-                        data.TryPopFirst(out byte partId) &&
-                        data.TryPopFirst(out byte partsNumber) &&
-                        data.TryPopFirst(out IMultiRefReadOnlyByteArray? chunkBytes) && chunkBytes != null)
-                    {
-                        info = new DeliveryInfo(new DeliveryId(id), partId);
-                        _confirmationList.Add(info);
-
-                        if (duplicity == Deduplicator.Result.New)
-                        {
-                            userData = _chunker.Combine(new DeliveryId(id), partId, partsNumber, (IMultiRefByteArray)chunkBytes);
-                            chunkBytes.Release();
-                        }
-                    }
-                    else
-                    {
-                        data.Release();
-                        return false;
-                    }
-                }
-                else
-                {
-                    data.Release();
-                    return false;
-                }
-            }
-            else
+            if (!_serializer.TryParseUserMessage(data, out var parsed))
             {
                 data.Release();
                 return false;
             }
+
+            var info = parsed.IsMultiChunk
+                ? new DeliveryInfo(parsed.Id, parsed.PartId)
+                : new DeliveryInfo(parsed.Id, 0);
+            _confirmationList.Add(info);
+
+            IMultiRefByteArray? userData = null;
+            if (duplicity == Deduplicator.Result.New)
+            {
+                if (parsed.IsMultiChunk)
+                {
+                    userData = _chunker.Combine(parsed.Id, parsed.PartId, parsed.PartsNumber, (IMultiRefByteArray)parsed.Payload);
+                }
+                else
+                {
+                    userData = (IMultiRefByteArray)parsed.Payload;
+                    userData.AddRef();
+                }
+            }
+
+            parsed.Payload.Release();
 
             if (userData != null)
             {
@@ -259,7 +213,7 @@ namespace Pontifex.DeliveryManager
                 var onReceived = Received;
                 if (onReceived != null)
                 {
-                    onReceived(info.Id, deserialized, responseProcessTime);
+                    onReceived(info.Id, deserialized);
                 }
                 deserialized.Release();
                 userData.Release();
@@ -299,13 +253,13 @@ namespace Pontifex.DeliveryManager
 
             if (_confirmationList.Count > 0)
             {
-                int packSize = (_messageMaxByteSize - DeliveryInfoFixedOverhead - SafetyMargin) / DeliveryInfoElementSize;
+                int packSize = (_messageMaxByteSize - _serializer.DeliveryInfoFixedOverhead - SafetyMargin) / _serializer.DeliveryInfoElementSize;
 
                 int pos = 0;
                 while (pos < _confirmationList.Count)
                 {
                     int len = Math.Min(packSize, _confirmationList.Count - pos);
-                    var infoMsg = SerializeDeliveryInfo(_confirmationList, pos, len);
+                    var infoMsg = _serializer.CreateDeliveryInfo(_confirmationList, pos, len);
                     dst.Put(infoMsg);
                     pos += len;
                 }
@@ -314,63 +268,6 @@ namespace Pontifex.DeliveryManager
             }
 
             _dispatcher.TryToDeliver(dst, scheduler, now);
-        }
-
-        private bool ProcessDeliveryInfo(UnionDataList data)
-        {
-            if (!data.TryPopFirst(out byte type) || type != TypeDeliveryInfo)
-                return false;
-
-            if (!data.TryPopFirst(out ushort count))
-                return false;
-
-            for (int i = 0; i < count; ++i)
-            {
-                if (!data.TryPopFirst(out ushort id) || !data.TryPopFirst(out byte chunkId))
-                    return false;
-
-                _dispatcher.ConfirmDelivered(new DeliveryInfo(new DeliveryId(id), chunkId));
-            }
-
-            return true;
-        }
-
-        private UnionDataList SerializeUserSingle(DeliveryId id, IMultiRefByteArray data, short responseProcessTime)
-        {
-            var msg = _collectablePool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData(TypeUserSingle));
-            msg.PutLast(new UnionData(id.Id));
-            msg.PutLast(new UnionData(responseProcessTime));
-            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)data.Acquire()));
-            return msg;
-        }
-
-        private UnionDataList SerializeUserMulti(DeliveryId id, IMultiRefByteArray chunkData, byte partId, byte partsNumber, short responseProcessTime)
-        {
-            var msg = _collectablePool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData(TypeUserMulti));
-            msg.PutLast(new UnionData(id.Id));
-            msg.PutLast(new UnionData(responseProcessTime));
-            msg.PutLast(new UnionData(partId));
-            msg.PutLast(new UnionData(partsNumber));
-            msg.PutLast(new UnionData((IMultiRefReadOnlyByteArray)chunkData.Acquire()));
-            return msg;
-        }
-
-        private UnionDataList SerializeDeliveryInfo(List<DeliveryInfo> confirmations, int start, int count)
-        {
-            var msg = _collectablePool.Acquire<UnionDataList>();
-            msg.PutLast(new UnionData((ushort)0));
-            msg.PutLast(new UnionData(TypeDeliveryInfo));
-            msg.PutLast(new UnionData((ushort)count));
-
-            for (int i = start; i < start + count; ++i)
-            {
-                msg.PutLast(new UnionData(confirmations[i].Id.Id));
-                msg.PutLast(new UnionData(confirmations[i].ChunkId));
-            }
-
-            return msg;
         }
 
     }

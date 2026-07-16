@@ -14,7 +14,7 @@ namespace Pontifex.DeliveryManager
         /// Fires when a complete message is received from the remote side.
         /// The caller must release the provided <see cref="UnionDataList"/> when done with it.
         /// </summary>
-        event Action<DeliveryId, UnionDataList, short>? Received;
+        event Action<DeliveryId, UnionDataList>? Received;
 
         /// <summary>
         /// Fires when a previously scheduled message has been confirmed delivered
@@ -40,9 +40,8 @@ namespace Pontifex.DeliveryManager
         /// </summary>
         /// <param name="data">User data to send. Released on return.</param>
         /// <param name="deliveryId">The auto-assigned unique ID for this delivery.</param>
-        /// <param name="responseProcessTime">Expected processing time on the remote side (hint for ordering).</param>
         /// <returns><see cref="SendResult.Ok"/> on success, or an error code.</returns>
-        SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId, short responseProcessTime = 0);
+        SendResult ScheduleDelivery(UnionDataList data, out DeliveryId deliveryId);
     }
 
     /// <summary>

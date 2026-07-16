@@ -59,7 +59,7 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(outbound, Has.Count.EqualTo(3));
 
             var received = new List<(DeliveryId id, byte[] data)>();
-            sorted.Received += (id, d, _) =>
+            sorted.Received += (id, d) =>
             {
                 var element = d.Elements[0].Bytes!;
                 var bytes = new byte[element.Count];
@@ -91,7 +91,7 @@ namespace Pontifex.DeliveryManager.Tests
             var outbound = CaptureAll(sender);
 
             byte[]? received = null;
-            sorted.Received += (_, d, _) =>
+            sorted.Received += (_, d) =>
             {
                 var element = d.Elements[0].Bytes!;
                 received = new byte[element.Count];
@@ -120,7 +120,7 @@ namespace Pontifex.DeliveryManager.Tests
             sorted.Clear();
 
             int receivedCount = 0;
-            sorted.Received += (_, _, _) => receivedCount++;
+            sorted.Received += (_, _) => receivedCount++;
 
             foreach (var msg in outbound)
             {
@@ -144,7 +144,7 @@ namespace Pontifex.DeliveryManager.Tests
             var msg = outbound[0];
 
             int received = 0;
-            sorted.Received += (_, _, _) => received++;
+            sorted.Received += (_, _) => received++;
 
             msg.AddRef();
             inner.ProcessIncoming(msg);
@@ -168,7 +168,7 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(outbound, Has.Count.EqualTo(10));
 
             var received = new List<DeliveryId>();
-            sorted.Received += (id, _, _) => received.Add(id);
+            sorted.Received += (id, _) => received.Add(id);
 
             foreach (var msg in outbound)
             {
@@ -245,7 +245,7 @@ inner.ProcessIncoming(msg2);
             var third = CaptureAll(sender);
 
             int receivedAfterGap = 0;
-            sorted.Received += (_, _, _) => receivedAfterGap++;
+            sorted.Received += (_, _) => receivedAfterGap++;
 
             foreach (var msg in third)
             {
@@ -255,29 +255,6 @@ inner.ProcessIncoming(msg2);
             }
 
             Assert.That(receivedAfterGap, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void ResponseProcessTime_DroppedToZero()
-        {
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-
-            sender.ScheduleDelivery(DataList(1), out _, responseProcessTime: 42);
-            var outbound = CaptureAll(sender);
-
-            short? actualProcessTime = null;
-            sorted.Received += (_, _, pt) => actualProcessTime = pt;
-
-            foreach (var msg in outbound)
-            {
-                msg.AddRef();
-                inner.ProcessIncoming(msg);
-                msg.Release();
-            }
-
-            Assert.That(actualProcessTime, Is.EqualTo(0));
         }
 
         [Test]

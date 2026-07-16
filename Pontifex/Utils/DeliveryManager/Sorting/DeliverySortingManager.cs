@@ -5,14 +5,14 @@ namespace Pontifex.DeliveryManager
 {
     internal interface IDeliverySortingManager
     {
-        event Action<DeliveryId, UnionDataList, short>? Received;
+        event Action<DeliveryId, UnionDataList>? Received;
         event Action? FailedToSort;
         void Clear();
     }
 
     internal class DeliverySortingManager : IDeliverySortingManager
     {
-        public event Action<DeliveryId, UnionDataList, short>? Received;
+        public event Action<DeliveryId, UnionDataList>? Received;
         public event Action? FailedToSort;
 
         private readonly IDeliveryManagerUserSide _deliveryMan;
@@ -27,7 +27,7 @@ namespace Pontifex.DeliveryManager
             _sorter.OnError += (_, _) => OnFailedToSort();
         }
 
-        private void OnReceived(DeliveryId id, UnionDataList message, short processTime)
+        private void OnReceived(DeliveryId id, UnionDataList message)
         {
             if (!_sorter.Push(id, message))
             {
@@ -41,7 +41,7 @@ namespace Pontifex.DeliveryManager
                 var onReceived = Received;
                 if (onReceived != null)
                 {
-                    onReceived(nextId, nextBuffer, 0);
+                    onReceived(nextId, nextBuffer);
                 }
                 nextBuffer?.Release();
             }

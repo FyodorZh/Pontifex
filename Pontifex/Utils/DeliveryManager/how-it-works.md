@@ -49,8 +49,7 @@ For messages that fit in one chunk.
 Offset  Size  Field
 0       1     type (0x00)
 1       2     DeliveryId (ushort LE)
-3       2     responseProcessTime (short LE)
-5       N     user data (raw bytes)
+3       N     user data (raw bytes)
 ```
 
 ### UserMulti (type = 0x01)
@@ -59,10 +58,9 @@ For messages split across multiple chunks. Each chunk carries the same `Delivery
 Offset  Size  Field
 0       1     type (0x01)
 1       2     DeliveryId (ushort LE)
-3       2     responseProcessTime (short LE)
-5       1     partId (byte) — which chunk this is (0-based)
-6       1     partsNumber (byte) — total number of chunks
-7       N     chunk data (raw bytes)
+3       1     partId (byte) — which chunk this is (0-based)
+4       1     partsNumber (byte) — total number of chunks
+5       N     chunk data (raw bytes)
 ```
 
 ### DeliveryInfo (type = 0x02)
@@ -80,17 +78,17 @@ Offset  Size  Field
 
 | Constant | Value | Description |
 |---|---|---|
-| `SingleOverhead` | 5 | Header bytes for UserSingle |
-| `MultiOverhead` | 7 | Header bytes for UserMulti |
-| `DeliveryInfoOverhead` | 3 | Header bytes for DeliveryInfo |
-| `DeliveryInfoElementSize` | 3 | Each confirmation entry |
+| `UserSingleOverhead` | 6 | Header bytes for UserSingle |
+| `UserMultiOverhead` | 10 | Header bytes for UserMulti |
+| `DeliveryInfoFixedOverhead` | 6 | Header bytes for DeliveryInfo |
+| `DeliveryInfoElementSize` | 5 | Each confirmation entry |
 | `SafetyMargin` | 4 | Padding to avoid MTU edge cases |
 | `DeduplicatorCapacity` | 1024 | Sliding window size |
 | `TransportMessageQueueCapacity` | 5000 | Max pending deliveries |
 
 Derived limits:
-- `SingleChunkDeliveryMaxSize = messageMaxByteSize - 5 - 4`
-- `MultiChunkDeliveryChunkMaxSize = messageMaxByteSize - 7 - 4`
+- `SingleChunkDeliveryMaxSize = messageMaxByteSize - UserSingleOverhead(6) - SafetyMargin(4)`
+- `MultiChunkDeliveryChunkMaxSize = messageMaxByteSize - UserMultiOverhead(10) - SafetyMargin(4)`
 - `DeliveryMaxByteSize = MultiChunkDeliveryChunkMaxSize × 255` (max 255 chunks)
 
 ---
@@ -270,10 +268,10 @@ Reassembles multi-chunk messages into a single contiguous buffer.
 ## Wire Size Calculations
 
 ```
-MaxUserDataInSingleChunk = messageMaxByteSize - 5 - 4
-MaxChunkDataInMultiChunk = messageMaxByteSize - 7 - 4
+MaxUserDataInSingleChunk = messageMaxByteSize - UserSingleOverhead(6) - SafetyMargin(4)
+MaxChunkDataInMultiChunk = messageMaxByteSize - UserMultiOverhead(10) - SafetyMargin(4)
 MaxUserDataTotal          = MaxChunkDataInMultiChunk × 255
-MaxConfirmationsPerPacket = (messageMaxByteSize - 3 - 4) / 3
+MaxConfirmationsPerPacket = (messageMaxByteSize - DeliveryInfoFixedOverhead(6) - SafetyMargin(4)) / DeliveryInfoElementSize(5)
 ```
 
 The `-4` safety margin exists in the legacy code "just to be sure" (avoids edge cases with MTU).

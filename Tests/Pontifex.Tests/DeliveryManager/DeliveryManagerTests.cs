@@ -91,7 +91,7 @@ namespace Pontifex.DeliveryManager.Tests
 
             DeliveryId? receivedId = null;
             byte[]? receivedBytes = null;
-            receiver.Received += (id, d, _) =>
+            receiver.Received += (id, d) =>
             {
                 receivedId = id;
                 var element = d.Elements[0].Bytes!;
@@ -117,7 +117,7 @@ namespace Pontifex.DeliveryManager.Tests
             var msg = outbound[0];
 
             int received = 0;
-            receiver.Received += (_, _, _) => received++;
+            receiver.Received += (_, _) => received++;
 
             msg.AddRef();
             receiver.ProcessIncoming(msg);
@@ -201,7 +201,7 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(outbound, Has.Count.EqualTo(5));
 
             int received = 0;
-            receiver.Received += (_, _, _) => received++;
+            receiver.Received += (_, _) => received++;
 
             foreach (var msg in outbound)
             {
@@ -241,7 +241,7 @@ namespace Pontifex.DeliveryManager.Tests
             msg.AddRef();
 
             byte[]? receivedBytes = null;
-            receiver.Received += (_, d, _) =>
+            receiver.Received += (_, d) =>
             {
                 if (d.Elements.Count > 0)
                 {
@@ -305,7 +305,7 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(outbound.Count, Is.GreaterThan(1));
 
             byte[]? resultData = null;
-            receiver.Received += (_, d, _) =>
+            receiver.Received += (_, d) =>
             {
                 if (d.Elements.Count > 0)
                 {
@@ -343,7 +343,7 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(outbound.Count, Is.GreaterThan(1));
 
             byte[]? resultData = null;
-            receiver.Received += (_, d, _) =>
+            receiver.Received += (_, d) =>
             {
                 if (d.Elements.Count > 0)
                 {
@@ -382,7 +382,7 @@ namespace Pontifex.DeliveryManager.Tests
             Assert.That(outbound.Count, Is.GreaterThan(1));
 
             int received = 0;
-            receiver.Received += (_, _, _) => received++;
+            receiver.Received += (_, _) => received++;
 
             foreach (var msg in outbound)
             {
