@@ -44,17 +44,17 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
             {
                 _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
-                try
-                {
-                    var sioUdpConnectionReset = -1744830452;
-                    var inValue = new byte[] {0};
-                    var outValue = new byte[] {0};
-                    _socket.IOControl(sioUdpConnectionReset, inValue, outValue);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf("Socket icmp exception 'MAGIC FIX' throw error!", ex);
-                }
+                // try
+                // {
+                //     var sioUdpConnectionReset = -1744830452;
+                //     var inValue = new byte[] {0};
+                //     var outValue = new byte[] {0};
+                //     _socket.IOControl(sioUdpConnectionReset, inValue, outValue);
+                // }
+                // catch (Exception ex)
+                // {
+                //     Log.wtf("Socket icmp exception 'MAGIC FIX' throw error!", ex);
+                // }
 
                 try
                 {
