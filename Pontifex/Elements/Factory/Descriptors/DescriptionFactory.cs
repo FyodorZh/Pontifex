@@ -7,6 +7,7 @@ namespace Pontifex.Factory
     public interface IDescriptionUriFactory
     {
         Description ParseTransport(string uri);
+        IDescription FromJson(JsonElement element);
     }
     
     public interface IDescriptionFactory
@@ -14,7 +15,6 @@ namespace Pontifex.Factory
         void RegisterUriParser(string typeName, Func<string, IDescriptionUriFactory, Description?> parser);
         
         IDescription FromUri(string uri);
-        IDescription FromJson(JsonElement element);
     }
     
     internal class DescriptionFactory : IDescriptionFactory, IDescriptionUriFactory

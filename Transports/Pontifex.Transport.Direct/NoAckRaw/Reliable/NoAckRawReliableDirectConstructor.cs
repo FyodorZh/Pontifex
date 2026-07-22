@@ -14,7 +14,8 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
 
-            return new NoAckRawReliableDirectServer(id, builder.Logger, builder.MemoryRental);
+            var transport = new NoAckRawReliableDirectServer(id, builder.Logger, builder.MemoryRental);
+            return transport;
         }
 
         public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
@@ -22,7 +23,8 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
 
-            return new NoAckRawReliableDirectClient(id, builder.Logger, builder.MemoryRental);
+            var transport = new NoAckRawReliableDirectClient(id, builder.Logger, builder.MemoryRental);
+            return transport;
         }
 
         public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()

@@ -1,6 +1,8 @@
 # Pontifex Virtual Delivery — Netem
 
 Network emulation delivery system implementing the algorithms from Linux `sch_netem.c`.
+https://git.raptorcs.com/git/blackbird-obmc-linux/plain/net/sched/sch_netem.c .
+
 Wraps `IDeliverySystem` to introduce configurable latency, jitter, loss, duplication, reordering,
 and rate limiting into a message stream.
 

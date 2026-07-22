@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Pontifex.Factory;
+using Pontifex.VirtualDelivery;
 
 namespace Pontifex.NoAck.Raw.Unreliable.Direct
 {
@@ -21,17 +23,32 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
         {
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
+            if (!description.Get("delivery").EvaluateAsDescription(out var descriptionInfo))
+                throw new ArgumentException("Missing 'delivery' in description");
 
-            return new NoAckRawUnreliableDirectClient(id, builder.Logger, builder.MemoryRental);
+            var transport = new NoAckRawUnreliableDirectClient(id, builder.Logger, builder.MemoryRental);
+            var pool = builder.MemoryRental.CollectablePool;
+            var bytesPool = builder.MemoryRental.ByteArraysPool;
+            transport.SetDeliverySystem(
+                DeliverySystemFactory.Build(descriptionInfo, pool, bytesPool),
+                DeliverySystemFactory.Build(descriptionInfo, pool, bytesPool));
+            return transport;
         }
 
         public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()
         {
             yield return (Name, (uriBody, factory) =>
             {
+                var pos = uriBody.IndexOf(':');
+                var serverName = uriBody.Substring(0, pos);
+                var paramsJson = uriBody.Substring(pos);
+                var deliveryDescription = factory.FromJson(JsonElement.Parse(paramsJson));
+                    
+                
                 var desc = new Description();
-                desc.Add("id", new StringElement(uriBody));
+                desc.Add("id", new StringElement(serverName));
                 desc.Add("type", new StringElement("NoAckRawUnreliable"));
+                desc.Add("delivery", new DescriptionElement(deliveryDescription));
                 return desc;
             });
         }
