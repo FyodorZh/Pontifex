@@ -88,6 +88,9 @@ sequenceDiagram
 4. A client enters its logical connection only when its
    `OnConnected(IAckRawReliableClientSideEndpoint, UnionDataList)` callback is
    invoked.
+5. If the populated ACK data exceeds `MessageMaxByteSize`, establishment MUST
+   fail. The client MUST receive `OnStopped` without `OnConnected`; the
+   failure reason is implementation-defined.
 
 ### 5.2 Server responsibilities
 
@@ -107,6 +110,10 @@ sequenceDiagram
    MUST populate it but MUST NOT retain or release it.
 8. If a callback fails before the server handler's `OnConnected`, the session
    never became logical and that handler receives no lifecycle callback.
+9. If the populated ACK response exceeds `MessageMaxByteSize`, establishment
+   MUST fail. The client MUST receive `OnStopped` without `OnConnected`, and
+   the pre-connected server handler receives no lifecycle callback. The client
+   failure reason is implementation-defined.
 
 Server acceptance is local. Server `OnConnected` MAY run before the client
 receives the ACK response or runs its own `OnConnected`.
@@ -174,7 +181,9 @@ logical session.
 `IsConnected`, `RemoteEndPoint`, and `MessageMaxByteSize` MUST be safe to read
 concurrently. `MessageMaxByteSize` is an inclusive maximum for the
 application payload in a `UnionDataList`; it excludes transport framing and
-control metadata. Empty regular and handshake payloads are valid.
+control metadata. The client and server endpoints for one established
+connection MUST report the same limit. Empty regular and handshake payloads
+are valid.
 
 ### 7.2 `Send`
 
@@ -240,17 +249,18 @@ or disconnected, and the original reason and teardown remain unchanged.
 
 Once `Disconnect` returns `true`, the transport MAY discard already accepted
 but undelivered outbound messages. The caller's reason MUST be supplied to
-the local `OnDisconnected` and, for a client, local `OnStopped`. The remote
-peer's reason is implementation-defined and MUST NOT be assumed to equal the
-local reason.
+the local `OnDisconnected` and, for a client, local `OnStopped` as the exact
+same `StopReason` instance. The remote peer's reason is implementation-defined
+and MUST NOT be assumed to equal the local reason.
 
 `Send` and `Disconnect` may race. Either operation may linearize first:
 `Send` may return `Ok` and subsequently be discarded by teardown, or it may
 return `NotConnected` if teardown wins.
 
 Application logic MAY call `Send` and `Disconnect` from `OnConnected` or
-`OnReceived`. `Send` is not valid in `OnDisconnected`. If `Disconnect` is
-called from a callback, `OnDisconnected` MUST be deferred until that callback
+`OnReceived`. `Send` in `OnDisconnected` MUST return `NotConnected` and still
+consume its buffer according to the ownership rules. If `Disconnect` is called
+from a callback, `OnDisconnected` MUST be deferred until that callback
 returns; lifecycle callbacks MUST NOT be reentrant.
 
 ## 8. Callback concurrency and resource ownership
@@ -276,6 +286,11 @@ The following ownership rules are normative:
 | `TryAck(ackData)` | Acknowledger | MUST release exactly once after validation. |
 | client `OnConnected(..., ackResponse)` | Client handler | MUST release exactly once. |
 | `OnReceived(receivedBuffer)` | Receiving handler | MUST release exactly once. |
+
+Every owner in this table MUST eventually release its transferred or owned
+reference exactly once after finishing with it. An implementation MAY take
+additional internal references, but it MUST balance those references without
+releasing the owner's reference more than once.
 
 ```csharp
 public void OnReceived(UnionDataList receivedBuffer)
@@ -313,18 +328,25 @@ reference exactly once.
 
 ## 9. Failure and transport shutdown
 
-An exception thrown by application logic in any callback MUST terminate the
-affected logical connection with an exception-failure reason. Applications
+An exception thrown by application logic in `FillAckData`, `OnConnected`, or
+`OnReceived` MUST terminate the affected local logical connection with an
+`ExceptionFail` containing that exact exception instance. Every affected local
+teardown callback MUST receive that reason. The remote peer's reason remains
+implementation-defined. An exception in `TryAck` or `FillAckResponse` fails
+establishment as described in Section 5. An exception in `OnDisconnected` or
+client `OnStopped` MUST NOT create duplicate lifecycle callbacks. Applications
 MUST use `try`/`finally` to release callback-owned buffers before allowing an
 exception to escape.
 
 When `Stop(reason)` is called on a connected client, normal teardown MUST
-occur: `OnDisconnected(reason)` followed by `OnStopped(reason)`. If a started
-client is stopped or otherwise terminates before `OnConnected`, it MUST
-receive exactly one `OnStopped(reason)` and no `OnDisconnected`.
+occur: `OnDisconnected(reason)` followed by `OnStopped(reason)`, both with the
+exact supplied `StopReason` instance. If a started client is stopped or
+otherwise terminates before `OnConnected`, it MUST receive exactly one
+`OnStopped(reason)` with that exact instance and no `OnDisconnected`.
 
 When `Stop(reason)` is called on a server, it MUST stop accepting new clients
-and logically disconnect every active session with that reason. The
+and logically disconnect every active session with that exact reason instance.
+The
 transport-level `onStopped` callback supplied to `Start` MUST run only after
 all affected handler teardown callbacks have completed.
 
