@@ -11,6 +11,7 @@ namespace Pontifex.NoAck.Raw.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
+        private SerializedCallbackQueue? _callbackQueue;
 
         public event Action<IEndPoint, UnionDataList>? OnReceived;
 
@@ -24,9 +25,12 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected override sealed bool TryStart()
         {
+            _callbackQueue = new SerializedCallbackQueue($"srv-cb-{_serverEp}");
             if (!DirectTransportManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
             {
                 Log.e("Failed to register server '{0}'. Name already in use.", _serverEp);
+                _callbackQueue.Dispose();
+                _callbackQueue = null;
                 return false;
             }
             return true;
@@ -43,19 +47,42 @@ namespace Pontifex.NoAck.Raw.Direct
                 channel.Dispose();
             }
             _channels.Clear();
+            _callbackQueue?.Dispose();
+            _callbackQueue = null;
         }
 
         private void OnChannelCreated(Channel channel)
         {
+            var queue = _callbackQueue;
             channel.ServerHandler = (clientEp, message) =>
             {
-                var handler = OnReceived;
-                if (handler != null)
+                if (queue != null)
                 {
-                    try { handler(clientEp, message); }
-                    catch (Exception e) { FailException("OnReceived", e); }
+                    queue.Post(() =>
+                    {
+                        var handler = OnReceived;
+                        if (handler != null)
+                        {
+                            try
+                            {
+                                handler(clientEp, message);
+                            }
+                            catch
+                            {
+                                message.Release();
+                                throw;
+                            }
+                        }
+                        else
+                        {
+                            message.Release();
+                        }
+                    });
                 }
-                else { message.Release(); }
+                else
+                {
+                    message.Release();
+                }
             };
 
             _channels.TryAdd(channel.ClientEp, channel);

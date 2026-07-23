@@ -88,10 +88,19 @@ namespace Pontifex.NoAck.Raw.Direct
 
         public SendResult SendToClient(UnionDataList message)
         {
+            if (message == null)
+                return SendResult.InvalidMessage;
+
             if (_disposed)
             {
                 message.Release();
                 return SendResult.NotConnected;
+            }
+
+            if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
+            {
+                message.Release();
+                return SendResult.MessageTooBig;
             }
 
             var ds = _clientDeliverySystem;
@@ -114,10 +123,19 @@ namespace Pontifex.NoAck.Raw.Direct
 
         public SendResult SendToServer(UnionDataList message)
         {
+            if (message == null)
+                return SendResult.InvalidMessage;
+
             if (_disposed)
             {
                 message.Release();
                 return SendResult.NotConnected;
+            }
+
+            if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
+            {
+                message.Release();
+                return SendResult.MessageTooBig;
             }
 
             var ds = _serverDeliverySystem;

@@ -10,6 +10,7 @@ namespace Pontifex.NoAck.Raw.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
+        private SerializedCallbackQueue? _callbackQueue;
         protected volatile Channel? _channel;
 
         public event Action<UnionDataList>? OnReceived;
@@ -25,10 +26,13 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected sealed override bool TryStart()
         {
+            _callbackQueue = new SerializedCallbackQueue($"cli-cb-{_serverEp}");
             var channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
             if (channel == null)
             {
                 Log.e("Failed to connect to server '{0}'", _serverEp);
+                _callbackQueue.Dispose();
+                _callbackQueue = null;
                 return false;
             }
 
@@ -39,15 +43,36 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected virtual void OnChannelConnected(Channel channel)
         {
+            var queue = _callbackQueue;
             channel.ClientHandler = (message) =>
             {
-                var handler = OnReceived;
-                if (handler != null)
+                if (queue != null)
                 {
-                    try { handler(message); }
-                    catch (Exception e) { FailException("OnReceived", e); }
+                    queue.Post(() =>
+                    {
+                        var handler = OnReceived;
+                        if (handler != null)
+                        {
+                            try
+                            {
+                                handler(message);
+                            }
+                            catch
+                            {
+                                message.Release();
+                                throw;
+                            }
+                        }
+                        else
+                        {
+                            message.Release();
+                        }
+                    });
                 }
-                else { message.Release(); }
+                else
+                {
+                    message.Release();
+                }
             };
         }
 
@@ -62,6 +87,8 @@ namespace Pontifex.NoAck.Raw.Direct
                 OnBeforeChannelDisconnect(channel);
                 DirectTransportManager.Instance.Disconnect(_serverEp, _clientEp);
             }
+            _callbackQueue?.Dispose();
+            _callbackQueue = null;
         }
 
         protected virtual void OnBeforeChannelDisconnect(Channel channel) { }
