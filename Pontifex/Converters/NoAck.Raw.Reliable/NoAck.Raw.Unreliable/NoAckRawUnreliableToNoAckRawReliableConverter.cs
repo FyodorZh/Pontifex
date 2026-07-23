@@ -79,6 +79,10 @@ namespace Pontifex.Converters
             public bool IsStarted => _inner.IsStarted;
             public ILogger Log => _log;
             public IMemoryRental Memory => _memory;
+            
+            public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+            {
+            }
 
             public bool Start(Action<StopReason> onStopped)
             {
@@ -358,6 +362,10 @@ namespace Pontifex.Converters
             public bool IsStarted => _inner.IsStarted;
             public ILogger Log => _log;
             public IMemoryRental Memory => _memory;
+            
+            public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+            {
+            }
 
             public bool Start(Action<StopReason> onStopped)
             {

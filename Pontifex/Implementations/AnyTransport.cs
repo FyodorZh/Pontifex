@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Actuarius.Memory;
 using Scriba;
 
@@ -21,6 +22,11 @@ namespace Pontifex
         public ILogger Log { get; }
 
         public IMemoryRental Memory { get; }
+        
+        public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        {
+            // do nothing
+        }
 
         /// <summary>
         /// Attempts to start the protocol transport.

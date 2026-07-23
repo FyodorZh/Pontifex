@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.NoAck.Raw;
 using Pontifex.Utils;
@@ -54,6 +55,10 @@ namespace Pontifex.Converters
             public bool IsStarted => _inner.IsStarted;
             public ILogger Log => _log;
             public IMemoryRental Memory => _memory;
+            
+            public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+            {
+            }
 
             public bool Start(Action<StopReason> onStopped) => _inner.Start(onStopped);
             public bool Stop(StopReason? reason = null) => _inner.Stop(reason);
@@ -93,6 +98,10 @@ namespace Pontifex.Converters
             public bool IsStarted => _inner.IsStarted;
             public ILogger Log => _log;
             public IMemoryRental Memory => _memory;
+            
+            public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+            {
+            }
 
             public bool Start(Action<StopReason> onStopped) => _inner.Start(onStopped);
             public bool Stop(StopReason? reason = null) => _inner.Stop(reason);

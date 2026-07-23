@@ -1,4 +1,6 @@
-﻿using Actuarius.Memory;
+﻿using System;
+using System.Collections.Generic;
+using Actuarius.Memory;
 using Scriba;
 
 namespace Pontifex
@@ -52,5 +54,7 @@ namespace Pontifex
         /// Memory rental system for the transport. It is used to rent memory for data transmission and reception.
         /// </summary>
         IMemoryRental Memory { get; }
+        
+        void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null);
     }
 }

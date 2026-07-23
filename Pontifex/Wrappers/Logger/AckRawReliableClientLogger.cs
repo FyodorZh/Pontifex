@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Ack;
 using Pontifex.Ack.Raw;
@@ -45,6 +46,11 @@ namespace Pontifex
         ILogger ITransport.Log => _core.Log;
 
         IMemoryRental ITransport.Memory => _core.Memory;
+        
+        public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        {
+            _core.GetControls(dst, predicate);
+        }
 
         bool IAckRawReliableClient.Init(IAckRawReliableClientHandler handler)
         {
