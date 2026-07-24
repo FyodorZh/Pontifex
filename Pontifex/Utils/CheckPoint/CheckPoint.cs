@@ -10,7 +10,7 @@ namespace Pontifex.Utils.CheckPointGate
         private volatile bool _disposed;
         private volatile bool _isArmed;
         private int _hitCount;
-        private int _epoch;
+        private long _epoch;
         private TaskCompletionSource<CheckPointWaitResult>? _armTcs;
         private TaskCompletionSource<byte>? _blockedHitTcs;
 
@@ -45,28 +45,30 @@ namespace Pontifex.Utils.CheckPointGate
             }
         }
 
-        public Task HitAsync()
+        public async ValueTask HitAsync()
         {
             if (!_isArmed || _disposed)
-                return Task.CompletedTask;
+                return;
 
+            Task? taskToWait = null;
             lock (_gate)
             {
                 if (!_isArmed || _disposed)
-                    return Task.CompletedTask;
+                    return;
 
                 if (_hitCount > 0)
                 {
                     _hitCount--;
-                    return Task.CompletedTask;
+                    return;
                 }
 
                 _armTcs?.TrySetResult(CheckPointWaitResult.Reached);
                 _armTcs = null;
 
                 _blockedHitTcs ??= new TaskCompletionSource<byte>(TaskCreationOptions.RunContinuationsAsynchronously);
-                return _blockedHitTcs.Task;
+                taskToWait = _blockedHitTcs.Task;
             }
+            await taskToWait;
         }
 
         public Task<CheckPointWaitResult> Arm(int requiredHits = 1)
