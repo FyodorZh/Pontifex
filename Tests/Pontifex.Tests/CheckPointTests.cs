@@ -214,7 +214,7 @@ public sealed class CheckPointTests
         Assert.That(hitTask.IsCompleted, Is.False);
 
         cp.Reset();
-        await hitTask.WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
         Assert.That(hitTask.IsCompleted, Is.True);
     }
 
@@ -290,7 +290,7 @@ public sealed class CheckPointTests
         Assert.That(result, Is.EqualTo(CheckPointWaitResult.Reached));
 
         cp.Reset();
-        await hitTask.WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
     }
 
     [Test]
@@ -310,7 +310,8 @@ public sealed class CheckPointTests
         Assert.That(hitTask2.IsCompleted, Is.False);
 
         cp.Reset();
-        await Task.WhenAll(hitTask1, hitTask2).WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask1.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask2.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
     }
 
     [Test]
@@ -383,7 +384,7 @@ public sealed class CheckPointTests
         Assert.That(hitTask.IsCompleted, Is.False);
 
         cp.Reset();
-        await hitTask.WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
         Assert.That(hitTask.IsCompleted, Is.True);
     }
 
@@ -460,7 +461,7 @@ public sealed class CheckPointTests
         Assert.That(hitTask.IsCompleted, Is.False);
 
         cp.Dispose();
-        await hitTask.WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
         Assert.That(hitTask.IsCompleted, Is.True);
     }
 
@@ -595,7 +596,7 @@ public sealed class CheckPointTests
         Assert.That(hitTask.IsCompleted, Is.False);
 
         cp.Arm(3);
-        await hitTask.WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask;
         Assert.That(hitTask.IsCompleted, Is.True);
         Assert.That(cp.HitCount, Is.EqualTo(2));
     }
@@ -662,7 +663,7 @@ public sealed class CheckPointTests
 
         var tasks = new Task[99];
         for (var i = 0; i < tasks.Length; i++)
-            tasks[i] = cp.HitAsync();
+            tasks[i] = cp.HitAsync().AsTask();
 
         await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5));
         Assert.That(cp.HitCount, Is.Zero);
@@ -728,7 +729,7 @@ public sealed class CheckPointTests
         Assert.That(armResult, Is.EqualTo(CheckPointWaitResult.Reached));
 
         cp.Reset();
-        await hit3.WaitAsync(TimeSpan.FromSeconds(1));
+        await hit3.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
     }
 
     [Test]
@@ -763,7 +764,7 @@ public sealed class CheckPointTests
         Assert.That(task.IsCompleted, Is.False);
 
         cp.Reset();
-        await task.WaitAsync(TimeSpan.FromSeconds(1));
+        await task.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
     }
 
     [Test]
@@ -806,7 +807,7 @@ public sealed class CheckPointTests
         Assert.That(result, Is.EqualTo(CheckPointWaitResult.Reached));
 
         cp.Reset();
-        await hitTask.WaitAsync(TimeSpan.FromSeconds(1));
+        await hitTask.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
     }
 
     [Test]
@@ -941,7 +942,7 @@ public sealed class CheckPointTests
 
         var tasks = new Task[5];
         for (var i = 0; i < tasks.Length; i++)
-            tasks[i] = cp.HitAsync();
+            tasks[i] = cp.HitAsync().AsTask();
 
         foreach (var t in tasks)
             Assert.That(t.IsCompleted, Is.False);
@@ -1033,7 +1034,7 @@ public sealed class CheckPointTests
         Assert.That(winnerResult, Is.EqualTo(CheckPointWaitResult.Reached));
 
         cp.Reset();
-        await hitTask;
+        await hitTask.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
     }
 
     [Test]

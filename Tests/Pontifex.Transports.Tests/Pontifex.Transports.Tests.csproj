@@ -1,12 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <LangVersion>14</LangVersion>
+        <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
-        <RootNamespace>Pontifex.Tests</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
@@ -22,7 +21,12 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
+        <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="NoAck\Raw\Unreliable\" />
+        <Folder Include="NoAck\Raw\Unreliable\Tests\" />
     </ItemGroup>
 
 </Project>
