@@ -88,7 +88,7 @@ Concrete transports are created through the scope so that the suite can control 
 | `CreateExactLimitMessage(ITransport transport)` | Return a `UnionDataList` that is valid and whose serialised size equals the transport's maximum send size exactly. Use `transport` to determine the limit. Must return at least one element. |
 | `CreateOneByteOverLimitMessage(ITransport transport)` | Return a `UnionDataList` that is one byte larger than the transport's maximum send size, so that calling `TrySend` on it returns `MessageTooBig`. Must return at least one element. |
 | `CreateForeignServerDestination()` | Return an `IEndPoint` that belongs to a *different* server (real or fake) so that sending to it produces `InvalidAddress`. Must not be `null`. |
-| `CreateAdditionalNonOkCases()` | Return additional test cases that exercise other non-`Ok` results. Return `Enumerable.Empty<…>()` if none. |
+| `CreateAdditionalNonOkCases()` | Return a **fresh** enumeration of self-contained test cases for non-`Ok` send results not already covered by the built-in tests (`MessageTooBig`, `InvalidMessage`, `InvalidAddress`, `NotConnected`). Each call must produce new instances. Return `Enumerable.Empty<…>()` if none. Each case owns its transport: it must be valid, started, and disposed by the test (the scope does **not** track these cases). Cases must exercise a real `TrySend` call — no internal bypass, no exception injection. |
 | `Dispose()` | Clean up all transports, payloads, and endpoints created by this scope. |
 
 ### `INoAckRawUnreliableAdditionalNonOkCase` (optional)
@@ -99,8 +99,8 @@ Returned by `CreateAdditionalNonOkCases`. Each instance describes one send attem
 |---|---|
 | `Name` | Display name for the test case. |
 | `ExpectedResult` | The `SendResult` that `Invoke()` is expected to return. |
-| `Transport` | The transport to invoke `TrySend` on. |
-| `Invoke()` | Execute the send and return the actual result. The test framework compares it against `ExpectedResult`. |
+| `Transport` | The transport to invoke `TrySend` on. Must be valid, started, and owned exclusively by this case. |
+| `Invoke()` | Execute the send and return the actual result. The test framework compares it against `ExpectedResult`. Must use a real `TrySend` call (no internal bypass). |
 
 ## Test discovery
 

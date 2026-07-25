@@ -15,8 +15,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
 
         Assert.That(client.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeTrySendStateDecision);
+        var gate = control.BeforeTrySendStateDecisionGate;
 
         SendResult sendResult;
 
@@ -53,8 +52,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
 
         Assert.That(server.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeTrySendStateDecision);
+        var gate = control.BeforeTrySendStateDecisionGate;
 
         SendResult sendResult;
 
@@ -92,8 +90,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
 
         Assert.That(client.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStopStateTransition);
+        var gate = control.BeforeStopStateTransitionGate;
 
         SendResult sendResult;
 
@@ -125,8 +122,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
 
         Assert.That(client.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStoppedCallback);
+        var gate = control.BeforeStoppedCallbackGate;
 
         SendResult sendResult;
 
@@ -158,8 +154,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
 
         Assert.That(server.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStoppedCallback);
+        var gate = control.BeforeStoppedCallbackGate;
 
         SendResult sendResult;
 

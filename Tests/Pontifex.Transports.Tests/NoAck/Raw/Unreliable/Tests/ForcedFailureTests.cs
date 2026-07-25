@@ -59,8 +59,7 @@ public sealed class ForcedFailureTests : ConformanceTestBase
 
         Assert.That(client.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStoppedCallback);
+        var gate = control.BeforeStoppedCallbackGate;
         var stopResults = new List<bool>();
         List<Task> stopTasks;
 

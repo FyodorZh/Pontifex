@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using Actuarius.Memory;
+using Pontifex.StopReasons;
+using Pontifex.Utils.CheckPointGate;
 using Scriba;
 
 namespace Pontifex
@@ -10,6 +13,8 @@ namespace Pontifex
     /// </summary>
     public abstract class AnyTransport : ITransport
     {
+        private readonly ConformanceControl _conformanceControl;
+        
         protected readonly object _locker = new ();
 
         private bool _isValid = true;
@@ -23,9 +28,12 @@ namespace Pontifex
 
         public IMemoryRental Memory { get; }
         
-        public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        public virtual void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
         {
-            // do nothing
+            if (predicate?.Invoke(_conformanceControl) ?? true)
+            {
+                dst.Add(_conformanceControl);
+            }
         }
 
         /// <summary>
@@ -70,12 +78,14 @@ namespace Pontifex
             }
         }
 
-        protected AnyTransport(string typeName, ILogger logger, IMemoryRental memory)
+        protected AnyTransport(string typeName, ILogger logger, IMemoryRental memory, ConformanceControl? conformanceControl = null)
         {
             Name = typeName;
             Log = logger.Wrap();
             Log.Tags.Set(Name);
             Memory = memory;
+            
+            _conformanceControl = conformanceControl ?? new ConformanceControl(this);
         }
 
         public bool Start(Action<StopReason> onStopped)
@@ -86,6 +96,12 @@ namespace Pontifex
                 {
                     if (!_started)
                     {
+                        if (_conformanceControl.ShouldFailNextStart_AnyTransportLevel())
+                        {
+                            Fail("Start", "Conformance control forced failure");
+                            return false;
+                        }
+                        
                         _started = true;
                         _onStopped = onStopped;
                         if (TryStart())
@@ -117,6 +133,8 @@ namespace Pontifex
                 {
                     if (_started)
                     {
+                        _conformanceControl.BeforeStopStateTransitionGate.Hit();
+                        
                         _started = false;
 
                         if (reason == null)
@@ -136,17 +154,15 @@ namespace Pontifex
                         {
                             Log.wtf(ex);
                         }
-
-                        if (_onStopped != null)
+                        
+                        try
                         {
-                            try
-                            {
-                                _onStopped.Invoke(reason);
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.wtf(ex);
-                            }
+                            _conformanceControl.BeforeStoppedCallbackGate.Hit();
+                            _onStopped?.Invoke(reason);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
                         }
                     }
                     return true;
@@ -163,6 +179,8 @@ namespace Pontifex
 
                 if (_started)
                 {
+                    _conformanceControl.BeforeStopStateTransitionGate.Hit();
+                    
                     _started = false;
 
                     try
@@ -174,16 +192,14 @@ namespace Pontifex
                         Log.wtf(ex);
                     }
 
-                    if (_onStopped != null)
+                    try
                     {
-                        try
-                        {
-                            _onStopped.Invoke(reason);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.wtf(ex);
-                        }
+                        _conformanceControl.BeforeStoppedCallbackGate.Hit();
+                        _onStopped?.Invoke(reason);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
                     }
                 }
             }
@@ -211,6 +227,41 @@ namespace Pontifex
         public override string ToString()
         {
             return GetType().Name;
+        }
+        
+        protected class ConformanceControl : IConformanceControl
+        {
+            private readonly AnyTransport _owner;
+            public virtual string Name => "ConformanceControl(AnyTransport)";
+
+            private readonly CheckPoint _beforeStopStateTransitionGate = new();
+            private readonly CheckPoint _beforeStoppedCallbackGate = new();
+
+            private bool _failNextStartFlag = false;
+
+            public ICheckPoint BeforeStopStateTransitionGate => _beforeStopStateTransitionGate;
+
+            public ICheckPoint BeforeStoppedCallbackGate => _beforeStoppedCallbackGate;
+
+            public ConformanceControl(AnyTransport owner)
+            {
+                _owner = owner;
+            }
+
+            public virtual void FailNextStart()
+            {
+                Volatile.Write(ref _failNextStartFlag, true);
+            }
+
+            public void InjectUnrecoverableFailure()
+            {
+                _owner.Fail(new TextFail(Name, "ConformanceControl(AnyTransport) injected unrecoverable failure"));
+            }
+            
+            public bool ShouldFailNextStart_AnyTransportLevel()
+            {
+                return Volatile.Read(ref _failNextStartFlag);
+            }
         }
     }
 }

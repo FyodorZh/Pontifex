@@ -15,8 +15,7 @@ public sealed class StatusPropertyTests : ConformanceTestBase
 
         Assert.That(client.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStopStateTransition);
+        var gate = control.BeforeStopStateTransitionGate;
 
         var readerExceptions = new List<Exception>();
 
@@ -68,8 +67,7 @@ public sealed class StatusPropertyTests : ConformanceTestBase
 
         Assert.That(server.Start(recorder.Callback), Is.True);
 
-        var gate = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStopStateTransition);
+        var gate = control.BeforeStopStateTransitionGate;
 
         var readerExceptions = new List<Exception>();
 

@@ -266,7 +266,7 @@ profile.
 
 14. **Repeated stop cannot duplicate a paused client stopped callback.**
     **Profile:** 4.2, 5.3. **Setup and steps:** Start an instrumented client
-    with a recorder. Arm `BeforeStoppedCallback`; call `Stop` on a task; await
+    with a recorder. Arm `BeforeStoppedCallbackGate`; call `Stop` on a task; await
     the gate's `Reached` result. Issue at least four additional `Stop` calls on
     separate tasks. Reset the gate, then await all stop tasks and the recorder.
     **Assertions:** Every stop call returns `true`; the recorder count is one;
@@ -297,7 +297,7 @@ profile.
 
 18. **Repeated stop cannot duplicate a paused fatal-failure callback.**
     **Profile:** 4.2, 5.4. **Setup and steps:** Start an instrumented client
-    with a recorder. Arm `BeforeStoppedCallback`; invoke
+    with a recorder. Arm `BeforeStoppedCallbackGate`; invoke
     `InjectUnrecoverableFailure` on a task; await `Reached`; issue repeated
     `Stop` calls on other tasks; reset the gate; await all tasks and the
     recorder.
@@ -309,7 +309,7 @@ profile.
 
 19. **Client status reads remain safe while stop is in progress.**
     **Profile:** 5.5. **Setup and steps:** Start an instrumented client. Arm
-    `BeforeStopStateTransition`; start a stop task and await `Reached`; start
+    `BeforeStopStateTransitionGate`; start a stop task and await `Reached`; start
     multiple concurrent readers; reset the gate; await stop and reader tasks.
     **Assertions:** No reader throws or deadlocks; final state is valid and not
     started.
@@ -404,7 +404,7 @@ profile.
 
 31. **Client send loses when stop wins the state race.**
     **Profile:** 5.8. **Setup and steps:** Start an instrumented client with a
-    recorder. Arm `BeforeTrySendStateDecision`; invoke `TrySend` with a fresh
+    recorder. Arm `BeforeTrySendStateDecisionGate`; invoke `TrySend` with a fresh
     small valid message on a task; await `Reached`; call `Stop` and await its
     recorder; reset the send gate; await the send task.
     **Assertions:** The send result is `NotConnected`; final state is valid and
@@ -413,7 +413,7 @@ profile.
 
 32. **Server send loses when stop wins the state race.**
     **Profile:** 5.8. **Setup and steps:** Start an instrumented server with a
-    recorder. Arm `BeforeTrySendStateDecision`; invoke `TrySend` with a fresh
+    recorder. Arm `BeforeTrySendStateDecisionGate`; invoke `TrySend` with a fresh
     small valid message and foreign destination on a task; await `Reached`; call
     `Stop`; reset the send gate; await the send task.
     **Assertions:** The send result is `NotConnected`; final state is valid and
@@ -423,7 +423,7 @@ profile.
 
 33. **Client send does not lose solely because a later stop begins.**
     **Profile:** 5.8. **Setup and steps:** Start an instrumented client with a
-    recorder. Arm `BeforeStopStateTransition`; call `Stop` on a task; await
+    recorder. Arm `BeforeStopStateTransitionGate`; call `Stop` on a task; await
     `Reached`; synchronously call `TrySend` with a fresh small valid message;
     reset the stop gate; await stop and recorder completion.
     **Assertions:** The send result is not `NotConnected`. The result may be
@@ -433,7 +433,7 @@ profile.
 
 34. **Client send while stopping returns NotConnected.**
     **Profile:** 5.7. **Setup and steps:** Start an instrumented client with a
-    recorder. Arm `BeforeStoppedCallback`; call `Stop` on a task; await
+    recorder. Arm `BeforeStoppedCallbackGate`; call `Stop` on a task; await
     `Reached`; synchronously call `TrySend` with a fresh small valid message;
     reset the callback gate; await stop and recorder completion.
     **Assertions:** The send result is `NotConnected`; final state is valid and
@@ -449,13 +449,13 @@ profile.
 
 ### Local operation control contract
 
-36. **Checkpoint lookup is stable and validates its argument.**
+36. **Checkpoint gates are stable and distinct.**
     **Profile:** 4.2. **Setup and steps:** Create an instrumented client and
-    obtain its local operation control. Obtain each defined checkpoint twice.
-    Call `GetGate` once with an undefined enum value.
-    **Assertions:** Repeated lookup of one checkpoint returns the same gate
-    instance; different checkpoints return different gate instances; lookup of
-    the undefined value throws `ArgumentOutOfRangeException`.
+    obtain its local operation control. Read each of the three checkpoint
+    properties (`BeforeTrySendStateDecisionGate`, `BeforeStopStateTransitionGate`,
+    `BeforeStoppedCallbackGate`) twice.
+    **Assertions:** Repeated reads of the same property return the same gate
+    instance; different properties return different gate instances.
     **Cleanup:** Reset every obtained gate and dispose the scope.
 
 37. **FailNextStart validates its one-shot pre-start state.**
@@ -472,9 +472,9 @@ profile.
     **Profile:** 4.2. **Setup and steps:** On a fresh unstarted instrumented
     client, call `InjectUnrecoverableFailure`. In a separate client scope, start
     successfully, inject failure, await its recorder, then inject failure again.
-    In a third scope, start a client, arm `BeforeStoppedCallback`, begin `Stop`,
-    await `Reached`, and call `InjectUnrecoverableFailure` before releasing the
-    gate.
+    In a third scope, start a client, arm `BeforeStoppedCallbackGate`, begin
+    `Stop`, await `Reached`, and call `InjectUnrecoverableFailure` before
+    releasing the gate.
     **Assertions:** Injection before start, after a prior injected failure, and
     after stopping has begun each throw `InvalidOperationException`. The first
     valid injection follows test 16 and is not affected by the rejected second

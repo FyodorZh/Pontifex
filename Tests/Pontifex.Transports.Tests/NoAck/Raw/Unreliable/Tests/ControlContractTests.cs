@@ -7,37 +7,29 @@ public sealed class ControlContractTests : ConformanceTestBase
         INoAckRawUnreliableConformanceTestAdapter adapter) : base(adapter) { }
 
     [Test]
-    public void CheckpointLookupIsStableAndValidatesItsArgument()
+    public void CheckpointGatesAreStableAndDistinct()
     {
         var client = Scope.CreateClient(instrumented: true);
         var control = GetControl(client);
 
-        foreach (var cp in Enum.GetValues<
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint>())
-        {
-            var first = control.GetGate(cp);
-            var second = control.GetGate(cp);
-            Assert.That(second, Is.SameAs(first),
-                $"GetGate({cp}) returned different instances across calls");
-        }
+        var g0a = control.BeforeTrySendStateDecisionGate;
+        var g0b = control.BeforeTrySendStateDecisionGate;
+        Assert.That(g0b, Is.SameAs(g0a));
 
-        var gate0 = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeTrySendStateDecision);
-        var gate1 = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStopStateTransition);
-        var gate2 = control.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStoppedCallback);
+        var g1a = control.BeforeStopStateTransitionGate;
+        var g1b = control.BeforeStopStateTransitionGate;
+        Assert.That(g1b, Is.SameAs(g1a));
+
+        var g2a = control.BeforeStoppedCallbackGate;
+        var g2b = control.BeforeStoppedCallbackGate;
+        Assert.That(g2b, Is.SameAs(g2a));
 
         Assert.Multiple(() =>
         {
-            Assert.That(gate1, Is.Not.SameAs(gate0));
-            Assert.That(gate2, Is.Not.SameAs(gate0));
-            Assert.That(gate2, Is.Not.SameAs(gate1));
+            Assert.That(g1a, Is.Not.SameAs(g0a));
+            Assert.That(g2a, Is.Not.SameAs(g0a));
+            Assert.That(g2a, Is.Not.SameAs(g1a));
         });
-
-        var undefinedValue = (NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint)99;
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => control.GetGate(undefinedValue));
     }
 
     [Test]
@@ -94,8 +86,7 @@ public sealed class ControlContractTests : ConformanceTestBase
 
         Assert.That(client3.Start(recorder3.Callback), Is.True);
 
-        var gate = control3.GetGate(
-            NoAckRawUnreliableCarrierIndependentCoreConformanceCheckpoint.BeforeStoppedCallback);
+        var gate = control3.BeforeStoppedCallbackGate;
 
         using (var lease = new CheckpointLease(gate))
         {
