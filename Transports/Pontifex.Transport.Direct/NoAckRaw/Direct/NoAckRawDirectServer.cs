@@ -23,7 +23,7 @@ namespace Pontifex.NoAck.Raw.Direct
             _serverEp = new StringEndPoint(serverName);
         }
 
-        protected override sealed bool TryStart()
+        protected sealed override bool TryStart()
         {
             _callbackQueue = new SerializedCallbackQueue($"srv-cb-{_serverEp}");
             if (!DirectTransportManager.Instance.RegisterServer(_serverEp, OnChannelCreated))

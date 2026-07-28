@@ -24,7 +24,7 @@ namespace Pontifex.NoAck.Raw.Reliable.Direct
 
         protected override void OnBeforeChannelDisconnect(Channel channel)
         {
-            channel.SetDeliverySystem(null, null);
+            channel.SetDeliverySystem(new PerfectDeliverySystem(), new PerfectDeliverySystem());
         }
 
         public SendResult Send(UnionDataList message) => SendToServer(message);

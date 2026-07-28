@@ -23,18 +23,18 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
         {
             _clientDeliverySystem = clientDeliverySystem;
             _serverDeliverySystem = serverDeliverySystem;
-            _channel?.SetDeliverySystem(clientDeliverySystem, serverDeliverySystem);
+            _channel?.SetDeliverySystem(clientDeliverySystem ?? new PerfectDeliverySystem(), serverDeliverySystem ?? new PerfectDeliverySystem());
         }
 
         protected override void OnChannelConnected(Channel channel)
         {
             base.OnChannelConnected(channel);
-            channel.SetDeliverySystem(_clientDeliverySystem, _serverDeliverySystem);
+            channel.SetDeliverySystem(_clientDeliverySystem ?? new PerfectDeliverySystem(), _serverDeliverySystem ?? new PerfectDeliverySystem());
         }
 
         protected override void OnBeforeChannelDisconnect(Channel channel)
         {
-            channel.SetDeliverySystem(null, null);
+            channel.SetDeliverySystem(new PerfectDeliverySystem(), new PerfectDeliverySystem());
         }
 
         public SendResult TrySend(UnionDataList message) => SendToServer(message);

@@ -11,14 +11,16 @@ namespace Pontifex.NoAck.Raw.Direct
         private readonly IEndPoint _serverEp;
         private volatile Action<UnionDataList>? _clientHandler;
         private volatile Action<IEndPoint, UnionDataList>? _serverHandler;
-        private volatile IDeliverySystem? _clientDeliverySystem;
-        private volatile IDeliverySystem? _serverDeliverySystem;
+        private volatile IDeliverySystem _clientDeliverySystem;
+        private volatile IDeliverySystem _serverDeliverySystem;
         private volatile bool _disposed;
 
         public Channel(IEndPoint clientEp, IEndPoint serverEp)
         {
             _clientEp = clientEp;
             _serverEp = serverEp;
+            _clientDeliverySystem = new PerfectDeliverySystem();
+            _serverDeliverySystem = new PerfectDeliverySystem();
         }
 
         public IEndPoint ClientEp => _clientEp;
@@ -37,32 +39,22 @@ namespace Pontifex.NoAck.Raw.Direct
         /// It is possible and acceptable for messages that are processed right now to be undelivered.
         /// The most important invariant is to release messages.
         /// </summary>
-        public void SetDeliverySystem(IDeliverySystem? clientDeliverySystem, IDeliverySystem? serverDeliverySystem)
+        public void SetDeliverySystem(IDeliverySystem clientDeliverySystem, IDeliverySystem serverDeliverySystem)
         {
             if (clientDeliverySystem != _clientDeliverySystem)
             {
-                if (clientDeliverySystem != null)
-                    clientDeliverySystem.Delivered += OnClientDeliveredMessage;
-
+                clientDeliverySystem.Delivered += OnClientDeliveredMessage;
                 var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, clientDeliverySystem);
-                if (oldClient != null)
-                {
-                    oldClient.Delivered -= OnClientDeliveredMessage;
-                    oldClient.Clear();
-                }
+                oldClient.Delivered -= OnClientDeliveredMessage;
+                oldClient.Clear();
             }
 
             if (serverDeliverySystem != _serverDeliverySystem)
             {
-                if (serverDeliverySystem != null)
-                    serverDeliverySystem.Delivered += OnServerDeliveredMessage;
-
+                serverDeliverySystem.Delivered += OnServerDeliveredMessage;
                 var oldServer = Interlocked.Exchange(ref _serverDeliverySystem, serverDeliverySystem);
-                if (oldServer != null)
-                {
-                    oldServer.Delivered -= OnServerDeliveredMessage;
-                    oldServer.Clear();
-                }
+                oldServer.Delivered -= OnServerDeliveredMessage;
+                oldServer.Clear();
             }
         }
         
@@ -103,22 +95,8 @@ namespace Pontifex.NoAck.Raw.Direct
                 return SendResult.MessageTooBig;
             }
 
-            var ds = _clientDeliverySystem;
-            if (ds != null)
-            {
-                ds.Deliver(message);
-                return SendResult.Ok;
-            }
-
-            var handler = _clientHandler;
-            if (handler != null)
-            {
-                handler(message);
-                return SendResult.Ok;
-            }
-
-            message.Release();
-            return SendResult.Error;
+            _clientDeliverySystem.Deliver(message);
+            return SendResult.Ok;
         }
 
         public SendResult SendToServer(UnionDataList message)
@@ -138,22 +116,8 @@ namespace Pontifex.NoAck.Raw.Direct
                 return SendResult.MessageTooBig;
             }
 
-            var ds = _serverDeliverySystem;
-            if (ds != null)
-            {
-                ds.Deliver(message);
-                return SendResult.Ok;
-            }
-
-            var handler = _serverHandler;
-            if (handler != null)
-            {
-                handler(_clientEp, message);
-                return SendResult.Ok;
-            }
-
-            message.Release();
-            return SendResult.Error;
+            _serverDeliverySystem.Deliver(message);
+            return SendResult.Ok;
         }
 
         public void Dispose()
@@ -161,19 +125,13 @@ namespace Pontifex.NoAck.Raw.Direct
             if (_disposed) return;
             _disposed = true;
 
-            var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, null);
-            if (oldClient != null)
-            {
-                oldClient.Delivered -= OnClientDeliveredMessage;
-                oldClient.Clear();
-            }
+            var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, new PerfectDeliverySystem());
+            oldClient.Delivered -= OnClientDeliveredMessage;
+            oldClient.Clear();
 
-            var oldServer = Interlocked.Exchange(ref _serverDeliverySystem, null);
-            if (oldServer != null)
-            {
-                oldServer.Delivered -= OnServerDeliveredMessage;
-                oldServer.Clear();
-            }
+            var oldServer = Interlocked.Exchange(ref _serverDeliverySystem, new PerfectDeliverySystem());
+            oldServer.Delivered -= OnServerDeliveredMessage;
+            oldServer.Clear();
 
             _clientHandler = null;
             _serverHandler = null;
