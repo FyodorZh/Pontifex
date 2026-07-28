@@ -7,7 +7,7 @@ using Scriba;
 
 namespace Pontifex.NoAck.Raw.Direct
 {
-    public abstract class NoAckRawDirectServer : AnyTransport
+    public abstract class NoAckRawDirectServer : NoAckRawTransport
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();

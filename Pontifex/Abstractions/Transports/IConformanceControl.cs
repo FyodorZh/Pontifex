@@ -1,3 +1,4 @@
+using System;
 using Pontifex.Utils.CheckPointGate;
 
 namespace Pontifex

@@ -6,7 +6,7 @@ using Scriba;
 
 namespace Pontifex.NoAck.Raw.Direct
 {
-    public abstract class NoAckRawDirectClient : AnyTransport
+    public abstract class NoAckRawDirectClient : NoAckRawTransport
     {
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
