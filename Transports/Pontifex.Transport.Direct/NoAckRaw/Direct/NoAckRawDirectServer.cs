@@ -11,7 +11,7 @@ namespace Pontifex.NoAck.Raw.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
-        private SerializedCallbackQueue? _callbackQueue;
+        private SerializedCallbackQueue<(IEndPoint, UnionDataList)>? _callbackQueue;
 
         public event Action<IEndPoint, UnionDataList>? OnReceived;
 
@@ -25,7 +25,19 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected sealed override bool TryStart()
         {
-            _callbackQueue = new SerializedCallbackQueue($"srv-cb-{_serverEp}");
+            _callbackQueue = new SerializedCallbackQueue<(IEndPoint, UnionDataList)>(
+                $"srv-cb-{_serverEp}",
+                pair =>
+                {
+                    var (clientEp, message) = pair;
+                    if (_channels.TryGetValue(clientEp, out var channel))
+                    {
+                        Conformance.BeforeTrySendStateDecisionGate.Hit();
+                        channel.SendToClient(message);
+                    }
+                    else
+                        message.Release();
+                });
             if (!DirectTransportManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
             {
                 Log.e("Failed to register server '{0}'. Name already in use.", _serverEp);
@@ -53,31 +65,20 @@ namespace Pontifex.NoAck.Raw.Direct
 
         private void OnChannelCreated(Channel channel)
         {
-            var queue = _callbackQueue;
             channel.ServerHandler = (clientEp, message) =>
             {
-                if (queue != null)
+                var handler = OnReceived;
+                if (handler != null)
                 {
-                    queue.Post(() =>
+                    try
                     {
-                        var handler = OnReceived;
-                        if (handler != null)
-                        {
-                            try
-                            {
-                                handler(clientEp, message);
-                            }
-                            catch
-                            {
-                                message.Release();
-                                throw;
-                            }
-                        }
-                        else
-                        {
-                            message.Release();
-                        }
-                    });
+                        handler(clientEp, message);
+                    }
+                    catch
+                    {
+                        message.Release();
+                        throw;
+                    }
                 }
                 else
                 {
@@ -96,7 +97,10 @@ namespace Pontifex.NoAck.Raw.Direct
         protected SendResult SendToClient(IEndPoint destination, UnionDataList message)
         {
             if (_channels.TryGetValue(destination, out var channel))
-                return channel.SendToClient(message);
+            {
+                _callbackQueue?.Post((destination, message));
+                return SendResult.Ok;
+            }
 
             message.Release();
             return SendResult.InvalidAddress;

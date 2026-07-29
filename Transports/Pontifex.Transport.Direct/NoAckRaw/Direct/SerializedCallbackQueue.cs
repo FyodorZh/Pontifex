@@ -4,14 +4,16 @@ using System.Threading;
 
 namespace Pontifex.NoAck.Raw.Direct
 {
-    internal sealed class SerializedCallbackQueue : IDisposable
+    internal sealed class SerializedCallbackQueue<T> : IDisposable
     {
-        private readonly BlockingCollection<Action> _queue = new();
+        private readonly BlockingCollection<T> _queue = new();
         private readonly Thread _thread;
+        private readonly Action<T> _handler;
         private bool _disposed;
 
-        public SerializedCallbackQueue(string threadName)
+        public SerializedCallbackQueue(string threadName, Action<T> handler)
         {
+            _handler = handler;
             _thread = new Thread(Loop)
             {
                 IsBackground = true,
@@ -20,14 +22,14 @@ namespace Pontifex.NoAck.Raw.Direct
             _thread.Start();
         }
 
-        public void Post(Action callback)
+        public void Post(T state)
         {
             if (_disposed)
                 return;
 
             try
             {
-                _queue.Add(callback);
+                _queue.Add(state);
             }
             catch (ObjectDisposedException)
             {
@@ -53,11 +55,11 @@ namespace Pontifex.NoAck.Raw.Direct
         {
             try
             {
-                foreach (var action in _queue.GetConsumingEnumerable())
+                foreach (var state in _queue.GetConsumingEnumerable())
                 {
                     try
                     {
-                        action();
+                        _handler(state);
                     }
                     catch
                     {

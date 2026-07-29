@@ -10,7 +10,7 @@ namespace Pontifex.NoAck.Raw.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
-        private SerializedCallbackQueue? _callbackQueue;
+        private SerializedCallbackQueue<UnionDataList>? _callbackQueue;
         protected volatile Channel? _channel;
 
         public event Action<UnionDataList>? OnReceived;
@@ -26,7 +26,19 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected sealed override bool TryStart()
         {
-            _callbackQueue = new SerializedCallbackQueue($"cli-cb-{_serverEp}");
+            _callbackQueue = new SerializedCallbackQueue<UnionDataList>(
+                $"cli-cb-{_serverEp}",
+                message =>
+                {
+                    var channel = _channel;
+                    if (channel != null)
+                    {
+                        Conformance.BeforeTrySendStateDecisionGate.Hit();
+                        channel.SendToServer(message);
+                    }
+                    else
+                        message.Release();
+                });
             var channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
             if (channel == null)
             {
@@ -43,31 +55,20 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected virtual void OnChannelConnected(Channel channel)
         {
-            var queue = _callbackQueue;
             channel.ClientHandler = (message) =>
             {
-                if (queue != null)
+                var handler = OnReceived;
+                if (handler != null)
                 {
-                    queue.Post(() =>
+                    try
                     {
-                        var handler = OnReceived;
-                        if (handler != null)
-                        {
-                            try
-                            {
-                                handler(message);
-                            }
-                            catch
-                            {
-                                message.Release();
-                                throw;
-                            }
-                        }
-                        else
-                        {
-                            message.Release();
-                        }
-                    });
+                        handler(message);
+                    }
+                    catch
+                    {
+                        message.Release();
+                        throw;
+                    }
                 }
                 else
                 {
@@ -95,13 +96,14 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected SendResult SendToServer(UnionDataList message)
         {
-            var channel = _channel;
-            if (channel == null)
+            if (_channel == null)
             {
                 message.Release();
                 return SendResult.NotConnected;
             }
-            return channel.SendToServer(message);
+
+            _callbackQueue?.Post(message);
+            return SendResult.Ok;
         }
 
         public override string ToString()
