@@ -119,7 +119,7 @@ namespace Pontifex
                         Fail("Start", "Failed to start");
                         return false;
                     }
-                    Fail("Start", "Started more than once");
+                    return false;
                 }
                 return false;
             }
