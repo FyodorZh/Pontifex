@@ -58,8 +58,8 @@ public interface INoAckRawUnreliableConformanceTestAdapter
 
 public interface INoAckRawUnreliableConformanceScope : IDisposable
 {
-    INoAckRawUnreliableClient CreateClient(bool instrumented);
-    INoAckRawUnreliableServer CreateServer(bool instrumented);
+    INoAckRawUnreliableClient CreateClient();
+    INoAckRawUnreliableServer CreateServer();
 
     UnionDataList CreateSmallValidMessage(ITransport transport);
     UnionDataList CreateExactLimitMessage(ITransport transport);
@@ -85,8 +85,7 @@ public interface INoAckRawUnreliableAdditionalNonOkCase : IDisposable
 The adapter and scope have these requirements:
 
 - `CreateClient` and `CreateServer` return fresh, valid, unstarted transports.
-- `instrumented: true` returns an instance exposing the required local API
-  conformance control. `instrumented: false` may omit that control.
+- Every returned instance exposes the required local API conformance control.
 - Each created transport uses unique, isolated ordinary physical-carrier
   configuration. The adapter must not replace, relay, intercept, or inject
   packet traffic.
@@ -118,8 +117,8 @@ memory instrumentation to this suite.
 
 ### 3.3 Required control discovery
 
-For every test that requests an instrumented transport, retrieve controls only
-through `ITransport.GetControls`.
+Every transport must expose `INoAckRawUnreliableConformanceControl`. Retrieve it
+only through `ITransport.GetControls`.
 
 1. Create an empty `List<IControl>`.
 2. Call `GetControls`, filtering for
@@ -128,7 +127,7 @@ through `ITransport.GetControls`.
 4. Treat zero or multiple matching controls as an adapter-contract failure.
 
 The common suite must not cast the transport to an implementation-specific
-control provider. It must not require controls on ordinary instances.
+control provider.
 
 ### 3.4 Common fixtures
 
@@ -181,7 +180,7 @@ profile.
    **Cleanup:** No start is required; dispose the scope.
 
 3. **Concurrent client starts have exactly one winner.**
-   **Profile:** 5.1. **Setup and steps:** Create an instrumented client. Release
+   **Profile:** 5.1. **Setup and steps:** Create a client. Release
    at least eight caller tasks simultaneously; each calls `Start` with its own
    stop recorder. Wait for all calls to return.
    **Assertions:** Exactly one result is `true`; every other result is `false`;
@@ -191,20 +190,20 @@ profile.
    recorder.
 
 4. **Concurrent server starts have exactly one winner.**
-   **Profile:** 5.1. **Setup and steps:** Repeat test 3 for an instrumented
+   **Profile:** 5.1. **Setup and steps:** Repeat test 3 for a
    server.
    **Assertions:** The same assertions as test 3 apply.
    **Cleanup:** Stop the server and await its winning recorder.
 
 5. **Later start after a successful client start is rejected.**
-   **Profile:** 5.1. **Setup and steps:** Start an instrumented client
+   **Profile:** 5.1. **Setup and steps:** Start a client
    successfully, then call `Start` again with a distinct recorder.
    **Assertions:** The second call returns `false`; the client remains valid and
    started; the second recorder receives no callback.
    **Cleanup:** Stop the client and await the first recorder once.
 
 6. **Later start after a successful server start is rejected.**
-   **Profile:** 5.1. **Setup and steps:** Repeat test 5 for an instrumented
+   **Profile:** 5.1. **Setup and steps:** Repeat test 5 for a
    server.
    **Assertions:** The same assertions as test 5 apply.
    **Cleanup:** Stop the server and await the first recorder once.
@@ -212,7 +211,7 @@ profile.
 ### Failed start
 
 7. **Forced client start failure is terminal and silent.**
-   **Profile:** 5.2. **Setup and steps:** Create an instrumented client, obtain
+   **Profile:** 5.2. **Setup and steps:** Create a client, obtain
    its required control, call `FailNextStart`, then call `Start` with a stop
    recorder.
    **Assertions:** `Start` returns `false`; `IsValid` and `IsStarted` are both
@@ -221,13 +220,13 @@ profile.
    **Cleanup:** Do not restart or stop the invalid client; dispose the scope.
 
 8. **Forced server start failure is terminal and silent.**
-   **Profile:** 5.2. **Setup and steps:** Repeat test 7 for an instrumented
+   **Profile:** 5.2. **Setup and steps:** Repeat test 7 for a
    server.
    **Assertions:** The same assertions as test 7 apply.
    **Cleanup:** Dispose the scope.
 
 9. **Start-failure arming is one-shot.**
-   **Profile:** 4.2, 5.2. **Setup and steps:** Create an instrumented client,
+   **Profile:** 4.2, 5.2. **Setup and steps:** Create a client,
    arm `FailNextStart`, and call `Start`.
    **Assertions:** The call consumes the fault and follows test 7. The test must
    not attempt a second start on the invalid instance. This test exists to
@@ -237,20 +236,20 @@ profile.
 ### Stop and stopped lifecycle
 
 10. **Client stop before start is a no-op that preserves startability.**
-    **Profile:** 5.3. **Setup and steps:** Create an instrumented client with no
+    **Profile:** 5.3. **Setup and steps:** Create a client with no
     start callback registered. Call `Stop`, then call `Start` with a recorder.
     **Assertions:** The pre-start stop returns `true`; no callback occurs before
     start; the later start returns `true`; the client is valid and started.
     **Cleanup:** Stop the client and await the recorder exactly once.
 
 11. **Server stop before start is a no-op that preserves startability.**
-    **Profile:** 5.3. **Setup and steps:** Repeat test 10 for an instrumented
+    **Profile:** 5.3. **Setup and steps:** Repeat test 10 for a
     server.
     **Assertions:** The same assertions as test 10 apply.
     **Cleanup:** Stop the server and await the recorder exactly once.
 
 12. **Client stop invokes the winning callback exactly once and is terminal.**
-    **Profile:** 5.3. **Setup and steps:** Start an instrumented client with a
+    **Profile:** 5.3. **Setup and steps:** Start a client with a
     recorder. Call `Stop`, await the recorder, call `Stop` again, then call
     `Start` with a second recorder.
     **Assertions:** Both stop calls return `true`; the first recorder count is
@@ -259,13 +258,13 @@ profile.
     **Cleanup:** Dispose the scope.
 
 13. **Server stop invokes the winning callback exactly once and is terminal.**
-    **Profile:** 5.3. **Setup and steps:** Repeat test 12 for an instrumented
+    **Profile:** 5.3. **Setup and steps:** Repeat test 12 for a
     server.
     **Assertions:** The same assertions as test 12 apply.
     **Cleanup:** Dispose the scope.
 
 14. **Repeated stop cannot duplicate a paused client stopped callback.**
-    **Profile:** 4.2, 5.3. **Setup and steps:** Start an instrumented client
+    **Profile:** 4.2, 5.3. **Setup and steps:** Start a client
     with a recorder. Arm `BeforeStoppedCallbackGate`; call `Stop` on a task; await
     the gate's `Reached` result. Issue at least four additional `Stop` calls on
     separate tasks. Reset the gate, then await all stop tasks and the recorder.
@@ -274,15 +273,15 @@ profile.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 15. **Repeated stop cannot duplicate a paused server stopped callback.**
-    **Profile:** 4.2, 5.3. **Setup and steps:** Repeat test 14 for an
-    instrumented server.
+    **Profile:** 4.2, 5.3. **Setup and steps:** Repeat test 14 for a
+    server.
     **Assertions:** The same assertions as test 14 apply.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 ### Forced unrecoverable failure
 
 16. **Forced client failure stops, invalidates, and notifies once.**
-    **Profile:** 5.4. **Setup and steps:** Start an instrumented client with a
+    **Profile:** 5.4. **Setup and steps:** Start a client with a
     recorder. Call `InjectUnrecoverableFailure` and await the recorder.
     **Assertions:** `IsStarted` is `false`; `IsValid` is `false`; recorder count
     is one; every later `Stop` call returns `false`; every later `Start` call
@@ -290,13 +289,13 @@ profile.
     **Cleanup:** Do not restart or stop the invalid client; dispose the scope.
 
 17. **Forced server failure stops, invalidates, and notifies once.**
-    **Profile:** 5.4. **Setup and steps:** Repeat test 16 for an instrumented
+    **Profile:** 5.4. **Setup and steps:** Repeat test 16 for a
     server.
     **Assertions:** The same assertions as test 16 apply.
     **Cleanup:** Dispose the scope.
 
 18. **Repeated stop cannot duplicate a paused fatal-failure callback.**
-    **Profile:** 4.2, 5.4. **Setup and steps:** Start an instrumented client
+    **Profile:** 4.2, 5.4. **Setup and steps:** Start a client
     with a recorder. Arm `BeforeStoppedCallbackGate`; invoke
     `InjectUnrecoverableFailure` on a task; await `Reached`; issue repeated
     `Stop` calls on other tasks; reset the gate; await all tasks and the
@@ -308,7 +307,7 @@ profile.
 ### Status properties
 
 19. **Client status reads remain safe while stop is in progress.**
-    **Profile:** 5.5. **Setup and steps:** Start an instrumented client. Arm
+    **Profile:** 5.5. **Setup and steps:** Start a client. Arm
     `BeforeStopStateTransitionGate`; start a stop task and await `Reached`; start
     multiple concurrent readers; reset the gate; await stop and reader tasks.
     **Assertions:** No reader throws or deadlocks; final state is valid and not
@@ -316,13 +315,13 @@ profile.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 20. **Server status reads remain safe while stop is in progress.**
-    **Profile:** 5.5. **Setup and steps:** Repeat test 19 for an instrumented
+    **Profile:** 5.5. **Setup and steps:** Repeat test 19 for a
     server.
     **Assertions:** The same assertions as test 19 apply.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 21. **Client status reads remain safe while fatal failure is initiated.**
-    **Profile:** 5.5. **Setup and steps:** Start an instrumented client, run
+    **Profile:** 5.5. **Setup and steps:** Start a client, run
     concurrent readers, then invoke `InjectUnrecoverableFailure` concurrently.
     Stop readers only after the failure call and callback complete.
     **Assertions:** No reader throws or deadlocks; final state is invalid and
@@ -330,7 +329,7 @@ profile.
     **Cleanup:** Dispose the scope.
 
 22. **Server status reads remain safe while fatal failure is initiated.**
-    **Profile:** 5.5. **Setup and steps:** Repeat test 21 for an instrumented
+    **Profile:** 5.5. **Setup and steps:** Repeat test 21 for a
     server.
     **Assertions:** The same assertions as test 21 apply.
     **Cleanup:** Dispose the scope.
@@ -346,7 +345,7 @@ profile.
 ### Local synchronous send validation
 
 24. **Client exact-limit and oversized messages are classified correctly.**
-    **Profile:** 5.6. **Setup and steps:** Start an instrumented client. Send a
+    **Profile:** 5.6. **Setup and steps:** Start a client. Send a
     fresh exact-limit message, then a fresh one-byte-over-limit message.
     **Assertions:** The exact-limit result is not `MessageTooBig`; the oversized
     result is `MessageTooBig`; after each call the client remains valid and
@@ -369,21 +368,21 @@ profile.
     **Cleanup:** Dispose the scope.
 
 27. **Client null message is rejected non-fatally.**
-    **Profile:** 5.7. **Setup and steps:** Start an instrumented client and call
+    **Profile:** 5.7. **Setup and steps:** Start a client and call
     `TrySend(null!)`.
     **Assertions:** The result is `InvalidMessage`; the client remains valid
     and started; its stop recorder has no callback.
     **Cleanup:** Stop the client and await its recorder once.
 
 28. **Server null message is rejected non-fatally.**
-    **Profile:** 5.7. **Setup and steps:** Start an instrumented server and call
+    **Profile:** 5.7. **Setup and steps:** Start a server and call
     `TrySend(foreignDestination, null!)`.
     **Assertions:** The result is `InvalidMessage`; the server remains valid and
     started; its stop recorder has no callback.
     **Cleanup:** Stop the server and await its recorder once.
 
 29. **Server foreign destination is rejected non-fatally.**
-    **Profile:** 5.7. **Setup and steps:** Start an instrumented server. Create
+    **Profile:** 5.7. **Setup and steps:** Start a server. Create
     a fresh small valid message and a foreign destination, then call `TrySend`.
     **Assertions:** The result is `InvalidAddress`; the server remains valid and
     started; its stop recorder has no callback.
@@ -403,7 +402,7 @@ profile.
 ### Send-versus-stop ordering
 
 31. **Client send loses when stop wins the state race.**
-    **Profile:** 5.8. **Setup and steps:** Start an instrumented client with a
+    **Profile:** 5.8. **Setup and steps:** Start a client with a
     recorder. Arm `BeforeTrySendStateDecisionGate`; invoke `TrySend` with a fresh
     small valid message on a task; await `Reached`; call `Stop` and await its
     recorder; reset the send gate; await the send task.
@@ -412,7 +411,7 @@ profile.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 32. **Server send loses when stop wins the state race.**
-    **Profile:** 5.8. **Setup and steps:** Start an instrumented server with a
+    **Profile:** 5.8. **Setup and steps:** Start a server with a
     recorder. Arm `BeforeTrySendStateDecisionGate`; invoke `TrySend` with a fresh
     small valid message and foreign destination on a task; await `Reached`; call
     `Stop`; reset the send gate; await the send task.
@@ -422,7 +421,7 @@ profile.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 33. **Client send does not lose solely because a later stop begins.**
-    **Profile:** 5.8. **Setup and steps:** Start an instrumented client with a
+    **Profile:** 5.8. **Setup and steps:** Start a client with a
     recorder. Arm `BeforeStopStateTransitionGate`; call `Stop` on a task; await
     `Reached`; synchronously call `TrySend` with a fresh small valid message;
     reset the stop gate; await stop and recorder completion.
@@ -432,7 +431,7 @@ profile.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 34. **Client send while stopping returns NotConnected.**
-    **Profile:** 5.7. **Setup and steps:** Start an instrumented client with a
+    **Profile:** 5.7. **Setup and steps:** Start a client with a
     recorder. Arm `BeforeStoppedCallbackGate`; call `Stop` on a task; await
     `Reached`; synchronously call `TrySend` with a fresh small valid message;
     reset the callback gate; await stop and recorder completion.
@@ -441,7 +440,7 @@ profile.
     **Cleanup:** Reset the gate in `finally`, then dispose the scope.
 
 35. **Server send while stopping returns NotConnected.**
-    **Profile:** 5.7. **Setup and steps:** Repeat test 34 for an instrumented
+    **Profile:** 5.7. **Setup and steps:** Repeat test 34 for a
     server using a fresh small valid message and foreign destination.
     **Assertions:** The send result is `NotConnected`; final state is valid and
     not started.
@@ -450,7 +449,7 @@ profile.
 ### Local operation control contract
 
 36. **Checkpoint gates are stable and distinct.**
-    **Profile:** 4.2. **Setup and steps:** Create an instrumented client and
+    **Profile:** 4.2. **Setup and steps:** Create a client and
     obtain its local operation control. Read each of the three checkpoint
     properties (`BeforeTrySendStateDecisionGate`, `BeforeStopStateTransitionGate`,
     `BeforeStoppedCallbackGate`) twice.
@@ -459,7 +458,7 @@ profile.
     **Cleanup:** Reset every obtained gate and dispose the scope.
 
 37. **FailNextStart validates its one-shot pre-start state.**
-    **Profile:** 4.2. **Setup and steps:** On a fresh instrumented client, call
+    **Profile:** 4.2. **Setup and steps:** On a fresh client, call
     `FailNextStart` twice, then call `Start`. In a separate fresh client scope,
     start successfully and then call `FailNextStart`.
     **Assertions:** The second pre-start arm throws `InvalidOperationException`;
@@ -469,7 +468,7 @@ profile.
     invalid first client. Dispose both scopes.
 
 38. **InjectUnrecoverableFailure validates its running one-shot state.**
-    **Profile:** 4.2. **Setup and steps:** On a fresh unstarted instrumented
+    **Profile:** 4.2. **Setup and steps:** On a fresh unstarted
     client, call `InjectUnrecoverableFailure`. In a separate client scope, start
     successfully, inject failure, await its recorder, then inject failure again.
     In a third scope, start a client, arm `BeforeStoppedCallbackGate`, begin

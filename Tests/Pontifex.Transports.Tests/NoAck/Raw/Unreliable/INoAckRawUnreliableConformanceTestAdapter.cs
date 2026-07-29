@@ -23,15 +23,13 @@ public interface INoAckRawUnreliableConformanceTestAdapter
 /// </summary>
 public interface INoAckRawUnreliableConformanceScope : IDisposable
 {
-    /// <summary>Create a client transport. When <paramref name="instrumented"/> is <see langword="true"/>,
-    /// the transport must expose <see cref="INoAckRawUnreliableConformanceControl"/> via
+    /// <summary>Create a client transport. Must expose <see cref="INoAckRawUnreliableConformanceControl"/> via
     /// <see cref="ITransport.GetControls"/>.</summary>
-    INoAckRawUnreliableClient CreateClient(bool instrumented);
+    INoAckRawUnreliableClient CreateClient();
 
-    /// <summary>Create a server transport. When <paramref name="instrumented"/> is <see langword="true"/>,
-    /// the transport must expose <see cref="INoAckRawUnreliableConformanceControl"/> via
+    /// <summary>Create a server transport. Must expose <see cref="INoAckRawUnreliableConformanceControl"/> via
     /// <see cref="ITransport.GetControls"/>.</summary>
-    INoAckRawUnreliableServer CreateServer(bool instrumented);
+    INoAckRawUnreliableServer CreateServer();
 
     /// <summary>A valid message small enough to always succeed on any transport.</summary>
     UnionDataList CreateSmallValidMessage(ITransport transport);

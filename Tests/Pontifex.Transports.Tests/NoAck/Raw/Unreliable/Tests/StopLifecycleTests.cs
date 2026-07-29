@@ -9,7 +9,7 @@ public sealed class StopLifecycleTests : ConformanceTestBase
     [Test]
     public async Task ClientStopBeforeStartIsNoOpThatPreservesStartability()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
 
         Assert.That(client.Stop(), Is.True);
 
@@ -29,7 +29,7 @@ public sealed class StopLifecycleTests : ConformanceTestBase
     [Test]
     public async Task ServerStopBeforeStartIsNoOpThatPreservesStartability()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
 
         Assert.That(server.Stop(), Is.True);
 
@@ -49,7 +49,7 @@ public sealed class StopLifecycleTests : ConformanceTestBase
     [Test]
     public async Task ClientStopInvokesWinningCallbackExactlyOnceAndIsTerminal()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var firstRecorder = new StopRecorder();
 
         Assert.That(client.Start(firstRecorder.Callback), Is.True);
@@ -73,7 +73,7 @@ public sealed class StopLifecycleTests : ConformanceTestBase
     [Test]
     public async Task ServerStopInvokesWinningCallbackExactlyOnceAndIsTerminal()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var firstRecorder = new StopRecorder();
 
         Assert.That(server.Start(firstRecorder.Callback), Is.True);
@@ -97,7 +97,7 @@ public sealed class StopLifecycleTests : ConformanceTestBase
     [Test]
     public async Task RepeatedStopCannotDuplicatePausedClientStoppedCallback()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -134,7 +134,7 @@ public sealed class StopLifecycleTests : ConformanceTestBase
     [Test]
     public async Task RepeatedStopCannotDuplicatePausedServerStoppedCallback()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var control = GetControl(server);
         var recorder = new StopRecorder();
 

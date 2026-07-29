@@ -9,7 +9,7 @@ public sealed class StatusPropertyTests : ConformanceTestBase
     [Test]
     public async Task ClientStatusReadsRemainSafeWhileStopInProgress()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -61,7 +61,7 @@ public sealed class StatusPropertyTests : ConformanceTestBase
     [Test]
     public async Task ServerStatusReadsRemainSafeWhileStopInProgress()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var control = GetControl(server);
         var recorder = new StopRecorder();
 
@@ -113,7 +113,7 @@ public sealed class StatusPropertyTests : ConformanceTestBase
     [Test]
     public async Task ClientStatusReadsRemainSafeWhileFatalFailureInitiated()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -158,7 +158,7 @@ public sealed class StatusPropertyTests : ConformanceTestBase
     [Test]
     public async Task ServerStatusReadsRemainSafeWhileFatalFailureInitiated()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var control = GetControl(server);
         var recorder = new StopRecorder();
 
@@ -203,10 +203,10 @@ public sealed class StatusPropertyTests : ConformanceTestBase
     [Test]
     public async Task MessageMaxByteSizeIsImmutableForClientAndServerLifetime()
     {
-        var client = Scope.CreateClient(instrumented: false);
+        var client = Scope.CreateClient();
         var clientInitialMax = client.MessageMaxByteSize;
 
-        var server = Scope.CreateServer(instrumented: false);
+        var server = Scope.CreateServer();
         var serverInitialMax = server.MessageMaxByteSize;
 
         var clientRecorder = new StopRecorder();
@@ -226,7 +226,7 @@ public sealed class StatusPropertyTests : ConformanceTestBase
         Assert.That(server.MessageMaxByteSize, Is.EqualTo(serverInitialMax));
 
         using var scope2 = Adapter.CreateScope();
-        var failedClient = scope2.CreateClient(instrumented: true);
+        var failedClient = scope2.CreateClient();
         var failedControl = GetControl(failedClient);
         var failedInitialMax = failedClient.MessageMaxByteSize;
 

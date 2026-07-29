@@ -9,7 +9,7 @@ public sealed class FailedStartTests : ConformanceTestBase
     [Test]
     public void ForcedClientStartFailureIsTerminalAndSilent()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -29,7 +29,7 @@ public sealed class FailedStartTests : ConformanceTestBase
     [Test]
     public void ForcedServerStartFailureIsTerminalAndSilent()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var control = GetControl(server);
         var recorder = new StopRecorder();
 
@@ -49,7 +49,7 @@ public sealed class FailedStartTests : ConformanceTestBase
     [Test]
     public void StartFailureArmingIsOneShot()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
 
         control.FailNextStart();

@@ -9,7 +9,7 @@ public sealed class ForcedFailureTests : ConformanceTestBase
     [Test]
     public async Task ForcedClientFailureStopsInvalidatesAndNotifiesOnce()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -31,7 +31,7 @@ public sealed class ForcedFailureTests : ConformanceTestBase
     [Test]
     public async Task ForcedServerFailureStopsInvalidatesAndNotifiesOnce()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var control = GetControl(server);
         var recorder = new StopRecorder();
 
@@ -53,7 +53,7 @@ public sealed class ForcedFailureTests : ConformanceTestBase
     [Test]
     public async Task RepeatedStopCannotDuplicatePausedFatalFailureCallback()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 

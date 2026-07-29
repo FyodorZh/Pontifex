@@ -9,7 +9,7 @@ public sealed class SendValidationTests : ConformanceTestBase
     [Test]
     public async Task ClientExactLimitAndOversizedMessagesAreClassifiedCorrectly()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var recorder = new StopRecorder();
 
         Assert.That(client.Start(recorder.Callback), Is.True);
@@ -41,7 +41,7 @@ public sealed class SendValidationTests : ConformanceTestBase
     [Test]
     public async Task ClientSendBeforeStartAndAfterStopReturnsNotConnected()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
 
         var beforeStartMessage = Scope.CreateSmallValidMessage(client);
         Assert.That(client.TrySend(beforeStartMessage), Is.EqualTo(SendResult.NotConnected));
@@ -58,7 +58,7 @@ public sealed class SendValidationTests : ConformanceTestBase
     [Test]
     public async Task ServerSendBeforeStartAndAfterStopReturnsNotConnected()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var foreignDest = Scope.CreateForeignServerDestination();
 
         var beforeStartMessage = Scope.CreateSmallValidMessage(server);
@@ -78,7 +78,7 @@ public sealed class SendValidationTests : ConformanceTestBase
     [Test]
     public async Task ClientNullMessageIsRejectedNonFatally()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var recorder = new StopRecorder();
 
         Assert.That(client.Start(recorder.Callback), Is.True);
@@ -100,7 +100,7 @@ public sealed class SendValidationTests : ConformanceTestBase
     [Test]
     public async Task ServerNullMessageIsRejectedNonFatally()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var recorder = new StopRecorder();
         var foreignDest = Scope.CreateForeignServerDestination();
 
@@ -123,7 +123,7 @@ public sealed class SendValidationTests : ConformanceTestBase
     [Test]
     public async Task ServerForeignDestinationIsRejectedNonFatally()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var recorder = new StopRecorder();
         var foreignDest = Scope.CreateForeignServerDestination();
 

@@ -9,7 +9,7 @@ public sealed class ControlContractTests : ConformanceTestBase
     [Test]
     public void CheckpointGatesAreStableAndDistinct()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
 
         var g0a = control.BeforeTrySendStateDecisionGate;
@@ -35,7 +35,7 @@ public sealed class ControlContractTests : ConformanceTestBase
     [Test]
     public void FailNextStartValidatesItsOneShotPreStartState()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
 
         control.FailNextStart();
@@ -48,7 +48,7 @@ public sealed class ControlContractTests : ConformanceTestBase
         });
 
         using var scope2 = Adapter.CreateScope();
-        var client2 = scope2.CreateClient(instrumented: true);
+        var client2 = scope2.CreateClient();
         var control2 = GetControl(client2);
         var recorder = new StopRecorder();
 
@@ -61,14 +61,14 @@ public sealed class ControlContractTests : ConformanceTestBase
     [Test]
     public void InjectUnrecoverableFailureValidatesItsRunningOneShotState()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
 
         Assert.Throws<InvalidOperationException>(
             () => control.InjectUnrecoverableFailure());
 
         using var scope2 = Adapter.CreateScope();
-        var client2 = scope2.CreateClient(instrumented: true);
+        var client2 = scope2.CreateClient();
         var control2 = GetControl(client2);
         var recorder2 = new StopRecorder();
 
@@ -80,7 +80,7 @@ public sealed class ControlContractTests : ConformanceTestBase
             () => control2.InjectUnrecoverableFailure());
 
         using var scope3 = Adapter.CreateScope();
-        var client3 = scope3.CreateClient(instrumented: true);
+        var client3 = scope3.CreateClient();
         var control3 = GetControl(client3);
         var recorder3 = new StopRecorder();
 

@@ -9,7 +9,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
     [Test]
     public async Task ClientSendLosesWhenStopWinsStateRace()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -46,7 +46,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
     [Test]
     public async Task ServerSendLosesWhenStopWinsStateRace()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var control = GetControl(server);
         var recorder = new StopRecorder();
 
@@ -84,7 +84,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
     [Test]
     public async Task ClientSendDoesNotLoseSolelyBecauseLaterStopBegins()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -116,7 +116,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
     [Test]
     public async Task ClientSendWhileStoppingReturnsNotConnected()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var control = GetControl(client);
         var recorder = new StopRecorder();
 
@@ -148,7 +148,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
     [Test]
     public async Task ServerSendWhileStoppingReturnsNotConnected()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var control = GetControl(server);
         var recorder = new StopRecorder();
 

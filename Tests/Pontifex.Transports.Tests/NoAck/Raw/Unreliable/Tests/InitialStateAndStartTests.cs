@@ -9,7 +9,7 @@ public sealed class InitialStateAndStartTests : ConformanceTestBase
     [Test]
     public void ClientInitialStateIsValidAndUnstarted()
     {
-        var client = Scope.CreateClient(instrumented: false);
+        var client = Scope.CreateClient();
 
         Assert.Multiple(() =>
         {
@@ -21,7 +21,7 @@ public sealed class InitialStateAndStartTests : ConformanceTestBase
     [Test]
     public void ServerInitialStateIsValidAndUnstarted()
     {
-        var server = Scope.CreateServer(instrumented: false);
+        var server = Scope.CreateServer();
 
         Assert.Multiple(() =>
         {
@@ -33,7 +33,7 @@ public sealed class InitialStateAndStartTests : ConformanceTestBase
     [Test]
     public async Task ConcurrentClientStartsHaveExactlyOneWinner()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         _ = GetControl(client);
         const int taskCount = 8;
         var results = new bool[taskCount];
@@ -72,7 +72,7 @@ public sealed class InitialStateAndStartTests : ConformanceTestBase
     [Test]
     public async Task ConcurrentServerStartsHaveExactlyOneWinner()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         _ = GetControl(server);
         const int taskCount = 8;
         var results = new bool[taskCount];
@@ -111,7 +111,7 @@ public sealed class InitialStateAndStartTests : ConformanceTestBase
     [Test]
     public async Task LaterClientStartAfterSuccessfulStartIsRejected()
     {
-        var client = Scope.CreateClient(instrumented: true);
+        var client = Scope.CreateClient();
         var firstRecorder = new StopRecorder();
         var secondRecorder = new StopRecorder();
 
@@ -132,7 +132,7 @@ public sealed class InitialStateAndStartTests : ConformanceTestBase
     [Test]
     public async Task LaterServerStartAfterSuccessfulStartIsRejected()
     {
-        var server = Scope.CreateServer(instrumented: true);
+        var server = Scope.CreateServer();
         var firstRecorder = new StopRecorder();
         var secondRecorder = new StopRecorder();
 

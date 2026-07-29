@@ -24,8 +24,8 @@ public sealed class MyTransportAdapter
 ```csharp
 public sealed class MyScope : INoAckRawUnreliableConformanceScope
 {
-    public INoAckRawUnreliableClient CreateClient(bool instrumented) { /* ... */ }
-    public INoAckRawUnreliableServer CreateServer(bool instrumented) { /* ... */ }
+    public INoAckRawUnreliableClient CreateClient() { /* ... */ }
+    public INoAckRawUnreliableServer CreateServer() { /* ... */ }
     public UnionDataList CreateSmallValidMessage(ITransport transport) { /* ... */ }
     public UnionDataList CreateExactLimitMessage(ITransport transport) { /* ... */ }
     public UnionDataList CreateOneByteOverLimitMessage(ITransport transport) { /* ... */ }
@@ -36,8 +36,8 @@ public sealed class MyScope : INoAckRawUnreliableConformanceScope
 }
 ```
 
-When `instrumented: true`, the transport must expose
-`INoAckRawUnreliableConformanceControl` through `ITransport.GetControls`.
+Every transport must expose `INoAckRawUnreliableConformanceControl` through
+`ITransport.GetControls`.
 
 ### 2. Register the adapter
 
@@ -82,8 +82,8 @@ Concrete transports are created through the scope so that the suite can control 
 
 | Member | Requirement |
 |---|---|
-| `CreateClient(bool instrumented)` | Create and return a new `INoAckRawUnreliableClient` instance. The transport must be unstarted (calling `IsStarted` returns `false`). When `instrumented` is `true`, the transport must also expose `INoAckRawUnreliableConformanceControl` via `GetControls`. |
-| `CreateServer(bool instrumented)` | Same as `CreateClient`, but returns an `INoAckRawUnreliableServer`. |
+| `CreateClient()` | Create and return a new `INoAckRawUnreliableClient` instance. The transport must be unstarted (calling `IsStarted` returns `false`) and expose `INoAckRawUnreliableConformanceControl` via `GetControls`. |
+| `CreateServer()` | Same as `CreateClient`, but returns an `INoAckRawUnreliableServer`. |
 | `CreateSmallValidMessage(ITransport transport)` | Return a `UnionDataList` that is valid and small enough to be sent successfully on any transport. The `transport` parameter is the client or server that will send the message — use it to query limits if needed. Must return at least one element. |
 | `CreateExactLimitMessage(ITransport transport)` | Return a `UnionDataList` that is valid and whose serialised size equals the transport's maximum send size exactly. Use `transport` to determine the limit. Must return at least one element. |
 | `CreateOneByteOverLimitMessage(ITransport transport)` | Return a `UnionDataList` that is one byte larger than the transport's maximum send size, so that calling `TrySend` on it returns `MessageTooBig`. Must return at least one element. |
