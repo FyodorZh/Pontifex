@@ -12,8 +12,8 @@ public sealed class ControlContractTests : ConformanceTestBase
         var client = Scope.CreateClient();
         var control = GetControl(client);
 
-        var g0a = control.BeforeTrySendStateDecisionGate;
-        var g0b = control.BeforeTrySendStateDecisionGate;
+        var g0a = control.BeforeSendCommitGate;
+        var g0b = control.BeforeSendCommitGate;
         Assert.That(g0b, Is.SameAs(g0a));
 
         var g1a = control.BeforeStopStateTransitionGate;
@@ -93,8 +93,10 @@ public sealed class ControlContractTests : ConformanceTestBase
             var stopTask = Task.Run(() => client3.Stop());
             lease.Reached.GetAwaiter().GetResult();
 
-            Assert.Throws<InvalidOperationException>(
-                () => control3.InjectUnrecoverableFailure());
+            Task.Run(() =>
+            {
+                Assert.Throws<InvalidOperationException>(() => control3.InjectUnrecoverableFailure()); 
+            });
         }
 
         recorder3.WaitAsync().GetAwaiter().GetResult();

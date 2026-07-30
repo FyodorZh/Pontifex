@@ -13,7 +13,7 @@ namespace Pontifex
     /// </summary>
     public abstract class AnyTransport : ITransport
     {
-        private readonly ConformanceControl _conformanceControl;
+        protected ConformanceControl Conformance { get; }
         
         protected readonly object _locker = new ();
 
@@ -30,9 +30,9 @@ namespace Pontifex
         
         public virtual void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
         {
-            if (predicate?.Invoke(_conformanceControl) ?? true)
+            if (predicate?.Invoke(Conformance) ?? true)
             {
-                dst.Add(_conformanceControl);
+                dst.Add(Conformance);
             }
         }
 
@@ -85,7 +85,8 @@ namespace Pontifex
             Log.Tags.Set(Name);
             Memory = memory;
             
-            _conformanceControl = conformanceControl ?? new ConformanceControl(this);
+            Conformance = conformanceControl ?? new ConformanceControl();
+            Conformance.SetOwner(this);
         }
 
         public bool Start(Action<StopReason> onStopped)
@@ -96,7 +97,7 @@ namespace Pontifex
                 {
                     if (!_started)
                     {
-                        if (_conformanceControl.ShouldFailNextStart_AnyTransportLevel())
+                        if (Conformance.ShouldFailNextStart_AnyTransportLevel())
                         {
                             Fail("Start", "Conformance control forced failure");
                             return false;
@@ -133,7 +134,7 @@ namespace Pontifex
                 {
                     if (_started)
                     {
-                        _conformanceControl.BeforeStopStateTransitionGate.Hit();
+                        Conformance.BeforeStopStateTransitionGate.Hit();
                         
                         _started = false;
 
@@ -157,7 +158,7 @@ namespace Pontifex
                         
                         try
                         {
-                            _conformanceControl.BeforeStoppedCallbackGate.Hit();
+                            Conformance.BeforeStoppedCallbackGate.Hit();
                             _onStopped?.Invoke(reason);
                         }
                         catch (Exception ex)
@@ -179,7 +180,7 @@ namespace Pontifex
 
                 if (_started)
                 {
-                    _conformanceControl.BeforeStopStateTransitionGate.Hit();
+                    Conformance.BeforeStopStateTransitionGate.Hit();
                     
                     _started = false;
 
@@ -194,7 +195,7 @@ namespace Pontifex
 
                     try
                     {
-                        _conformanceControl.BeforeStoppedCallbackGate.Hit();
+                        Conformance.BeforeStoppedCallbackGate.Hit();
                         _onStopped?.Invoke(reason);
                     }
                     catch (Exception ex)
@@ -231,36 +232,47 @@ namespace Pontifex
         
         protected class ConformanceControl : IConformanceControl
         {
-            private readonly AnyTransport _owner;
-            public virtual string Name => "ConformanceControl(AnyTransport)";
+            protected AnyTransport _owner = null!;
 
             private readonly CheckPoint _beforeStopStateTransitionGate = new();
             private readonly CheckPoint _beforeStoppedCallbackGate = new();
 
-            private bool _failNextStartFlag = false;
+            private int _failNextStartFlag;
+            
+            public virtual string Name => "ConformanceControl(AnyTransport)";
 
             public ICheckPoint BeforeStopStateTransitionGate => _beforeStopStateTransitionGate;
 
             public ICheckPoint BeforeStoppedCallbackGate => _beforeStoppedCallbackGate;
+            
+            protected virtual void OnOwnerSet(){}
 
-            public ConformanceControl(AnyTransport owner)
+            public void SetOwner(AnyTransport owner)
             {
                 _owner = owner;
+                OnOwnerSet();
             }
 
             public virtual void FailNextStart()
             {
-                Volatile.Write(ref _failNextStartFlag, true);
+                if (_owner.IsStarted || Interlocked.Exchange(ref _failNextStartFlag, 1) == 1)
+                {
+                    throw new InvalidOperationException();
+                }
             }
 
             public void InjectUnrecoverableFailure()
             {
+                if (!_owner.IsStarted || !_owner.IsValid)
+                {
+                    throw new InvalidOperationException();
+                }
                 _owner.Fail(new TextFail(Name, "ConformanceControl(AnyTransport) injected unrecoverable failure"));
             }
             
             public bool ShouldFailNextStart_AnyTransportLevel()
             {
-                return Volatile.Read(ref _failNextStartFlag);
+                return Volatile.Read(ref _failNextStartFlag) != 0;
             }
         }
     }

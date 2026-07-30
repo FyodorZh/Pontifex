@@ -15,7 +15,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
 
         Assert.That(client.Start(recorder.Callback), Is.True);
 
-        var gate = control.BeforeTrySendStateDecisionGate;
+        var gate = control.BeforeSendCommitGate;
 
         SendResult sendResult;
 
@@ -52,7 +52,7 @@ public sealed class SendVersusStopOrderingTests : ConformanceTestBase
 
         Assert.That(server.Start(recorder.Callback), Is.True);
 
-        var gate = control.BeforeTrySendStateDecisionGate;
+        var gate = control.BeforeSendCommitGate;
 
         SendResult sendResult;
 

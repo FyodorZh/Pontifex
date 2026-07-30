@@ -34,8 +34,9 @@ namespace Pontifex.NoAck.Raw.Direct
                     var channel = _channel;
                     if (channel != null)
                     {
-                        Conformance.BeforeTrySendStateDecisionGate.Hit();
+                        Conformance.BeforeSendCommitGate.Hit();
                         channel.SendToServer(message);
+                        Conformance.AfterSendCommitGate.Hit();
                     }
                     else
                         message.Release();
@@ -98,14 +99,29 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected SendResult SendToServer(UnionDataList message)
         {
+            if (message == null!)
+            {
+                return SendResult.InvalidMessage;
+            }
+            
             if (_channel == null)
             {
                 message.Release();
                 return SendResult.NotConnected;
             }
+            
+            if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
+            {
+                message.Release();
+                return SendResult.MessageTooBig;
+            }
 
-            _callbackQueue?.Post(message);
-            return SendResult.Ok;
+            if (_callbackQueue?.Post(message) ?? false)
+            {
+                return SendResult.Ok;
+            }
+            message.Release();
+            return SendResult.Error;
         }
 
         public override string ToString()

@@ -33,8 +33,9 @@ namespace Pontifex.NoAck.Raw.Direct
                     var (clientEp, message) = pair;
                     if (_channels.TryGetValue(clientEp, out var channel))
                     {
-                        Conformance.BeforeTrySendStateDecisionGate.Hit();
+                        Conformance.BeforeSendCommitGate.Hit();
                         channel.SendToClient(message);
+                        Conformance.AfterSendCommitGate.Hit();
                     }
                     else
                         message.Release();
@@ -98,14 +99,35 @@ namespace Pontifex.NoAck.Raw.Direct
 
         protected SendResult SendToClient(IEndPoint destination, UnionDataList message)
         {
-            if (_channels.TryGetValue(destination, out var channel))
+            if (message == null!)
             {
-                _callbackQueue?.Post((destination, message));
-                return SendResult.Ok;
+                return SendResult.InvalidMessage;
             }
 
+            if (!IsStarted)
+            {
+                message.Release();
+                return SendResult.NotConnected;
+            }
+            
+            if (!_channels.TryGetValue(destination, out var channel))
+            {
+                message.Release();
+                return SendResult.InvalidAddress;
+            }
+
+            if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
+            {
+                message.Release();
+                return SendResult.MessageTooBig;
+            }
+
+            if (_callbackQueue?.Post((destination, message)) ?? false)
+            {
+                return SendResult.Ok;
+            }
             message.Release();
-            return SendResult.InvalidAddress;
+            return SendResult.Error;
         }
 
         public override string ToString()

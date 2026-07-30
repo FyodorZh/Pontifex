@@ -52,7 +52,7 @@ produce that result without fabrication by the adapter or control.
 
 The local operation control is used to construct both permitted orderings.
 
-When `BeforeTrySendStateDecisionGate` is held, `Stop` completes its state
+When `BeforeSendCommitGate` is held, `Stop` completes its state
 transition, and the send is then released, that send **MUST** return
 `NotConnected`.
 

@@ -5,18 +5,13 @@ namespace Pontifex.NoAck.Raw
     public interface INoAckRawConformanceControl : IConformanceControl
     {
         /// <summary>
-        /// A client or server <c>TrySend</c> call is about to make its
-        /// linearized running-or-stopping decision.
+        /// A client or server is about to send data to underlying IO transport
         /// </summary>
-        /// <remarks>
-        /// The checkpoint must be reached before the implementation acquires an
-        /// exclusive state lock needed by <c>Stop</c>. This lets a test make either
-        /// operation win a send-versus-stop race without manufacturing a deadlock.
-        /// A returned gate is inactive until armed by the test. A checkpoint hit
-        /// calls <see cref="ICheckPoint.Hit"/> and therefore blocks only while
-        /// its gate is armed. All returned gates and this getter are safe for
-        /// concurrent use.
-        /// </remarks>
-        ICheckPoint BeforeTrySendStateDecisionGate { get; }
+        ICheckPoint BeforeSendCommitGate { get; }
+
+        /// <summary>
+        /// A client or server has just sent data to underlying IO transport
+        /// </summary>
+        ICheckPoint AfterSendCommitGate { get; }
     }
 }

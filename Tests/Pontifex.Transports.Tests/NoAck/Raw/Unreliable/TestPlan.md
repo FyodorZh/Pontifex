@@ -3,7 +3,7 @@
 ## 1. Purpose and scope
 
 This document defines the transport-agnostic NUnit test suite for the
-[NoAckRawUnreliable Carrier-Independent Core Conformance Profile](../../../../../Pontifex/Abstractions/Transports/NoAck/Raw/Unreliable/Tests/TestSpecification.md).
+[NoAckRawUnreliable Carrier-Independent Core Conformance Profile](../../../../../Pontifex/Abstractions/Transports/NoAck/Raw/Unreliable/Tests/ConformanceSpecification.md).
 It must run against every implementation-specific conformance adapter.
 
 The suite certifies local API behavior only. It does not certify packet
@@ -20,7 +20,7 @@ not a skipped or passing local-certification result.
 The suite derives its assertions from these documents:
 
 - [NoAckRawUnreliable Specification](../../../../../Pontifex/Abstractions/Transports/NoAck/Raw/Unreliable/Specification.md)
-- [NoAckRawUnreliable Carrier-Independent Core Conformance Profile](../../../../../Pontifex/Abstractions/Transports/NoAck/Raw/Unreliable/Tests/TestSpecification.md)
+- [NoAckRawUnreliable Carrier-Independent Core Conformance Profile](../../../../../Pontifex/Abstractions/Transports/NoAck/Raw/Unreliable/Tests/ConformanceSpecification.md)
 - [Carrier-independent core conformance control](../../../../../Pontifex/Abstractions/Transports/NoAck/Raw/Unreliable/Tests/INoAckRawUnreliableConformanceControl.cs)
 
 If this plan conflicts with the Carrier-Independent Core Conformance Profile, the profile
@@ -403,7 +403,7 @@ profile.
 
 31. **Client send loses when stop wins the state race.**
     **Profile:** 5.8. **Setup and steps:** Start a client with a
-    recorder. Arm `BeforeTrySendStateDecisionGate`; invoke `TrySend` with a fresh
+    recorder. Arm `BeforeSendCommitGate`; invoke `TrySend` with a fresh
     small valid message on a task; await `Reached`; call `Stop` and await its
     recorder; reset the send gate; await the send task.
     **Assertions:** The send result is `NotConnected`; final state is valid and
@@ -412,7 +412,7 @@ profile.
 
 32. **Server send loses when stop wins the state race.**
     **Profile:** 5.8. **Setup and steps:** Start a server with a
-    recorder. Arm `BeforeTrySendStateDecisionGate`; invoke `TrySend` with a fresh
+    recorder. Arm `BeforeSendCommitGate`; invoke `TrySend` with a fresh
     small valid message and foreign destination on a task; await `Reached`; call
     `Stop`; reset the send gate; await the send task.
     **Assertions:** The send result is `NotConnected`; final state is valid and
@@ -451,7 +451,7 @@ profile.
 36. **Checkpoint gates are stable and distinct.**
     **Profile:** 4.2. **Setup and steps:** Create a client and
     obtain its local operation control. Read each of the three checkpoint
-    properties (`BeforeTrySendStateDecisionGate`, `BeforeStopStateTransitionGate`,
+    properties (`BeforeSendCommitGate`, `BeforeStopStateTransitionGate`,
     `BeforeStoppedCallbackGate`) twice.
     **Assertions:** Repeated reads of the same property return the same gate
     instance; different properties return different gate instances.
