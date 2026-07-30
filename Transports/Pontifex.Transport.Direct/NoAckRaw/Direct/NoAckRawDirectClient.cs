@@ -27,6 +27,7 @@ namespace Pontifex.NoAck.Raw.Direct
         protected sealed override bool TryStart()
         {
             _callbackQueue = new SerializedCallbackQueue<UnionDataList>(
+                100,
                 $"cli-cb-{_serverEp}",
                 message =>
                 {
@@ -38,7 +39,8 @@ namespace Pontifex.NoAck.Raw.Direct
                     }
                     else
                         message.Release();
-                });
+                },
+                message => message.Release());
             var channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
             if (channel == null)
             {

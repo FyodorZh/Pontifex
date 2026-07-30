@@ -26,6 +26,7 @@ namespace Pontifex.NoAck.Raw.Direct
         protected sealed override bool TryStart()
         {
             _callbackQueue = new SerializedCallbackQueue<(IEndPoint, UnionDataList)>(
+                100,
                 $"srv-cb-{_serverEp}",
                 pair =>
                 {
@@ -37,7 +38,8 @@ namespace Pontifex.NoAck.Raw.Direct
                     }
                     else
                         message.Release();
-                });
+                },
+                pair => pair.Item2.Release());
             if (!DirectTransportManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
             {
                 Log.e("Failed to register server '{0}'. Name already in use.", _serverEp);

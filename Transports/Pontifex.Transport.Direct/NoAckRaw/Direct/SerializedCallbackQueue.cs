@@ -1,42 +1,44 @@
 using System;
-using System.Collections.Concurrent;
 using System.Threading;
+using Actuarius.Collections;
+using Actuarius.Concurrent;
 
 namespace Pontifex.NoAck.Raw.Direct
 {
     internal sealed class SerializedCallbackQueue<T> : IDisposable
     {
-        private readonly BlockingCollection<T> _queue = new();
-        private readonly Thread _thread;
+        private readonly ConcurrentQueueValve<T> _queue;
+        
+        private readonly SemaphoreSlim _signal = new(0);
+        private int _pendingSignal;
         private readonly Action<T> _handler;
-        private bool _disposed;
+        private volatile bool _disposed;
 
-        public SerializedCallbackQueue(string threadName, Action<T> handler)
+        public event Action<Exception>? ExceptionHandler;
+
+        public SerializedCallbackQueue(int capacity, string threadName, Action<T> handler, Action<T> disposer)
         {
+            _queue = new (
+                new LimitedConcurrentQueue<T>(capacity), disposer, _ => { });
+            
             _handler = handler;
-            _thread = new Thread(Loop)
+            var thread = new Thread(Loop)
             {
                 IsBackground = true,
                 Name = threadName
             };
-            _thread.Start();
+            thread.Start();
         }
 
-        public void Post(T state)
+        public bool Post(T state)
         {
-            if (_disposed)
-                return;
-
-            try
+            if (_queue.Put(state))
             {
-                _queue.Add(state);
+                if (Interlocked.Exchange(ref _pendingSignal, 1) == 0)
+                    _signal.Release();
+                return true;
             }
-            catch (ObjectDisposedException)
-            {
-            }
-            catch (InvalidOperationException)
-            {
-            }
+            return false;
         }
 
         public void Dispose()
@@ -45,30 +47,31 @@ namespace Pontifex.NoAck.Raw.Direct
                 return;
 
             _disposed = true;
-            _queue.CompleteAdding();
-            if (_thread.IsAlive)
-                _thread.Join(TimeSpan.FromSeconds(5));
-            _queue.Dispose();
+            _queue.CloseValve();
+            _signal.Release();
         }
 
         private void Loop()
         {
-            try
+            while (!_disposed)
             {
-                foreach (var state in _queue.GetConsumingEnumerable())
+                _signal.Wait();
+                Interlocked.Exchange(ref _pendingSignal, 0);
+
+                while (_queue.TryPop(out var element))
                 {
                     try
                     {
-                        _handler(state);
+                        _handler(element);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        ExceptionHandler?.Invoke(ex);
                     }
                 }
             }
-            catch
-            {
-            }
+
+            _signal.Dispose();
         }
     }
 }
