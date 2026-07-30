@@ -16,6 +16,8 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
         private volatile IDeliverySystem _clientDeliverySystem = new PerfectDeliverySystem();
         private volatile IDeliverySystem _serverDeliverySystem = new PerfectDeliverySystem();
 
+        private bool _askedForReliableDelivery;
+
         public event Action<UnionDataList>? OnReceived;
 
         public int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
@@ -94,8 +96,16 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
                 }
             };
 
-            channel.SetClientDeliverySystem(_clientDeliverySystem);
-            channel.SetServerDeliverySystem(_serverDeliverySystem);
+            if (_askedForReliableDelivery)
+            {
+                channel.SetClientDeliverySystem(new PerfectDeliverySystem());
+                channel.SetServerDeliverySystem(new PerfectDeliverySystem());
+            }
+            else
+            {
+                channel.SetClientDeliverySystem(_clientDeliverySystem);
+                channel.SetServerDeliverySystem(_serverDeliverySystem);
+            }
         }
 
         protected override void OnStarted() { }
@@ -151,14 +161,8 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
 
         protected override bool TryMakeReliableForDebug()
         {
-            var channel = _channel;
-            if (channel != null)
-            {
-                channel.SetClientDeliverySystem(new PerfectDeliverySystem());
-                return true;
-            }
-
-            return false;
+            _askedForReliableDelivery = true;
+            return IsStarted == false;
         }
     }
 }
