@@ -9,6 +9,7 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
 {
     public sealed class NoAckRawUnreliableDirectClient : NoAckRawUnreliableClientTransport, INoAckRawUnreliableClient
     {
+        private readonly object _connectLock = new();
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
         private SerializedCallbackQueue<UnionDataList>? _callbackQueue;
@@ -123,14 +124,21 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
             var channel = _channel;
             if (channel == null)
             {
-                channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
-                if (channel == null)
+                lock (_connectLock)
                 {
-                    message?.Release();
-                    return SendResult.Error;
+                    channel = _channel;
+                    if (channel == null)
+                    {
+                        channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
+                        if (channel == null)
+                        {
+                            message?.Release();
+                            return SendResult.Error;
+                        }
+                        OnChannelConnected(channel);
+                        _channel = channel;
+                    }
                 }
-                OnChannelConnected(channel);
-                _channel = channel;
             }
 
             if (message == null!)
