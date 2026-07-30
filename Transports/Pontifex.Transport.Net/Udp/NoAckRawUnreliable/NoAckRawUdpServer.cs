@@ -146,31 +146,30 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
 
         SendResult INoAckRawUnreliableServer.TrySend(IEndPoint destination, UnionDataList message)
         {
+            var sender = _sender;
+            if (sender == null)
+            {
+                message?.Release();
+                return SendResult.Error;
+            }
+
             if (message == null!)
             {
                 return SendResult.InvalidMessage;
             }
 
             using var disposer = message.AsDisposable();
-
-            var sender = _sender;
-            if (sender != null)
+            if (destination is IpEndPoint endPoint)
             {
-                if (destination is IpEndPoint endPoint)
-                {
-                    return sender.Send(endPoint.EP, message.Acquire());
-                }
-
-                return SendResult.InvalidAddress;
+                var result = sender.Send(endPoint.EP, message.Acquire());
+                return result == SendResult.NotConnected ? SendResult.Error : result;
             }
 
-            return SendResult.Error;
+            return SendResult.InvalidAddress;
         }
 
         private void OnReceivedInternal(EndPoint sender, UnionDataList message)
         {
-            using var disposer = message.AsDisposable();
-
             if (!_endPointsMap.TryGetValue(sender, out var ep))
             {
                 ep = new IpEndPoint(sender);
@@ -178,16 +177,19 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
             }
 
             var handler = OnReceived;
-            if (handler != null)
+            if (handler == null)
             {
-                try
-                {
-                    handler(ep, message);
-                }
-                catch (Exception e)
-                {
-                    FailException("OnReceived", e);
-                }
+                message.Release();
+                return;
+            }
+
+            try
+            {
+                handler(ep, message);
+            }
+            catch (Exception e)
+            {
+                Log.wtf(e);
             }
         }
 

@@ -131,20 +131,20 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
         private void OnReceivedInternal(EndPoint remoteEp, UnionDataList message)
         {
             var handler = OnReceived;
-            if (handler != null)
+            if (handler == null)
             {
-                try
-                {
-                    handler(message);
-                    return;
-                }
-                catch (Exception e)
-                {
-                    FailException("OnReceived", e);
-                }
+                message.Release();
+                return;
             }
 
-            message.Release();
+            try
+            {
+                handler(message);
+            }
+            catch (Exception e)
+            {
+                Log.wtf(e);
+            }
         }
 
         SendResult INoAckRawUnreliableClient.TrySend(UnionDataList message)
@@ -152,20 +152,26 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
             var sender = _sender;
             if (sender == null)
             {
-                message.Release();
-                return SendResult.NotConnected;
+                message?.Release();
+                return SendResult.Error;
+            }
+
+            if (message == null!)
+            {
+                return SendResult.InvalidMessage;
             }
 
             try
             {
-                return sender.Send(message);
+                var result = sender.Send(message);
+                return result == SendResult.NotConnected ? SendResult.Error : result;
             }
             catch (Exception e)
             {
                 Log.wtf(e);
             }
 
-            return SendResult.InvalidMessage;
+            return SendResult.Error;
         }
 
         public override string ToString()
