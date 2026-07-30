@@ -49,7 +49,7 @@ connected/disconnected callback, keep-alive, reconnection, or resume concept.
 | Sending | `Ok` means local acceptance only, never peer receipt. Every call consumes its message buffer. | Handle every `SendResult`; retry only with a newly created logical message. | Queue capacity, drain rate, and scheduling. |
 | Callbacks | Receive callbacks are globally serialized per transport instance and non-reentrant. | Subscribe at most one handler, return promptly, release received buffers, and protect state shared with other code. | Callback thread or scheduler. |
 | Routing | A server can reply through a source endpoint received from that server. Equal endpoints identify the same route while the server runs. | Retain only server-issued endpoints and treat them as unauthenticated metadata. | Endpoint representation and carrier addressing. |
-| Failure | Invalid inbound data and application callback exceptions discard only the affected message. Unrecoverable transport failure stops and invalidates the transport. | Observe `onStopped`, recreate a transport after terminal failure, and log or surface application failures. | Failure detection mechanism and timing. |
+| Failure | Invalid inbound data and application callback exceptions terminate only the affected delivery. Unrecoverable transport failure stops and invalidates the transport. | Observe `onStopped`, recreate a transport after terminal failure, and log or surface application failures. | Failure detection mechanism and timing. |
 | Security | No authentication, authorization, confidentiality, integrity, or replay protection. | Implement required protection above this layer or select an appropriately protected carrier. | Any implementation-specific protection outside this contract. |
 
 ## 5. Connectionless model and message path
@@ -107,10 +107,13 @@ stateDiagram-v2
     Constructed --> Running: Start succeeds
     Constructed --> Invalid: Start returns false
     Running --> Stopping: Stop or unrecoverable failure
-    Stopping --> Stopped: onStopped
+    Stopping --> Stopped: terminal transition
     Stopped --> [*]
     Invalid --> [*]
 ```
+
+`Start` requires a non-null `onStopped` callback. Passing null **MUST** throw
+`ArgumentNullException` without changing the instance lifecycle state.
 
 `Start` is a one-time operation. Concurrent calls to `Start` are safe, but at
 most one call **MAY** return `true`; every racing or later call **MUST** return
@@ -118,16 +121,21 @@ most one call **MAY** return `true`; every racing or later call **MUST** return
 address and makes the client locally able to send and receive from its configured
 remote destination. It does not imply peer reachability or establish a session.
 
-If `Start` returns `false`, the instance **MUST** become invalid, **MUST NOT**
-invoke the supplied `onStopped` callback, and **MUST NOT** be restarted.
-After a successful start, stopping is terminal: a stopped transport **MUST NOT**
-be restarted or reinitialized. A `Stop` call before a successful `Start` is a
-no-op and returns `true`.
+If the initial `Start` attempt returns `false`, the instance **MUST** become
+invalid, **MUST NOT** invoke the supplied `onStopped` callback, and **MUST NOT**
+be restarted. A later or racing `Start` call returns `false` without changing
+the already terminal lifecycle state. After a successful start, stopping is
+terminal: a stopped transport **MUST NOT** be restarted or reinitialized. A
+normal stop does not invalidate the instance: `IsValid` remains true while
+`IsStarted` becomes false. A `Stop` call before a successful `Start` is a no-op
+and returns `true`.
 
 For each successful `Start(onStopped)`, `onStopped` **MUST** be invoked exactly
-once when the transport subsequently stops, whether by `Stop` or an
-unrecoverable internal or carrier failure. Such a failure **MUST** make the
-transport invalid. `Stop(reason)` **MAY** provide `onStopped` with a
+once after the terminal state transition when the transport subsequently stops,
+whether by `Stop` or an unrecoverable internal or carrier failure. The callback
+MAY be invoked synchronously or asynchronously; `Stop` is not required to wait
+for it. Such a failure **MUST** make the transport invalid. `Stop(reason)`
+**MAY** provide `onStopped` with a
 transport-generated reason that preserves the supplied reason as its cause;
 callers **MUST NOT** require object identity with the supplied reason.
 
@@ -148,8 +156,9 @@ false after a failed start or an unrecoverable failure.
 entire transport-instance lifetime. It is an inclusive limit on the serialized
 `UnionDataList` representation, including list and element encoding but
 excluding carrier framing. The limit applies to both sent and received
-messages. Empty messages are valid when their serialized representation fits
-the limit.
+messages. It **MUST** be large enough to admit an empty `UnionDataList`.
+`UnionDataList.GetDataSize()` defines the serialized size for this contract.
+Empty messages are valid.
 
 An implementation **MUST NOT** invoke `OnReceived` for an inbound message that
 is malformed, cannot be decoded as a `UnionDataList`, or exceeds
@@ -168,7 +177,8 @@ registration, connection, or admission exchange from its source.
 Client and server `TrySend` operations are thread-safe. They may run
 concurrently with each other and with `Stop`; the outcome is determined by
 their operation ordering. A `TrySend` call made before successful start, while
-stopping, or after stopping **MUST** return `NotConnected`.
+stopping, or after stopping **MUST** return `Error`. A NoAckRawUnreliable
+implementation **MUST NOT** return `NotConnected`.
 
 Every `TrySend` invocation transfers ownership of its non-null message
 argument to the transport regardless of its result. After the call, the caller
@@ -186,17 +196,19 @@ if (result == SendResult.BufferOverflow)
 }
 ```
 
-An implementation **MUST** return the most specific applicable result:
+An implementation **MUST** select a result using this precedence: transport
+state, message validity and serializability, message size, server destination
+validity, outbound capacity, then other synchronous errors.
 
 | Result | Required meaning |
 | --- | --- |
 | `Ok` | The transport accepted the message for local processing. It is not a carrier submission guarantee, peer receipt, or delivery guarantee. |
-| `MessageTooBig` | The serialized message exceeds `MessageMaxByteSize`. |
 | `InvalidMessage` | The message is null, malformed, or cannot be serialized. |
+| `MessageTooBig` | The serialized message exceeds `MessageMaxByteSize`. |
 | `InvalidAddress` | A server destination is not a valid endpoint issued by that running server. |
-| `NotConnected` | The transport is not running or is stopping. |
 | `BufferOverflow` | The implementation cannot accept the message because its finite outbound capacity is full. |
-| `Error` | An unclassified synchronous sending error. |
+| `NotConnected` | Defined by the shared enum for connection-oriented transport contracts. NoAckRawUnreliable **MUST NOT** return it. |
+| `Error` | The transport is unavailable or another unclassified synchronous sending error occurred. |
 
 Every synchronous non-`Ok` result is non-fatal: it **MUST NOT** stop or
 invalidate the transport. `BufferOverflow` is not a delivery failure
@@ -233,9 +245,11 @@ reference to the handler. The handler:
 Duplicate deliveries each provide their own independently owned message
 reference. A handler that throws **MUST** still release any message reference
 it owns, normally with `try`/`finally`. The transport **MUST** catch a handler
-exception, discard only that affected message, and continue running. It
-**MUST NOT** stop or invalidate the transport solely because the handler
-threw.
+exception, suppress further processing of only that affected delivery, and
+continue running. Because ownership has transferred to the handler, the
+transport is not required to release a reference that a throwing handler failed
+to release. It **MUST NOT** stop or invalidate the transport solely because
+the handler threw.
 
 Handlers **MUST** return promptly and **MUST NOT** perform blocking or
 long-running work. Slow handling delays every later receive delivery on that
@@ -245,11 +259,11 @@ The contract defines no callback timeout or automatic penalty.
 ## 10. Endpoint and routing rules
 
 The server `TrySend(IEndPoint destination, UnionDataList message)` overload
-accepts only an endpoint obtained from that same server's `OnReceived`
-callback. The application may retain that endpoint and use it in a later
-`TrySend` call until the server stops. An endpoint that compares equal through
-`IEndPoint.Equals` identifies the same reply route for the lifetime of the
-running server and may be used as a dictionary key.
+accepts an endpoint obtained from that same server's `OnReceived` callback, or
+an endpoint equal to one, until the server stops. An endpoint that compares
+equal through `IEndPoint.Equals` identifies the same reply route for the
+lifetime of the running server and may be used as a dictionary key. Equal
+endpoints **MUST** return the same `GetHashCode` value during that lifetime.
 
 An endpoint is not an authenticated identity, authorization claim, proof of
 ownership, or replay-protected session handle. Applications **MUST** validate
@@ -271,6 +285,7 @@ not weaken the requirements in this specification:
 - address configuration, endpoint representation, and source filtering
   mechanism;
 - callback scheduler and execution thread;
+- `onStopped` dispatch scheduler and timing after the terminal state transition;
 - outbound queue capacity, scheduling, and drain rate;
 - carrier submission timing after `TrySend` returns `Ok`;
 - internal logging format and sink;

@@ -3,11 +3,13 @@ namespace Pontifex.NoAck.Raw.Unreliable
     public interface INoAckRawUnreliableClientConformanceControl : INoAckRawUnreliableConformanceControl
     {
         /// <summary>
-        /// Attempt to make this transport reliable. If success, then no message will be lost, reordered or duplicated.
-        /// This method must be called before starting the transport.
+        /// Attempts to make this client-server link reliable in both directions.
+        /// When it returns true, every message accepted with SendResult.Ok while
+        /// both endpoints are running is delivered exactly once in FIFO operation
+        /// order for that direction. This method must be called before starting the
+        /// client; calling it after startup begins is unsupported.
         /// </summary>
-        /// <returns> False if transport can't be put in reliable mode </returns>
+        /// <returns>False if the implementation cannot provide reliable debug mode.</returns>
         bool TryMakeReliable();
-
     }
 }
