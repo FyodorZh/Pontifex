@@ -1,5 +1,6 @@
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class DeduplicatorTests
     {
         [Test]
@@ -114,5 +115,6 @@ namespace Pontifex.DeliveryManager.Tests
             var result = dedup.Received(100);
             Assert.That(result, Is.EqualTo(Deduplicator.Result.Overflow));
         }
+
     }
 }

@@ -1,19 +1,24 @@
+using System;
+using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.DeliveryManager;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager.Tests
 {
+    [Category("DeliveryManager")]
     public class DeliveryDispatcherTests
     {
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
+        private static ICollectablePool CPool => Memory.CollectablePool;
 
-        private static IMultiRefByteArray Buf(params byte[] bytes)
+        private static UnionDataList DummyData()
         {
-            var buf = Pool.Acquire(bytes.Length);
-            Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
-            return buf;
+            var data = CPool.Acquire<UnionDataList>();
+            data.PutLast(new UnionData((byte)0));
+            return data;
         }
 
         private static DeliveryInfo Info(ushort id, byte chunk = 0) => new DeliveryInfo(new DeliveryId(id), chunk);
@@ -21,38 +26,54 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void ScheduleDeliver_ReturnsOk()
         {
-            var d = new DeliveryDispatcher(10);
-            Assert.That(d.ScheduleDeliver(Info(1), Buf(1), DateTime.UtcNow),
+            var d = new DeliveryDispatcher(10, CPool);
+            Assert.That(d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow),
                 Is.EqualTo(DeliveryDispatcher.ScheduleResult.Ok));
         }
 
         [Test]
         public void ScheduleDeliver_DuplicateId_ReturnsIdIsNotUnique()
         {
-            var d = new DeliveryDispatcher(10);
-            d.ScheduleDeliver(Info(1), Buf(1), DateTime.UtcNow);
-            var result = d.ScheduleDeliver(Info(1), Buf(2), DateTime.UtcNow);
+            var d = new DeliveryDispatcher(10, CPool);
+            d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
+            var result = d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
             Assert.That(result, Is.EqualTo(DeliveryDispatcher.ScheduleResult.IdIsNotUnique));
         }
 
         [Test]
+        public void ScheduleDeliver_DoesNotModifyOriginalData()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var data = DummyData();
+            data.AddRef();
+            int originalCount = data.Elements.Count;
+
+            d.ScheduleDeliver(Info(1), data, DateTime.UtcNow);
+
+            Assert.That(data.Elements.Count, Is.EqualTo(originalCount));
+            data.Release();
+        }
+
+
+
+        [Test]
         public void ScheduleDeliver_AtCapacity_ReturnsBufferOverflow()
         {
-            var d = new DeliveryDispatcher(2);
-            d.ScheduleDeliver(Info(1), Buf(1), DateTime.UtcNow);
-            d.ScheduleDeliver(Info(2), Buf(2), DateTime.UtcNow);
-            var result = d.ScheduleDeliver(Info(3), Buf(3), DateTime.UtcNow);
+            var d = new DeliveryDispatcher(2, CPool);
+            d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
+            d.ScheduleDeliver(Info(2), DummyData(), DateTime.UtcNow);
+            var result = d.ScheduleDeliver(Info(3), DummyData(), DateTime.UtcNow);
             Assert.That(result, Is.EqualTo(DeliveryDispatcher.ScheduleResult.BufferOverflow));
         }
 
         [Test]
         public void TryToDeliver_NoDueTasks_SendsNothing()
         {
-            var d = new DeliveryDispatcher(10);
-            d.ScheduleDeliver(Info(1), Buf(1), DateTime.UtcNow);
+            var d = new DeliveryDispatcher(10, CPool);
+            d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
 
-            var sent = new List<Message>();
-            var consumer = new ConsumerDelegate<Message>(x => { sent.Add(x); return true; });
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
             d.TryToDeliver(consumer, scheduler, DateTime.UtcNow - TimeSpan.FromHours(1));
@@ -63,31 +84,31 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryToDeliver_DueTask_SendsOnce()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1), Buf(42), now);
+            d.ScheduleDeliver(Info(1), DummyData(), now);
 
-            var sent = new List<Message>();
-            var consumer = new ConsumerDelegate<Message>(x => { sent.Add(x); return true; });
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
 
             Assert.That(sent, Has.Count.EqualTo(1));
-            Assert.That(sent[0].PacketId, Is.EqualTo(1));
-            sent[0].Data.Release();
+            Assert.That(sent[0].Elements[0].Alias.UShortValue, Is.EqualTo(1));
+            sent[0].Release();
         }
 
         [Test]
         public void TryToDeliver_ConfirmedDelivery_Skipped()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1), Buf(42), now);
+            d.ScheduleDeliver(Info(1), DummyData(), now);
             d.ConfirmDelivered(Info(1));
 
-            var sent = new List<Message>();
-            var consumer = new ConsumerDelegate<Message>(x => { sent.Add(x); return true; });
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
@@ -98,12 +119,12 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void TryToDeliver_Retry_SendsMultipleTimes()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1), Buf(1, 2, 3), now);
+            d.ScheduleDeliver(Info(1), DummyData(), now);
 
-            var sent = new List<Message>();
-            var consumer = new ConsumerDelegate<Message>(x => { sent.Add(x); return true; });
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10), baseIntervalMs: 50);
 
             d.TryToDeliver(consumer, scheduler, now);
@@ -111,36 +132,36 @@ namespace Pontifex.DeliveryManager.Tests
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(200));
 
             Assert.That(sent, Has.Count.EqualTo(3));
-            foreach (var b in sent) b.Data.Release();
+            foreach (var b in sent) b.Release();
         }
 
         [Test]
         public void TryToDeliver_Failure_FiresFailedToDeliver()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1), Buf(1), now);
+            d.ScheduleDeliver(Info(1), DummyData(), now);
 
             DeliveryId? failedId = null;
             d.OnFailedToDeliver += id => failedId = id;
 
-            var sent = new List<Message>();
-            var consumer = new ConsumerDelegate<Message>(x => { sent.Add(x); return true; });
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromMilliseconds(50), baseIntervalMs: 100);
 
             d.TryToDeliver(consumer, scheduler, now);
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(200));
 
             Assert.That(failedId, Is.EqualTo(new DeliveryId(1)));
-            foreach (var b in sent) b.Data.Release();
+            foreach (var b in sent) b.Release();
         }
 
         [Test]
         public void ConfirmDelivered_SingleChunk_FiresDelivered()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1), Buf(1), now);
+            d.ScheduleDeliver(Info(1), DummyData(), now);
 
             DeliveryId? deliveredId = null;
             d.OnDelivered += id => deliveredId = id;
@@ -152,10 +173,10 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void ConfirmDelivered_MultiChunk_AllConfirmed_FiresOnce()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1, 0), Buf(1), now);
-            d.ScheduleDeliver(Info(1, 1), Buf(2), now);
+            d.ScheduleDeliver(Info(1, 0), DummyData(), now);
+            d.ScheduleDeliver(Info(1, 1), DummyData(), now);
 
             int delivered = 0;
             d.OnDelivered += _ => delivered++;
@@ -170,7 +191,7 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void ConfirmDelivered_NonExistent_NoOp()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             bool fired = false;
             d.OnDelivered += _ => fired = true;
             d.ConfirmDelivered(Info(999));
@@ -178,16 +199,33 @@ namespace Pontifex.DeliveryManager.Tests
         }
 
         [Test]
+        public void ConfirmDelivered_DoubleAck_IsNoOp()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+
+            int delivered = 0;
+            d.OnDelivered += _ => delivered++;
+
+            d.ConfirmDelivered(Info(1));
+            Assert.That(delivered, Is.EqualTo(1));
+
+            d.ConfirmDelivered(Info(1));
+            Assert.That(delivered, Is.EqualTo(1));
+        }
+
+        [Test]
         public void Clear_EmptiesQueue()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1), Buf(1), now);
-            d.ScheduleDeliver(Info(2), Buf(2), now);
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+            d.ScheduleDeliver(Info(2), DummyData(), now);
             d.Clear();
 
-            var sent = new List<Message>();
-            var consumer = new ConsumerDelegate<Message>(x => { sent.Add(x); return true; });
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromHours(1));
@@ -198,20 +236,104 @@ namespace Pontifex.DeliveryManager.Tests
         [Test]
         public void MultipleTasks_AllDue_AllSent()
         {
-            var d = new DeliveryDispatcher(10);
+            var d = new DeliveryDispatcher(10, CPool);
             var now = DateTime.UtcNow;
-            d.ScheduleDeliver(Info(1), Buf(1), now);
-            d.ScheduleDeliver(Info(2), Buf(2), now);
-            d.ScheduleDeliver(Info(3), Buf(3), now);
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+            d.ScheduleDeliver(Info(2), DummyData(), now);
+            d.ScheduleDeliver(Info(3), DummyData(), now);
 
-            var sent = new List<Message>();
-            var consumer = new ConsumerDelegate<Message>(x => { sent.Add(x); return true; });
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
 
             Assert.That(sent, Has.Count.EqualTo(3));
-            foreach (var b in sent) b.Data.Release();
+            foreach (var b in sent) b.Release();
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  New wire format target tests
+        //  Target: Dispatcher prepends [bool(true), ushort(seq)]
+        //  then the serializer's elements follow.
+        // ════════════════════════════════════════════════════════════════
+
+        [Test]
+        public void NewFormat_DispatchedData_HasDiscriminatorAndWireChunkId()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+
+            UnionDataList? dispatched = null;
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { dispatched = x; return true; });
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
+            d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
+
+            Assert.That(dispatched, Is.Not.Null);
+            // Element 0: bool(true) — isUser discriminator
+            Assert.That(dispatched!.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));
+            Assert.That(dispatched.Elements[0].Alias.BoolValue, Is.True);
+            // Element 1: ushort — wireChunkId (starts at 1)
+            Assert.That(dispatched.Elements[1].Type, Is.EqualTo(UnionDataType.UShort));
+            Assert.That(dispatched.Elements[1].Alias.UShortValue, Is.EqualTo(1));
+            // Original data (the byte from DummyData) follows
+            Assert.That(dispatched.Elements[2].Type, Is.EqualTo(UnionDataType.Byte));
+            dispatched.Release();
+        }
+
+        [Test]
+        public void NewFormat_Retry_PreservesDiscriminator()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+
+            // First send — consumer just releases without popping (production transport clones)
+            var consumer1 = new ConsumerDelegate<UnionDataList>(x =>
+            {
+                x.Release();
+                return true;
+            });
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10), baseIntervalMs: 50);
+            d.TryToDeliver(consumer1, scheduler, now);
+
+            // Retry — discriminator/wireChunkId should still be intact
+            UnionDataList? retried = null;
+            var retryConsumer = new ConsumerDelegate<UnionDataList>(x => { retried = x; return true; });
+            d.TryToDeliver(retryConsumer, scheduler, now + TimeSpan.FromMilliseconds(100));
+
+            Assert.That(retried, Is.Not.Null);
+            Assert.That(retried!.Elements[0].Type, Is.EqualTo(UnionDataType.Bool));
+            Assert.That(retried.Elements[0].Alias.BoolValue, Is.True);
+            Assert.That(retried.Elements[1].Type, Is.EqualTo(UnionDataType.UShort));
+            Assert.That(retried.Elements[1].Alias.UShortValue, Is.EqualTo(1));
+            retried.Release();
+        }
+
+        [Test]
+        public void NewFormat_SequentialDispatches_HaveUniqueWireChunkIds()
+        {
+            var d = new DeliveryDispatcher(10, CPool);
+            var now = DateTime.UtcNow;
+            d.ScheduleDeliver(Info(1), DummyData(), now);
+            d.ScheduleDeliver(Info(2), DummyData(), now);
+            d.ScheduleDeliver(Info(3), DummyData(), now);
+
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
+            d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(1));
+
+            Assert.That(sent, Has.Count.EqualTo(3));
+            var ids = new HashSet<ushort>();
+            foreach (var msg in sent)
+            {
+                Assert.That(msg.Elements[0].Alias.BoolValue, Is.True);
+                ids.Add(msg.Elements[1].Alias.UShortValue);
+                msg.Release();
+            }
+            Assert.That(ids, Is.EquivalentTo(new ushort[] { 1, 2, 3 }));
         }
     }
 }

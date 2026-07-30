@@ -2,14 +2,14 @@
 
 namespace Pontifex
 {
-    public struct DeliveryId : IComparable<DeliveryId>, IEquatable<DeliveryId>
+    public readonly struct DeliveryId : IComparable<DeliveryId>, IEquatable<DeliveryId>
     {
         private const int Range = UInt16.MaxValue;
         private const int HalfRange = Range / 2;
 
         public static readonly DeliveryId Zero = new DeliveryId(0);
 
-        private UInt16 _id;
+        private readonly UInt16 _id;
 
         public DeliveryId(UInt16 id)
         {
@@ -20,7 +20,7 @@ namespace Pontifex
         {
             get
             {
-                UInt16 id = (UInt16)((_id + 1) % Range);
+                UInt16 id = (UInt16)(_id + 1);
                 if (id == 0)
                 {
                     id = 1;
@@ -81,6 +81,20 @@ namespace Pontifex
         public override string ToString()
         {
             return _id.ToString();
+        }
+        
+        public static int operator -(DeliveryId left, DeliveryId right)
+        {
+            int diff = left._id - right._id;
+            if (diff > HalfRange)
+            {
+                diff -= Range + 1;
+            }
+            else if (diff < -HalfRange)
+            {
+                diff += Range + 1;
+            }
+            return diff;
         }
     }
 }

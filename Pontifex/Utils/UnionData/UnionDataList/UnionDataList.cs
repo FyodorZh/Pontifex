@@ -4,11 +4,10 @@ using System.Linq;
 using System.Text;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Utils;
 
 namespace Pontifex.Utils
 {
-    public class UnionDataList : MultiRefCollectableResource<UnionDataList>
+    public class UnionDataList : MultiRefCollectableResource<UnionDataList>, IReadOnlyUnionDataList
     {
         private readonly CycleQueue<UnionData> _data = new();
 
@@ -142,6 +141,18 @@ namespace Pontifex.Utils
             return true;
         }
 
+        public UnionDataList Clone(ICollectablePool? pool)
+        {
+            var clone = pool?.Acquire<UnionDataList>() ?? new UnionDataList();
+            if (pool == null)
+                clone.AddRef();
+            foreach (var element in _data.Enumerate())
+            {
+                clone.PutLast(element.Clone());
+            }
+            return clone;
+        }
+
         public override string ToString()
         {
             return "[" + string.Join(",", _data.Enumerate()) + "]";
@@ -254,7 +265,7 @@ namespace Pontifex.Utils
             return false;
         }
         
-        public static bool EqualByContent(this UnionDataList d1, UnionDataList d2)
+        public static bool EqualByContent(this IReadOnlyUnionDataList d1, IReadOnlyUnionDataList d2)
         {
             if (d1.Elements.Count != d2.Elements.Count)
                 return false;
@@ -271,7 +282,7 @@ namespace Pontifex.Utils
             return true;
         }
 
-        public static void CopyFrom(this UnionDataList self, UnionDataList d2)
+        public static void CopyFrom(this UnionDataList self, IReadOnlyUnionDataList d2)
         {
             if (self.Elements.Count != 0)
             {

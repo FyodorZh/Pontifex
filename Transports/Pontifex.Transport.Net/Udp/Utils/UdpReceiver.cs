@@ -26,18 +26,8 @@ namespace Pontifex.NoAck
 
         private readonly ILogger Log;
         private readonly ITrafficCollectorSink _trafficCollectorSink;
+        private volatile bool _stopped;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="socket"> Открытый, полностью настроенный UDP сокет </param>
-        /// <param name="remoteEp"></param>
-        /// <param name="onReceived"> Показывает пришедшие данные. Отдаёт их во владение. </param>
-        /// <param name="onFail"> Информирует о проблемах </param>
-        /// <param name="unionListPool"> Пул для хранения объединённых данных </param>
-        /// <param name="bytesPool"> Пул байтов для временного хранения данных </param>
-        /// <param name="logger"> Логгер для записи сообщений </param>
-        /// <param name="trafficCollectorSink"> Сборщик трафика для мониторинга входящего трафика </param>
         public UdpReceiver(Socket socket, IPEndPoint remoteEp, 
             Action<EndPoint, UnionDataList> onReceived,
             Action<SocketException> onFail,
@@ -57,6 +47,8 @@ namespace Pontifex.NoAck
             _trafficCollectorSink = trafficCollectorSink;
             _bytesPool = bytesPool;
 
+            socket.ReceiveTimeout = 1000; // macOS: Close() doesn't unblock ReceiveFrom, so poll _stopped periodically
+
             Thread thread = new Thread(DoWork, 1024 * 128)
             {
                 IsBackground = true
@@ -66,6 +58,7 @@ namespace Pontifex.NoAck
 
         public void Stop()
         {
+            _stopped = true;
             _socket.Close();
         }
 
@@ -73,7 +66,7 @@ namespace Pontifex.NoAck
         {
             EndPoint ep = _anyRemoteEP;
 
-            while (_socket.Connected)
+            while (!_stopped)
             {
                 try
                 {
@@ -113,12 +106,16 @@ namespace Pontifex.NoAck
                     Log.wtf(ex);
                     break;
                 }
+                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
+                {
+                }
                 catch (SocketException ex)
                 {
                     if (ex.SocketErrorCode != SocketError.Interrupted)
                     {
                         _onFail(ex);
                     }
+                    break;
                 }
             }
         }

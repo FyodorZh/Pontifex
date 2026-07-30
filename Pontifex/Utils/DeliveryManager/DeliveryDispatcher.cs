@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Utils;
 
 namespace Pontifex.DeliveryManager
 {
@@ -25,25 +26,26 @@ namespace Pontifex.DeliveryManager
         {
             private DeliveryInfo _id;
             private DateTime _scheduleTime;
-            private IMultiRefByteArray _data = null!;
-            private ushort _packetId;
+            private UnionDataList _data = null!;
 
-            public void Init(DeliveryInfo id, DateTime scheduleTime, IMultiRefByteArray data, ushort packetId)
+            public void Init(DeliveryInfo id, DateTime scheduleTime, IReadOnlyUnionDataList data, ushort packetId, ICollectablePool pool)
             {
                 _id = id;
                 _scheduleTime = scheduleTime;
-                _data = data;
-                _packetId = packetId;
+                _data = data.Clone(pool);
+                _data.PutFirst(new UnionData(packetId));  // wireChunkId
+                _data.PutFirst(new UnionData(true));       // isUser = true
+                data.Release();
                 DeliveryAttempts = 0;
             }
 
             public DeliveryInfo Id => _id;
             public DateTime ScheduleTime => _scheduleTime;
 
-            public Message AcquireMessage()
+            public UnionDataList AcquireMessage()
             {
                 _data.AddRef();
-                return new Message(_packetId, _data);
+                return _data;
             }
 
             public int DeliveryAttempts { get; set; }
@@ -60,14 +62,16 @@ namespace Pontifex.DeliveryManager
         }
 
         private readonly int _capacity;
+        private readonly ICollectablePool _pool;
         private ushort _nextSeq = 1;
         private readonly PriorityQueue<DateTime, DeliveryTask> _deliveryQueue = new PriorityQueue<DateTime, DeliveryTask>();
         private readonly HashSet<DeliveryInfo> _unfinishedDeliveries = new HashSet<DeliveryInfo>();
         private readonly Dictionary<DeliveryId, int> _unfinishedLogicDeliveries = new Dictionary<DeliveryId, int>();
 
-        public DeliveryDispatcher(int capacity)
+        public DeliveryDispatcher(int capacity, ICollectablePool pool)
         {
             _capacity = capacity;
+            _pool = pool;
         }
 
         public void Clear()
@@ -82,15 +86,16 @@ namespace Pontifex.DeliveryManager
             _unfinishedLogicDeliveries.Clear();
         }
 
-        public ScheduleResult ScheduleDeliver(DeliveryInfo id, IMultiRefByteArray data, DateTime now)
+        public ScheduleResult ScheduleDeliver(DeliveryInfo id, IReadOnlyUnionDataList data, DateTime now)
         {
             if (_deliveryQueue.Count < _capacity)
             {
                 if (_unfinishedDeliveries.Add(id))
                 {
-                    ushort seq = _nextSeq++;
+                    ushort seq = _nextSeq;
+                    _nextSeq = seq == ushort.MaxValue ? (ushort)1 : (ushort)(seq + 1);
                     var task = new DeliveryTask();
-                    task.Init(id, now, data, seq);
+                    task.Init(id, now, data, seq, _pool);
                     _deliveryQueue.Enqueue(now, task);
 
                     if (_unfinishedLogicDeliveries.ContainsKey(id.Id))
@@ -113,7 +118,7 @@ namespace Pontifex.DeliveryManager
             return ScheduleResult.BufferOverflow;
         }
 
-        public void TryToDeliver(IConsumer<Message> dst, IDeliveryAttemptScheduler scheduler, DateTime now)
+        public void TryToDeliver(IConsumer<UnionDataList> dst, IDeliveryAttemptScheduler scheduler, DateTime now)
         {
             while (_deliveryQueue.Count > 0)
             {

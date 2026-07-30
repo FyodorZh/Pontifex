@@ -3,7 +3,7 @@ using Actuarius.Memory;
 
 namespace Pontifex.DeliveryManager
 {
-    internal class UnorderedDeliveryRecipient
+    internal class MessageMerger
     {
         private class MessageConstructor
         {
@@ -75,15 +75,14 @@ namespace Pontifex.DeliveryManager
         private readonly Dictionary<DeliveryId, MessageConstructor> _unfinishedMultimessages = new Dictionary<DeliveryId, MessageConstructor>();
         private readonly IPool<IMultiRefByteArray, int> _pool;
 
-        public UnorderedDeliveryRecipient(IPool<IMultiRefByteArray, int> pool)
+        public MessageMerger(IPool<IMultiRefByteArray, int> pool)
         {
             _pool = pool;
         }
 
-        public IMultiRefByteArray? ReceivedMulti(DeliveryId id, byte partId, byte partsNumber, IMultiRefByteArray data)
+        public IMultiRefByteArray? Combine(DeliveryId id, byte partId, byte partsNumber, IMultiRefByteArray data)
         {
-            MessageConstructor? ctor;
-            if (!_unfinishedMultimessages.TryGetValue(id, out ctor))
+            if (!_unfinishedMultimessages.TryGetValue(id, out var ctor))
             {
                 ctor = new MessageConstructor(partsNumber, _pool);
                 _unfinishedMultimessages.Add(id, ctor);
@@ -96,12 +95,6 @@ namespace Pontifex.DeliveryManager
             }
 
             return null;
-        }
-
-        public IMultiRefByteArray ReceivedSingle(IMultiRefByteArray data)
-        {
-            data.AddRef();
-            return data;
         }
 
         public void Clear()

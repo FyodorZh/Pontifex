@@ -4,11 +4,11 @@
 
 DeliveryManager is a **reliable message delivery subsystem** that sits between a transport layer and business logic. It provides:
 
-- **In-order or unordered delivery** (via `DeliverySorter` wrapper)
+- **In-order or unordered delivery** (via `DeliverySortingManager` wrapper)
 - **Message chunking/reassembly** for large payloads
 - **Automatic retry with configurable backoff** (via `DeliveryDispatcher` + `IDeliveryAttemptScheduler`)
-- **Deduplication** of retransmitted packets (via `Deduplicator`)
-- **ACK piggybacking** — delivery confirmations are batched and sent back alongside user data
+- **Deduplication** of retransmitted wire packets (via `Deduplicator`)
+- **ACK piggybacking** — delivery confirmations are batched and sent back (via `DeliveryReporter`)
 
 All types live in namespace `Pontifex.DeliveryManager` and are `internal` (not part of the public API).
 
@@ -18,22 +18,25 @@ All types live in namespace `Pontifex.DeliveryManager` and are `internal` (not p
 
 ```
                     ┌─────────────────────────────────────┐
-                    │         SortedDeliveryManager        │  (optional ordering wrapper)
-                    │  (adds DeliverySorter on top)        │
+                    │       DeliverySortingManager         │  (optional ordering wrapper)
+                    │  (wraps DeliveryManager.Received     │
+                    │   via DeliverySorter<UnionDataList>) │
                     └──────────┬──────────────────────────┘
                                │
                     ┌──────────▼──────────────────────────┐
                     │           DeliveryManager            │  (orchestrator)
                     │                                     │
-                    │  ┌────────────┐  ┌────────────────┐ │
-                    │  │ Deduplicator│  │ DeliveryDispatcher│ │
-                    │  │ (sliding   │  │ (priority queue │ │
-                    │  │  window)   │  │  + retry logic) │ │
-                    │  └────────────┘  └────────────────┘ │
-                    │  ┌──────────────────────────────┐   │
-                    │  │ UnorderedDeliveryRecipient    │   │
-                    │  │ (multi-chunk reassembly)     │   │
-                    │  └──────────────────────────────┘   │
+                    │  ┌──────────────┐  ┌──────────────┐ │
+                    │  │ Deduplicator │  │DeliveryDispatcher│
+                    │  │ (sliding     │  │ (priority q   │ │
+                    │  │  window on   │  │  + retry)     │ │
+                    │  │  wireChunkId)│  └──────────────┘ │
+                    │  └──────────────┘  ┌──────────────┐ │
+                    │                    │MessagePacker  │ │
+                    │  ┌──────────────┐  │(split + merge)│ │
+                    │  │DeliveryReporter│ └──────────────┘ │
+                    │  │ (ACK batching)│                   │
+                    │  └──────────────┘                   │
                     └─────────────────────────────────────┘
 ```
 
@@ -41,56 +44,65 @@ All types live in namespace `Pontifex.DeliveryManager` and are `internal` (not p
 
 ## Wire Format
 
-Every message sent over the wire is a single `IMultiRefByteArray` with the following structure:
+Every outbound wire packet is a `UnionDataList`. The first two elements are prepended by `DeliveryDispatcher`:
 
-### UserSingle (type = 0x00)
-For messages that fit in one chunk.
-```
-Offset  Size  Field
-0       1     type (0x00)
-1       2     DeliveryId (ushort LE)
-3       2     responseProcessTime (short LE)
-5       N     user data (raw bytes)
-```
+| Index | UnionData type | Field |
+|---|---|---|
+| 0 | `bool` | `true` = user message, `false` = delivery report (ACK) |
+| 1 | `ushort` | wireChunkId — used by the receiver's `Deduplicator` |
 
-### UserMulti (type = 0x01)
-For messages split across multiple chunks. Each chunk carries the same `DeliveryId` plus chunk metadata.
-```
-Offset  Size  Field
-0       1     type (0x01)
-1       2     DeliveryId (ushort LE)
-3       2     responseProcessTime (short LE)
-5       1     partId (byte) — which chunk this is (0-based)
-6       1     partsNumber (byte) — total number of chunks
-7       N     chunk data (raw bytes)
-```
+The remaining elements depend on the message type (user data vs delivery report).
 
-### DeliveryInfo (type = 0x02)
-Batched delivery confirmations (ACKs).
-```
-Offset  Size  Field
-0       1     type (0x02)
-1       2     count (ushort LE) — number of confirmations in this batch
-3       for each confirmation:
-        2     DeliveryId (ushort LE)
-        1     chunkId (byte)
-```
+### User Single-Chunk Message
+
+Created by `MessagePacker.Pack()` for payloads that fit in one chunk.
+
+| Index | UnionData type | Field |
+|---|---|---|
+| 0 | `bool` | `true` (isUser) |
+| 1 | `ushort` | wireChunkId |
+| 2 | `byte` | partsNumber = `1` (single-chunk marker) |
+| 3 | `ushort` | DeliveryId |
+| 4 | `Array` | serialized user data |
+
+### User Multi-Chunk Message
+
+Created by `MessagePacker.Pack()` for payloads split across chunks.
+
+| Index | UnionData type | Field |
+|---|---|---|
+| 0 | `bool` | `true` (isUser) |
+| 1 | `ushort` | wireChunkId |
+| 2 | `byte` | chunksNumber — total number of chunks |
+| 3 | `byte` | chunkId — this chunk's index (0-based) |
+| 4 | `ushort` | DeliveryId |
+| 5 | `Array` | chunk payload (bytes) |
+
+### Delivery Report (ACK)
+
+Created by `DeliveryReporter.Flush()` via `DeliveryInfoSerializer.CreateDeliveryReport()`.
+
+| Index | UnionData type | Field |
+|---|---|---|
+| 0 | `bool` | `false` (isUser = delivery report) |
+| 1 | `ushort` | count — number of confirmations in this batch |
+| 2..N | pairs: `ushort` DeliveryId, `byte` chunkId | repeated `count` times |
 
 ### Size constraints
 
 | Constant | Value | Description |
 |---|---|---|
-| `SingleOverhead` | 5 | Header bytes for UserSingle |
-| `MultiOverhead` | 7 | Header bytes for UserMulti |
-| `DeliveryInfoOverhead` | 3 | Header bytes for DeliveryInfo |
-| `DeliveryInfoElementSize` | 3 | Each confirmation entry |
+| `UserSingleOverhead` | 6 | Byte overhead for single-chunk header (excl. payload) |
+| `UserMultiOverhead` | 10 | Byte overhead for multi-chunk header (excl. payload) |
+| `DeliveryInfoFixedOverhead` | 4 | Byte overhead for delivery report header (excl. entries) |
+| `DeliveryInfoElementSize` | 5 | Byte overhead per confirmation entry |
 | `SafetyMargin` | 4 | Padding to avoid MTU edge cases |
-| `DeduplicatorCapacity` | 1024 | Sliding window size |
-| `TransportMessageQueueCapacity` | 5000 | Max pending deliveries |
+| `DeduplicatorCapacity` | 1024 | Sliding window size for wireChunkId dedup |
+| `TransportMessageQueueCapacity` | 5000 | Max pending deliveries in the dispatcher |
 
 Derived limits:
-- `SingleChunkDeliveryMaxSize = messageMaxByteSize - 5 - 4`
-- `MultiChunkDeliveryChunkMaxSize = messageMaxByteSize - 7 - 4`
+- `SingleChunkDeliveryMaxSize = messageMaxByteSize - UserSingleOverhead(6) - SafetyMargin(4)`
+- `MultiChunkDeliveryChunkMaxSize = messageMaxByteSize - UserMultiOverhead(10) - SafetyMargin(4)`
 - `DeliveryMaxByteSize = MultiChunkDeliveryChunkMaxSize × 255` (max 255 chunks)
 
 ---
@@ -100,88 +112,110 @@ Derived limits:
 ```
 ScheduleDelivery(id, data)
   │
-  ├─ data.size ≤ SingleChunkMax
-  │   └─ serialize as UserSingle → _queueToSend
+  ├─ data is null → return InvalidMessage
+  │
+  ├─ data.size ≤ singleChunkMax
+  │   └─ Pack as single-chunk → _queueToSend (QueuedMessage)
   │
   ├─ data.size ≤ DeliveryMaxByteSize
-  │   └─ split into chunks of MultiChunkMax
-  │       └─ serialize each as UserMulti → _queueToSend
+  │   └─ Serialize data → split into chunks of multiChunkMax
+  │       └─ Pack each as multi-chunk → _queueToSend
   │
   └─ else → return MessageTooBig
 
 ProcessOutgoing(scheduler, now, dst)
   │
-  ├─ for each item in _queueToSend:
-  │     ├─ ParseDeliveryInfo  → extract DeliveryInfo from header
-  │     ├─ ScheduleDeliver(info, data, now)
+  ├─ for each QueuedMessage in _queueToSend:
+  │     ├─ ScheduleDeliver(info, userMessage, now)
   │     │   └─ DeliveryDispatcher: add to priority queue with key=now
-  │     └─ (BufferOverflow → fire FailedToDeliver)
+  │     │       ├─ Ok → enqueue
+  │     │       ├─ BufferOverflow → fire FailedToDeliver
+  │     │       └─ IdIsNotUnique → release data (should not happen for unique DeliveryInfo)
+  │     └─ release userMessage ref
   │
-  ├─ if _confirmationList not empty:
-  │     └─ batch into DeliveryInfo message(s) → dst
+  ├─ DeliveryReporter.Flush():
+  │     └─ batch pending confirmations into DeliveryReport message(s) → dst
   │
   └─ DeliveryDispatcher.TryToDeliver(dst, scheduler, now)
       └─ for each task due (TopKey ≤ now):
-          ├─ if task already confirmed → skip
-          ├─ dst.Put(acquired data)   — send to wire
+          ├─ if task already confirmed → skip (release task)
+          ├─ dst.Put(AcquireMessage) — clone with isUser+wireChunkId → dst
           ├─ increment DeliveryAttempts
           ├─ scheduler.Reschedule(task, now, out delta)
-          │   ├─ true  → re-queue with key = sendTime + delta
+          │   ├─ true  → re-enqueue with key = sendTime + delta
           │   └─ false → fire FailedToDeliver, release task
           └─ loop
 ```
 
 ### Key invariants (sending)
 
-1. **DeliveryId uniqueness across chunks**: A multi-chunk message shares the same `DeliveryId` across all chunks. The `DeliveryDispatcher` tracks `DeliveryInfo(deliveryId, chunkId)` per chunk. ACKs confirm individual chunks. The logical message (all chunks of same `DeliveryId`) is considered delivered only when ALL its chunks are acknowledged.
+1. **DeliveryId uniqueness across chunks**: A multi-chunk message shares the same `DeliveryId` across all chunks. The `DeliveryDispatcher` tracks `DeliveryInfo(deliveryId, chunkId)` per chunk. ACKs confirm individual chunks. The logical message is considered delivered only when ALL its chunks are acknowledged.
 
-2. **`_unfinishedLogicDeliveries` dictionary** counts outstanding chunks per `DeliveryId`. When a chunk is confirmed, the count decrements. When it reaches zero, `Delivered` event fires. This ensures the caller doesn't get a "delivered" notification until all chunks of a large message are confirmed.
+2. **`_unfinishedLogicDeliveries` dictionary** counts outstanding chunks per `DeliveryId`. When a chunk is confirmed, the count decrements. When it reaches zero, `Delivered` fires. This ensures the caller doesn't get a "delivered" notification until all chunks are confirmed.
 
-3. **Retry is per-chunk**: Each chunk of a multi-chunk message retries independently. The scheduler decides per-chunk.
+3. **Retry is per-chunk**: Each chunk retries independently under the dispatcher. The scheduler decides per-chunk.
 
-4. **ScheduleDelivery releases the input `IMultiRefByteArray`** (via `finally { data.Release() }`). The serialized copy retains the data. The caller must not use the data after `ScheduleDelivery` returns.
+4. **ScheduleDelivery uses `using var disposer = data.AsDisposable()`** — the input `UnionDataList` is released on return. The caller must not use it afterwards.
+
+5. **Retransmitted packets have the same wireChunkId** — the dispatcher's `AcquireMessage()` clones the stored data, which already has the original wireChunkId prepended. The receiver's deduplicator therefore sees a duplicate.
 
 ---
 
 ## Receiving Flow
 
 ```
-ProcessIncoming(incomingData)
+ProcessIncoming(data)
   │
-  ├─ type == DeliveryInfo (0x02)
-  │   └─ for each confirmation: dispatcher.ConfirmDelivered(info)
-  │       └─ decrements _unfinishedLogicDeliveries count
-  │           └─ if count reaches 0 → fire Delivered event
+  ├─ TryPopFirst(isUser)
+  │   └─ false (not a UnionData.Bool) → return false
   │
-  ├─ type == UserSingle (0x00) or UserMulti (0x01)
-  │   ├─ TryParseDeliveryId → extract DeliveryId from header
-  │   ├─ Deduplicator.Received(id) → New / Duplicate / Overflow
-  │   │   ├─ Overflow → return false (fatal)
-  │   │   └─ Duplicate → still add to confirmation list (ACK it!), but skip processing
-  │   ├─ add DeliveryInfo to _confirmationList (for later ACK)
+  ├─ isUser == false → Delivery Report (ACK)
+  │   ├─ DeliveryInfoSerializer.LoadDeliveryReport(data)
+  │   │   └─ fails if count is not ushort → return false
+  │   ├─ for each (DeliveryId, chunkId):
+  │   │     └─ dispatcher.ConfirmDelivered(info)
+  │   │         ├─ removes from _unfinishedDeliveries
+  │   │         └─ decrements _unfinishedLogicDeliveries count
+  │   │             └─ if count reaches 0 → fire Delivered event
+  │   └─ return true
+  │
+  ├─ isUser == true → User Message
+  │   ├─ TryPopFirst(wireChunkId)
+  │   │   └─ not ushort → return false
   │   │
-  │   └─ if New:
-  │       ├─ UserSingle → Recipient.ReceivedSingle(data)
-  │       │   └─ AddRef → return reference
-  │       ├─ UserMulti  → Recipient.ReceivedMulti(id, partId, partsNumber, chunk)
-  │       │   └─ store chunk; when all parts done → Combine() into one buffer
-  │       │
-  │       └─ if userData != null → fire Received event
+  │   ├─ Deduplicator.Received(wireChunkId)
+  │   │   ├─ Overflow → return false (fatal, close connection)
+  │   │   ├─ New → process full message
+  │   │   │   ├─ MessagePacker.TryUnpackUserMessage(data, out unpacked)
+  │   │   │   │   └─ reads partsNumber byte:
+  │   │   │   │       1 → ReadUserSingle (single-chunk)
+  │   │   │   │       N → ReadUserMulti (multi-chunk, merge via MessageMerger)
+  │   │   │   └─ fails → return false
+  │   │   ├─ Duplicate → skip full processing
+  │   │   │   └─ MessagePacker.TryPeekDeliveryInfo(data, out info)
+  │   │   │       └─ fails → return false
+  │   │   │
+  │   │   ├─ DeliveryReporter.Add(info) — always (so ACK is sent)
+  │   │   │
+  │   │   └─ if unpacked.UserData != null (New path):
+  │   │         └─ fire Received(id, userData), release userData
+  │   │
+  │   └─ return true
   │
-  └─ unknown type → return false
+  └─ default → return false
 ```
 
 ### Key invariants (receiving)
 
-1. **ACK always sent**: Even for duplicate messages, the `DeliveryInfo` is added to `_confirmationList`. This ensures the sender gets the ACK and stops retransmitting. Without this, the sender would keep retrying forever.
+1. **ACK always sent**: Even for duplicate wire packets, the `DeliveryInfo` is added to the confirmation list via `DeliveryReporter.Add()`. This ensures the sender gets the ACK and stops retransmitting.
 
-2. **Deduplicator uses `DeliveryId` as packet ID**: This works because each logically distinct send gets a unique `DeliveryId` from the sender. Retransmissions carry the same `DeliveryId`.
+2. **Deduplicator operates on `wireChunkId`**, NOT on `DeliveryId`. The `wireChunkId` is a `ushort` assigned sequentially by the sender's `DeliveryDispatcher`. Retransmissions of the same chunk carry the same `wireChunkId`. The deduplicator is a sliding window over this ID space.
 
-3. **Deduplicator overflow** returns `false` (fatal). The caller (protocol layer) should close the connection. The window size of 1024 must be sufficient for the expected packet window.
+3. **Deduplicator overflow** returns `false` (fatal). The caller (protocol layer) should close the connection.
 
-4. **Multi-chunk messages accept chunks in any order**. `UnorderedDeliveryRecipient` stores chunks by `partId` and combines only when all are ready. Partial chunks are released on `Clear()`.
+4. **Multi-chunk messages accept chunks in any order**. `MessageMerger` stores chunks by `partId` and combines only when all are ready. Partial chunks are released on `Clear()`.
 
-5. **DeliveryInfo messages are NOT deduplicated**. They bypass the `Deduplicator` entirely (no `DeliveryId` is parsed from them). If a duplicate `DeliveryInfo` arrives, `ConfirmDelivered` is a no-op for already-confirmed deliveries (the entry was already removed from `_unfinishedDeliveries`).
+5. **Delivery Report (ACK) messages are NOT deduplicated**. They bypass the `Deduplicator` entirely. If a duplicate ACK arrives, `ConfirmDelivered` is a no-op (the entry was already removed from `_unfinishedDeliveries`).
 
 ---
 
@@ -189,10 +223,10 @@ ProcessIncoming(incomingData)
 
 ### Deduplicator
 
-Sliding-window deduplicator backed by `CycleQueue<bool>`.
+Sliding-window deduplicator backed by `CycleQueue<bool>` (fixed-capacity circular buffer).
 
 **State:**
-- `_queue[bool]` — tracks which IDs in the window have been seen
+- `_queue[bool]` — tracks which wireChunkIds in the window have been seen
 - `_from (uint)` — first ID in the window
 - `_till (uint)` — last ID in the window
 
@@ -221,25 +255,66 @@ return New
 
 **Trim()**: Pops leading `true` entries from the queue, shifting `_from` forward. This keeps the window tight — only IDs that might still be retransmitted are tracked.
 
-**Capacity**: 1024. If the sender transmits more than 1024 unacknowledged messages, overflow occurs (fatal).
+**Capacity**: 1024. If the sender transmits more than 1024 unacknowledged wireChunkIds, overflow occurs (fatal).
+
+**Note**: ID=0 is not handled gracefully (integer underflow in `Trim`). The system never generates wireChunkId=0 (`_nextSeq` starts at 1 and wraps from 65535 to 1), so this is unreachable in production.
 
 ### DeliveryDispatcher
 
 Manages the retry queue and delivery tracking.
 
 **Structures:**
-- `_deliveryQueue: PriorityQueue<DateTime, DeliveryTask>` — sorted by next send time
+- `_deliveryQueue: PriorityQueue<DateTime, DeliveryTask>` — min-heap sorted by next send time
 - `_unfinishedDeliveries: HashSet<DeliveryInfo>` — all chunks not yet acknowledged
 - `_unfinishedLogicDeliveries: Dictionary<DeliveryId, int>` — per-message chunk counter
 
 **DeliveryTask lifecycle:**
 1. Created by `ScheduleDeliver`, enqueued with `key = now`
-2. `TryToDeliver` dequeues when `key ≤ now`, sends via `dst.Put()`, then either:
+2. `Init()` clones the user data, prepends `bool(true)` (isUser) and `ushort` (wireChunkId)
+3. `TryToDeliver` dequeues when `key ≤ now`, sends via `dst.Put(AcquireMessage())`, then either:
    - Reschedules with new key = `sendTime + delta` (if scheduler says retry)
    - Removes and fires `FailedToDeliver` (if scheduler says give up)
-3. `ConfirmDelivered` removes from `_unfinishedDeliveries` and decrements counter; if counter reaches 0, fires `Delivered` event
+4. `ConfirmDelivered` removes the chunk from `_unfinishedDeliveries` and decrements the per-message counter; if counter reaches 0, fires `Delivered`
 
 **Capacity**: 5000 simultaneous pending deliveries. `ScheduleResult.BufferOverflow` if exceeded.
+
+**PriorityQueue note**: The `PriorityQueue` is a binary min-heap and is NOT stable for equal keys. Tasks scheduled at the same `DateTime` may be dispatched in any order. Tests that depend on dispatch order should use staggered timestamps.
+
+### MessagePacker
+
+Handles serialization of user data into wire format and deserialization on the receiving side.
+
+**Components:**
+- `MessageSplitter` — splits a serialized byte buffer into chunks of at most `multiChunkMax`
+- `MessageMerger` — reassembles chunks by `DeliveryId` + `partId`, returns combined buffer when complete
+
+**Pack flow (send):**
+1. Small data (≤ singleChunkMax) → single-chunk wire message, added to `_queueToSend`
+2. Large data → serialize via `UnionDataList.Serialize()`, split into chunk-sized pieces, each wrapped as a multi-chunk wire message → `_queueToSend`
+3. If `Serialize()` fails → `InvalidMessage`. If total size > `DeliveryMaxByteSize` → `MessageTooBig`.
+
+**Unpack flow (receive):**
+1. `TryUnpackUserMessage`: reads `partsNumber` byte
+   - 1 → `ReadUserSingle`: returns the user data directly (with DeliveryId)
+   - N → `ReadUserMulti`: merges chunks via `MessageMerger`, deserializes the combined buffer back into a `UnionDataList`
+2. `TryPeekDeliveryInfo`: extracts just the `DeliveryInfo` (DeliveryId + chunkId) without full deserialization — used for duplicate packets
+
+### DeliveryReporter
+
+Accumulates received `DeliveryInfo` entries (one per received wire chunk, including duplicates) and flushes them as batched delivery report messages.
+
+**Flush logic:**
+1. Calculates how many confirmations fit in one packet: `(messageMaxByteSize - DeliveryInfoFixedOverhead - SafetyMargin) / DeliveryInfoElementSize`
+2. Splits `_confirmations` into batches of that size
+3. For each batch, calls `DeliveryInfoSerializer.CreateDeliveryReport()` and prepends `bool(false)` (isUser = delivery report)
+4. Clears the internal list
+
+### DeliveryInfoSerializer
+
+Serializes/deserializes delivery confirmations to/from `UnionDataList`.
+
+- `CreateDeliveryReport(confirmations, start, count)`: Creates a list with `ushort(count)` followed by pairs of `(ushort DeliveryId, byte chunkId)`.
+- `LoadDeliveryReport(data)`: Parses the list and populates `CurrentDeliveryReport`. Returns `false` on malformed input (wrong type or truncated).
 
 ### DeliverySorter<TParcel>
 
@@ -248,59 +323,46 @@ Ensures messages are delivered to the upper layer in `DeliveryId` order.
 **State:**
 - `_id: DeliveryId` — the next expected ID
 - `_parcels: PriorityQueue<DeliveryId, TParcel>` — out-of-order buffer
+- `_hasError: bool` — set on Clear() or if TryPop detects an ID gap
 
 **Algorithm:**
-- `Push(id, parcel)`: Accepts if `id ≥ _id` (enqueues to priority queue). Rejects (returns false) if `id < _id` (too old).
-- `TryPop()`: If `_parcels.TopKey == _id`, dequeue and advance `_id = _id.Next`. If `TopKey < _id`, signal error — a message was skipped (gap detected).
+- `Push(id, parcel)`: First call sets `_id = id`. Subsequent calls accept if `id ≥ _id` (enqueues). Rejects if `id < _id`.
+- `TryPop()`: If `_parcels.TopKey == _id`, dequeue and advance `_id = _id.Next`. If `TopKey < _id`, set `_hasError = true` and fire `OnError`.
+- `Clear(destructor)`: Empties the queue (calling destructor per item), sets `_hasError = true`.
 
-**Error state**: Once `_hasError` is set, all subsequent `Push()` and `TryPop()` fail. The sorter must be replaced.
+**Error state**: Once `_hasError` is set, all `Push()` and `TryPop()` calls fail permanently. The sorter must be replaced.
 
-### UnorderedDeliveryRecipient
+### DeliverySortingManager
 
-Reassembles multi-chunk messages into a single contiguous buffer.
+Optional wrapper around `IDeliveryManagerUserSide` that reorders incoming messages by `DeliveryId`.
 
-**MessageConstructor:**
-- Stores chunks in an array indexed by `partId`
-- `AddChunk(chunkId, data)`: Stores a reference (AddRef) if slot is empty; returns true when all slots filled
-- `Combine()`: Allocates a pooled buffer of totalSize, copies all chunks into it sequentially, releases chunk refs
-- `Clear()`: Releases all stored chunks (for cleanup of incomplete messages)
+- Wraps the inner DM's `Received` event through a `DeliverySorter<UnionDataList>`
+- Exposes its own `Received` (in-order) and `FailedToSort` events
+- `Clear()` calls `_sorter.Clear()` (releases pending parcels, permanently stops the sorter)
 
 ---
 
 ## Wire Size Calculations
 
 ```
-MaxUserDataInSingleChunk = messageMaxByteSize - 5 - 4
-MaxChunkDataInMultiChunk = messageMaxByteSize - 7 - 4
+MaxUserDataInSingleChunk = messageMaxByteSize - UserSingleOverhead(6) - SafetyMargin(4)
+MaxChunkDataInMultiChunk = messageMaxByteSize - UserMultiOverhead(10) - SafetyMargin(4)
 MaxUserDataTotal          = MaxChunkDataInMultiChunk × 255
-MaxConfirmationsPerPacket = (messageMaxByteSize - 3 - 4) / 3
+MaxConfirmationsPerPacket = (messageMaxByteSize - DeliveryInfoFixedOverhead(4) - SafetyMargin(4)) / DeliveryInfoElementSize(5)
 ```
 
-The `-4` safety margin exists in the legacy code "just to be sure" (avoids edge cases with MTU).
+The `-4` safety margin avoids edge cases with MTU.
 
 ---
 
 ## Thread Safety
 
 All `DeliveryManager` methods are **NOT thread-safe**:
-- `ScheduleDelivery` can be called from any thread (the queue is `SystemQueue<T>` — thread-safe only in SPSC scenarios)
+- `ScheduleDelivery` can be called from any thread (the queue is `SystemQueue<T>` — a simple FIFO, not thread-safe)
 - `ProcessIncoming` and `ProcessOutgoing` must be called from the same thread
 - The caller must provide external synchronization
 
 The legacy code achieved thread safety by running everything on a single logic thread (`IPeriodicLogic.LogicTick()`), with cross-thread handoff via `ConcurrentQueueValve` at the protocol layer above.
-
----
-
-## Protocol Handshake (Legacy Context)
-
-The delivery system does NOT handle the initial ACK handshake. In the legacy code, the protocol layer above handled:
-
-1. **Client sends**: `AckPrefix + userAckData`
-2. **Server validates**: checks `AckPrefix`, calls handler producer
-3. **Server responds**: `AckOKResponse + userAckResponse`
-4. **Client validates**: checks `AckOKResponse`, calls `OnConnected`
-
-After the handshake, the delivery system takes over for all subsequent data transfer. Keepalive is also handled at the protocol layer (sending empty messages with `isKeepAlive = true` every 1 second).
 
 ---
 
@@ -311,9 +373,9 @@ ScheduleDelivery(id, data)
   │
   ├─[later] ProcessOutgoing → sent to wire
   │
-  ├─[remote receives, sends back DeliveryInfo]
+  ├─[remote receives, sends back DeliveryReport]
   │
-  ├─ ProcessIncoming(DeliveryInfo)
+  ├─ ProcessIncoming(DeliveryReport)
   │   └─ Dispatcher.ConfirmDelivered(info)
   │       └─ if last chunk of DeliveryId → Delivered(id)
   │
@@ -322,9 +384,11 @@ ScheduleDelivery(id, data)
 
 On the receiving side:
 
-ProcessIncoming(UserSingle/UserMulti)
-  ├─[if first time] → Received(id, data, processTime)
-  └─[always] → _confirmationList.Add(…)  →  [later] ProcessOutgoing sends DeliveryInfo
+ProcessIncoming(UserMessage)
+  ├─[if Deduplicator.Result.New]
+  │   └─ Received(id, data)
+  └─[always] → DeliveryReporter.Add(info)
+      └─[later] ProcessOutgoing → send DeliveryReport
 ```
 
 ### Invariant: Delivered fires exactly once per unique DeliveryId

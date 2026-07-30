@@ -6,7 +6,8 @@
     public enum SendResult : byte
     {
         /// <summary>
-        /// Data transmission was successful, but the delivery status is unknown.
+        /// The transport accepted the message for local processing. It does not
+        /// guarantee carrier submission, peer receipt, or delivery.
         /// </summary>
         Ok,
 
@@ -26,7 +27,8 @@
         InvalidAddress,
 
         /// <summary>
-        /// The connection is not established or has been disconnected.
+        /// A connection-oriented transport is not connected. Connectionless
+        /// transport contracts may reserve this value and use a different result.
         /// </summary>
         NotConnected,
 
@@ -36,7 +38,8 @@
         BufferOverflow,
 
         /// <summary>
-        /// Any unclassified error.
+        /// An unclassified synchronous error. A transport contract may also use
+        /// this result for a transport-specific unavailable state.
         /// </summary>
         Error
     }

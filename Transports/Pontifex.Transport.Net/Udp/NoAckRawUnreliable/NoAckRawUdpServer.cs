@@ -11,7 +11,7 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.Raw.Unreliable.Udp
 {
-    internal sealed class NoAckRawUdpServer : AnyTransport, INoAckRawUnreliableServer
+    public sealed class NoAckRawUdpServer : NoAckRawUnreliableServerTransport, INoAckRawUnreliableServer
     {
         private IPEndPoint _localEndPoint;
 
@@ -44,17 +44,17 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
             {
                 _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
-                try
-                {
-                    var sioUdpConnectionReset = -1744830452;
-                    var inValue = new byte[] {0};
-                    var outValue = new byte[] {0};
-                    _socket.IOControl(sioUdpConnectionReset, inValue, outValue);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf("Socket icmp exception 'MAGIC FIX' throw error!", ex);
-                }
+                // try
+                // {
+                //     var sioUdpConnectionReset = -1744830452;
+                //     var inValue = new byte[] {0};
+                //     var outValue = new byte[] {0};
+                //     _socket.IOControl(sioUdpConnectionReset, inValue, outValue);
+                // }
+                // catch (Exception ex)
+                // {
+                //     Log.wtf("Socket icmp exception 'MAGIC FIX' throw error!", ex);
+                // }
 
                 try
                 {
@@ -146,31 +146,38 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
 
         SendResult INoAckRawUnreliableServer.TrySend(IEndPoint destination, UnionDataList message)
         {
+            var sender = _sender;
+            if (sender == null)
+            {
+                message?.Release();
+                return SendResult.Error;
+            }
+
             if (message == null!)
             {
                 return SendResult.InvalidMessage;
             }
 
-            using var disposer = message.AsDisposable();
-
-            var sender = _sender;
-            if (sender != null)
+            if (message.GetDataSize() > MessageMaxByteSize)
             {
-                if (destination is IpEndPoint endPoint)
-                {
-                    return sender.Send(endPoint.EP, message.Acquire());
-                }
-
-                return SendResult.InvalidAddress;
+                message.Release();
+                return SendResult.MessageTooBig;
             }
 
-            return SendResult.Error;
+            using var disposer = message.AsDisposable();
+            if (destination is IpEndPoint endPoint)
+            {
+                Conformance.BeforeSendCommitGate.Hit();
+                var result = sender.Send(endPoint.EP, message.Acquire());
+                Conformance.AfterSendCommitGate.Hit();
+                return result == SendResult.NotConnected ? SendResult.Error : result;
+            }
+
+            return SendResult.InvalidAddress;
         }
 
         private void OnReceivedInternal(EndPoint sender, UnionDataList message)
         {
-            using var disposer = message.AsDisposable();
-
             if (!_endPointsMap.TryGetValue(sender, out var ep))
             {
                 ep = new IpEndPoint(sender);
@@ -178,16 +185,26 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
             }
 
             var handler = OnReceived;
-            if (handler != null)
+            if (handler == null)
             {
-                try
-                {
-                    handler(ep, message);
-                }
-                catch (Exception e)
-                {
-                    FailException("OnReceived", e);
-                }
+                message.Release();
+                return;
+            }
+
+            Conformance.AfterReceivedGate.Hit();
+            if (!IsStarted)
+            {
+                message.Release();
+                return;
+            }
+
+            try
+            {
+                handler(ep, message);
+            }
+            catch (Exception e)
+            {
+                Log.wtf(e);
             }
         }
 

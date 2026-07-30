@@ -1,4 +1,6 @@
-﻿using Actuarius.Memory;
+﻿using System;
+using System.Collections.Generic;
+using Actuarius.Memory;
 using Scriba;
 
 namespace Pontifex
@@ -25,16 +27,17 @@ namespace Pontifex
         bool IsStarted { get; }
 
         /// <summary>
-        /// Starts the transport system. Non-blocking operation.
-        /// Server: After successful completion of the method, the server can be connected to.
-        /// Client: Successful completion of the method means that the transport has been initialized
-        /// and has started the asynchronous process of connecting to the server.
+        /// Starts the transport system. A successful return means local transport
+        /// initialization completed. A transport that uses connections MAY begin
+        /// asynchronous connection work; connectionless transports do not establish
+        /// or await a connection.
         /// </summary>
-        /// <param name="onStopped"> If true is returned, the onStopped callback should be invoked when
-        /// the transport system stops (if it is not null) </param>
+        /// <param name="onStopped">Callback invoked once when a successfully started transport stops.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="onStopped"/> is null.</exception>
         /// <returns>
-        /// Returns false if the transport system could not be started. After this, the transport system becomes invalid.
-        /// Returns true if the operation to start the transport system was successfully initiated.
+        /// Returns true if the transport system started successfully. A failed local
+        /// initialization invalidates the transport; a terminal transport may also
+        /// return false without attempting initialization.
         /// </returns>
         bool Start(System.Action<StopReason> onStopped);
 
@@ -52,5 +55,7 @@ namespace Pontifex
         /// Memory rental system for the transport. It is used to rent memory for data transmission and reception.
         /// </summary>
         IMemoryRental Memory { get; }
+        
+        void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null);
     }
 }
