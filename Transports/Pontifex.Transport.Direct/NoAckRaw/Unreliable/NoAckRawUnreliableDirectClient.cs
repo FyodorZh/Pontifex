@@ -58,18 +58,7 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
                 },
                 message => message.Release());
             _callbackQueue.ExceptionHandler += ex => Log.wtf(ex);
-            
-            var channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
-            if (channel == null)
-            {
-                Log.e("Failed to connect to server '{0}'", _serverEp);
-                _callbackQueue.Dispose();
-                _callbackQueue = null;
-                return false;
-            }
 
-            OnChannelConnected(channel);
-            _channel = channel;
             return true;
         }
 
@@ -83,6 +72,11 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
                     try
                     {
                         Conformance.AfterReceivedGate.Hit();
+                        if (!IsStarted)
+                        {
+                            message.Release();
+                            return;
+                        }
                         handler(message);
                     }
                     catch (Exception ex)
@@ -126,10 +120,17 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
 
         private SendResult SendToServer(UnionDataList message)
         {
-            if (_channel == null)
+            var channel = _channel;
+            if (channel == null)
             {
-                message?.Release();
-                return SendResult.Error;
+                channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
+                if (channel == null)
+                {
+                    message?.Release();
+                    return SendResult.Error;
+                }
+                OnChannelConnected(channel);
+                _channel = channel;
             }
 
             if (message == null!)

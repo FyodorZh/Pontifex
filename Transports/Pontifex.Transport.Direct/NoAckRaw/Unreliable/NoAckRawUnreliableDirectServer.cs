@@ -11,6 +11,7 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
+        private readonly object _callbackLock = new();
         private SerializedCallbackQueue<(IEndPoint, UnionDataList)>? _callbackQueue;
 
         public event Action<IEndPoint, UnionDataList>? OnReceived;
@@ -79,7 +80,15 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
                     try
                     {
                         Conformance.AfterReceivedGate.Hit();
-                        handler(clientEp, message);
+                        if (!IsStarted)
+                        {
+                            message.Release();
+                            return;
+                        }
+                        lock (_callbackLock)
+                        {
+                            handler(clientEp, message);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -108,16 +117,16 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
                 return SendResult.InvalidMessage;
             }
             
-            if (!_channels.TryGetValue(destination, out _))
-            {
-                message.Release();
-                return SendResult.InvalidAddress;
-            }
-
             if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
             {
                 message.Release();
                 return SendResult.MessageTooBig;
+            }
+
+            if (!_channels.TryGetValue(destination, out _))
+            {
+                message.Release();
+                return SendResult.InvalidAddress;
             }
 
             if (_callbackQueue?.Post((destination, message)) ?? false)
