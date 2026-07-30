@@ -11,7 +11,7 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.Raw.Unreliable.Udp
 {
-    internal sealed class NoAckRawUdpServer : AnyTransport, INoAckRawUnreliableServer
+    public sealed class NoAckRawUdpServer : NoAckRawUnreliableServerTransport, INoAckRawUnreliableServer
     {
         private IPEndPoint _localEndPoint;
 
@@ -158,10 +158,18 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
                 return SendResult.InvalidMessage;
             }
 
+            if (message.GetDataSize() > MessageMaxByteSize)
+            {
+                message.Release();
+                return SendResult.MessageTooBig;
+            }
+
             using var disposer = message.AsDisposable();
             if (destination is IpEndPoint endPoint)
             {
+                Conformance.BeforeSendCommitGate.Hit();
                 var result = sender.Send(endPoint.EP, message.Acquire());
+                Conformance.AfterSendCommitGate.Hit();
                 return result == SendResult.NotConnected ? SendResult.Error : result;
             }
 
@@ -178,6 +186,13 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
 
             var handler = OnReceived;
             if (handler == null)
+            {
+                message.Release();
+                return;
+            }
+
+            Conformance.AfterReceivedGate.Hit();
+            if (!IsStarted)
             {
                 message.Release();
                 return;

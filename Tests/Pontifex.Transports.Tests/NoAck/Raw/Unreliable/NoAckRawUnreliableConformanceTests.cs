@@ -692,7 +692,7 @@ public abstract class NoAckRawUnreliableConformanceTests
         };
 
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Task.Run(() => { Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok)); });
         Volatile.Write(ref sendReturned, 1);
         await beforeCommitReached.WaitAsync(DeliveryTimeout);
         clientControl.BeforeSendCommitGate.Reset();

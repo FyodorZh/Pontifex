@@ -10,7 +10,7 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.Raw.Unreliable.Udp
 {
-    internal sealed class NoAckRawUdpClient : AnyTransport, INoAckRawUnreliableClient
+    public sealed class NoAckRawUdpClient : NoAckRawUnreliableClientTransport, INoAckRawUnreliableClient
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;
@@ -137,6 +137,13 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
                 return;
             }
 
+            Conformance.AfterReceivedGate.Hit();
+            if (!IsStarted)
+            {
+                message.Release();
+                return;
+            }
+
             try
             {
                 handler(message);
@@ -163,7 +170,9 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
 
             try
             {
+                Conformance.BeforeSendCommitGate.Hit();
                 var result = sender.Send(message);
+                Conformance.AfterSendCommitGate.Hit();
                 return result == SendResult.NotConnected ? SendResult.Error : result;
             }
             catch (Exception e)
@@ -172,6 +181,11 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
             }
 
             return SendResult.Error;
+        }
+
+        protected override bool TryMakeReliableForDebug()
+        {
+            return true;
         }
 
         public override string ToString()
