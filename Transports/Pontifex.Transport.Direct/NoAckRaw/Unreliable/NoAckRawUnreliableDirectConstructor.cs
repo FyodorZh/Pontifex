@@ -30,8 +30,8 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
             var pool = builder.MemoryRental.CollectablePool;
             var bytesPool = builder.MemoryRental.ByteArraysPool;
             transport.SetDeliverySystem(
-                DeliverySystemFactory.Build(descriptionInfo, pool, bytesPool),
-                DeliverySystemFactory.Build(descriptionInfo, pool, bytesPool));
+                DeliverySystemFactory.Build(descriptionInfo, pool, bytesPool) ?? new PerfectDeliverySystem(),
+                DeliverySystemFactory.Build(descriptionInfo, pool, bytesPool) ?? new PerfectDeliverySystem());
             return transport;
         }
 

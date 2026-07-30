@@ -3,7 +3,7 @@ using System.Threading;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 
-namespace Pontifex.NoAck.Raw.Direct
+namespace Pontifex.NoAck.Raw.Unreliable.Direct
 {
     public sealed class Channel : IDisposable
     {
@@ -39,7 +39,7 @@ namespace Pontifex.NoAck.Raw.Direct
         /// It is possible and acceptable for messages that are processed right now to be undelivered.
         /// The most important invariant is to release messages.
         /// </summary>
-        public void SetDeliverySystem(IDeliverySystem clientDeliverySystem, IDeliverySystem serverDeliverySystem)
+        public void SetClientDeliverySystem(IDeliverySystem clientDeliverySystem)
         {
             if (clientDeliverySystem != _clientDeliverySystem)
             {
@@ -48,7 +48,14 @@ namespace Pontifex.NoAck.Raw.Direct
                 oldClient.Delivered -= OnClientDeliveredMessage;
                 oldClient.Clear();
             }
+        }
 
+        /// <summary>
+        /// It is possible and acceptable for messages that are processed right now to be undelivered.
+        /// The most important invariant is to release messages.
+        /// </summary>
+        public void SetServerDeliverySystem(IDeliverySystem serverDeliverySystem)
+        {
             if (serverDeliverySystem != _serverDeliverySystem)
             {
                 serverDeliverySystem.Delivered += OnServerDeliveredMessage;

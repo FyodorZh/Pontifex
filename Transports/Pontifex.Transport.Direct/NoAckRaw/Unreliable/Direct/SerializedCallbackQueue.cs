@@ -3,7 +3,7 @@ using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Concurrent;
 
-namespace Pontifex.NoAck.Raw.Direct
+namespace Pontifex.NoAck.Raw.Unreliable.Direct
 {
     internal sealed class SerializedCallbackQueue<T> : IDisposable
     {

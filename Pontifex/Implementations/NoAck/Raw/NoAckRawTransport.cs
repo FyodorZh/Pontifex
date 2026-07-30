@@ -14,15 +14,8 @@ namespace Pontifex.NoAck.Raw
         {
         }
 
-        protected class NoAckRawConformanceControl : ConformanceControl, INoAckRawConformanceControl, INoAckRawUnreliableConformanceControl
+        protected class NoAckRawConformanceControl : ConformanceControl, INoAckRawConformanceControl
         {
-            private readonly CheckPoint _beforeSendCommitGate = new();
-            
-            private readonly CheckPoint _afterSendCommitGate = new();
-
-            public ICheckPoint BeforeSendCommitGate => _beforeSendCommitGate;
-
-            public ICheckPoint AfterSendCommitGate => _afterSendCommitGate;
         }
     }
 }

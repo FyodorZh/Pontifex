@@ -1,4 +1,4 @@
-namespace Pontifex.NoAck.Raw.Direct
+namespace Pontifex.NoAck.Raw.Unreliable.Direct
 {
     internal static class DirectInfo
     {
