@@ -27,7 +27,6 @@
 
     <ItemGroup>
         <Folder Include="NoAck\Raw\Unreliable\" />
-        <Folder Include="NoAck\Raw\Unreliable\Tests\" />
     </ItemGroup>
 
 </Project>
