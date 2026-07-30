@@ -35,9 +35,10 @@ namespace Pontifex
         /// a concurrent operation that checks the transport state. A returned gate
         /// is inactive until armed by the test. A checkpoint hit calls
         /// <see cref="ICheckPoint.Hit"/> and therefore blocks only while its gate
-        /// is armed. All returned gates and this getter are safe for concurrent use.
+        /// is armed. The returned control can be armed and reset by the test. All
+        /// returned gates and this getter are safe for concurrent use.
         /// </remarks>
-        ICheckPoint BeforeStopStateTransitionGate { get; }
+        ICheckPointCtl BeforeStopStateTransitionGate { get; }
 
         /// <summary>
         /// A successfully started transport is about to invoke its
@@ -47,12 +48,12 @@ namespace Pontifex
         /// The transport has already completed its terminal state transition when
         /// this checkpoint is reached. The gate permits tests to race repeated
         /// <c>Stop</c> calls with callback dispatch and verify exactly-once
-        /// notification. A returned gate is inactive until armed by the test.
+        /// notification. A returned control is inactive until armed by the test.
         /// A checkpoint hit calls <see cref="ICheckPoint.Hit"/> and therefore
         /// blocks only while its gate is armed. All returned gates and this
         /// getter are safe for concurrent use.
         /// </remarks>
-        ICheckPoint BeforeStoppedCallbackGate { get; }
+        ICheckPointCtl BeforeStoppedCallbackGate { get; }
 
         /// <summary>
         /// Arms a one-shot fault that makes the next <see cref="ITransport.Start"/>

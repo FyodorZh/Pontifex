@@ -1,4 +1,3 @@
-using System;
 using Pontifex.Utils.CheckPointGate;
 
 namespace Pontifex.NoAck.Raw.Unreliable
@@ -9,18 +8,24 @@ namespace Pontifex.NoAck.Raw.Unreliable
     public interface INoAckRawUnreliableConformanceControl : INoAckRawConformanceControl
     {
         /// <summary>
-        /// A client or server is about to send data to underlying IO transport
+        /// An accepted message is about to reach an underlying IO commit attempt.
+        /// Synchronously rejected messages and accepted messages discarded before
+        /// a commit attempt do not hit this gate.
         /// </summary>
-        ICheckPoint BeforeSendCommitGate { get; }
+        ICheckPointCtl BeforeSendCommitGate { get; }
 
         /// <summary>
-        /// A client or server has just sent data to underlying IO transport
+        /// An accepted message has completed an underlying IO commit attempt.
         /// </summary>
-        ICheckPoint AfterSendCommitGate { get; }
+        ICheckPointCtl AfterSendCommitGate { get; }
         
         /// <summary>
-        /// A client or server received data from underlying IO transport
+        /// A valid, routed inbound message has been bound to the current sole
+        /// receive handler and is about to invoke that handler. The gate is hit
+        /// once per impending OnReceived invocation, immediately before it begins.
+        /// It is not hit for malformed, oversized, stopped or discarded messages,
+        /// or when no receive handler is attached.
         /// </summary>
-        ICheckPoint AfterReceivedGate { get; }
+        ICheckPointCtl AfterReceivedGate { get; }
     }
 }

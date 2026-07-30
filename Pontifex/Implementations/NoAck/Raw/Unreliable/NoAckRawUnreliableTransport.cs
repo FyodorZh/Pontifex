@@ -18,12 +18,12 @@ namespace Pontifex.NoAck.Raw.Unreliable
         {
             private readonly CheckPoint _beforeSendCommitGate = new();
             private readonly CheckPoint _afterSendCommitGate = new();
-            private readonly CheckPoint _beforeReceivedGate = new();
+            private readonly CheckPoint _afterReceivedGate = new();
 
-            public ICheckPoint BeforeSendCommitGate => _beforeSendCommitGate;
-            public ICheckPoint AfterSendCommitGate => _afterSendCommitGate;
+            public ICheckPointCtl BeforeSendCommitGate => _beforeSendCommitGate;
+            public ICheckPointCtl AfterSendCommitGate => _afterSendCommitGate;
 
-            public ICheckPoint AfterReceivedGate => _beforeReceivedGate;
+            public ICheckPointCtl AfterReceivedGate => _afterReceivedGate;
         }
     }
 }
