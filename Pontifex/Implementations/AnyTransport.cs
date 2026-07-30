@@ -19,6 +19,7 @@ namespace Pontifex
 
         private bool _isValid = true;
         private bool _started;
+        private bool _hasStarted;
 
         private Action<StopReason>? _onStopped;
         
@@ -91,35 +92,37 @@ namespace Pontifex
 
         public bool Start(Action<StopReason> onStopped)
         {
+            if (onStopped == null!)
+            {
+                throw new ArgumentNullException(nameof(onStopped));
+            }
+
             lock (_locker)
             {
-                if (_isValid)
+                if (_isValid && !_hasStarted)
                 {
-                    if (!_started)
+                    _hasStarted = true;
+                    if (Conformance.ShouldFailNextStart_AnyTransportLevel())
                     {
-                        if (Conformance.ShouldFailNextStart_AnyTransportLevel())
-                        {
-                            Fail("Start", "Conformance control forced failure");
-                            return false;
-                        }
-                        
-                        _started = true;
-                        _onStopped = onStopped;
-                        if (TryStart())
-                        {
-                            if (!_started)
-                            {
-                                _onStopped = null;
-                                return false;
-                            }
-                            OnStarted();
-                            return true;
-                        }
-                        _started = false;
-                        _onStopped = null;
-                        Fail("Start", "Failed to start");
+                        Fail("Start", "Conformance control forced failure");
                         return false;
                     }
+
+                    _started = true;
+                    _onStopped = onStopped;
+                    if (TryStart())
+                    {
+                        if (!_started)
+                        {
+                            _onStopped = null;
+                            return false;
+                        }
+                        OnStarted();
+                        return true;
+                    }
+                    _started = false;
+                    _onStopped = null;
+                    Fail("Start", "Failed to start");
                     return false;
                 }
                 return false;
@@ -241,9 +244,9 @@ namespace Pontifex
             
             public virtual string Name => "ConformanceControl(AnyTransport)";
 
-            public ICheckPoint BeforeStopStateTransitionGate => _beforeStopStateTransitionGate;
+            public ICheckPointCtl BeforeStopStateTransitionGate => _beforeStopStateTransitionGate;
 
-            public ICheckPoint BeforeStoppedCallbackGate => _beforeStoppedCallbackGate;
+            public ICheckPointCtl BeforeStoppedCallbackGate => _beforeStoppedCallbackGate;
             
             protected virtual void OnOwnerSet(){}
 
@@ -255,7 +258,7 @@ namespace Pontifex
 
             public virtual void FailNextStart()
             {
-                if (_owner.IsStarted || Interlocked.Exchange(ref _failNextStartFlag, 1) == 1)
+                if (_owner.HasStartBeenAttempted || Interlocked.Exchange(ref _failNextStartFlag, 1) == 1)
                 {
                     throw new InvalidOperationException();
                 }
@@ -273,6 +276,17 @@ namespace Pontifex
             public bool ShouldFailNextStart_AnyTransportLevel()
             {
                 return Volatile.Read(ref _failNextStartFlag) != 0;
+            }
+        }
+
+        private bool HasStartBeenAttempted
+        {
+            get
+            {
+                lock (_locker)
+                {
+                    return _hasStarted;
+                }
             }
         }
     }
