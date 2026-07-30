@@ -83,10 +83,9 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
                         Conformance.AfterReceivedGate.Hit();
                         handler(message);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        message.Release();
-                        throw;
+                        Log.wtf(ex);
                     }
                 }
                 else
@@ -117,15 +116,15 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
 
         private SendResult SendToServer(UnionDataList message)
         {
+            if (_channel == null)
+            {
+                message?.Release();
+                return SendResult.Error;
+            }
+
             if (message == null!)
             {
                 return SendResult.InvalidMessage;
-            }
-            
-            if (_channel == null)
-            {
-                message.Release();
-                return SendResult.NotConnected;
             }
             
             if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)

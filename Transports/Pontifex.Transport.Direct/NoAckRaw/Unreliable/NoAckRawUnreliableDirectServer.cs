@@ -81,10 +81,9 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
                         Conformance.AfterReceivedGate.Hit();
                         handler(clientEp, message);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        message.Release();
-                        throw;
+                        Log.wtf(ex);
                     }
                 }
                 else
@@ -98,15 +97,15 @@ namespace Pontifex.NoAck.Raw.Unreliable.Direct
 
         private SendResult SendToClient(IEndPoint destination, UnionDataList message)
         {
+            if (!IsStarted)
+            {
+                message?.Release();
+                return SendResult.Error;
+            }
+
             if (message == null!)
             {
                 return SendResult.InvalidMessage;
-            }
-
-            if (!IsStarted)
-            {
-                message.Release();
-                return SendResult.NotConnected;
             }
             
             if (!_channels.TryGetValue(destination, out _))
