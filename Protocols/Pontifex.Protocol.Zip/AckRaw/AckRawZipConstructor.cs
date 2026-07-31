@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Ack.Raw;
 using Pontifex.Factory;
-using Pontifex.Protocols;
+using Pontifex.Ack.Raw.Reliable.Protocols;
 using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Zip

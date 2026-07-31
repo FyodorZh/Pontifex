@@ -1,7 +1,7 @@
 using System;
 using Pontifex.Utils;
 
-namespace Pontifex.NoAck.Raw
+namespace Pontifex.NoAck.Raw.Reliable
 {
     public interface INoAckRawReliableClient : ITransport
     {

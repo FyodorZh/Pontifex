@@ -1,10 +1,8 @@
 ﻿using System;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
-using Pontifex.Ack.Raw.Reliable;
 using Scriba;
 
-namespace Pontifex.Protocols
+namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
     public class AckRawWrapperServer<TAcknowledgerWrapper> : AckRawReliableServer
         where TAcknowledgerWrapper : AcknowledgerWrapper

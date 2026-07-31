@@ -1,11 +1,9 @@
 ﻿using System;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
-using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Protocols
+namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
     public class AckRawWrapperClient<TLogic> : AckRawWrapperClient
         where TLogic : IAckRawWrapperClientLogic

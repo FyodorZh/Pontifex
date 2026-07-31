@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Ionic.Zlib;
-using Pontifex.Protocols;
+using Pontifex.Ack.Raw.Reliable.Protocols;
 using Pontifex.Utils;
 using Scriba;
 

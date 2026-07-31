@@ -1,6 +1,6 @@
 ﻿using Pontifex.Utils;
 
-namespace Pontifex.Protocols
+namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
     public interface IAckRawWrapperServerLogic : IAckRawWrapperLogic
     {

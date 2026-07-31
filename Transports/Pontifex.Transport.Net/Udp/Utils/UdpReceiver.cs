@@ -8,7 +8,7 @@ using Pontifex.Controls;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.NoAck
+namespace Pontifex.NetSockets
 {
     internal class UdpReceiver
     {

@@ -4,11 +4,9 @@ using System.Collections.Generic;
 using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
 using Pontifex.Ack.Raw.Reliable;
 using dm = Pontifex.DeliveryManager;
-using Pontifex.NoAck.Raw;
-using Pontifex.StopReasons;
+using Pontifex.NoAck.Raw.Unreliable;
 using Pontifex.Utils;
 using Scriba;
 

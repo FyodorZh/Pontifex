@@ -1,9 +1,7 @@
 ﻿using System;
-using Pontifex.Ack.Raw;
-using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Utils;
 
-namespace Pontifex.Protocols
+namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
     public class AcknowledgerWrapper<THandlerWrapper> : AcknowledgerWrapper
         where THandlerWrapper : IHandlerWrapper

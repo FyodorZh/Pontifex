@@ -9,7 +9,7 @@ using Pontifex.Api.Server;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 
-namespace Pontifex.AckRawReliable.Tests;
+namespace Pontifex.Ack.Raw.Reliable.Tests;
 
 public struct KickMessage : IDataStruct
 {

@@ -4,7 +4,7 @@ using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Protocols
+namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
     public abstract class AckRawWrapperLogic : IAckRawWrapperLogic
     {

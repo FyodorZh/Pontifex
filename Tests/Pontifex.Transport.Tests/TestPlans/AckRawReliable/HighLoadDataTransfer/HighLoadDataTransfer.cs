@@ -8,7 +8,7 @@ using Pontifex.StopReasons;
 using Pontifex.Tests;
 using Pontifex.Utils;
 
-namespace Pontifex.AckRawReliable.Tests
+namespace Pontifex.Ack.Raw.Reliable.Tests
 {
     [TestFixtureSource(typeof(AckRawReliableStacks))]
     public class HighLoadDataTransfer

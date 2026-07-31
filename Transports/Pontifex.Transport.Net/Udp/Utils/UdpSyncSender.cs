@@ -5,7 +5,7 @@ using Actuarius.Memory;
 using Pontifex.Controls;
 using Pontifex.Utils;
 
-namespace Pontifex.NoAck
+namespace Pontifex.NetSockets
 {
     internal class UdpSyncSender
     {
