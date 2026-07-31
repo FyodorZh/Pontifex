@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Reliable.Logger
 {
     public abstract class AckRawBaseEndpointWrapper : IAckRawReliableBaseEndpoint
     {

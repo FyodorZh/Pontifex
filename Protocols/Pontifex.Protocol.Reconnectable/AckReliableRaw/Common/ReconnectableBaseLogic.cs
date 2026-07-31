@@ -10,7 +10,7 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IAckRawBaseHandler, IAckRawReliableBaseEndpoint, IEndPoint
         where TEndpoint : class, IAckRawReliableBaseEndpoint

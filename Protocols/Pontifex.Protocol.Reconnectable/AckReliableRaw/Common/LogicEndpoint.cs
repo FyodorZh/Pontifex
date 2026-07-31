@@ -2,7 +2,7 @@ using System;
 using Pontifex.Abstractions;
 using Pontifex.Ack.Raw;
 
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     internal class LogicEndpoint<TEndpoint> : IEndPoint
         where TEndpoint : class, IAckRawReliableBaseEndpoint

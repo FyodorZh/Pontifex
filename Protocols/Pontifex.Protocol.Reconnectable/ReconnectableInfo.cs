@@ -1,7 +1,7 @@
 ﻿using System;
 using Actuarius.Memory;
 
-namespace Pontifex.Protocols.Reconnectable
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     public static class ReconnectableInfo
     {

@@ -1,4 +1,4 @@
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     internal enum ReconnectableLogicState
     {

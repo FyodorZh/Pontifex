@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Archivarius;
 using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Api;
 using Pontifex.Api.Client;
 using Pontifex.Api.Server;

@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Ionic.Zlib;
 using Pontifex.Abstractions;
+using Pontifex.Protocols;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Protocols.Zip
+namespace Pontifex.Ack.Raw.Reliable.Zip
 {
     public abstract class CompressorLogic : AckRawWrapperLogic, IReleasableResource
     {

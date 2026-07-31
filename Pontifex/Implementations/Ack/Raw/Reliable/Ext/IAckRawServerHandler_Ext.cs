@@ -2,7 +2,7 @@ using System;
 using Actuarius.Concurrent;
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Reliable
 {
     public static class IAckRawServerHandler_Ext
     {

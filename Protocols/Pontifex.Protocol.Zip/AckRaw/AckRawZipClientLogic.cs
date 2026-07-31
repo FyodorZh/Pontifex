@@ -1,8 +1,9 @@
 ﻿using Actuarius.Memory;
+using Pontifex.Protocols;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Protocols.Zip
+namespace Pontifex.Ack.Raw.Reliable.Zip
 {
     class AckRawZipClientLogic : CompressorLogic, IAckRawWrapperClientLogic
     {

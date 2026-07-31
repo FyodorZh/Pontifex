@@ -5,7 +5,7 @@ using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     class ReconnectableServerLogic : ReconnectableBaseLogic<IAckRawReliableServerSideEndpoint>, IAckRawReliableServerHandler, IAckRawReliableServerSideEndpoint
     {

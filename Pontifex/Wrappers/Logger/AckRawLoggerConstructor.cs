@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Pontifex.Ack.Raw;
 using Pontifex.Factory;
 
-namespace Pontifex.Protocols.Monitoring.AckRaw
+namespace Pontifex.Ack.Raw.Reliable.Logger
 {
     public class AckRawLoggerConstructor : ITransportConstructor
     {

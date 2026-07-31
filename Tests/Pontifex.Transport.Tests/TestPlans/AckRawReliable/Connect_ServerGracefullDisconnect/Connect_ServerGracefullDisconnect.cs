@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 using Pontifex.Utils;

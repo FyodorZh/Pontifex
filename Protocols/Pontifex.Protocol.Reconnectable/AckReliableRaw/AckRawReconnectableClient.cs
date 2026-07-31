@@ -4,7 +4,7 @@ using Operarius;
 using Pontifex.Ack.Raw;
 using Scriba;
 
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     public sealed class AckRawReconnectableClient : AckRawReliableClient, IAckRawReliableClient
     {

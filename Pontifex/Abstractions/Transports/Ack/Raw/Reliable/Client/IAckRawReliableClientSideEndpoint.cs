@@ -1,4 +1,4 @@
-﻿namespace Pontifex.Ack.Raw
+﻿namespace Pontifex.Ack.Raw.Reliable
 {
     /// <summary>
     /// Client-side view of an ACK raw endpoint.

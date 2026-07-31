@@ -5,7 +5,7 @@ using Pontifex.Ack.Raw;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex
+namespace Pontifex.Ack.Raw.Reliable.Logger
 {
     public class AckRawReliableServerLogger : IAckRawReliableServer, IRawServerAcknowledger<IAckRawReliableServerHandler>, IAckRawReliableServerHandler
     {

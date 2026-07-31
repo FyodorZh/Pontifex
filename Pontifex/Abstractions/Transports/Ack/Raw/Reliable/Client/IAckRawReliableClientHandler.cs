@@ -1,6 +1,6 @@
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Reliable
 {
     /// <summary>
     /// Client-side handler for the Reliable ACK raw transport.

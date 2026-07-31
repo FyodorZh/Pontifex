@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Pontifex.Ack.Raw;
 using Pontifex.Factory;
 
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     public class AckRawReconnectableConstructor : ITransportConstructor
     {

@@ -1,6 +1,6 @@
 ﻿using Actuarius.Collections;
 
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     public class SessionMap<TSession>
         where TSession : class

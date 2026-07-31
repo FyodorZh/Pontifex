@@ -1,4 +1,4 @@
-﻿namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+﻿namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     public readonly struct SessionId : System.IEquatable<SessionId>
     {

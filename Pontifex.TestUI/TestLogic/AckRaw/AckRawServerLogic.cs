@@ -5,6 +5,7 @@ using Pontifex.Utils;
 using Scriba;
 using Pontifex;
 using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 
 namespace TransportAnalyzer.TestLogic
 {

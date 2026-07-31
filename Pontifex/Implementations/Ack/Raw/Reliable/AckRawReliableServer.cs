@@ -2,7 +2,7 @@ using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Reliable
 {
     public abstract class AckRawReliableServer : AnyTransport, IAckRawReliableServer
     {

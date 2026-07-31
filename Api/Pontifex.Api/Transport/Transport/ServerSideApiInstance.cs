@@ -2,6 +2,7 @@ using System;
 using Actuarius.Memory;
 using Pontifex.Abstractions;
 using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 using Scriba;

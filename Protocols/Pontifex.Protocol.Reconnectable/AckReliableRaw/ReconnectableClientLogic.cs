@@ -8,7 +8,7 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Protocols.Reconnectable.AckReliableRaw
+namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
     class ReconnectableClientLogic : ReconnectableBaseLogic<IAckRawReliableClientSideEndpoint>, IAckRawReliableClientHandler, IAckRawReliableClientSideEndpoint
     {

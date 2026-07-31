@@ -1,5 +1,6 @@
 ﻿using System;
 using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Utils;
 
 namespace Pontifex.Protocols

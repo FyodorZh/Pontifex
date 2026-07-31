@@ -1,7 +1,7 @@
 ﻿using System;
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Reliable.Logger
 {
     public class AckRawClientSideEndpointWrapper : AckRawBaseEndpointWrapper, IAckRawReliableClientSideEndpoint
     {

@@ -1,4 +1,4 @@
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Reliable
 {
     /// <summary>
     /// Marker interface for a reliable (e.g. TCP) ACK raw server transport.

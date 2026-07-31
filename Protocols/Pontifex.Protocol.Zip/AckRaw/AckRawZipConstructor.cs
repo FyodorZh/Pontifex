@@ -6,7 +6,7 @@ using Pontifex.Factory;
 using Pontifex.Protocols;
 using Scriba;
 
-namespace Pontifex.Protocols.Zip
+namespace Pontifex.Ack.Raw.Reliable.Zip
 {
     public class AckRawZipConstructor : ITransportConstructor
     {
