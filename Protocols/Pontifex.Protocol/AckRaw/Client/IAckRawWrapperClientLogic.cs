@@ -1,5 +1,4 @@
-﻿using Pontifex.Abstractions;
-using Pontifex.Utils;
+﻿using Pontifex.Utils;
 
 namespace Pontifex.Protocols
 {

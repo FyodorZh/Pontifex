@@ -1,5 +1,3 @@
-using Pontifex.Abstractions;
-
 namespace Pontifex.Test
 {
     public class UnknownControlView : ControlView

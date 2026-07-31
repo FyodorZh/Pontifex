@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Security;
 using System.Threading;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Controls;
+using Pontifex.Controls;
 using Pontifex.Utils;
 using Scriba;
 

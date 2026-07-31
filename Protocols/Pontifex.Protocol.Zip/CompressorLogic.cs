@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Ionic.Zlib;
-using Pontifex.Abstractions;
 using Pontifex.Protocols;
 using Pontifex.Utils;
 using Scriba;

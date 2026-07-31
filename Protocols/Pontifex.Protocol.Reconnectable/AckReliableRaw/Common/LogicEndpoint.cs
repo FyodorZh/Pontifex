@@ -1,5 +1,4 @@
 using System;
-using Pontifex.Abstractions;
 using Pontifex.Ack.Raw;
 
 namespace Pontifex.Ack.Raw.Reliable.Reconnectable

@@ -1,4 +1,4 @@
-namespace Pontifex.Abstractions.Controls
+namespace Pontifex.Controls
 {
     public interface ICCUController : IControl
     {

@@ -4,7 +4,6 @@ using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.Abstractions;
 using Pontifex.Ack.Raw;
 using Pontifex.StopReasons;
 using Pontifex.Utils;

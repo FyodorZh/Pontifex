@@ -1,6 +1,4 @@
-﻿using Pontifex.Abstractions;
-
-namespace Pontifex.Endpoints
+﻿namespace Pontifex.Endpoints
 {
     public sealed class VoidEndPoint : IEndPoint
     {

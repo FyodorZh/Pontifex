@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Pontifex.Abstractions;
 using Pontifex.Utils;
 
 namespace Pontifex.Protocols

@@ -6,7 +6,7 @@ using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Controls;
+using Pontifex.Controls;
 using Pontifex.Utils;
 using Scriba;
 

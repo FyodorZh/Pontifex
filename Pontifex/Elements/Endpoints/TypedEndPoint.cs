@@ -1,5 +1,4 @@
 ﻿using System;
-using Pontifex.Abstractions;
 
 namespace Pontifex.Endpoints
 {

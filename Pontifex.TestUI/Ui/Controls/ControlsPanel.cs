@@ -1,4 +1,3 @@
-using Pontifex.Abstractions;
 using Pontifex.Ack.Raw;
 using Pontifex.Ack.Raw.Reliable;
 using Scriba;

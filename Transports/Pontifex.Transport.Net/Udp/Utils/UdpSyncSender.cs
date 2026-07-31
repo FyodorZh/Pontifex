@@ -2,7 +2,7 @@
 using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
-using Pontifex.Abstractions.Controls;
+using Pontifex.Controls;
 using Pontifex.Utils;
 
 namespace Pontifex.NoAck
