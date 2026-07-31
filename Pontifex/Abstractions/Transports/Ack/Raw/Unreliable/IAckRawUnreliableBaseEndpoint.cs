@@ -1,6 +1,6 @@
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Unreliable
 {
     /// <summary>
     /// Represents one side of a raw ACK-based connection.

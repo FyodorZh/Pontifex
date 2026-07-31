@@ -1,4 +1,4 @@
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Unreliable
 {
     /// <summary>
     /// Marker interface for an unreliable (e.g. UDP) ACK raw client transport.
