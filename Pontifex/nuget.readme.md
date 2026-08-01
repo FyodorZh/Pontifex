@@ -14,7 +14,7 @@ Pontifex is a transport abstraction layer designed to simplify network communica
 - **Synchronized Handlers**: Thread-safe message handling utilities
 - **Delivery ID Management**: Cyclic delivery ID tracking with wrap-around semantics
 - **Endpoint Flexibility**: Support for various endpoint types (GUID, Long, String, Typed, Void)
-- **Logging & Monitoring**: Integrated logging wrappers for AckRaw transports
+- **Logging & Monitoring**: Integrated logging wrappers for AckRawReliable transports
 - **Traffic Control**: Built-in mechanisms for delivery control and traffic management
 
 ## Architecture

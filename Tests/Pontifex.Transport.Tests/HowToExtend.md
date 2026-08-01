@@ -53,9 +53,10 @@ static TransportRegistry()
     Memory = MemoryRental.Shared;
     Builder = new TransportBuilder(ConvertersGraph.Default);
 
-    Builder.RegisterTransport(new AckRawDirectConstructor());
+    Builder.RegisterTransport(new AckRawReliableDirectConstructor());
     Builder.RegisterTransport(new AckRawTcpConstructor());
-    Builder.RegisterTransport(new NoAckRawReliableDirectConstructor());
+    Builder.RegisterTransport(new NoAckRawUnreliableDirectConstructor());
+    Builder.RegisterTransport(new NoAckRawUdpConstructor());
     Builder.RegisterTransport(new MyNewWebSocketConstructor());  // ← ADD
 }
 ```
@@ -116,9 +117,9 @@ A "test plan" is a set of related tests for one transport abstraction. There are
 
 Create a new fixture class and use `_stack.GetTransportFactory()` to build transports.
 
-**Directory convention:** `TestPlans/{TransportTypeName}/{TestPlanName}/{TestName}Tests.cs`
+**Directory convention:** `TestPlans/{Ack|NoAck}/{Raw|RR}/{Reliable|Unreliable}/{TestPlanName}/{TestName}Tests.cs`
 
-**Example:** `TestPlans/NoAckRawReliable/Ping/PingTests.cs`:
+**Example:** `TestPlans/NoAck/Raw/Reliable/Ping/PingTests.cs`:
 
 ```csharp
 using Actuarius.Memory;
@@ -166,7 +167,7 @@ Every API-based test plan follows the **canonical structure**:
 4. Each client connects, performs work, calls `GracefulShutdown`, asserts no `AnyFail` stop reasons
 5. Three test cases: `Test_Single` (1, 1), `Test_Small` (`GetSmallTestSize()`), `Test_Big` (`GetBigTestSize()`)
 
-**Example:** `TestPlans/AckRawReliable/TestProtocols/ApiPing/PingTests.cs`:
+**Example:** `TestPlans/Ack/Raw/Reliable/TestProtocols/ApiPing/PingTests.cs`:
 
 ```csharp
 using System.Collections.Concurrent;
@@ -328,7 +329,7 @@ When you need a new API protocol for testing (e.g. a streaming API, a complex st
 
 ### Step A: Define the Protocol
 
-Create a file in `TestPlans/AckRawReliable/TestProtocols/YourProtocolName/` together with its test file:
+Create a file in `TestPlans/Ack/Raw/Reliable/TestProtocols/YourProtocolName/` together with its test file:
 
 ```csharp
 using Archivarius;
@@ -570,7 +571,7 @@ Use for TCP/UDP stacks that need real network sockets. Avoids port conflicts dur
 ## 6. File Organization Convention
 
 ```
-Tests/Pontifex.Tests/
+Tests/Pontifex.Transport.Tests/
 ├── Core/                                    # Test infrastructure
 │   ├── DynamicPortAllocator.cs              # Random port helper
 │   ├── TestHarness.cs                       # ApiTestHarness + TestServerSideApiInstance
@@ -584,21 +585,15 @@ Tests/Pontifex.Tests/
 │   ├── AckRawReliableStacks.cs
 │   └── NoAckRawReliableStacks.cs
 ├── TestPlans/                               # All test plans
-│   ├── AckRawReliable/
+│   ├── Ack/Raw/Reliable/                    # AckRawReliable test plans
 │   │   ├── TestProtocols/                   # API-based test plans (name prefix 'Api')
-│   │   │   ├── ApiPing/
-│   │   │   │   └── PingTests.cs             # API + tests in one file (canonical pattern)
-│   │   │   ├── ApiConnectDisconnect/
-│   │   │   │   └── ConnectDisconnectTests.cs
-│   │   │   └── ApiConnectReceiveKick/
-│   │   │       └── ConnectReceiveKickTests.cs
-│   │   ├── Connect_ServerGracefullDisconnect/
-│   │   │   └── Connect_ServerGracefullDisconnect.cs  # Raw handler test
-│   │   └── HighLoadDataTransfer/
-│   │       └── HighLoadDataTransfer.cs               # Raw handler test
-│   └── NoAckRawReliable/
-│       └── Ping/
-│           └── PingTests.cs                 # Raw exchange test (no API layer)
+│   │   │   ├── ApiPing/PingTests.cs         # API + tests in one file (canonical pattern)
+│   │   │   ├── ApiConnectDisconnect/ConnectDisconnectTests.cs
+│   │   │   └── ApiConnectReceiveKick/ConnectReceiveKickTests.cs
+│   │   ├── Connect_ServerGracefullDisconnect/Connect_ServerGracefullDisconnect.cs  # Raw handler test
+│   │   └── HighLoadDataTransfer/HighLoadDataTransfer.cs                             # Raw handler test
+│   └── NoAck/Raw/Reliable/                  # NoAckRawReliable test plans
+│       └── Ping/PingTests.cs                # Raw exchange test (no API layer)
 ```
 
 ---
@@ -611,8 +606,7 @@ All URIs follow the pattern `transport://<scheme>|<params>`. The `DescriptionFac
 |-----------|-------------|-------|
 | Direct | `transport://direct\|server-name` | Server name is arbitrary; client uses same name to connect |
 | TCP | `transport://tcp\|127.0.0.1:9000/60` | `/60` = disconnect timeout in seconds |
-| Direct NoAck Raw Reliable | `transport://direct-noack-raw-reliable\|srv-{guid}` | Unacknowledged reliable direct transport |
-| Convert | `transport://convert\|NoAckRawReliable:udp\|127.0.0.1:9000` | Builds inner transport, converts via ConvertersGraph |
+| Convert | `transport://convert\|AckRawReliable:udp\|127.0.0.1:9000` | Builds an inner NoAckRawUnreliable (e.g. Udp) transport and converts it via ConvertersGraph |
 | Zip wrapper | `transport://zip\|9:direct\|srv` | `9` = compression level (optional; default 9) |
 | Log wrapper | `transport://log\|direct\|srv` | Wraps inner transport with logging |
 | Reconnectable | `transport://reconnectable\|30:direct\|srv` | `30` = reconnect timeout in seconds |
