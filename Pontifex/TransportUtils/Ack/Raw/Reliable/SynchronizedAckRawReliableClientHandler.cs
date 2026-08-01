@@ -1,16 +1,15 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.Concurrent;
-using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw
+namespace Pontifex.Ack.Raw.Reliable
 {
     /// <summary>
     /// Враппер над клиентским хендлером. Делает взаимодействие однопоточным из подконтрольного треда,
     /// кроме вызова  GetAckData()
     /// </summary>
-    public class SynchronizedAckRawClientHandler : IAckRawReliableClientHandler
+    public class SynchronizedAckRawReliableClientHandler : IAckRawReliableClientHandler
     {
         private readonly IAckRawReliableClientHandler _handler;
         private readonly ConcurrentQueueValve<UnionDataList> _receivedDataQueue;
@@ -27,7 +26,7 @@ namespace Pontifex.Ack.Raw
         private bool _stopServiced = true;
         private StopReason? _stopReason;
 
-        public SynchronizedAckRawClientHandler(IAckRawReliableClientHandler handler, Action onBufferOverflow)
+        public SynchronizedAckRawReliableClientHandler(IAckRawReliableClientHandler handler, Action onBufferOverflow)
         {
             _receivedDataQueue = new ConcurrentQueueValve<UnionDataList>(
                 new LimitedConcurrentQueue<UnionDataList>(500),
