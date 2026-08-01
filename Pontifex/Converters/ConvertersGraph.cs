@@ -25,7 +25,7 @@ namespace Pontifex.Converters
         
         public ConvertersGraph(params ITransportConverter[] converters)
         {
-            const int N = 8;
+            int N = Enum.GetValues(typeof(TransportType)).Length;
             _convertersMap = new List<ITransportConverter>?[N][];
             for (int i = 0; i < N; i++)
             {

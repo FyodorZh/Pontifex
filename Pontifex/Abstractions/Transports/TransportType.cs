@@ -1,24 +1,18 @@
-using System;
-
 namespace Pontifex
 {
-    [Flags]
+    // Closed set of eight transport contracts formed by combining
+    // Ack/NoAck, Raw/RR and Reliable/Unreliable. Values are a plain 0..7
+    // index consumed by ConvertersGraph; they carry no flags semantics and
+    // are ordered by the naming hierarchy {Raw|RR}{Reliable|Unreliable}{Ack|NoAck}.
     public enum TransportType
     {
-        AckRawReliable = _Ack | _Raw | _Reliable,
-        AckRawUnreliable = _Ack | _Raw | _Unreliable,
-        AckRRReliable = _Ack | _Rr | _Reliable,
-        AckRRUnreliable = _Ack | _Rr | _Unreliable,
-        NoAckRawReliable = _NoAck | _Raw | _Reliable,
-        NoAckRawUnreliable = _NoAck | _Raw | _Unreliable,
-        NoAckRRReliable = _NoAck | _Rr | _Reliable,
-        NoAckRRUnreliable = _NoAck | _Rr | _Unreliable,
-        
-        _Ack = 1,
-        _NoAck = 0,
-        _Raw = 2,
-        _Rr = 0,
-        _Reliable = 4,
-        _Unreliable = 0,
+        AckRawReliable = 0,
+        NoAckRawReliable = 1,
+        AckRawUnreliable = 2,
+        NoAckRawUnreliable = 3,
+        AckRRReliable = 4,
+        NoAckRRReliable = 5,
+        AckRRUnreliable = 6,
+        NoAckRRUnreliable = 7,
     }
 }
