@@ -4,7 +4,7 @@ using Pontifex.Factory;
 
 namespace Pontifex.Ack.Raw.Reliable.Direct
 {
-    public class AckRawDirectConstructor : ITransportConstructor
+    public class AckRawReliableDirectConstructor : ITransportConstructor
     {
         public TransportType Type => TransportType.AckRawReliable;
         public string Name => DirectInfo.TransportName;
@@ -14,7 +14,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
 
-            return new AckRawDirectServer(id, builder.Logger, builder.MemoryRental);
+            return new AckRawReliableDirectServer(id, builder.Logger, builder.MemoryRental);
         }
 
         public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
@@ -22,7 +22,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
 
-            return new AckRawDirectClient(id, builder.Logger, builder.MemoryRental);
+            return new AckRawReliableDirectClient(id, builder.Logger, builder.MemoryRental);
         }
 
         public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()

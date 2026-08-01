@@ -49,7 +49,7 @@ namespace Pontifex.Test
             }
             else
             {
-                if (_server == null || !_server.Init(new AckRawServerLogic(_server.Log, _server.Memory)))
+                if (_server == null || !_server.Init(new AckRawReliableServerLogic(_server.Log, _server.Memory)))
                 {
                     _logger.e("Failed to construct server");
                     return;

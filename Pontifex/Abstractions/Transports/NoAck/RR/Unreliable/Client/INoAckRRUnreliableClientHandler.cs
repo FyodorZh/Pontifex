@@ -2,9 +2,9 @@ using Pontifex.Utils;
 
 namespace Pontifex.NoAck.RR.Unreliable
 {
-    public interface INoAckUnreliableRRClientHandler : IHandler
+    public interface INoAckRRUnreliableClientHandler : IHandler
     {
-        void Started(INoAckUnreliableRRServerEndpoint endpoint);
+        void Started(INoAckRRUnreliableServerEndpoint endpoint);
 
         void Received(UnionDataList message);
 

@@ -19,7 +19,7 @@ namespace Pontifex.Test
 
         public TransportFactory()
         {
-            mBuilder.RegisterTransport(new AckRawDirectConstructor());
+            mBuilder.RegisterTransport(new AckRawReliableDirectConstructor());
             mBuilder.RegisterTransport(new AckRawTcpConstructor());
             mBuilder.RegisterTransport(new AckRawZipConstructor());
             mBuilder.RegisterTransport(new AckRawReconnectableConstructor());

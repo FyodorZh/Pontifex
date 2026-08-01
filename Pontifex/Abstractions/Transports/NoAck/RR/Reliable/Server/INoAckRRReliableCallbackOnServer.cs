@@ -2,7 +2,7 @@ using Pontifex.Utils;
 
 namespace Pontifex.NoAck.RR.Reliable
 {
-    public interface INoAckReliableRRCallbackOnServer
+    public interface INoAckRRReliableCallbackOnServer
     {
         int MessageMaxByteSize { get; }
 

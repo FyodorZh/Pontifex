@@ -10,12 +10,12 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.RR.Unreliable.Udp
 {
-    internal sealed class NoAckRRUdpClient : AnyTransport, INoAckUnreliableRRClient, INoAckUnreliableRRServerEndpoint
+    internal sealed class NoAckRRUdpClient : AnyTransport, INoAckRRUnreliableClient, INoAckRRUnreliableServerEndpoint
     {
         private readonly IPEndPoint mRemoteEndPoint;
         private readonly IEndPoint mManagedRemoteEndPoint;
 
-        private INoAckUnreliableRRClientHandler? mHandler;
+        private INoAckRRUnreliableClientHandler? mHandler;
 
         private UdpSyncSender? mSender;
         private UdpReceiver? mReceiver;
@@ -34,7 +34,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
             //AppendControl(mTrafficCollector);
         }
 
-        bool INoAckUnreliableRRClient.Init(INoAckUnreliableRRClientHandler handler)
+        bool INoAckRRUnreliableClient.Init(INoAckRRUnreliableClientHandler handler)
         {
             if (handler == null!)
             {
@@ -177,7 +177,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
             }
         }
 
-        SendResult INoAckUnreliableRRServerEndpoint.Send(UnionDataList message)
+        SendResult INoAckRRUnreliableServerEndpoint.Send(UnionDataList message)
         {
             if (message == null!)
             {

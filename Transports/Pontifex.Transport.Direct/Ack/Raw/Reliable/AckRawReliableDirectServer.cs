@@ -5,14 +5,14 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Direct
 {
-    public class AckRawDirectServer : AckRawReliableServer, IAckRawReliableServer
+    public class AckRawReliableDirectServer : AckRawReliableServer, IAckRawReliableServer
     {
         private readonly StringEndPoint _localEp;
         private DirectServer? _server;
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
-        public AckRawDirectServer(string serverName, ILogger logger, IMemoryRental memory)
+        public AckRawReliableDirectServer(string serverName, ILogger logger, IMemoryRental memory)
             : base(DirectInfo.TransportName, logger, memory)
         {
             _localEp = new StringEndPoint(serverName);

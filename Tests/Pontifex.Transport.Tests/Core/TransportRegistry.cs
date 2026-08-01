@@ -35,7 +35,7 @@ public static class TransportRegistry
         Memory = MemoryRental.Shared;
         Builder = new TransportBuilder(ConvertersGraph.Default);
 
-        Builder.RegisterTransport(new AckRawDirectConstructor());
+        Builder.RegisterTransport(new AckRawReliableDirectConstructor());
         Builder.RegisterTransport(new AckRawTcpConstructor());
         //Builder.RegisterTransport(new NoAckRawReliableDirectConstructor());
         Builder.RegisterTransport(new NoAckRawUnreliableDirectConstructor());

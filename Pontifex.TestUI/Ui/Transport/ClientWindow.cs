@@ -49,7 +49,7 @@ namespace Pontifex.Test
 
             if (startApi == null)
             {
-                var clientLogic = new AckRawClientLogic(_transport.Memory, _transport.Log, 1);
+                var clientLogic = new AckRawReliableClientLogic(_transport.Memory, _transport.Log, 1);
                 clientLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
                 clientLogic.Disconnected += _ => { controlsPanel.SetEndpoint(null); };
 

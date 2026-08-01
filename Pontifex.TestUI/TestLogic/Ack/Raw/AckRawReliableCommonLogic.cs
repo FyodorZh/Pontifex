@@ -3,7 +3,7 @@ using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
-    abstract class AckRawCommonLogic
+    abstract class AckRawReliableCommonLogic
     {
         const int MinN = 200;
         const int MaxN = 2000;
@@ -14,7 +14,7 @@ namespace TransportAnalyzer.TestLogic
         public ILogger Log { get; }
         public IMemoryRental Memory { get; }
 
-        protected AckRawCommonLogic(IMemoryRental memory, ILogger logger)
+        protected AckRawReliableCommonLogic(IMemoryRental memory, ILogger logger)
         {
             Log = logger;
             Memory = memory;

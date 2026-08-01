@@ -9,7 +9,7 @@ using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class AckRawClientLogic : AckRawCommonLogic, IAckRawReliableClientHandler
+    class AckRawReliableClientLogic : AckRawReliableCommonLogic, IAckRawReliableClientHandler
     {
         private volatile IAckRawReliableClientSideEndpoint? _endpoint;
 
@@ -27,7 +27,7 @@ namespace TransportAnalyzer.TestLogic
             return $"MessageId={Interlocked.Read(ref _receiveId)}";
         }
 
-        public AckRawClientLogic(IMemoryRental memoryRental, ILogger logger, int unconfirmedTicks = 1, long lastTickId = -1)
+        public AckRawReliableClientLogic(IMemoryRental memoryRental, ILogger logger, int unconfirmedTicks = 1, long lastTickId = -1)
             : base(memoryRental, logger)
         {
             _unconfirmedTicks = unconfirmedTicks;

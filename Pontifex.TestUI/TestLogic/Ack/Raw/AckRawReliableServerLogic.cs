@@ -9,7 +9,7 @@ using Pontifex.Ack.Raw.Reliable;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class AckRawServerLogic : IRawServerAcknowledger<IAckRawReliableServerHandler>
+    class AckRawReliableServerLogic : IRawServerAcknowledger<IAckRawReliableServerHandler>
     {
         private readonly ConcurrentDictionary<IClientHandler, IClientHandler> mClients = new ConcurrentDictionary<IClientHandler, IClientHandler>();
 
@@ -19,7 +19,7 @@ namespace TransportAnalyzer.TestLogic
         private readonly ILogger _logger;
         private readonly IMemoryRental _memory;
 
-        public AckRawServerLogic(ILogger logger, IMemoryRental memory)
+        public AckRawReliableServerLogic(ILogger logger, IMemoryRental memory)
         {
             _logger = logger;
             _memory = memory;
@@ -42,7 +42,7 @@ namespace TransportAnalyzer.TestLogic
         public IAckRawReliableServerHandler? TryAck(UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
-            if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) && AckRawCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
+            if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) && AckRawReliableCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
             {
                 ack.Release();
                 return new Handler(this, _memory, _logger);
@@ -59,17 +59,17 @@ namespace TransportAnalyzer.TestLogic
             void Disconnect(StopReason reason);
         }
 
-        private class Handler : AckRawCommonLogic, IAckRawReliableServerHandler, IClientHandler
+        private class Handler : AckRawReliableCommonLogic, IAckRawReliableServerHandler, IClientHandler
         {
             private volatile IAckRawReliableServerSideEndpoint? mEndpoint;
 
             private long mReceiveId = 0;
 
-            private readonly AckRawServerLogic mOwner;
+            private readonly AckRawReliableServerLogic mOwner;
 
             private string mText = "<connecting>";
 
-            public Handler(AckRawServerLogic owner, IMemoryRental memoryRental, ILogger logger)
+            public Handler(AckRawReliableServerLogic owner, IMemoryRental memoryRental, ILogger logger)
                 :base(memoryRental, logger)
             {
                 mOwner = owner;

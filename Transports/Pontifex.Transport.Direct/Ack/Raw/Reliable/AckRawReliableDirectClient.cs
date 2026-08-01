@@ -10,7 +10,7 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Direct
 {
-    public class AckRawDirectClient : AckRawReliableClient, IAckRawReliableClient, IClientDirectCtl
+    public class AckRawReliableDirectClient : AckRawReliableClient, IAckRawReliableClient, IClientDirectCtl
     {
         private enum State
         {
@@ -30,7 +30,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
-        public AckRawDirectClient(string serverName, ILogger logger, IMemoryRental memory)
+        public AckRawReliableDirectClient(string serverName, ILogger logger, IMemoryRental memory)
             : base(DirectInfo.TransportName, logger, memory)
         {
             _serverEp = new StringEndPoint(serverName);

@@ -2,16 +2,16 @@ using Pontifex.Utils;
 
 namespace Pontifex.NoAck.RR.Reliable
 {
-    public enum NoAckReliableRRFailReason
+    public enum NoAckRRReliableFailReason
     {
         Rejected,
         BufferOverflow,
         Timeout
     }
 
-    public interface INoAckReliableRRCallbackOnClient
+    public interface INoAckRRReliableCallbackOnClient
     {
         void Response(UnionDataList data);
-        void Failed(NoAckReliableRRFailReason reason);
+        void Failed(NoAckRRReliableFailReason reason);
     }
 }

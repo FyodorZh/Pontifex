@@ -10,14 +10,14 @@ using Scriba;
 
 namespace Pontifex.NoAck.RR.Unreliable.Udp
 {
-    internal sealed class NoAckRRUdpServer : AnyTransport, INoAckUnreliableRRServer
+    internal sealed class NoAckRRUdpServer : AnyTransport, INoAckRRUnreliableServer
     {
         private IPEndPoint mLocalEndPoint;
 
         private UdpReceiver? mReceiver;
         private UdpAsyncSender? mSender;
 
-        private volatile INoAckUnreliableRRServerHandler? mHandler;
+        private volatile INoAckRRUnreliableServerHandler? mHandler;
 
         private Socket? mSocket;
 
@@ -43,7 +43,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
             }
         }
 
-        bool INoAckUnreliableRRServer.Init(INoAckUnreliableRRServerHandler handler)
+        bool INoAckRRUnreliableServer.Init(INoAckRRUnreliableServerHandler handler)
         {
             mHandler = handler;
             return (handler != null!);
@@ -152,7 +152,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
             }
         }
 
-        SendResult INoAckUnreliableRRServer.Send(IEndPoint client, UnionDataList message)
+        SendResult INoAckRRUnreliableServer.Send(IEndPoint client, UnionDataList message)
         {
             if (message == null!)
             {
