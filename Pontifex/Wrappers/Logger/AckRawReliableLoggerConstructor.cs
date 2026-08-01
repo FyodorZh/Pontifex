@@ -5,7 +5,7 @@ using Pontifex.Factory;
 
 namespace Pontifex.Ack.Raw.Reliable.Logger
 {
-    public class AckRawLoggerConstructor : ITransportConstructor
+    public class AckRawReliableLoggerConstructor : ITransportConstructor
     {
         public TransportType Type => TransportType.AckRawReliable;
         public string Name => "log";

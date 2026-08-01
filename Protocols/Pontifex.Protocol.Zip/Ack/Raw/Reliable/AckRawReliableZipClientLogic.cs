@@ -1,23 +1,20 @@
-﻿using Actuarius.Collections;
-using Actuarius.Memory;
+﻿using Actuarius.Memory;
 using Pontifex.Ack.Raw.Reliable.Protocols;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Zip
 {
-    class AckRawZipServerLogic : CompressorLogic, IAckRawWrapperServerLogic
+    class AckRawReliableZipClientLogic : CompressorLogic, IAckRawReliableWrapperClientLogic
     {
-        public AckRawZipServerLogic(ILogger logger, IMemoryRental memoryRental, int compressionLvl)
+        public AckRawReliableZipClientLogic(ILogger logger, IMemoryRental memoryRental, int compressionLvl)
             : base(logger, memoryRental, compressionLvl)
         {
         }
 
-        public bool ProcessAckData(UnionDataList ackData)
+        public void UpdateAckData(UnionDataList ackData)
         {
-            bool res = ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? data) && data.EqualByContent(ZipInfo.TransportNameBytes);
-            data?.Release();
-            return res;
+            ackData.PutFirst("zip");
         }
 
         public override void OnConnected()

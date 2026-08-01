@@ -6,7 +6,7 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
-    public sealed class AckRawReconnectableClient : AckRawReliableClient, IAckRawReliableClient
+    public sealed class AckRawReliableReconnectableClient : AckRawReliableClient, IAckRawReliableClient
     {
         private readonly Func<IAckRawReliableClient?> _underlyingTransportProducer;
         private readonly TimeSpan _disconnectTimeout;
@@ -14,7 +14,7 @@ namespace Pontifex.Ack.Raw.Reliable.Reconnectable
         private ReconnectableClientLogic? _logic;
         private  ILogicDriver<IPeriodicLogicDriverCtl>? _logicDriver;
 
-        public AckRawReconnectableClient(
+        public AckRawReliableReconnectableClient(
             Func<IAckRawReliableClient?> underlyingTransportProducer,
             TimeSpan disconnectTimeout,
             ILogger logger,

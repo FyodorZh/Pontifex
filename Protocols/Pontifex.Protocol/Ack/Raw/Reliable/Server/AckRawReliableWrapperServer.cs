@@ -4,14 +4,14 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
-    public class AckRawWrapperServer<TAcknowledgerWrapper> : AckRawReliableServer
+    public class AckRawReliableWrapperServer<TAcknowledgerWrapper> : AckRawReliableServer
         where TAcknowledgerWrapper : AcknowledgerWrapper
     {
         private readonly IAckRawReliableServer _core;
 
         private readonly Func<ILogger, IMemoryRental, TAcknowledgerWrapper> mWrapperConstructor;
 
-        public AckRawWrapperServer(string typeName, IAckRawReliableServer core, Func<ILogger, IMemoryRental, TAcknowledgerWrapper> wrapperConstructor)
+        public AckRawReliableWrapperServer(string typeName, IAckRawReliableServer core, Func<ILogger, IMemoryRental, TAcknowledgerWrapper> wrapperConstructor)
             : base(typeName, core.Log, core.Memory)
         {
             _core = core;

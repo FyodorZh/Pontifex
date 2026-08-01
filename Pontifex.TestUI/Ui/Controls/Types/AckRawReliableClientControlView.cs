@@ -1,8 +1,8 @@
 namespace Pontifex.Test
 {
-    public class AckRawClientControlView : ControlView
+    public class AckRawReliableClientControlView : ControlView
     {
-        public AckRawClientControlView(IAckRawClientControl control) 
+        public AckRawReliableClientControlView(IAckRawReliableClientControl control) 
             : base(control)
         {
             RegisterButton("Transport:", "Stop", control.Stop);

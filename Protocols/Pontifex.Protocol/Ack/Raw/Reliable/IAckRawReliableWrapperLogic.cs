@@ -4,7 +4,7 @@ using Pontifex.Utils;
 
 namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
-    public interface IAckRawWrapperLogic
+    public interface IAckRawReliableWrapperLogic
     {
         void OnConnected();
         void OnDisconnected();

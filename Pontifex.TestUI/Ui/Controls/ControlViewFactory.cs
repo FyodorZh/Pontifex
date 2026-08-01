@@ -8,8 +8,8 @@ namespace Pontifex.Test
         {
             return control switch
             {
-                IAckRawClientControl ackRawClientControl => new AckRawClientControlView(ackRawClientControl),
-                IAckRawTcpClientDebugControl ackRawTcpClientDebugControlrol => new AckRawTcpClientDebugControlView(ackRawTcpClientDebugControlrol),
+                IAckRawReliableClientControl ackRawClientControl => new AckRawReliableClientControlView(ackRawClientControl),
+                IAckRawReliableTcpClientDebugControl ackRawTcpClientDebugControlrol => new AckRawReliableTcpClientDebugControlView(ackRawTcpClientDebugControlrol),
                 _ => new UnknownControlView(control)
             };
         }

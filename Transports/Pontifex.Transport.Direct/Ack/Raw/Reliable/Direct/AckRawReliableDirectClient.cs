@@ -26,7 +26,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
 
         private DirectTransport? _transport;
         
-        private readonly AckRawClientControl _transportControl;
+        private readonly AckRawReliableClientControl _transportControl;
 
         public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
@@ -37,7 +37,7 @@ namespace Pontifex.Ack.Raw.Reliable.Direct
 
             var fsm = new RatchetFSM<State>((a, b) => ((int)a).CompareTo((int)b), State.Constructed);
             _state = new ConcurrentFSM<State>(fsm);
-            _transportControl = new AckRawClientControl(this);
+            _transportControl = new AckRawReliableClientControl(this);
         }
 
         protected override bool BeginConnect()

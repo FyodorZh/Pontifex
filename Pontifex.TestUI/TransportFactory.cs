@@ -20,10 +20,10 @@ namespace Pontifex.Test
         public TransportFactory()
         {
             mBuilder.RegisterTransport(new AckRawReliableDirectConstructor());
-            mBuilder.RegisterTransport(new AckRawTcpConstructor());
-            mBuilder.RegisterTransport(new AckRawZipConstructor());
-            mBuilder.RegisterTransport(new AckRawReconnectableConstructor());
-            mBuilder.RegisterTransport(new AckRawLoggerConstructor());
+            mBuilder.RegisterTransport(new AckRawReliableTcpConstructor());
+            mBuilder.RegisterTransport(new AckRawReliableZipConstructor());
+            mBuilder.RegisterTransport(new AckRawReliableReconnectableConstructor());
+            mBuilder.RegisterTransport(new AckRawReliableLoggerConstructor());
         }
 
         public IAckRawReliableServer? ConstructServer(string url, ILogger logger, IMemoryRental memoryRental)

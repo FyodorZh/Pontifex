@@ -8,7 +8,7 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Zip
 {
-    public abstract class CompressorLogic : AckRawWrapperLogic, IReleasableResource
+    public abstract class CompressorLogic : AckRawReliableWrapperLogic, IReleasableResource
     {
         private ZLibCompressor? _compressor;
         private ZLibDecompressor? _decompressor;

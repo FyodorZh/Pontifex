@@ -8,29 +8,29 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Zip
 {
-    public class AckRawZipConstructor : ITransportConstructor
+    public class AckRawReliableZipConstructor : ITransportConstructor
     {
         public TransportType Type => TransportType.AckRawReliable;
         public string Name => ZipInfo.TransportName;
 
-        private class ZipClient : AckRawWrapperClient<AckRawZipClientLogic>, IAckRawReliableClient
+        private class ZipClient : AckRawReliableWrapperClient<AckRawReliableZipClientLogic>, IAckRawReliableClient
         {
             public ZipClient(IAckRawReliableClient transportToWrap, int compressionLevel)
                 : base(ZipInfo.TransportName, transportToWrap,
-                    (logger, memoryRental) => new AckRawZipClientLogic(logger, memoryRental, compressionLevel))
+                    (logger, memoryRental) => new AckRawReliableZipClientLogic(logger, memoryRental, compressionLevel))
             {
             }
         }
 
-        private class ZipServer : AckRawWrapperServer<AcknowledgerWrapper<HandlerWrapper<AckRawZipServerLogic>>>, IAckRawReliableServer
+        private class ZipServer : AckRawReliableWrapperServer<AcknowledgerWrapper<HandlerWrapper<AckRawReliableZipServerLogic>>>, IAckRawReliableServer
         {
             public ZipServer(IAckRawReliableServer transportToWrap, int compressionLevel)
                 : base(
                     ZipInfo.TransportName,
                     transportToWrap,
-                    (logger, memory) => new AcknowledgerWrapper<HandlerWrapper<AckRawZipServerLogic>>(
-                        () => new HandlerWrapper<AckRawZipServerLogic>(
-                            () => new AckRawZipServerLogic(logger, memory, compressionLevel))))
+                    (logger, memory) => new AcknowledgerWrapper<HandlerWrapper<AckRawReliableZipServerLogic>>(
+                        () => new HandlerWrapper<AckRawReliableZipServerLogic>(
+                            () => new AckRawReliableZipServerLogic(logger, memory, compressionLevel))))
             {
             }
         }

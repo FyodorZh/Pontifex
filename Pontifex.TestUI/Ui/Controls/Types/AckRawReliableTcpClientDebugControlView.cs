@@ -2,9 +2,9 @@ using Pontifex.Ack.Raw.Reliable.Tcp;
 
 namespace Pontifex.Test
 {
-    public class AckRawTcpClientDebugControlView : ControlView
+    public class AckRawReliableTcpClientDebugControlView : ControlView
     {
-        public AckRawTcpClientDebugControlView(IAckRawTcpClientDebugControl control) 
+        public AckRawReliableTcpClientDebugControlView(IAckRawReliableTcpClientDebugControl control) 
             : base(control)
         {
             RegisterButton("Transport:", "Disconnect", control.GracefulDisconnect);

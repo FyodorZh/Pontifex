@@ -5,7 +5,7 @@ using Pontifex.Factory;
 
 namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
-    public class AckRawReconnectableConstructor : ITransportConstructor
+    public class AckRawReliableReconnectableConstructor : ITransportConstructor
     {
         public TransportType Type => TransportType.AckRawReliable;
         public string Name => ReconnectableInfo.TransportName;
@@ -22,7 +22,7 @@ namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 
             var innerDesc = nestedDesc;
 
-            return new AckRawReconnectableClient(
+            return new AckRawReliableReconnectableClient(
                 () => builder.Build<IAckRawReliableClient>(innerDesc),
                 disconnectTimeout,
                 builder.Logger,
@@ -39,7 +39,7 @@ namespace Pontifex.Ack.Raw.Reliable.Reconnectable
             if (!description.Get("nested").EvaluateAsDescription(out var nestedDesc))
                 throw new ArgumentException("Missing 'nested' in reconnectable description");
 
-            return new AckRawReconnectableServer(builder.Build<IAckRawReliableServer>(nestedDesc), disconnectTimeout, builder.Logger, builder.MemoryRental);
+            return new AckRawReliableReconnectableServer(builder.Build<IAckRawReliableServer>(nestedDesc), disconnectTimeout, builder.Logger, builder.MemoryRental);
         }
 
         public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()

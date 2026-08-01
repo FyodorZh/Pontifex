@@ -19,23 +19,23 @@ namespace TransportAnalyzer.TestLogic
         }
     }
 
-    public class AckRawProtocol : ApiRoot
+    public class AckRawReliableProtocol : ApiRoot
     {
         public readonly RRDecl<Int2, Int2> EP = new RRDecl<Int2, Int2>();
         
         public ILogger Log { get; }
         public IMemoryRental Memory { get; }
 
-        protected AckRawProtocol(IMemoryRental memory, ILogger logger)
+        protected AckRawReliableProtocol(IMemoryRental memory, ILogger logger)
         {
             Log = logger;
             Memory = memory;
         }
     }
 
-    public class AckRawProtocol_Server : AckRawProtocol
+    public class AckRawReliableProtocol_Server : AckRawReliableProtocol
     {
-        public AckRawProtocol_Server(IMemoryRental memory, ILogger logger) 
+        public AckRawReliableProtocol_Server(IMemoryRental memory, ILogger logger) 
             : base(memory, logger)
         {
             EP.SetProcessor(request =>
@@ -53,9 +53,9 @@ namespace TransportAnalyzer.TestLogic
         }
     }
 
-    public class AckRawProtocol_Client : AckRawProtocol
+    public class AckRawReliableProtocol_Client : AckRawReliableProtocol
     {
-        public AckRawProtocol_Client(IMemoryRental memory, ILogger logger) 
+        public AckRawReliableProtocol_Client(IMemoryRental memory, ILogger logger) 
             : base(memory, logger)
         {
             Connected += () => Task.Run(Test);

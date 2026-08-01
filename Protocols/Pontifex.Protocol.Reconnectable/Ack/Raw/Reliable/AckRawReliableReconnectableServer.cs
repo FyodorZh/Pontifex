@@ -8,7 +8,7 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {
-    public class AckRawReconnectableServer : AckRawReliableServer, IAckRawReliableServer, IRawServerAcknowledger<IAckRawReliableServerHandler>
+    public class AckRawReliableReconnectableServer : AckRawReliableServer, IAckRawReliableServer, IRawServerAcknowledger<IAckRawReliableServerHandler>
     {
         private readonly IAckRawReliableServer _coreTransport;
         private readonly TimeSpan _disconnectTimeout;
@@ -16,7 +16,7 @@ namespace Pontifex.Ack.Raw.Reliable.Reconnectable
         private readonly SessionMap<ReconnectableServerLogic> _sessionsMap = new (ReconnectableInfo.ServerConnectionsLimit);
         private ILogicDriver<IPeriodicLogicDriverCtl>? _sessionsLogicDriver;
 
-        public AckRawReconnectableServer(IAckRawReliableServer coreTransport, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        public AckRawReliableReconnectableServer(IAckRawReliableServer coreTransport, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(ReconnectableInfo.TransportName, logger, memoryRental)
         {
             _coreTransport = coreTransport;

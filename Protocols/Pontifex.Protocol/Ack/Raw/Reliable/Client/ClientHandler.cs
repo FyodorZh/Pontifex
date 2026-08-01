@@ -8,15 +8,15 @@ namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
     internal class ClientHandler : IAckRawReliableClientHandler, IAckRawReliableClientSideEndpoint
     {
-        private readonly AckRawWrapperClient mTransport;
-        private readonly IAckRawWrapperClientLogic mWrapperLogic;
+        private readonly AckRawReliableWrapperClient mTransport;
+        private readonly IAckRawReliableWrapperClientLogic mWrapperLogic;
         private readonly IAckRawReliableClientHandler mUserHandler;
 
         private volatile IAckRawReliableClientSideEndpoint? mTransportEndpoint;
 
         private readonly object mSendCallSerializer = new object();
 
-        public ClientHandler(AckRawWrapperClient transport, IAckRawWrapperClientLogic wrapperLogic, IAckRawReliableClientHandler userHandler)
+        public ClientHandler(AckRawReliableWrapperClient transport, IAckRawReliableWrapperClientLogic wrapperLogic, IAckRawReliableClientHandler userHandler)
         {
             mTransport = transport;
             mWrapperLogic = wrapperLogic;

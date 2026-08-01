@@ -36,8 +36,7 @@ public static class TransportRegistry
         Builder = new TransportBuilder(ConvertersGraph.Default);
 
         Builder.RegisterTransport(new AckRawReliableDirectConstructor());
-        Builder.RegisterTransport(new AckRawTcpConstructor());
-        //Builder.RegisterTransport(new NoAckRawReliableDirectConstructor());
+        Builder.RegisterTransport(new AckRawReliableTcpConstructor());
         Builder.RegisterTransport(new NoAckRawUnreliableDirectConstructor());
         Builder.RegisterTransport(new NoAckRawUdpConstructor());
     }

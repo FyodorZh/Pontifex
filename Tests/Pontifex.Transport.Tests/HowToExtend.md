@@ -5,17 +5,13 @@
 ```
 TransportStacks/                     ← You curate stacks here (data)
        │
-       ├── AckRawReliableStacks     ──→  [TestFixtureSource]
+       └── AckRawReliableStacks     ──→  [TestFixtureSource]
        │       │
-        │       ├── ApiPingTests                      ← Test plan (API-based)
-        │       ├── ApiConnectDisconnectTests         ← Test plan (API-based)
-        │       └── ApiConnectReceiveKickTests        ← Test plan (API-based)
+       │       ├── ApiPingTests                      ← Test plan (API-based)
+       │       ├── ApiConnectDisconnectTests         ← Test plan (API-based)
+       │       └── ApiConnectReceiveKickTests        ← Test plan (API-based)
        │
-       ├── NoAckRawReliableStacks    ──→  [TestFixtureSource]
-       │       │
-       │       └── PingTests                          ← Test plan
-       │
-       └── [future] ... (6 more abstractions, same pattern)
+       └── [future] ... (7 more abstractions, same pattern)
 ```
 
 Five layers work together:
@@ -54,7 +50,7 @@ static TransportRegistry()
     Builder = new TransportBuilder(ConvertersGraph.Default);
 
     Builder.RegisterTransport(new AckRawReliableDirectConstructor());
-    Builder.RegisterTransport(new AckRawTcpConstructor());
+    Builder.RegisterTransport(new AckRawReliableTcpConstructor());
     Builder.RegisterTransport(new NoAckRawUnreliableDirectConstructor());
     Builder.RegisterTransport(new NoAckRawUdpConstructor());
     Builder.RegisterTransport(new MyNewWebSocketConstructor());  // ← ADD
@@ -119,43 +115,47 @@ Create a new fixture class and use `_stack.GetTransportFactory()` to build trans
 
 **Directory convention:** `TestPlans/{Ack|NoAck}/{Raw|RR}/{Reliable|Unreliable}/{TestPlanName}/{TestName}Tests.cs`
 
-**Example:** `TestPlans/NoAck/Raw/Reliable/Ping/PingTests.cs`:
+**Example:** `TestPlans/Ack/Raw/Reliable/HighLoadDataTransfer/HighLoadDataTransfer.cs`:
 
 ```csharp
+using System.Collections.Concurrent;
+using System.Threading;
+using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.NoAck.Raw;
+using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 using Pontifex.Utils;
 
-namespace Pontifex.NoAckRawReliable.Tests.Ping;
-
-[TestFixtureSource(typeof(NoAckRawReliableStacks))]
-public class PingTests
+namespace Pontifex.Ack.Raw.Reliable.Tests
 {
-    private readonly ITransportStack _stack;
-
-    public PingTests(ITransportStack stack)
+    [TestFixtureSource(typeof(AckRawReliableStacks))]
+    public class HighLoadDataTransfer
     {
-        _stack = stack;
-    }
+        private const int MinN = 200;
+        private const int MaxN = 2000;
 
-    [Test]
-    public async Task Ping_100_Times()
-    {
-        var memory = TransportRegistry.Memory;
-        var factory = _stack.GetTransportFactory();
+        private static readonly IMultiRefReadOnlyByteArray AckRequest =
+            new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-REQUEST"u8.ToArray());
 
-        var server = (INoAckRawReliableServer)factory.BuildServer();
-        var client = (INoAckRawReliableClient)factory.BuildClient();
+        [Test]
+        public async Task Transfer_Load()
+        {
+            var memory = TransportRegistry.Memory;
+            var factory = _stack.GetTransportFactory();
 
-        // wire OnReceived handlers, send 100 messages, verify responses
-        // ...
+            var server = (IAckRawReliableServer)factory.BuildServer();
+            var client = (IAckRawReliableClient)factory.BuildClient();
+
+            // wire OnReceived handlers, send messages, verify responses
+            // ...
+        }
     }
 }
 ```
 
-For raw transport test plans, you handle protocol at the `OnReceived` level using `INoAckRawReliableClient`/`INoAckRawReliableServer` (or the corresponding interfaces for other abstractions). No API layer is involved.
+For raw transport test plans, you handle protocol at the `OnReceived` level using `IAckRawReliableClient`/`IAckRawReliableServer` (or the corresponding interfaces for other abstractions). No API layer is involved.
 
 ### 2B. API-Based Test Plan (tests through ApiRoot)
 
@@ -582,18 +582,15 @@ Tests/Pontifex.Transport.Tests/
 │       ├── StaticTransportStack.cs          # Fixed URI, parsed once
 │       └── DynamicTransportStack.cs         # URI from provider function, parsed per call
 ├── TransportStacks/                         # Per-type stack catalogs (also NUnit sources)
-│   ├── AckRawReliableStacks.cs
-│   └── NoAckRawReliableStacks.cs
+│   └── AckRawReliableStacks.cs
 ├── TestPlans/                               # All test plans
-│   ├── Ack/Raw/Reliable/                    # AckRawReliable test plans
-│   │   ├── TestProtocols/                   # API-based test plans (name prefix 'Api')
-│   │   │   ├── ApiPing/PingTests.cs         # API + tests in one file (canonical pattern)
-│   │   │   ├── ApiConnectDisconnect/ConnectDisconnectTests.cs
-│   │   │   └── ApiConnectReceiveKick/ConnectReceiveKickTests.cs
-│   │   ├── Connect_ServerGracefullDisconnect/Connect_ServerGracefullDisconnect.cs  # Raw handler test
-│   │   └── HighLoadDataTransfer/HighLoadDataTransfer.cs                             # Raw handler test
-│   └── NoAck/Raw/Reliable/                  # NoAckRawReliable test plans
-│       └── Ping/PingTests.cs                # Raw exchange test (no API layer)
+│   └── Ack/Raw/Reliable/                    # AckRawReliable test plans
+│       ├── TestProtocols/                   # API-based test plans (name prefix 'Api')
+│       │   ├── ApiPing/PingTests.cs         # API + tests in one file (canonical pattern)
+│       │   ├── ApiConnectDisconnect/ConnectDisconnectTests.cs
+│       │   └── ApiConnectReceiveKick/ConnectReceiveKickTests.cs
+│       ├── Connect_ServerGracefullDisconnect/Connect_ServerGracefullDisconnect.cs  # Raw handler test
+│       └── HighLoadDataTransfer/HighLoadDataTransfer.cs                             # Raw handler test
 ```
 
 ---

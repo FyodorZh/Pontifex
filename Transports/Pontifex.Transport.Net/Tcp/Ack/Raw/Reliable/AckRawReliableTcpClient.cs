@@ -13,7 +13,7 @@ using Transport.Utils;
 
 namespace Pontifex.Ack.Raw.Reliable.Tcp
 {
-    internal class AckRawTcpClient : AckRawReliableClient, IAckRawReliableClient, IAckRawReliableClientSideEndpoint
+    internal class AckRawReliableTcpClient : AckRawReliableClient, IAckRawReliableClient, IAckRawReliableClientSideEndpoint
     {
         public enum State
         {
@@ -39,7 +39,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
         private State mState = State.Constructed;
         private readonly object mStateLock = new object();
 
-        private readonly AckRawClientControl _transportControl;
+        private readonly AckRawReliableClientControl _transportControl;
         private readonly PingCollector mPingCollector = new PingCollector();
         private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim("Tcp.Traffic", UtcNowDateTimeProvider.Instance);
         
@@ -88,7 +88,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
 
         public override int MessageMaxByteSize { get; }
 
-        public AckRawTcpClient(IPAddress ipAddress, int port, TimeSpan disconnectTimeout, int? messageMaxSize,
+        public AckRawReliableTcpClient(IPAddress ipAddress, int port, TimeSpan disconnectTimeout, int? messageMaxSize,
             ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
         {
@@ -96,7 +96,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
             mManagedRemoteEP = new IpEndPoint(mRemoteEP);
             mDisconnectTimeout = disconnectTimeout;
             MessageMaxByteSize = messageMaxSize ?? TcpInfo.DefaultMessageMaxSize;
-            _transportControl = new AckRawClientControl(this);
+            _transportControl = new AckRawReliableClientControl(this);
             _debugControl = new TcpClientDebugControl(this);
             _socketUnsafeAccessor = new SocketUnsafeAccessor(this);
         }
@@ -474,13 +474,13 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
 
         #endregion
 
-        private class TcpClientDebugControl : IAckRawTcpClientDebugControl
+        private class TcpClientDebugControl : IAckRawReliableTcpClientDebugControl
         {
-            private readonly AckRawTcpClient _client;
+            private readonly AckRawReliableTcpClient _client;
             
             public string Name => "TcpClient.Debug";
 
-            public TcpClientDebugControl(AckRawTcpClient client)
+            public TcpClientDebugControl(AckRawReliableTcpClient client)
             {
                 _client = client;
             }
@@ -493,11 +493,11 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
 
         private class SocketUnsafeAccessor : ISocketUnsafeAccessor
         {
-            private readonly AckRawTcpClient _client;
+            private readonly AckRawReliableTcpClient _client;
             
             public string Name => "TcpClient.SocketAccessor";
             
-            public SocketUnsafeAccessor(AckRawTcpClient client)
+            public SocketUnsafeAccessor(AckRawReliableTcpClient client)
             {
                 _client = client;
             }

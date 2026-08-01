@@ -6,12 +6,12 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
-    public abstract class AckRawWrapperLogic : IAckRawWrapperLogic
+    public abstract class AckRawReliableWrapperLogic : IAckRawReliableWrapperLogic
     {
         protected ILogger Log { get; }
         protected IMemoryRental Memory { get; }
 
-        protected AckRawWrapperLogic(ILogger logger, IMemoryRental memoryRental)
+        protected AckRawReliableWrapperLogic(ILogger logger, IMemoryRental memoryRental)
         {
             Log = logger;
             Memory = memoryRental;

@@ -13,7 +13,7 @@ using Transport.Utils;
 
 namespace Pontifex.Ack.Raw.Reliable.Tcp
 {
-    internal class AckRawTcpServer : AckRawReliableServer, IAckRawReliableServer
+    internal class AckRawReliableTcpServer : AckRawReliableServer, IAckRawReliableServer
     {
         private class ClientSet : PeriodicLogic
         {
@@ -112,7 +112,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
 
         private IServerSocketListener? mSocketListener;
 
-        public AckRawTcpServer(IPAddress ipAddress, int port, int connectionsLimit, TimeSpan disconnectTimeout, int? messageMaxSize, ILogger logger, IMemoryRental memoryRental)
+        public AckRawReliableTcpServer(IPAddress ipAddress, int port, int connectionsLimit, TimeSpan disconnectTimeout, int? messageMaxSize, ILogger logger, IMemoryRental memoryRental)
             : base(TcpInfo.TransportName, logger, memoryRental)
         {
             try
@@ -142,7 +142,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
             }
             catch (Exception ex)
             {
-                FailException("AckRawTcpServer", ex);
+                FailException("AckRawReliableTcpServer", ex);
                 mClients = null!;
                 mLocalEndPoint = null!;
                 mMaxNumberAcceptedClients = null!;

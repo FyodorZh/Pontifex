@@ -17,9 +17,6 @@ namespace Pontifex.Converters
     public class ConvertersGraph : IConvertersGraph
     {
         public static readonly IConvertersGraph Default = new ConvertersGraph(
-            //new NoAckRawReliableToNoAckRawUnreliableConverter(),
-            //new NoAckRawUnreliableToNoAckRawReliableConverter(),
-            //new AckRawReliableToNoAckRawReliableConverter(),
             new NoAckRawUnreliableToAckRawReliableConverter());
         
         public static readonly IConvertersGraph Empty = new ConvertersGraph();

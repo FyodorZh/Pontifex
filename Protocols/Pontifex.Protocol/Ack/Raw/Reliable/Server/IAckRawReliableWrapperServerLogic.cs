@@ -2,7 +2,7 @@
 
 namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
-    public interface IAckRawWrapperServerLogic : IAckRawWrapperLogic
+    public interface IAckRawReliableWrapperServerLogic : IAckRawReliableWrapperLogic
     {
         bool ProcessAckData(UnionDataList ackData);
     }

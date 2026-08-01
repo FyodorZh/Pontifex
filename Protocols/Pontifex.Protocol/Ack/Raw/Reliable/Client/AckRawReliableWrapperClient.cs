@@ -5,20 +5,20 @@ using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
-    public class AckRawWrapperClient<TLogic> : AckRawWrapperClient
-        where TLogic : IAckRawWrapperClientLogic
+    public class AckRawReliableWrapperClient<TLogic> : AckRawReliableWrapperClient
+        where TLogic : IAckRawReliableWrapperClientLogic
     {
-        public AckRawWrapperClient(string typeName, IAckRawReliableClient transportToWrap, Func<ILogger, IMemoryRental, TLogic> constructor)
+        public AckRawReliableWrapperClient(string typeName, IAckRawReliableClient transportToWrap, Func<ILogger, IMemoryRental, TLogic> constructor)
             : base(typeName, transportToWrap)
         {
             SetupLogic(constructor.Invoke(transportToWrap.Log, transportToWrap.Memory));
         }
     }
 
-    public class AckRawWrapperClient : AckRawReliableClient, IAckRawReliableClientHandler
+    public class AckRawReliableWrapperClient : AckRawReliableClient, IAckRawReliableClientHandler
     {
         private readonly IAckRawReliableClient mBaseTransport;
-        private IAckRawWrapperClientLogic? mLogic;
+        private IAckRawReliableWrapperClientLogic? mLogic;
 
         private bool mInConnectionProcess;
 
@@ -26,13 +26,13 @@ namespace Pontifex.Ack.Raw.Reliable.Protocols
         
         public override int MessageMaxByteSize => mBaseTransport.MessageMaxByteSize;
 
-        public AckRawWrapperClient(string typeName, IAckRawReliableClient transportToWrap)
+        public AckRawReliableWrapperClient(string typeName, IAckRawReliableClient transportToWrap)
             : base(typeName, transportToWrap.Log, transportToWrap.Memory)
         {
             mBaseTransport = transportToWrap;
         }
 
-        protected void SetupLogic(IAckRawWrapperClientLogic logic)
+        protected void SetupLogic(IAckRawReliableWrapperClientLogic logic)
         {
             mLogic = logic;
         }

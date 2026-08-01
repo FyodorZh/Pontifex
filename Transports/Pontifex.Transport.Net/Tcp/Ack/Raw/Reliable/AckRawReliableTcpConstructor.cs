@@ -6,7 +6,7 @@ using Pontifex.NetSockets;
 
 namespace Pontifex.Ack.Raw.Reliable.Tcp
 {
-    public class AckRawTcpConstructor : ITransportConstructor
+    public class AckRawReliableTcpConstructor : ITransportConstructor
     {
         public TransportType Type => TransportType.AckRawReliable;
         public string Name => TcpInfo.TransportName;
@@ -16,7 +16,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
             if (!TryParse(description, out var disconnectionTimeout, out var ip, out var port) || ip == null)
                 throw new ArgumentException("Invalid TCP server description");
 
-            return new AckRawTcpServer(ip, port, TcpInfo.ServerConnectionsLimit, disconnectionTimeout, null, builder.Logger, builder.MemoryRental);
+            return new AckRawReliableTcpServer(ip, port, TcpInfo.ServerConnectionsLimit, disconnectionTimeout, null, builder.Logger, builder.MemoryRental);
         }
 
         public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
@@ -24,7 +24,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
             if (!TryParse(description, out var disconnectionTimeout, out var ip, out var port) || ip == null)
                 throw new ArgumentException("Invalid TCP client description");
 
-            return new AckRawTcpClient(ip, port, disconnectionTimeout, null, builder.Logger, builder.MemoryRental);
+            return new AckRawReliableTcpClient(ip, port, disconnectionTimeout, null, builder.Logger, builder.MemoryRental);
         }
 
         private static bool TryParse(IDescription description, out TimeSpan disconnectionTimeout, out IPAddress? ip, out int port)

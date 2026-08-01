@@ -7,11 +7,11 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
 {
     internal class KeepAliver : IPeriodicLogic
     {
-        private readonly AckRawTcpClient _owner;
+        private readonly AckRawReliableTcpClient _owner;
         private readonly IMemoryRental _memoryRental;
         private ILogicDriverCtl? _driver;
 
-        public KeepAliver(AckRawTcpClient owner, IMemoryRental memoryRental)
+        public KeepAliver(AckRawReliableTcpClient owner, IMemoryRental memoryRental)
         {
             _owner = owner;
             _memoryRental = memoryRental;
@@ -27,7 +27,7 @@ namespace Pontifex.Ack.Raw.Reliable.Tcp
         {
             try
             {
-                if (_owner.ConnectionState != AckRawTcpClient.State.Connecting)
+                if (_owner.ConnectionState != AckRawReliableTcpClient.State.Connecting)
                 {
                     DateTime now = DateTime.UtcNow;
                     long data = now.ToBinary();

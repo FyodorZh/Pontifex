@@ -13,7 +13,7 @@ namespace Pontifex.Ack.Raw.Reliable.Protocols
 
 
     public class HandlerWrapper<TLogic> : HandlerWrapper
-        where TLogic : IAckRawWrapperServerLogic
+        where TLogic : IAckRawReliableWrapperServerLogic
     {
         public HandlerWrapper(Func<TLogic> constructor)
             : base(constructor.Invoke())
@@ -23,7 +23,7 @@ namespace Pontifex.Ack.Raw.Reliable.Protocols
 
     public abstract class HandlerWrapper : IHandlerWrapper, IAckRawReliableServerSideEndpoint
     {
-        private readonly IAckRawWrapperServerLogic _logic;
+        private readonly IAckRawReliableWrapperServerLogic _logic;
 
         private volatile IAckRawReliableServerHandler _wrappedHandler = null!;
 
@@ -31,7 +31,7 @@ namespace Pontifex.Ack.Raw.Reliable.Protocols
 
         private readonly object mSendCallSerializer = new ();
 
-        protected HandlerWrapper(IAckRawWrapperServerLogic logic)
+        protected HandlerWrapper(IAckRawReliableWrapperServerLogic logic)
         {
             _logic = logic;
         }

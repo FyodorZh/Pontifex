@@ -2,7 +2,7 @@
 
 namespace Pontifex.Ack.Raw.Reliable.Protocols
 {
-    public interface IAckRawWrapperClientLogic : IAckRawWrapperLogic
+    public interface IAckRawReliableWrapperClientLogic : IAckRawReliableWrapperLogic
     {
         void UpdateAckData(UnionDataList ackData);
     }
