@@ -6,7 +6,7 @@ using Pontifex.NetSockets;
 
 namespace Pontifex.NoAck.RR.Unreliable.Udp
 {
-    public class NoAckRRUdpConstructor : ITransportConstructor
+    public class NoAckRRUnreliableUdpConstructor : ITransportConstructor
     {
         public TransportType Type => TransportType.NoAckRRUnreliable;
         public string Name => RRUdpInfo.TransportName + "_rr";
@@ -16,7 +16,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
             if (!TryParse(description, out var ip, out var port) || ip == null)
                 throw new ArgumentException("Invalid RR-UDP server description");
 
-            return new NoAckRRUdpServer(ip, port, builder.Logger, builder.MemoryRental);
+            return new NoAckRRUnreliableUdpServer(ip, port, builder.Logger, builder.MemoryRental);
         }
 
         public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
@@ -24,7 +24,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
             if (!TryParse(description, out var ip, out var port) || ip == null)
                 throw new ArgumentException("Invalid RR-UDP client description");
 
-            return new NoAckRRUdpClient(ip, port, builder.Logger, builder.MemoryRental);
+            return new NoAckRRUnreliableUdpClient(ip, port, builder.Logger, builder.MemoryRental);
         }
 
         private static bool TryParse(IDescription description, out IPAddress? ip, out int port)

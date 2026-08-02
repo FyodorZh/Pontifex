@@ -11,7 +11,7 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.Raw.Unreliable.Udp
 {
-    public sealed class NoAckRawUdpServer : NoAckRawUnreliableServerTransport, INoAckRawUnreliableServer
+    public sealed class NoAckRawUnreliableUdpServer : NoAckRawUnreliableServerTransport, INoAckRawUnreliableServer
     {
         private IPEndPoint _localEndPoint;
 
@@ -26,7 +26,7 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
         
         public override TransportType Type => TransportType.NoAckRawUnreliable;
 
-        public NoAckRawUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
+        public NoAckRawUnreliableUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(RawUdpInfo.TransportName, logger, memoryRental)
         {
             _localEndPoint = new IPEndPoint(ipAddress, port);

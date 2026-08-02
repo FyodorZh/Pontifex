@@ -10,7 +10,7 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.RR.Unreliable.Udp
 {
-    internal sealed class NoAckRRUdpClient : AnyTransport, INoAckRRUnreliableClient, INoAckRRUnreliableServerEndpoint
+    internal sealed class NoAckRRUnreliableUdpClient : AnyTransport, INoAckRRUnreliableClient, INoAckRRUnreliableServerEndpoint
     {
         private readonly IPEndPoint mRemoteEndPoint;
         private readonly IEndPoint mManagedRemoteEndPoint;
@@ -26,7 +26,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
 
         public override TransportType Type => TransportType.NoAckRRUnreliable;
         
-        public NoAckRRUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
+        public NoAckRRUnreliableUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
             :base(RRUdpInfo.TransportName + "_rr", logger, memory)
         {
             mRemoteEndPoint = new IPEndPoint(ipAddress, port);

@@ -38,7 +38,7 @@ public static class TransportRegistry
         Builder.RegisterTransport(new AckRawReliableDirectConstructor());
         Builder.RegisterTransport(new AckRawReliableTcpConstructor());
         Builder.RegisterTransport(new NoAckRawUnreliableDirectConstructor());
-        Builder.RegisterTransport(new NoAckRawUdpConstructor());
+        Builder.RegisterTransport(new NoAckRawUnreliableUdpConstructor());
     }
 
     private class LogConsumer : ILogConsumer

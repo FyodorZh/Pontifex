@@ -46,7 +46,7 @@ public sealed class UdpNoAckRawUnreliableConformanceAdapter : INoAckRawUnreliabl
             _port = port;
             _logger = logger;
             _memory = memory;
-            Server = new NoAckRawUdpServer(IPAddress.Loopback, port, _logger, _memory);
+            Server = new NoAckRawUnreliableUdpServer(IPAddress.Loopback, port, _logger, _memory);
         }
 
         public INoAckRawUnreliableServer Server { get; }
@@ -55,7 +55,7 @@ public sealed class UdpNoAckRawUnreliableConformanceAdapter : INoAckRawUnreliabl
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            var client = new NoAckRawUdpClient(IPAddress.Loopback, _port, _logger, _memory);
+            var client = new NoAckRawUnreliableUdpClient(IPAddress.Loopback, _port, _logger, _memory);
             _clients.Add(client);
             return client;
         }

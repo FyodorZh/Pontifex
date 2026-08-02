@@ -10,7 +10,7 @@ using Scriba;
 
 namespace Pontifex.NoAck.RR.Unreliable.Udp
 {
-    internal sealed class NoAckRRUdpServer : AnyTransport, INoAckRRUnreliableServer
+    internal sealed class NoAckRRUnreliableUdpServer : AnyTransport, INoAckRRUnreliableServer
     {
         private IPEndPoint mLocalEndPoint;
 
@@ -25,7 +25,7 @@ namespace Pontifex.NoAck.RR.Unreliable.Udp
 
         public override TransportType Type => TransportType.NoAckRRUnreliable;
         
-        public NoAckRRUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
+        public NoAckRRUnreliableUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
             : base(RRUdpInfo.TransportName + "_rr", logger, memory)
         {
             mLocalEndPoint = new IPEndPoint(ipAddress, port);

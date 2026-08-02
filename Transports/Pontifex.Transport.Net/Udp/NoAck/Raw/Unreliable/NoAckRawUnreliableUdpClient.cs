@@ -10,7 +10,7 @@ using Transport.Utils;
 
 namespace Pontifex.NoAck.Raw.Unreliable.Udp
 {
-    public sealed class NoAckRawUdpClient : NoAckRawUnreliableClientTransport, INoAckRawUnreliableClient
+    public sealed class NoAckRawUnreliableUdpClient : NoAckRawUnreliableClientTransport, INoAckRawUnreliableClient
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;
@@ -23,7 +23,7 @@ namespace Pontifex.NoAck.Raw.Unreliable.Udp
 
         public override TransportType Type => TransportType.NoAckRawUnreliable;
         
-        public NoAckRawUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
+        public NoAckRawUnreliableUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(RawUdpInfo.TransportName, logger, memoryRental)
         {
             _remoteEndPoint = new IPEndPoint(ipAddress, port);
