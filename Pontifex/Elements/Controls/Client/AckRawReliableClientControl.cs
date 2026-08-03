@@ -1,4 +1,4 @@
-using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.StopReasons;
 
 namespace Pontifex

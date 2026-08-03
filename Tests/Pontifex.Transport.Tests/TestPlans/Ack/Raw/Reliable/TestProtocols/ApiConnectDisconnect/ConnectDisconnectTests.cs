@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Pontifex.Ack.Raw;
 using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Api;
 using Pontifex.StopReasons;

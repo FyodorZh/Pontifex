@@ -1,7 +1,6 @@
 using System;
 using Actuarius.Memory;
 using Scriba;
-using Pontifex.Ack.Raw;
 using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Ack.Raw.Reliable.Direct;
 using Pontifex.Ack.Raw.Reliable.Logger;

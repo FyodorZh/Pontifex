@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Utils;
 using Scriba;
 

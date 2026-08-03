@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using Actuarius.Memory;
-using Pontifex.NoAck.Raw;
 using Pontifex.NoAck.Raw.Unreliable;
 using Pontifex.NoAck.Raw.Unreliable.Udp;
 using Scriba;

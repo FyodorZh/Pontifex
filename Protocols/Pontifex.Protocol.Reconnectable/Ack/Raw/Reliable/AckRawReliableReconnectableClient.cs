@@ -1,7 +1,7 @@
 ﻿using System;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Scriba;
 
 namespace Pontifex.Ack.Raw.Reliable.Reconnectable

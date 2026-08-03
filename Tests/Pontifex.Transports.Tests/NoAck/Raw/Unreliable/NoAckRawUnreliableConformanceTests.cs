@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Actuarius.Memory;
-using Pontifex.NoAck.Raw;
 using Pontifex.NoAck.Raw.Unreliable;
 using Pontifex.StopReasons;
 using Pontifex.Utils;

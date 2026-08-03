@@ -3,7 +3,6 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Pontifex;
-using Pontifex.Ack.Raw;
 using Pontifex.Ack.Raw.Reliable;
 using Scriba;
 

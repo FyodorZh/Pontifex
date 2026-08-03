@@ -1,7 +1,6 @@
 using System;
 using Actuarius.Memory;
 using Pontifex.Ack;
-using Pontifex.Ack.Raw;
 using Pontifex.Ack.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Utils;

@@ -1,0 +1,20 @@
+using Pontifex.Utils;
+
+namespace Pontifex.Ack.Raw.Reliable
+{
+    /// <summary>
+    /// Validates incoming client connections and creates per-client session handlers.
+    /// Implemented by business logic.
+    /// </summary>
+    public interface IRawServerAcknowledger<out THandler>
+        where THandler : IAckRawServerHandler
+    {
+        /// <summary>
+        /// Identifies an incoming client and creates a new session for interaction.
+        /// !!! It is guaranteed that calls to TryAck() never overlap concurrently.
+        /// </summary>
+        /// <param name="ackData">Client identification data.</param>
+        /// <returns>Null if the client is not recognized; otherwise a client session handler.</returns>
+        THandler? TryAck(UnionDataList ackData);
+    }
+}

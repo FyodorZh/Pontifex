@@ -1,5 +1,5 @@
 using System;
-using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 
 namespace Pontifex.Ack.Raw.Reliable.Reconnectable
 {

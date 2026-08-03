@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.NoAck.Raw;
 using Pontifex.NoAck.Raw.Unreliable;
 using Pontifex.NoAck.Raw.Unreliable.Direct;
 using Scriba;

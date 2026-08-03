@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Pontifex.Ack.Raw;
+using Pontifex.Ack.Raw.Reliable;
 using Pontifex.Factory;
 
 namespace Pontifex.Ack.Raw.Reliable.Logger
