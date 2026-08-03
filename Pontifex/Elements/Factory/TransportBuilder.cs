@@ -28,7 +28,7 @@ namespace Pontifex.Factory
             _convertersGraph = convertersGraph;
             _descriptionFactory.RegisterUriParser("convert", (uriBody, factory) =>
             {
-                // "(transport://convert|)AckRawReliable:udp|127.0.0.1:9000"
+                // "(transport://convert|)RawReliableAck:udp|127.0.0.1:9000"
                 int pos = uriBody.IndexOf(':');
                 if (pos < 0)
                 {

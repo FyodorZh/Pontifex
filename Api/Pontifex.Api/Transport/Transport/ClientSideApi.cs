@@ -1,25 +1,24 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Ack;
-using Pontifex.Ack.Raw.Reliable;
+using Pontifex.Raw.Reliable.Ack;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Api
 {
-    public class ClientSideApi : IAckRawReliableClientHandler
+    public class ClientSideApi : IRawReliableAckClientHandler
     {
         private readonly IApiRoot _api;
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
         
         private TransportPipeSystem? _transportPipeSystem;
-        private IAckRawReliableClientSideEndpoint? _endpoint;
+        private IRawReliableAckClientSideEndpoint? _endpoint;
 
         private bool _wasConnectedEver;
         
-        public event Action<IAckRawReliableClientSideEndpoint>? Connected;
+        public event Action<IRawReliableAckClientSideEndpoint>? Connected;
         public event Action<StopReason>? Disconnected;
         
         protected virtual void AppendAckData(UnionDataList ackData)
@@ -34,14 +33,14 @@ namespace Pontifex.Api
             Log = logger;
         }
 
-        void IAckRawClientHandler.FillAckData(UnionDataList ackData)
+        void IRawAckClientHandler.FillAckData(UnionDataList ackData)
         {
             AppendAckData(ackData);
             long apiHash = 777;
             ackData.PutFirst(apiHash);
         }
 
-        void IAckRawReliableClientHandler.OnConnected(IAckRawReliableClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IRawReliableAckClientHandler.OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
         {
             using var disposer = ackResponse.AsDisposable();
             if (ackResponse.TryPopFirst(out long value) && value == 7777)
@@ -68,12 +67,12 @@ namespace Pontifex.Api
             }
         }
         
-        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _transportPipeSystem!.OnReceived(receivedBuffer);
         }
 
-        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
+        void IRawAckBaseHandler.OnDisconnected(StopReason reason)
         {
             _api.Stop();
             _transportPipeSystem = null;
@@ -81,7 +80,7 @@ namespace Pontifex.Api
             Disconnected?.Invoke(reason);
         }
         
-        void IAckRawClientHandler.OnStopped(StopReason reason)
+        void IRawAckClientHandler.OnStopped(StopReason reason)
         {
             if (!_wasConnectedEver) // prevent double invocation 
             {

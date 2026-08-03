@@ -1,4 +1,4 @@
-using Pontifex.Ack.Raw.Reliable;
+using Pontifex.Raw.Reliable.Ack;
 using Scriba;
 using Terminal.Gui.App;
 using Terminal.Gui.ViewBase;
@@ -8,7 +8,7 @@ namespace Pontifex.Test
 {
     public class ControlsPanel : FrameView
     {
-        private IAckRawReliableBaseEndpoint? _endpoint;
+        private IRawReliableAckBaseEndpoint? _endpoint;
 
         private readonly List<ControlView> _views = new List<ControlView>();
         private readonly List<IControl> _controls = new();
@@ -27,7 +27,7 @@ namespace Pontifex.Test
             base.Dispose(disposing);
         }
 
-        public void SetEndpoint(IAckRawReliableBaseEndpoint? endpoint)
+        public void SetEndpoint(IRawReliableAckBaseEndpoint? endpoint)
         {
             Application.Invoke(() =>
             {

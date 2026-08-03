@@ -1,4 +1,4 @@
-using Pontifex.Ack.Raw.Reliable.Tcp;
+using Pontifex.Raw.Reliable.Ack.Tcp;
 
 namespace Pontifex.Test
 {
@@ -8,8 +8,8 @@ namespace Pontifex.Test
         {
             return control switch
             {
-                IAckRawReliableClientControl ackRawClientControl => new AckRawReliableClientControlView(ackRawClientControl),
-                IAckRawReliableTcpClientDebugControl ackRawTcpClientDebugControlrol => new AckRawReliableTcpClientDebugControlView(ackRawTcpClientDebugControlrol),
+                IRawReliableAckClientControl ackRawClientControl => new RawReliableAckClientControlView(ackRawClientControl),
+                IRawReliableAckTcpClientDebugControl ackRawTcpClientDebugControlrol => new RawReliableAckTcpClientDebugControlView(ackRawTcpClientDebugControlrol),
                 _ => new UnknownControlView(control)
             };
         }

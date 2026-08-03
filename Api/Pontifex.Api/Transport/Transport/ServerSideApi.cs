@@ -1,6 +1,6 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw.Reliable;
+using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
 
 namespace Pontifex.Api
