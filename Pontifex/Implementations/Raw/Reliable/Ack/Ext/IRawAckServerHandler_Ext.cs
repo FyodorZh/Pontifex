@@ -117,7 +117,7 @@ namespace Pontifex.Raw.Reliable.Ack
                 _core.OnDisconnected(reason);
             }
 
-            void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+            void IRawHandler.OnReceived(UnionDataList receivedBuffer)
             {
                 BeginCriticalSection(ref _receiveDepth);
 

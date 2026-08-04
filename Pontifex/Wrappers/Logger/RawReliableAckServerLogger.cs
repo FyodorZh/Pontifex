@@ -83,7 +83,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _userHandler?.OnDisconnected(reason);
         }
 
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             Log.i("UserHandler.OnReceived(" + receivedBuffer + ")");
             _userHandler?.OnReceived(receivedBuffer);

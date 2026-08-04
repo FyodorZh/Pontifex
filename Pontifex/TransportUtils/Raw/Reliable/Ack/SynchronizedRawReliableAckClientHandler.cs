@@ -67,7 +67,7 @@ namespace Pontifex.Raw.Reliable.Ack
             _receivedDataQueue.CloseValve();
         }
 
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             if (!_receivedDataQueue.Put(receivedBuffer))
             {

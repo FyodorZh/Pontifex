@@ -247,7 +247,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public abstract void OnDisconnected(StopReason reason);
 
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             if (mState != ReconnectableLogicState.Stopped)
             {

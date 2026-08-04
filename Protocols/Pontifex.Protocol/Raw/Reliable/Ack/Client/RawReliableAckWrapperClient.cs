@@ -106,7 +106,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             ep?.Disconnect(reason);
         }
 
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             receivedBuffer.Release();
             Fail("OnReceived", "this method must not be called");
