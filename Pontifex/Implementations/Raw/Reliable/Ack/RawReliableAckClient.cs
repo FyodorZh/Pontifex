@@ -162,7 +162,7 @@ namespace Pontifex.Raw.Reliable.Ack
             }
         }
 
-        protected void ConnectionFinished(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+        protected void ConnectionFinished(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             lock (_locker)

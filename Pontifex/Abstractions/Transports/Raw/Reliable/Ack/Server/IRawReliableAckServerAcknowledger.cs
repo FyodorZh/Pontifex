@@ -6,8 +6,8 @@ namespace Pontifex.Raw.Reliable.Ack
     /// Validates incoming client connections and creates per-client session handlers.
     /// Implemented by business logic.
     /// </summary>
-    public interface IRawServerAcknowledger<out THandler>
-        where THandler : IRawAckServerHandler
+    public interface IRawReliableAckServerAcknowledger<out THandler>
+        where THandler : IRawReliableAckServerHandler
     {
         /// <summary>
         /// Identifies an incoming client and creates a new session for interaction.

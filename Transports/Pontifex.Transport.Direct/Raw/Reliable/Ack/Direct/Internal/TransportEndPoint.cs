@@ -7,7 +7,7 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Direct
 {
-    internal class TransportEndPoint : IRawReliableAckClientSideEndpoint, IRawReliableAckServerSideEndpoint
+    internal class TransportEndPoint : IRawReliableEndpoint
     {
         private struct SendReceiveAction: ActionQueue<SendReceiveAction>.IAction
         {
@@ -60,7 +60,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             {
                 buffer.Release();
                 Log.e("Direct transport buffer overflow");
-                ((IRawAckBaseEndpoint)this).Disconnect(new TextFail("direct", "Buffer overflow"));
+                ((IRawReliableEndpoint)this).Disconnect(new TextFail("direct", "Buffer overflow"));
                 return SendResult.BufferOverflow;
             }
 
@@ -81,11 +81,11 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             }
         }
 
-        IEndPoint? IRawAckBaseEndpoint.RemoteEndPoint => _other?.LocalEndPoint;
+        IEndPoint? IRawEndpoint.RemoteEndPoint => _other?.LocalEndPoint;
 
-        bool IRawAckBaseEndpoint.IsConnected => _other != null;
+        bool IRawReliableEndpoint.IsConnected => _other != null;
 
-        int IRawAckBaseEndpoint.MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
+        int IRawEndpoint.MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
         public SendResult Send(UnionDataList bufferToSend)
         {
@@ -98,7 +98,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             return SendResult.NotConnected;
         }
 
-        bool IRawAckBaseEndpoint.Disconnect(StopReason reason)
+        bool IRawReliableEndpoint.Disconnect(StopReason reason)
         {
             _actionSerializer.Release();
             return _owner.Disconnect(reason);

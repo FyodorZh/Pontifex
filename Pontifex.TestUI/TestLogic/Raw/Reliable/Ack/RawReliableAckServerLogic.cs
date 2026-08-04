@@ -4,11 +4,12 @@ using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
 using Pontifex;
+using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class RawReliableAckServerLogic : IRawServerAcknowledger<IRawReliableAckServerHandler>
+    class RawReliableAckServerLogic : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
     {
         private readonly ConcurrentDictionary<IClientHandler, IClientHandler> mClients = new ConcurrentDictionary<IClientHandler, IClientHandler>();
 
@@ -60,7 +61,7 @@ namespace TransportAnalyzer.TestLogic
 
         private class Handler : RawReliableAckCommonLogic, IRawReliableAckServerHandler, IClientHandler
         {
-            private volatile IRawReliableAckServerSideEndpoint? mEndpoint;
+            private volatile IRawReliableEndpoint? mEndpoint;
 
             private long mReceiveId = 0;
 
@@ -74,12 +75,12 @@ namespace TransportAnalyzer.TestLogic
                 mOwner = owner;
             }
 
-            void IRawAckServerHandler.FillAckResponse(UnionDataList ackResponse)
+            void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackResponse)
             {
                 ackResponse.PutFirst(new UnionData(AckResponse));
             }
 
-            public void OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+            public void OnConnected(IRawReliableEndpoint endPoint)
             {
                 mEndpoint = endPoint;
                 mText = endPoint.RemoteEndPoint?.ToString() ?? "null";

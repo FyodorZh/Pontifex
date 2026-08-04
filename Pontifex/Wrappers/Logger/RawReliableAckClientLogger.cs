@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
 using Scriba;
 
@@ -58,27 +57,27 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             return _core.Init(this);
         }
 
-        int IRawAckClient.MessageMaxByteSize => _core.MessageMaxByteSize;
+        int IRawTransport.MessageMaxByteSize => _core.MessageMaxByteSize;
 
-        void IRawAckBaseHandler.OnDisconnected(StopReason reason)
+        void IRawReliableHandler.OnDisconnected(StopReason reason)
         {
             _core.Log.i("UserHandler.OnDisconnected(" + reason + ")");
             _userHandler?.OnDisconnected(reason);
         }
 
-        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _core.Log.i("UserHandler.OnReceived(" + receivedBuffer + ")");
             _userHandler?.OnReceived(receivedBuffer);
         }
 
-        void IRawAckClientHandler.FillAckData(UnionDataList ackData)
+        void IRawReliableAckClientHandler.FillAckData(UnionDataList ackData)
         {
             _core.Log.i("UserHandler.GetAckData()");
             _userHandler?.FillAckData(ackData);
         }
 
-        void IRawReliableAckClientHandler.OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IRawReliableAckClientHandler.OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
         {
             _core.Log.i("UserHandler.OnConnected(" + endPoint + ", " + ackResponse + ")");
             var endPointWrapper = new RawAckClientSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
@@ -100,7 +99,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _userHandler?.OnConnected(endPointWrapper, ackResponse);
         }
 
-        void IRawAckClientHandler.OnStopped(StopReason reason)
+        void IRawReliableClientHandler.OnStopped(StopReason reason)
         {
             _core.Log.i("UserHandler.OnStopped(" + reason + ")");
             _userHandler?.OnStopped(reason: reason);

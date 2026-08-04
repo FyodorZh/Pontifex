@@ -60,7 +60,7 @@ namespace Pontifex.Raw.Reliable.Ack
                 _handler.FillAckResponse(ackData);
             }
 
-            public void OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+            public void OnConnected(IRawReliableEndpoint endPoint)
             {
                 _handler.OnConnected(endPoint);
             }
@@ -100,24 +100,24 @@ namespace Pontifex.Raw.Reliable.Ack
                 return $"'{_core}' - '{_core.GetType()}'";
             }
 
-            void IRawAckServerHandler.FillAckResponse(UnionDataList ackData)
+            void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackData)
             {
                 _core.FillAckResponse(ackData);
             }
 
-            void IRawReliableAckServerHandler.OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+            void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
             {
                 ChangeState(HandlerState.Constructed, HandlerState.Connected);
                 _core.OnConnected(endPoint);
             }
 
-            void IRawAckBaseHandler.OnDisconnected(StopReason reason)
+            void IRawReliableHandler.OnDisconnected(StopReason reason)
             {
                 ChangeState(HandlerState.Connected, HandlerState.Disconnected);
                 _core.OnDisconnected(reason);
             }
 
-            void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+            void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
             {
                 BeginCriticalSection(ref _receiveDepth);
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 using dm = Pontifex.DeliveryManager;
 using Pontifex.Raw.Unreliable.NoAck;
@@ -18,7 +19,7 @@ namespace Pontifex.Converters
         private readonly IRawUnreliableNoAckServer _inner;
         private readonly ConcurrentDictionary<IEndPoint, ServerSession> _sessions = new ConcurrentDictionary<IEndPoint, ServerSession>();
 
-        private IRawServerAcknowledger<IRawReliableAckServerHandler>? _acknowledger;
+        private IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>? _acknowledger;
         private Thread? _dmThread;
         private volatile bool _stopped;
         private readonly AutoResetEvent _workEvent = new AutoResetEvent(false);
@@ -53,7 +54,7 @@ namespace Pontifex.Converters
             }
         }
 
-        private sealed class ServerEndpoint : IRawReliableAckServerSideEndpoint
+        private sealed class ServerEndpoint : IRawReliableEndpoint
         {
             private readonly dm.DeliveryManager _dm;
             private readonly IEndPoint _remoteEndPoint;
@@ -108,7 +109,7 @@ namespace Pontifex.Converters
 
             public ServerSession(
                 RawUnreliableNoAckToRawReliableAckServer owner,
-                IRawServerAcknowledger<IRawReliableAckServerHandler> acknowledger,
+                IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> acknowledger,
                 IEndPoint remoteEndPoint)
             {
                 _owner = owner;
@@ -201,7 +202,7 @@ namespace Pontifex.Converters
 
         public int MessageMaxByteSize => _inner.MessageMaxByteSize;
 
-        public bool Init(IRawServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
+        public bool Init(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
         {
             _acknowledger = acknowledger;
             return true;

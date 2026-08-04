@@ -9,7 +9,7 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 {
-    class ReconnectableClientLogic : ReconnectableBaseLogic<IRawReliableAckClientSideEndpoint>, IRawReliableAckClientHandler, IRawReliableAckClientSideEndpoint
+    class ReconnectableClientLogic : ReconnectableBaseLogic<IRawReliableEndpoint>, IRawReliableAckClientHandler, IRawReliableEndpoint
     {
         private readonly Func<IRawReliableAckClient?> _underlyingTransportFactory;
         private readonly IRawReliableAckClientHandler _userHandler;
@@ -18,7 +18,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         private IMultiRefReadOnlyByteArray? _secret;
 
-        public event Action<IRawReliableAckClientSideEndpoint, UnionDataList>? OnConnected;
+        public event Action<IRawReliableEndpoint, UnionDataList>? OnConnected;
 
         public SessionId SessionId => _sessionId;
 
@@ -63,9 +63,9 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             _nextReconnectionTime.Time = DateTime.UtcNow.AddSeconds(ReconnectableInfo.ReconnectionPeriod.Seconds);
         }
 
-        #region IRawAckClientHandler
+        #region IRawReliableAckClientHandler
 
-        void IRawAckClientHandler.FillAckData(UnionDataList ackData)
+        void IRawReliableAckClientHandler.FillAckData(UnionDataList ackData)
         {
             _userHandler.FillAckData(ackData);
             if (_sessionId.IsValid)
@@ -77,7 +77,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             ackData.PutFirst(ReconnectableInfo.AckRequest);
         }
 
-        void IRawReliableAckClientHandler.OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IRawReliableAckClientHandler.OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
         {
             using var ackResponseDisposer = ackResponse.AsDisposable();
             if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? ackBytes))
@@ -131,7 +131,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             }
         }
 
-        void IRawAckClientHandler.OnStopped(StopReason reason)
+        void IRawReliableClientHandler.OnStopped(StopReason reason)
         {
             if (reason is Induced { Cause: AckRejected })
             {

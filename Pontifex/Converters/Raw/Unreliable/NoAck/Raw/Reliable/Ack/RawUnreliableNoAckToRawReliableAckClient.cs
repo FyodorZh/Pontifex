@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Memory;
+using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 using dm = Pontifex.DeliveryManager;
 using Pontifex.Raw.Unreliable.NoAck;
@@ -40,7 +41,7 @@ namespace Pontifex.Converters
             }
         }
 
-        private sealed class ClientEndpoint : IRawReliableAckClientSideEndpoint
+        private sealed class ClientEndpoint : IRawReliableEndpoint
         {
             private readonly dm.DeliveryManager _dm;
             private readonly RawUnreliableNoAckToRawReliableAckClient _owner;

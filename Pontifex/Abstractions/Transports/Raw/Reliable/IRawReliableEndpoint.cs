@@ -1,12 +1,9 @@
-namespace Pontifex.Raw.Reliable.Ack
-{
-    public interface IRawAckBaseEndpoint : IBaseEndpoint
-    {
-        /// <summary>
-        /// Gets the remote endpoint address, or null if not connected.
-        /// </summary>
-        IEndPoint? RemoteEndPoint { get; }
+using Pontifex.Utils;
 
+namespace Pontifex.Raw.Reliable
+{
+    public interface IRawReliableEndpoint : IRawEndpoint
+    {
         /// <summary>
         /// Gets whether the endpoint is currently connected.
         /// May return true before OnConnected() is invoked (the endpoint reference
@@ -15,12 +12,18 @@ namespace Pontifex.Raw.Reliable.Ack
         /// IsConnected transition to false is synchronized with the OnDisconnected() call.
         /// </summary>
         bool IsConnected { get; }
-
+        
         /// <summary>
-        /// Gets the maximum message size in bytes supported by the transport.
+        /// Sends a message to the remote peer.
+        /// Synchronous failures (e.g., buffer full, message too big, not connected)
+        /// are returned as a non-Ok SendResult and do NOT affect the connection.
+        /// If a failure occurs asynchronously after the method returns Ok,
+        /// the transport will be destroyed and OnDisconnected will be raised.
         /// </summary>
-        int MessageMaxByteSize { get; }
-
+        /// <param name="bufferToSend">The data to send.</param>
+        /// <returns>SendResult.Ok on success; other values indicate a synchronous failure.</returns>
+        SendResult Send(UnionDataList bufferToSend);
+        
         /// <summary>
         /// Initiates a logical disconnection of this endpoint with the given reason.
         /// </summary>

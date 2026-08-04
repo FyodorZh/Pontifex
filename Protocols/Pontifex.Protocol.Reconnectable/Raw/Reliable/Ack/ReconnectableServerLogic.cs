@@ -1,13 +1,12 @@
 ﻿using System;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 {
-    class ReconnectableServerLogic : ReconnectableBaseLogic<IRawReliableAckServerSideEndpoint>, IRawReliableAckServerHandler, IRawReliableAckServerSideEndpoint
+    class ReconnectableServerLogic : ReconnectableBaseLogic<IRawReliableEndpoint>, IRawReliableAckServerHandler, IRawReliableEndpoint
     {
         private IMultiRefReadOnlyByteArray? _secret;
 
@@ -15,7 +14,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         private volatile bool mAttached;
 
-        public event Action<IRawReliableAckServerSideEndpoint>? OnConnected;
+        public event Action<IRawReliableEndpoint>? OnConnected;
 
         public ReconnectableServerLogic(IRawReliableAckServerHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
             : base(userHandler, disconnectTimeout, logger, memoryRental)
@@ -65,7 +64,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             return true;
         }
 
-        void IRawAckServerHandler.FillAckResponse(UnionDataList ackData)
+        void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackData)
         {
             mUserHandler.FillAckResponse(ackData);
             ackData.PutFirst(new UnionData(_secret));
@@ -74,7 +73,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             ackData.PutFirst(new UnionData(ReconnectableInfo.AckOKResponse));
         }
 
-        void IRawReliableAckServerHandler.OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+        void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             Connect(endPoint, out var isFirstConnection);
             if (isFirstConnection)

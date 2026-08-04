@@ -3,7 +3,7 @@ using Pontifex.Utils;
 
 namespace Pontifex.Raw.Unreliable.NoAck
 {
-    public interface IRawUnreliableNoAckServer : ITransport
+    public interface IRawUnreliableNoAckServer : IRawUnreliableTransport
     {
         /// <summary>
         /// Event triggered when a message is received from one of the clients.
@@ -13,11 +13,6 @@ namespace Pontifex.Raw.Unreliable.NoAck
         ///   meaning that the next invocation will not occur until the previous one has completed.
         /// </summary>
         event Action<IEndPoint, UnionDataList>? OnReceived;
-        
-        /// <summary>
-        /// Maximum allowed size of a single message for sending (and receiving)
-        /// </summary>
-        int MessageMaxByteSize { get; }
         
         /// <summary>
         /// Attempts to send a message to the specified destination. Returns a SendResult indicating success or failure.

@@ -1,9 +1,6 @@
-namespace Pontifex.Raw.Reliable.Ack
+namespace Pontifex.Raw
 {
-    /// <summary>
-    /// Client-side transport for an ACK-based raw connection.
-    /// </summary>
-    public interface IRawAckClient : ITransport
+    public interface IRawTransport : ITransport
     {
         /// <summary>
         /// Gets the maximum single-message size in bytes supported by the transport.

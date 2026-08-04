@@ -10,7 +10,7 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Tcp
 {
-    internal class ServerSideSocket : IRawReliableAckServerSideEndpoint, IEquatable<ServerSideSocket>, IComparable<ServerSideSocket>
+    internal class ServerSideSocket : IRawReliableEndpoint, IEquatable<ServerSideSocket>, IComparable<ServerSideSocket>
     {
         private enum ServerSideSocketState
         {
@@ -286,13 +286,13 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
         public int MessageMaxByteSize { get; }
 
-        SendResult IRawReliableAckBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
         {
             bufferToSend.PutFirst((byte)PacketType.Regular);
             return Send(bufferToSend);
         }
 
-        bool IRawAckBaseEndpoint.Disconnect(StopReason reason)
+        bool IRawReliableEndpoint.Disconnect(StopReason reason)
         {
             return Disconnect(reason);
         }

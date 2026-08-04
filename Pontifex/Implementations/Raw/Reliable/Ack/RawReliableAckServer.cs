@@ -8,7 +8,7 @@ namespace Pontifex.Raw.Reliable.Ack
     {
         private bool _isInitialized;
 
-        private IRawServerAcknowledger<IRawReliableAckServerHandler>? _acknowledger;
+        private IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>? _acknowledger;
         
         public override TransportType Type => TransportType.RawReliableAck;
 
@@ -17,7 +17,7 @@ namespace Pontifex.Raw.Reliable.Ack
         {
         }
 
-        protected virtual IRawServerAcknowledger<IRawReliableAckServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
+        protected virtual IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>? SetupAcknowledger(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
         {
             return acknowledger;
         }
@@ -33,7 +33,7 @@ namespace Pontifex.Raw.Reliable.Ack
             }
         }
 
-        public bool Init(IRawServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
+        public bool Init(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
         {
             lock (_locker)
             {

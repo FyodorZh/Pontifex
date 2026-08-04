@@ -4,7 +4,7 @@ namespace Pontifex.Raw.Reliable.Ack
     /// Marker interface for a reliable (e.g. TCP) ACK raw server transport.
     /// Reliable transport guarantees in-order, lossless message delivery.
     /// </summary>
-    public interface IRawReliableAckServer : IRawAckServer
+    public interface IRawReliableAckServer : IRawReliableTransport
     {        
         /// <summary>
         /// Initializes the server transport with the given acknowledger.
@@ -13,6 +13,6 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </summary>
         /// <param name="acknowledger">The acknowledger that validates and creates client sessions.</param>
         /// <returns>True if initialization was successful.</returns>
-        bool Init(IRawServerAcknowledger<IRawReliableAckServerHandler> acknowledger);
+        bool Init(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> acknowledger);
     }
 }

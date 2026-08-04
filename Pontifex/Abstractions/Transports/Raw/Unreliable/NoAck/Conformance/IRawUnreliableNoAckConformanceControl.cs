@@ -5,7 +5,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
     /// <summary>
     /// Transport-specific conformance control for RawUnreliableNoAck.
     /// </summary>
-    public interface IRawUnreliableNoAckConformanceControl : IRawNoAckConformanceControl
+    public interface IRawUnreliableNoAckConformanceControl : IRawUnreliableConformanceControl
     {
         /// <summary>
         /// An accepted message is about to reach an underlying IO commit attempt.

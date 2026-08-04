@@ -13,7 +13,7 @@ using Transport.Utils;
 
 namespace Pontifex.Raw.Reliable.Ack.Tcp
 {
-    internal class RawReliableAckTcpClient : RawReliableAckClient, IRawReliableAckClient, IRawReliableAckClientSideEndpoint
+    internal class RawReliableAckTcpClient : RawReliableAckClient, IRawReliableAckClient, IRawReliableEndpoint
     {
         public enum State
         {
@@ -437,9 +437,9 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
         #region IRawAckServerEndpoint
 
-        IEndPoint IRawAckBaseEndpoint.RemoteEndPoint => mManagedRemoteEP;
+        IEndPoint IRawEndpoint.RemoteEndPoint => mManagedRemoteEP;
 
-        SendResult IRawReliableAckBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
         {
             int len = bufferToSend.GetDataSize();
 
@@ -451,7 +451,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             return res;
         }
 
-        bool IRawAckBaseEndpoint.Disconnect(StopReason reason)
+        bool IRawReliableEndpoint.Disconnect(StopReason reason)
         {
             return Stop(reason);
         }
@@ -470,7 +470,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 dst.Add(_socketUnsafeAccessor);
         }
 
-        bool IRawAckBaseEndpoint.IsConnected => ConnectionState == State.Connected;
+        bool IRawReliableEndpoint.IsConnected => ConnectionState == State.Connected;
 
         #endregion
 

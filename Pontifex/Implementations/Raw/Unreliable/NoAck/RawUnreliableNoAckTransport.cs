@@ -1,11 +1,10 @@
 using Actuarius.Memory;
-using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.Utils.CheckPointGate;
 using Scriba;
 
 namespace Pontifex.Raw.Unreliable.NoAck
 {
-    public abstract class RawUnreliableNoAckTransport : RawNoAckTransport
+    public abstract class RawUnreliableNoAckTransport : RawUnreliableTransport
     {
         protected new IRawUnreliableNoAckConformanceControl Conformance => (IRawUnreliableNoAckConformanceControl)base.Conformance;
         
@@ -14,7 +13,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
         {
         }
 
-        protected abstract class RawUnreliableNoAckConformanceControl : RawNoAckConformanceControl, IRawUnreliableNoAckConformanceControl
+        protected abstract class RawUnreliableNoAckConformanceControl : RawUnreliableConformanceControl, IRawUnreliableNoAckConformanceControl
         {
             private readonly CheckPoint _beforeSendCommitGate = new();
             private readonly CheckPoint _afterSendCommitGate = new();

@@ -63,7 +63,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             private readonly long _lastTickId;
             private readonly TaskCompletionSource _completedTcs;
 
-            private volatile IRawReliableAckClientSideEndpoint? _endpoint;
+            private volatile IRawReliableEndpoint? _endpoint;
             private long _sendId;
             private long _receiveId;
 
@@ -81,7 +81,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                 ackData.PutFirst(new UnionData(AckRequest));
             }
 
-            public void OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+            public void OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
             {
                 using var ackResponseDisposer = ackResponse.AsDisposable();
                 if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) ||
@@ -155,7 +155,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             }
         }
 
-        private class ServerAcknowledger : IRawServerAcknowledger<IRawReliableAckServerHandler>
+        private class ServerAcknowledger : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
         {
             private readonly IMemoryRental _memory;
 
@@ -181,7 +181,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
         private class ServerHandler : IRawReliableAckServerHandler
         {
             private readonly IMemoryRental _memory;
-            private volatile IRawReliableAckServerSideEndpoint? _endpoint;
+            private volatile IRawReliableEndpoint? _endpoint;
             private long _receiveId;
 
             public ServerHandler(IMemoryRental memory)
@@ -194,7 +194,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                 ackResponse.PutFirst(new UnionData(AckResponse));
             }
 
-            public void OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+            public void OnConnected(IRawReliableEndpoint endPoint)
             {
                 _endpoint = endPoint;
             }

@@ -4,7 +4,7 @@ namespace Pontifex.Raw.Reliable.Ack
     /// Marker interface for a reliable (e.g. TCP) ACK raw client transport.
     /// Reliable transport guarantees in-order, lossless message delivery.
     /// </summary>
-    public interface IRawReliableAckClient : IRawAckClient
+    public interface IRawReliableAckClient : IRawReliableTransport
     {        
         /// <summary>
         /// Initializes the client transport with the user-provided handler.

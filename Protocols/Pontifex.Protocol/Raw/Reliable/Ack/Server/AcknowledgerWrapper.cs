@@ -19,12 +19,12 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
         }
     }
 
-    public abstract class AcknowledgerWrapper : IRawServerAcknowledger<IRawReliableAckServerHandler>
+    public abstract class AcknowledgerWrapper : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
     {
         private Action<string> _onFail = null!;
-        private IRawServerAcknowledger<IRawReliableAckServerHandler> _wrappedAcknowledger = null!;
+        private IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> _wrappedAcknowledger = null!;
 
-        public void Init(IRawServerAcknowledger<IRawReliableAckServerHandler> wrappedAcknowledger, Action<string> onFail)
+        public void Init(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> wrappedAcknowledger, Action<string> onFail)
         {
             _onFail = onFail;
             _wrappedAcknowledger = wrappedAcknowledger;

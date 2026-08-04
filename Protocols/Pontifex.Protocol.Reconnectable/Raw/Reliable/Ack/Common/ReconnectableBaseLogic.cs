@@ -4,19 +4,18 @@ using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
 using Operarius;
-using Pontifex.Raw.Reliable.Ack;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 {
-    abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IRawAckBaseHandler, IRawReliableAckBaseEndpoint, IEndPoint
-        where TEndpoint : class, IRawReliableAckBaseEndpoint
+    abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IRawReliableHandler, IRawReliableEndpoint, IEndPoint
+        where TEndpoint : class, IRawReliableEndpoint
     {
         private readonly LogicEndpoint<TEndpoint> _logicEndpoint;
 
-        private readonly IRawAckBaseHandler mUserHandler;
+        private readonly IRawReliableHandler mUserHandler;
 
         private readonly TimeSpan mDisconnectTimeout;
 
@@ -53,7 +52,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
         protected ILogger Log { get; }
         protected IMemoryRental Memory { get; }
 
-        protected ReconnectableBaseLogic(IRawAckBaseHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
+        protected ReconnectableBaseLogic(IRawReliableHandler userHandler, TimeSpan disconnectTimeout, ILogger logger, IMemoryRental memoryRental)
         {
             mReceivedMessages = new ConcurrentQueueValve<UnionDataList>(new SystemConcurrentQueue<UnionDataList>(), data => data.Release());
             mSentMessages = new ConcurrentQueueValve<UnionDataList>(new SystemConcurrentQueue<UnionDataList>(), data => data.Release());
@@ -248,7 +247,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public abstract void OnDisconnected(StopReason reason);
 
-        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             if (mState != ReconnectableLogicState.Stopped)
             {
@@ -284,7 +283,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public int MessageMaxByteSize => _underlyingEndpoint?.MessageMaxByteSize ?? throw new NotImplementedException("TODO: Cache previous session message size");
 
-        SendResult IRawReliableAckBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
         {
             if (_underlyingEndpoint != null)
             {
@@ -298,7 +297,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             return SendResult.NotConnected;
         }
 
-        bool IRawAckBaseEndpoint.Disconnect(StopReason reason)
+        bool IRawReliableEndpoint.Disconnect(StopReason reason)
         {
             System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, reason, StopReason.Void);
 
@@ -324,7 +323,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, reason, StopReason.Void);
 
             Log.e("Fail: {@reason}", reason.Print());
-            (this as IRawReliableAckBaseEndpoint).Disconnect(reason);
+            (this as IRawReliableEndpoint).Disconnect(reason);
         }
 
         protected void Stop(StopReason reason)
@@ -332,7 +331,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             System.Threading.Interlocked.CompareExchange(ref mCurrentStopReason, reason, StopReason.Void);
 
             Log.i("Stop: {@reason}", reason.Print());
-            (this as IRawReliableAckBaseEndpoint).Disconnect(reason);
+            (this as IRawReliableEndpoint).Disconnect(reason);
         }
 
         bool IEquatable<IEndPoint>.Equals(IEndPoint other)

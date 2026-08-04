@@ -10,11 +10,11 @@ namespace Pontifex
     
     public class RawReliableAckClientControl : IRawReliableAckClientControl
     {
-        private readonly IRawAckClient _transport;
+        private readonly IRawReliableAckClient _transport;
 
         public string Name => _transport.Name + ".Control";
         
-        public RawReliableAckClientControl(IRawAckClient transport)
+        public RawReliableAckClientControl(IRawReliableAckClient transport)
         {
             _transport = transport;
         }

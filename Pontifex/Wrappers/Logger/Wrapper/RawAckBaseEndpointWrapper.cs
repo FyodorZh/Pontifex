@@ -5,15 +5,15 @@ using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable.Ack.Logger
 {
-    public abstract class RawAckBaseEndpointWrapper : IRawReliableAckBaseEndpoint
+    public abstract class RawAckBaseEndpointWrapper : IRawReliableEndpoint
     {
-        private volatile IRawReliableAckBaseEndpoint? _core;
-        private readonly Func<IRawReliableAckBaseEndpoint?, UnionDataList, SendResult> _sender;
-        private readonly Func<IRawReliableAckBaseEndpoint?, StopReason, bool> _disconnector;
+        private volatile IRawReliableEndpoint? _core;
+        private readonly Func<IRawReliableEndpoint?, UnionDataList, SendResult> _sender;
+        private readonly Func<IRawReliableEndpoint?, StopReason, bool> _disconnector;
 
-        protected RawAckBaseEndpointWrapper(IRawReliableAckBaseEndpoint? core, 
-            Func<IRawReliableAckBaseEndpoint?, UnionDataList, SendResult> sender, 
-            Func<IRawReliableAckBaseEndpoint?, StopReason, bool> disconnector)
+        protected RawAckBaseEndpointWrapper(IRawReliableEndpoint? core, 
+            Func<IRawReliableEndpoint?, UnionDataList, SendResult> sender, 
+            Func<IRawReliableEndpoint?, StopReason, bool> disconnector)
         {
             _core = core;
             _sender = sender;

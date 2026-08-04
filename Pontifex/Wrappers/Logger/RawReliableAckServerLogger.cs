@@ -1,17 +1,16 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Logger
 {
-    public class RawReliableAckServerLogger : IRawReliableAckServer, IRawServerAcknowledger<IRawReliableAckServerHandler>, IRawReliableAckServerHandler
+    public class RawReliableAckServerLogger : IRawReliableAckServer, IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>, IRawReliableAckServerHandler
     {
         private readonly IRawReliableAckServer _core;
 
-        private IRawServerAcknowledger<IRawReliableAckServerHandler>? _userAcknowledger;
+        private IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>? _userAcknowledger;
         private IRawReliableAckServerHandler? _userHandler;
         
         public TransportType Type => TransportType.RawReliableAck;
@@ -52,14 +51,14 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _core.GetControls(dst, predicate);
         }
 
-        bool IRawReliableAckServer.Init(IRawServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
+        bool IRawReliableAckServer.Init(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
         {
             Log.i("Init()");
             _userAcknowledger = acknowledger;
             return _core.Init(this);
         }
 
-        int IRawAckServer.MessageMaxByteSize => _core.MessageMaxByteSize;
+        int IRawTransport.MessageMaxByteSize => _core.MessageMaxByteSize;
 
         public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
         {
@@ -78,25 +77,25 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             return null;
         }
 
-        void IRawAckBaseHandler.OnDisconnected(StopReason reason)
+        void IRawReliableHandler.OnDisconnected(StopReason reason)
         {
             Log.i("UserHandler.OnDisconnected(" + reason + ")");
             _userHandler?.OnDisconnected(reason);
         }
 
-        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             Log.i("UserHandler.OnReceived(" + receivedBuffer + ")");
             _userHandler?.OnReceived(receivedBuffer);
         }
 
-        void IRawAckServerHandler.FillAckResponse(UnionDataList ackResponse)
+        void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackResponse)
         {
             Log.i("UserHandler.GetAckResponse()");
             _userHandler?.FillAckResponse(ackResponse);
         }
 
-        void IRawReliableAckServerHandler.OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+        void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             Log.i("UserHandler.OnConnected()");
             var endPointWrapper = new RawAckServerSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>

@@ -77,7 +77,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             mBaseTransport.Stop();
         }
 
-        internal void ConnectionFinished_Internal(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+        internal void ConnectionFinished_Internal(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
         {
             if (mInConnectionProcess)
             {
@@ -94,30 +94,30 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
 
         #region IRawAckClientHandler (for internal usage)
 
-        void IRawAckClientHandler.FillAckData(UnionDataList ackData)
+        void IRawReliableAckClientHandler.FillAckData(UnionDataList ackData)
         {
             ackData.Release();
             Fail("WriteAckData", "this method must not be called");
         }
 
-        void IRawAckBaseHandler.OnDisconnected(StopReason reason)
+        void IRawReliableHandler.OnDisconnected(StopReason reason)
         {
-            IRawReliableAckClientSideEndpoint? ep = mClientHandler;
+            IRawReliableEndpoint? ep = mClientHandler;
             ep?.Disconnect(reason);
         }
 
-        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             receivedBuffer.Release();
             Fail("OnReceived", "this method must not be called");
         }
 
-        void IRawReliableAckClientHandler.OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IRawReliableAckClientHandler.OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
         {
             // DO NOTHING
         }
 
-        void IRawAckClientHandler.OnStopped(StopReason reason)
+        void IRawReliableClientHandler.OnStopped(StopReason reason)
         {
             // DO NOTHING
         }

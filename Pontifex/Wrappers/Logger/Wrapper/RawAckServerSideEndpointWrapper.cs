@@ -4,13 +4,13 @@ using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable.Ack.Logger
 {
-    public class RawAckServerSideEndpointWrapper : RawAckBaseEndpointWrapper, IRawReliableAckServerSideEndpoint
+    public class RawAckServerSideEndpointWrapper : RawAckBaseEndpointWrapper, IRawReliableEndpoint
     {
         private readonly IControl[] _controls;
         
-        public RawAckServerSideEndpointWrapper(IRawReliableAckServerSideEndpoint? core,  
-            Func<IRawReliableAckBaseEndpoint?, UnionDataList, SendResult> sender, 
-            Func<IRawReliableAckBaseEndpoint?, StopReason, bool> disconnector,
+        public RawAckServerSideEndpointWrapper(IRawReliableEndpoint? core,  
+            Func<IRawReliableEndpoint?, UnionDataList, SendResult> sender, 
+            Func<IRawReliableEndpoint?, StopReason, bool> disconnector,
             IControl[] controls)
             : base(core, sender, disconnector)
         {

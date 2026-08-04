@@ -2,11 +2,7 @@ using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable.Ack
 {
-    /// <summary>
-    /// Client-side handler for the Reliable ACK raw transport.
-    /// Controls a single client-server connection.
-    /// </summary>
-    public interface IRawReliableAckClientHandler : IRawAckClientHandler
+    public interface IRawReliableAckClientHandler : IRawReliableClientHandler
     {
         /// <summary>
         /// Logical connection. Informs the business logic that the transport is fully configured
@@ -17,6 +13,12 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </summary>
         /// <param name="endPoint">The endpoint to the remote agent.</param>
         /// <param name="ackResponse">The server's response to the client's AckData.</param>
-        void OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse);
+        void OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse);
+        
+        /// <summary>
+        /// Prepares acknowledgement data to be sent to the server as part of the ACK handshake.
+        /// </summary>
+        /// <param name="ackData">The acknowledgement data to modify.</param>
+        void FillAckData(UnionDataList ackData);
     }
 }

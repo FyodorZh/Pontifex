@@ -1,5 +1,6 @@
 using System;
 using Actuarius.Memory;
+using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
@@ -14,11 +15,11 @@ namespace Pontifex.Api
         private readonly ILogger Log;
         
         private TransportPipeSystem? _transportPipeSystem;
-        private IRawReliableAckClientSideEndpoint? _endpoint;
+        private IRawReliableEndpoint? _endpoint;
 
         private bool _wasConnectedEver;
         
-        public event Action<IRawReliableAckClientSideEndpoint>? Connected;
+        public event Action<IRawReliableEndpoint>? Connected;
         public event Action<StopReason>? Disconnected;
         
         protected virtual void AppendAckData(UnionDataList ackData)
@@ -33,14 +34,14 @@ namespace Pontifex.Api
             Log = logger;
         }
 
-        void IRawAckClientHandler.FillAckData(UnionDataList ackData)
+        void IRawReliableAckClientHandler.FillAckData(UnionDataList ackData)
         {
             AppendAckData(ackData);
             long apiHash = 777;
             ackData.PutFirst(apiHash);
         }
 
-        void IRawReliableAckClientHandler.OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IRawReliableAckClientHandler.OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
         {
             using var disposer = ackResponse.AsDisposable();
             if (ackResponse.TryPopFirst(out long value) && value == 7777)
@@ -67,12 +68,12 @@ namespace Pontifex.Api
             }
         }
         
-        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _transportPipeSystem!.OnReceived(receivedBuffer);
         }
 
-        void IRawAckBaseHandler.OnDisconnected(StopReason reason)
+        void IRawReliableHandler.OnDisconnected(StopReason reason)
         {
             _api.Stop();
             _transportPipeSystem = null;
@@ -80,7 +81,7 @@ namespace Pontifex.Api
             Disconnected?.Invoke(reason);
         }
         
-        void IRawAckClientHandler.OnStopped(StopReason reason)
+        void IRawReliableClientHandler.OnStopped(StopReason reason)
         {
             if (!_wasConnectedEver) // prevent double invocation 
             {

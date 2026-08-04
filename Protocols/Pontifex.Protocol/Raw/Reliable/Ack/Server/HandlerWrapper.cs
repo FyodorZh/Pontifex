@@ -21,13 +21,13 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
         }
     }
 
-    public abstract class HandlerWrapper : IHandlerWrapper, IRawReliableAckServerSideEndpoint
+    public abstract class HandlerWrapper : IHandlerWrapper, IRawReliableEndpoint
     {
         private readonly IRawReliableAckWrapperServerLogic _logic;
 
         private volatile IRawReliableAckServerHandler _wrappedHandler = null!;
 
-        private volatile IRawReliableAckServerSideEndpoint? _wrappedEndpoint;
+        private volatile IRawReliableEndpoint? _wrappedEndpoint;
 
         private readonly object mSendCallSerializer = new ();
 
@@ -46,26 +46,26 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             return _logic.ProcessAckData(ackData);
         }
 
-        void IRawAckServerHandler.FillAckResponse(UnionDataList ackResponse)
+        void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackResponse)
         {
             _wrappedHandler.FillAckResponse(ackResponse);
         }
 
-        void IRawReliableAckServerHandler.OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+        void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             _wrappedEndpoint = endPoint;
             _wrappedHandler.OnConnected(this);
             _logic.OnConnected();
         }
 
-        void IRawAckBaseHandler.OnDisconnected(StopReason reason)
+        void IRawReliableHandler.OnDisconnected(StopReason reason)
         {
             _logic.OnDisconnected();
             _wrappedHandler.OnDisconnected(reason);
             _wrappedEndpoint = null;
         }
 
-        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             try
             {
@@ -88,9 +88,9 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             }
         }
 
-        IEndPoint? IRawAckBaseEndpoint.RemoteEndPoint => _wrappedEndpoint?.RemoteEndPoint;
+        IEndPoint? IRawEndpoint.RemoteEndPoint => _wrappedEndpoint?.RemoteEndPoint;
 
-        bool IRawAckBaseEndpoint.IsConnected
+        bool IRawReliableEndpoint.IsConnected
         {
             get
             {
@@ -103,7 +103,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             }
         }
 
-        int IRawAckBaseEndpoint.MessageMaxByteSize
+        int IRawEndpoint.MessageMaxByteSize
         {
             get
             {
@@ -116,7 +116,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             }
         }
 
-        SendResult IRawReliableAckBaseEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
         {
             lock (mSendCallSerializer)
             {
@@ -140,7 +140,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             }
         }
 
-        bool IRawAckBaseEndpoint.Disconnect(StopReason reason)
+        bool IRawReliableEndpoint.Disconnect(StopReason reason)
         {
             var endpoint = _wrappedEndpoint;
             if (endpoint != null)

@@ -33,7 +33,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                 ackData.PutFirst(new UnionData(AckRequest));
             }
 
-            public void OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+            public void OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
             {
                 using var ackResponseDisposer = ackResponse.AsDisposable();
                 if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) ||
@@ -63,7 +63,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             }
         }
 
-        private class ServerAcknowledger : IRawServerAcknowledger<IRawReliableAckServerHandler>
+        private class ServerAcknowledger : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
         {
             public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
             {
@@ -81,14 +81,14 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
 
         private class ServerHandler : IRawReliableAckServerHandler
         {
-            private volatile IRawReliableAckServerSideEndpoint? _endpoint;
+            private volatile IRawReliableEndpoint? _endpoint;
 
             public void FillAckResponse(UnionDataList ackResponse)
             {
                 ackResponse.PutFirst(new UnionData(AckResponse));
             }
 
-            public void OnConnected(IRawReliableAckServerSideEndpoint endPoint)
+            public void OnConnected(IRawReliableEndpoint endPoint)
             {
                 _endpoint = endPoint;
 

@@ -20,7 +20,7 @@ namespace Pontifex.Raw.Reliable.Ack
         private bool _disconnectServiced = true;
         private StopReason? _disconnectReason;
 
-        private IRawReliableAckClientSideEndpoint? _notServicedConnectedEndPoint;
+        private IRawReliableEndpoint? _notServicedConnectedEndPoint;
         private UnionDataList? _ackResponse;
 
         private bool _stopServiced = true;
@@ -42,32 +42,32 @@ namespace Pontifex.Raw.Reliable.Ack
         /// Не однопоточный
         /// </summary>
         /// <returns></returns>
-        void IRawAckClientHandler.FillAckData(UnionDataList ackData)
+        void IRawReliableAckClientHandler.FillAckData(UnionDataList ackData)
         {
             _handler.FillAckData(ackData);
         }
 
-        void IRawReliableAckClientHandler.OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+        void IRawReliableAckClientHandler.OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
         {
             _notServicedConnectedEndPoint = endPoint;
             _ackResponse = ackResponse;
         }
 
-        void IRawAckBaseHandler.OnDisconnected(StopReason reason)
+        void IRawReliableHandler.OnDisconnected(StopReason reason)
         {
             _disconnectServiced = false;
             _disconnectReason = reason;
             _receivedDataQueue.CloseValve();
         }
 
-        void IRawAckClientHandler.OnStopped(StopReason reason)
+        void IRawReliableClientHandler.OnStopped(StopReason reason)
         {
             _stopServiced = false;
             _stopReason = reason;
             _receivedDataQueue.CloseValve();
         }
 
-        void IRawAckBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             if (!_receivedDataQueue.Put(receivedBuffer))
             {

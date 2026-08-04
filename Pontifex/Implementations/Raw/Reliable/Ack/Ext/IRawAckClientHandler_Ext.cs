@@ -55,7 +55,7 @@ namespace Pontifex.Raw.Reliable.Ack
                 _core.FillAckData(ackData);
             }
 
-            public void OnConnected(IRawReliableAckClientSideEndpoint endPoint, UnionDataList ackResponse)
+            public void OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
             {
                 BeginCriticalSection(ref _receiveDepth);
 

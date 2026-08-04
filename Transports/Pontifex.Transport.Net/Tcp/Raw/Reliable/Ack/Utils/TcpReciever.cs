@@ -23,12 +23,12 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
         private readonly ILogger Log;
 
-        private readonly IRawReliableAckBaseEndpoint _owner;
+        private readonly IRawReliableEndpoint _owner;
 
         public TcpReceiver(Socket socket, 
             Action<UnionDataList> onReceived, Action<Exception> onFailed, Action? onStopped, 
             int messageMaxSize, IMemoryRental memoryRental, ILogger logger,
-            IRawReliableAckBaseEndpoint owner)
+            IRawReliableEndpoint owner)
         {
             _owner = owner;
             Log = logger;

@@ -8,7 +8,7 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 {
-    public class RawReliableAckReconnectableServer : RawReliableAckServer, IRawReliableAckServer, IRawServerAcknowledger<IRawReliableAckServerHandler>
+    public class RawReliableAckReconnectableServer : RawReliableAckServer, IRawReliableAckServer, IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
     {
         private readonly IRawReliableAckServer _coreTransport;
         private readonly TimeSpan _disconnectTimeout;
@@ -55,7 +55,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public override int MessageMaxByteSize => _coreTransport.MessageMaxByteSize;
 
-        IRawReliableAckServerHandler? IRawServerAcknowledger<IRawReliableAckServerHandler>.TryAck(UnionDataList ackData)
+        IRawReliableAckServerHandler? IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>.TryAck(UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ackRequest))

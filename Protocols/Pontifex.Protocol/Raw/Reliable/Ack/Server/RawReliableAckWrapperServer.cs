@@ -36,7 +36,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             _core.Stop(reason);
         }
 
-        protected override IRawServerAcknowledger<IRawReliableAckServerHandler>? SetupAcknowledger(IRawServerAcknowledger<IRawReliableAckServerHandler> baseAcknowledger)
+        protected override IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>? SetupAcknowledger(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> baseAcknowledger)
         {
             var acknowledger = mWrapperConstructor.Invoke(Log, Memory);
             acknowledger.Init(baseAcknowledger, text => Log.e(text));
