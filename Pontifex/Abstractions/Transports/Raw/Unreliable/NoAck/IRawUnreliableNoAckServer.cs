@@ -18,7 +18,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
         /// Attempts to send a message to the specified destination. Returns a SendResult indicating success or failure.
         /// </summary>
         /// <param name="destination">The destination endpoint to send the message to.</param>
-        /// <param name="message">The message to send. Ownership transfers to the transport for every non-null call result.</param>
+        /// <param name="message">The message to send. Ownership transfers to the transport for every non-null message argument, regardless of the result.</param>
         /// <returns>A SendResult indicating the outcome of the send operation.</returns>
         SendResult TrySend(IEndPoint destination, UnionDataList message);
     }
