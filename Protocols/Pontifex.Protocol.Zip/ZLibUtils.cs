@@ -3,7 +3,7 @@ using Actuarius.Memory;
 using Ionic.Zlib;
 using Pontifex.Utils;
 
-namespace Pontifex.Ack.Raw.Reliable.Zip
+namespace Pontifex.Raw.Reliable.Ack.Zip
 {
     public class ZLibCompressor
     {

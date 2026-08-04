@@ -1,21 +1,21 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
-using Pontifex.Ack.Raw.Reliable;
+using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Endpoints;
+using Pontifex.Raw.Reliable;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Api
 {
-    public class ServerSideApiInstance<TApi> : IAckRawReliableServerHandler
+    public class ServerSideApiInstance<TApi> : IRawReliableAckServerHandler
         where TApi : IApiRoot
     {
         private readonly TApi _api;
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
         
-        private IAckRawReliableServerSideEndpoint? _endpoint;
+        private IRawReliableEndpoint? _endpoint;
         private TransportPipeSystem? _transportPipeSystem;
 
         public event Action<ServerSideApiInstance<TApi>>? ApiStarted;
@@ -32,12 +32,12 @@ namespace Pontifex.Api
             Log = logger;
         }
 
-        void IAckRawServerHandler.FillAckResponse(UnionDataList ackData)
+        void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackData)
         {
             ackData.PutFirst((long)7777);
         }
 
-        void IAckRawReliableServerHandler.OnConnected(IAckRawReliableServerSideEndpoint endPoint)
+        void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             _endpoint = endPoint;
             
@@ -56,12 +56,12 @@ namespace Pontifex.Api
             ApiStarted?.Invoke(this);
         }
         
-        void IAckRawBaseHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _transportPipeSystem!.OnReceived(receivedBuffer);
         }
         
-        void IAckRawBaseHandler.OnDisconnected(StopReason reason)
+        void IRawReliableHandler.OnDisconnected(StopReason reason)
         {
             ApiStopped?.Invoke(this);
             _api.Stop();

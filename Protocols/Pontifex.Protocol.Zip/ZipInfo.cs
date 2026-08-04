@@ -1,6 +1,6 @@
 ﻿using Actuarius.Memory;
 
-namespace Pontifex.Ack.Raw.Reliable.Zip
+namespace Pontifex.Raw.Reliable.Ack.Zip
 {
     public static class ZipInfo
     {

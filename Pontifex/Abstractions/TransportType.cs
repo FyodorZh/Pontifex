@@ -6,13 +6,13 @@ namespace Pontifex
     // are ordered by the naming hierarchy {Raw|RR}{Reliable|Unreliable}{Ack|NoAck}.
     public enum TransportType
     {
-        AckRawReliable = 0,
-        NoAckRawReliable = 1,
-        AckRawUnreliable = 2,
-        NoAckRawUnreliable = 3,
-        AckRRReliable = 4,
-        NoAckRRReliable = 5,
-        AckRRUnreliable = 6,
-        NoAckRRUnreliable = 7,
+        RawReliableAck = 0,
+        RawReliableNoAck = 1,
+        RawUnreliableAck = 2,
+        RawUnreliableNoAck = 3,
+        RRReliableAck = 4,
+        RRReliableNoAck = 5,
+        RRUnreliableAck = 6,
+        RRUnreliableNoAck = 7,
     }
 }

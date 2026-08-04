@@ -1,6 +1,5 @@
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
-using Pontifex.Ack.Raw.Reliable;
+using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Api;
 using Pontifex.StopReasons;
 using Scriba;
@@ -29,8 +28,8 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
 
     public TClientApi ClientApi { get; }
     public TServerApi? ServerApi => _serverInstance?.Api;
-    public IAckRawReliableClient ClientTransport { get; }
-    public IAckRawReliableServer ServerTransport { get; }
+    public IRawReliableAckClient ClientTransport { get; }
+    public IRawReliableAckServer ServerTransport { get; }
 
     public ApiTestHarness(ITransportStack stack, bool failIfError)
     {
@@ -39,8 +38,8 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
         var logger = TransportRegistry.GetLogger(failIfError);
         var factory = stack.GetTransportFactory(failIfError);
 
-        ClientTransport = (IAckRawReliableClient)factory.BuildClient();
-        ServerTransport = (IAckRawReliableServer)factory.BuildServer();
+        ClientTransport = (IRawReliableAckClient)factory.BuildClient();
+        ServerTransport = (IRawReliableAckServer)factory.BuildServer();
 
         ClientApi = new TClientApi();
         var clientHandler = new ClientSideApi(ClientApi, memory, logger);

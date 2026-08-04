@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Ionic.Zlib;
-using Pontifex.Ack.Raw.Reliable.Protocols;
+using Pontifex.Raw.Reliable.Ack.Protocols;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Ack.Raw.Reliable.Zip
+namespace Pontifex.Raw.Reliable.Ack.Zip
 {
-    public abstract class CompressorLogic : AckRawReliableWrapperLogic, IReleasableResource
+    public abstract class CompressorLogic : RawReliableAckWrapperLogic, IReleasableResource
     {
         private ZLibCompressor? _compressor;
         private ZLibDecompressor? _decompressor;

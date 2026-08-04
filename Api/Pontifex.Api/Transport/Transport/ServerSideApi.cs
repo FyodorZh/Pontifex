@@ -1,11 +1,11 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
+using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
 
 namespace Pontifex.Api
 {
-    public class ServerSideApiFactory<TApi> : IRawServerAcknowledger<ServerSideApiInstance<TApi>>
+    public class ServerSideApiFactory<TApi> : IRawReliableAckServerAcknowledger<ServerSideApiInstance<TApi>>
         where TApi : IApiRoot
     {
         private readonly Func<UnionDataList, ServerSideApiInstance<TApi>?> _instanceFactory;
