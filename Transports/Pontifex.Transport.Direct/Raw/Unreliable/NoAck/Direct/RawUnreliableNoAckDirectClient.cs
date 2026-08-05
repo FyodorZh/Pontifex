@@ -12,14 +12,12 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
         private readonly object _connectLock = new();
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
-        private SerializedCallbackQueue<UnionDataList>? _callbackQueue;
+        private SerializedCallbackQueue<(RawUnreliableNoAckEndpoint, UnionDataList)>? _callbackQueue;
         private volatile Channel? _channel;
         private volatile IDeliverySystem _clientDeliverySystem = new PerfectDeliverySystem();
         private volatile IDeliverySystem _serverDeliverySystem = new PerfectDeliverySystem();
 
         private bool _askedForReliableDelivery;
-
-        public event Action<UnionDataList>? OnReceived;
 
         public int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
@@ -40,72 +38,33 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             _channel?.SetServerDeliverySystem(_serverDeliverySystem);
         }
 
-        protected override bool TryStart()
+        protected override IEndPoint? ClientRemoteEndPoint => _serverEp;
+
+        protected override bool StartCarrier()
         {
-            _callbackQueue = new SerializedCallbackQueue<UnionDataList>(
+            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableNoAckEndpoint, UnionDataList)>(
                 100,
                 $"cli-cb-{_serverEp}",
-                message =>
+                pair =>
                 {
+                    var (endpoint, message) = pair;
                     var channel = _channel;
-                    if (channel != null)
+                    if (channel == null)
                     {
-                        Conformance.BeforeSendCommitGate.Hit();
-                        channel.SendToServer(message);
-                        Conformance.AfterSendCommitGate.Hit();
-                    }
-                    else
                         message.Release();
+                        return;
+                    }
+                    endpoint.Conformance.BeforeSendCommitGate.Hit();
+                    channel.SendToServer(message);
+                    endpoint.Conformance.AfterSendCommitGate.Hit();
                 },
-                message => message.Release());
+                pair => pair.Item2.Release());
             _callbackQueue.ExceptionHandler += ex => Log.wtf(ex);
 
             return true;
         }
 
-        private void OnChannelConnected(Channel channel)
-        {
-            channel.ClientHandler = (message) =>
-            {
-                var handler = OnReceived;
-                if (handler != null)
-                {
-                    try
-                    {
-                        Conformance.AfterReceivedGate.Hit();
-                        if (!IsStarted)
-                        {
-                            message.Release();
-                            return;
-                        }
-                        handler(message);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
-                    }
-                }
-                else
-                {
-                    message.Release();
-                }
-            };
-
-            if (_askedForReliableDelivery)
-            {
-                channel.SetClientDeliverySystem(new PerfectDeliverySystem());
-                channel.SetServerDeliverySystem(new PerfectDeliverySystem());
-            }
-            else
-            {
-                channel.SetClientDeliverySystem(_clientDeliverySystem);
-                channel.SetServerDeliverySystem(_serverDeliverySystem);
-            }
-        }
-
-        protected override void OnStarted() { }
-
-        protected override void OnStopped(StopReason reason)
+        protected override void StopCarrier(StopReason reason)
         {
             var channel = _channel;
             if (channel != null)
@@ -119,7 +78,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             _callbackQueue = null;
         }
 
-        private SendResult SendToServer(UnionDataList message)
+        protected override SendResult SendToCarrier(RawUnreliableNoAckEndpoint endpoint, UnionDataList message)
         {
             var channel = _channel;
             if (channel == null)
@@ -132,7 +91,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
                         channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
                         if (channel == null)
                         {
-                            message?.Release();
+                            message.Release();
                             return SendResult.Error;
                         }
                         OnChannelConnected(channel);
@@ -141,18 +100,13 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
                 }
             }
 
-            if (message == null!)
-            {
-                return SendResult.InvalidMessage;
-            }
-            
             if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
             {
                 message.Release();
                 return SendResult.MessageTooBig;
             }
 
-            if (_callbackQueue?.Post(message) ?? false)
+            if (_callbackQueue?.Post((endpoint, message)) ?? false)
             {
                 return SendResult.Ok;
             }
@@ -160,7 +114,21 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             return SendResult.Error;
         }
 
-        public SendResult TrySend(UnionDataList message) => SendToServer(message);
+        private void OnChannelConnected(Channel channel)
+        {
+            channel.ClientHandler = message => OnCarrierInbound(null, message);
+
+            if (_askedForReliableDelivery)
+            {
+                channel.SetClientDeliverySystem(new PerfectDeliverySystem());
+                channel.SetServerDeliverySystem(new PerfectDeliverySystem());
+            }
+            else
+            {
+                channel.SetClientDeliverySystem(_clientDeliverySystem);
+                channel.SetServerDeliverySystem(_serverDeliverySystem);
+            }
+        }
 
         public override string ToString()
         {

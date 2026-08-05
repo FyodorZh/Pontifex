@@ -11,10 +11,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
-        private readonly object _callbackLock = new();
-        private SerializedCallbackQueue<(IEndPoint, UnionDataList)>? _callbackQueue;
-
-        public event Action<IEndPoint, UnionDataList>? OnReceived;
+        private SerializedCallbackQueue<(RawUnreliableNoAckEndpoint, UnionDataList)>? _callbackQueue;
 
         public int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
@@ -26,26 +23,26 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             _serverEp = new StringEndPoint(serverName);
         }
 
-        protected override bool TryStart()
+        protected override bool StartCarrier()
         {
-            _callbackQueue = new SerializedCallbackQueue<(IEndPoint, UnionDataList)>(
+            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableNoAckEndpoint, UnionDataList)>(
                 100,
                 $"srv-cb-{_serverEp}",
                 pair =>
                 {
-                    var (clientEp, message) = pair;
-                    if (_channels.TryGetValue(clientEp, out var channel))
+                    var (endpoint, message) = pair;
+                    if (!_channels.TryGetValue(endpoint.RemoteEndPoint!, out var channel))
                     {
-                        Conformance.BeforeSendCommitGate.Hit();
-                        channel.SendToClient(message);
-                        Conformance.AfterSendCommitGate.Hit();
-                    }
-                    else
                         message.Release();
+                        return;
+                    }
+                    endpoint.Conformance.BeforeSendCommitGate.Hit();
+                    channel.SendToClient(message);
+                    endpoint.Conformance.AfterSendCommitGate.Hit();
                 },
                 pair => pair.Item2.Release());
             _callbackQueue.ExceptionHandler += ex => Log.wtf(ex);
-            
+
             if (!DirectTransportManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
             {
                 Log.e("Failed to register server '{0}'. Name already in use.", _serverEp);
@@ -56,9 +53,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             return true;
         }
 
-        protected override void OnStarted() { }
-
-        protected override void OnStopped(StopReason reason)
+        protected override void StopCarrier(StopReason reason)
         {
             DirectTransportManager.Instance.UnregisterServer(_serverEp);
             foreach (var channel in _channels.Values)
@@ -70,66 +65,21 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             _callbackQueue = null;
         }
 
-        private void OnChannelCreated(Channel channel)
-        {
-            channel.ServerHandler = (clientEp, message) =>
-            {
-                var handler = OnReceived;
-                if (handler != null)
-                {
-                    try
-                    {
-                        Conformance.AfterReceivedGate.Hit();
-                        if (!IsStarted)
-                        {
-                            message.Release();
-                            return;
-                        }
-                        lock (_callbackLock)
-                        {
-                            handler(clientEp, message);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
-                    }
-                }
-                else
-                {
-                    message.Release();
-                }
-            };
-
-            _channels.TryAdd(channel.ClientEp, channel);
-        }
-
-        private SendResult SendToClient(IEndPoint destination, UnionDataList message)
+        protected override SendResult SendToCarrier(RawUnreliableNoAckEndpoint endpoint, UnionDataList message)
         {
             if (!IsStarted)
             {
-                message?.Release();
+                message.Release();
                 return SendResult.Error;
             }
 
-            if (message == null!)
-            {
-                return SendResult.InvalidMessage;
-            }
-            
-            if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
-            {
-                message.Release();
-                return SendResult.MessageTooBig;
-            }
-
-            if (!_channels.TryGetValue(destination, out _))
+            if (!_channels.TryGetValue(endpoint.RemoteEndPoint!, out _))
             {
                 message.Release();
                 return SendResult.InvalidAddress;
             }
 
-            if (_callbackQueue?.Post((destination, message)) ?? false)
+            if (_callbackQueue?.Post((endpoint, message)) ?? false)
             {
                 return SendResult.Ok;
             }
@@ -137,12 +87,18 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             return SendResult.Error;
         }
 
-        public SendResult TrySend(IEndPoint destination, UnionDataList message) => SendToClient(destination, message);
+        private void OnChannelCreated(Channel channel)
+        {
+            channel.ServerHandler = (clientEp, message) => OnCarrierInbound(clientEp, message);
+            _channels.TryAdd(channel.ClientEp, channel);
+        }
 
         public override string ToString()
         {
             try { return $"direct-server[{_serverEp}]"; }
             catch (Exception) { return "direct-server[unknown]"; }
         }
+
+        protected override bool TryMakeReliableForDebug() => true;
     }
 }

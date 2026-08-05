@@ -1,5 +1,7 @@
 using Actuarius.Memory;
+using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
+using Pontifex.Utils;
 
 namespace Pontifex.Tests.Raw.Unreliable.NoAck;
 
@@ -30,6 +32,7 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
     {
         using var fixture = new DirectRawUnreliableNoAckConformanceAdapter().CreateFixture();
 
+        Assert.That(fixture.Server.Init(_ => null), Is.True);
         Assert.That(fixture.Server.Start(_ => { }), Is.True);
         var runningServerClient = fixture.CreateClient();
         Assert.That(fixture.Server.Stop(), Is.True);
@@ -44,15 +47,34 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
     }
 
     [Test]
-    public void Dispose_ResetsArmedConformanceGates()
+    public async Task Dispose_ResetsArmedConformanceGates()
     {
         var fixture = new DirectRawUnreliableNoAckConformanceAdapter().CreateFixture();
-        var serverControl = GetControl<IRawUnreliableNoAckConformanceControl>(fixture.Server);
-        serverControl.BeforeStopStateTransitionGate.Arm();
-        serverControl.BeforeStoppedCallbackGate.Arm();
-        serverControl.BeforeSendCommitGate.Arm();
-        serverControl.AfterSendCommitGate.Arm();
-        serverControl.AfterReceivedGate.Arm();
+        var client = fixture.CreateClient();
+        var handler = new GateTestHandler(fixture);
+
+        Assert.That(client.Init(handler), Is.True);
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.Server.Start(_ => { }), Is.True);
+        Assert.That(client.Start(_ => { }), Is.True);
+
+        var endpoint = await WaitForEndpointAsync(handler);
+        var serverControl = GetControl<IRawUnreliableNoAckTransportConformanceControl>(fixture.Server);
+        var clientControl = GetControl<IRawUnreliableNoAckTransportConformanceControl>(client);
+        var endpointControl = GetEndpointControl<IRawUnreliableNoAckEndpointConformanceControl>(endpoint);
+
+        _ = serverControl.BeforeStopStateTransitionGate.Arm();
+        _ = serverControl.BeforeStoppedCallbackGate.Arm();
+        _ = serverControl.BeforeHandlerFactoryGate.Arm();
+        _ = serverControl.BeforeHandlerStartedGate.Arm();
+        _ = clientControl.BeforeStopStateTransitionGate.Arm();
+        _ = clientControl.BeforeStoppedCallbackGate.Arm();
+        _ = clientControl.BeforeHandlerStartedGate.Arm();
+        _ = endpointControl.BeforeEndpointStopStateTransitionGate.Arm();
+        _ = endpointControl.BeforeHandlerStoppedGate.Arm();
+        _ = endpointControl.BeforeSendCommitGate.Arm();
+        _ = endpointControl.AfterSendCommitGate.Arm();
+        _ = endpointControl.AfterReceivedGate.Arm();
 
         fixture.Dispose();
 
@@ -60,10 +82,29 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
         {
             Assert.That(serverControl.BeforeStopStateTransitionGate.IsArmed, Is.False);
             Assert.That(serverControl.BeforeStoppedCallbackGate.IsArmed, Is.False);
-            Assert.That(serverControl.BeforeSendCommitGate.IsArmed, Is.False);
-            Assert.That(serverControl.AfterSendCommitGate.IsArmed, Is.False);
-            Assert.That(serverControl.AfterReceivedGate.IsArmed, Is.False);
+            Assert.That(serverControl.BeforeHandlerFactoryGate.IsArmed, Is.False);
+            Assert.That(serverControl.BeforeHandlerStartedGate.IsArmed, Is.False);
+            Assert.That(clientControl.BeforeStopStateTransitionGate.IsArmed, Is.False);
+            Assert.That(clientControl.BeforeStoppedCallbackGate.IsArmed, Is.False);
+            Assert.That(clientControl.BeforeHandlerStartedGate.IsArmed, Is.False);
+            Assert.That(endpointControl.BeforeEndpointStopStateTransitionGate.IsArmed, Is.False);
+            Assert.That(endpointControl.BeforeHandlerStoppedGate.IsArmed, Is.False);
+            Assert.That(endpointControl.BeforeSendCommitGate.IsArmed, Is.False);
+            Assert.That(endpointControl.AfterSendCommitGate.IsArmed, Is.False);
+            Assert.That(endpointControl.AfterReceivedGate.IsArmed, Is.False);
         });
+    }
+
+    private static async Task<IRawUnreliableEndpoint> WaitForEndpointAsync(RawUnreliableNoAckTestHandler handler)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (handler.Endpoint == null)
+        {
+            if (DateTime.UtcNow >= deadline)
+                Assert.Fail("OnStarted was not invoked within the delivery timeout.");
+            await Task.Delay(10);
+        }
+        return handler.Endpoint;
     }
 
     private static TControl GetControl<TControl>(ITransport transport)
@@ -72,5 +113,26 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
         var controls = new List<IControl>();
         transport.GetControls(controls, control => control is TControl);
         return controls.OfType<TControl>().Single();
+    }
+
+    private static TControl GetEndpointControl<TControl>(IRawUnreliableEndpoint endpoint)
+        where TControl : class, IControl
+    {
+        var controls = new List<IControl>();
+        endpoint.GetControls(controls, control => control is TControl);
+        return controls.OfType<TControl>().Single();
+    }
+
+    private sealed class GateTestHandler : RawUnreliableNoAckTestHandler
+    {
+        public GateTestHandler(IRawUnreliableNoAckConformanceFixture fixture)
+            : base(fixture)
+        {
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            message.Release();
+        }
     }
 }

@@ -279,7 +279,7 @@ namespace Pontifex
             }
         }
 
-        private bool HasStartBeenAttempted
+        protected bool HasStartBeenAttempted
         {
             get
             {

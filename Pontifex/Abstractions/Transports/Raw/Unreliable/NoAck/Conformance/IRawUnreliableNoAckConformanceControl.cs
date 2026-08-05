@@ -3,29 +3,22 @@ using Pontifex.Utils.CheckPointGate;
 namespace Pontifex.Raw.Unreliable.NoAck
 {
     /// <summary>
-    /// Transport-specific conformance control for RawUnreliableNoAck.
+    /// Test-only control for a RawUnreliableNoAck transport instance, obtained via
+    /// ITransport.GetControls before starting.
     /// </summary>
-    public interface IRawUnreliableNoAckConformanceControl : IRawUnreliableConformanceControl
+    public interface IRawUnreliableNoAckTransportConformanceControl : IRawUnreliableConformanceControl
     {
-        /// <summary>
-        /// An accepted message is about to reach an underlying IO commit attempt.
-        /// Synchronously rejected messages and accepted messages discarded before
-        /// a commit attempt do not hit this gate.
-        /// </summary>
-        ICheckPointCtl BeforeSendCommitGate { get; }
+        /// <summary>Hit once immediately before each server handlerFactory invocation.</summary>
+        ICheckPointCtl BeforeHandlerFactoryGate { get; }
+
+        /// <summary>Hit once immediately before an endpoint's handler.OnStarted invocation.</summary>
+        ICheckPointCtl BeforeHandlerStartedGate { get; }
 
         /// <summary>
-        /// An accepted message has completed an underlying IO commit attempt.
+        /// Enables transport-wide reliable debug mode for every current and future
+        /// endpoint route of this transport. Must be called before Start. Returns
+        /// false if the implementation cannot provide the test mode.
         /// </summary>
-        ICheckPointCtl AfterSendCommitGate { get; }
-        
-        /// <summary>
-        /// A valid, routed inbound message has been bound to the current sole
-        /// receive handler and is about to invoke that handler. The gate is hit
-        /// once per impending OnReceived invocation, immediately before it begins.
-        /// It is not hit for malformed, oversized, stopped or discarded messages,
-        /// or when no receive handler is attached.
-        /// </summary>
-        ICheckPointCtl AfterReceivedGate { get; }
+        bool TryMakeReliable();
     }
 }

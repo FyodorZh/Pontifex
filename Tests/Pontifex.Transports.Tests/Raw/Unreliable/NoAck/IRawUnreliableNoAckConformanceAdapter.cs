@@ -1,3 +1,4 @@
+using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
 
 namespace Pontifex.Tests.Raw.Unreliable.NoAck;
@@ -24,4 +25,10 @@ public interface IRawUnreliableNoAckConformanceFixture : IDisposable
     /// Clients may be created before or after the server becomes terminal.
     /// </summary>
     IRawUnreliableNoAckClient CreateClient();
+
+    /// <summary>Registers an endpoint so Dispose() can reset its conformance gates. Called from handler OnStarted.</summary>
+    void TrackEndpoint(IRawUnreliableEndpoint endpoint);
+
+    /// <summary>All endpoints registered so far (safe for concurrent reads).</summary>
+    IReadOnlyList<IRawUnreliableEndpoint> TrackedEndpoints { get; }
 }

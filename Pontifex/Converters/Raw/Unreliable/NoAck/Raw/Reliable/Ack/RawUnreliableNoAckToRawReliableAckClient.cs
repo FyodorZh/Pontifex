@@ -2,11 +2,13 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 using dm = Pontifex.DeliveryManager;
+using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.Utils;
 using Scriba;
@@ -19,6 +21,7 @@ namespace Pontifex.Converters
         private readonly dm.DeliveryManager _dm;
         private readonly dm.RetryDeliveryScheduler _scheduler;
         private readonly ClientEndpoint _endpoint;
+        private readonly InnerHandler _innerHandler;
         private readonly SendConsumer _sendConsumer;
 
         private IRawReliableAckClientHandler? _handler;
@@ -28,15 +31,60 @@ namespace Pontifex.Converters
         private readonly ConcurrentQueue<UnionDataList> _incomingQueue = new ConcurrentQueue<UnionDataList>();
         private bool _connectedSignaled;
 
+        private sealed class InnerHandler : IRawUnreliableHandler
+        {
+            private readonly RawUnreliableNoAckToRawReliableAckClient _owner;
+            private readonly TaskCompletionSource<IRawUnreliableEndpoint> _endpointTcs =
+                new TaskCompletionSource<IRawUnreliableEndpoint>(TaskCreationOptions.RunContinuationsAsynchronously);
+            private volatile IRawUnreliableEndpoint? _endpoint;
+
+            public InnerHandler(RawUnreliableNoAckToRawReliableAckClient owner) => _owner = owner;
+
+            public IRawUnreliableEndpoint? Endpoint => _endpoint;
+
+            public IRawUnreliableEndpoint? WaitForEndpoint(TimeSpan timeout)
+            {
+                if (_endpoint == null)
+                {
+                    _endpointTcs.Task.Wait(timeout);
+                }
+                return _endpoint;
+            }
+
+            public void OnStarted(IRawUnreliableEndpoint endpoint)
+            {
+                _endpoint = endpoint;
+                _endpointTcs.TrySetResult(endpoint);
+            }
+
+            public void OnReceived(UnionDataList data)
+            {
+                _owner._incomingQueue.Enqueue(data);
+                _owner._workEvent.Set();
+            }
+
+            public void OnStopped(StopReason reason)
+            {
+                _owner.Log.i("Inner client endpoint stopped: {0}", reason);
+            }
+        }
+
         private sealed class SendConsumer : IConsumer<UnionDataList>
         {
-            private readonly IRawUnreliableNoAckClient _inner;
-            public SendConsumer(IRawUnreliableNoAckClient inner) => _inner = inner;
+            private readonly InnerHandler _innerHandler;
+            public SendConsumer(InnerHandler innerHandler) => _innerHandler = innerHandler;
 
             public bool Put(UnionDataList data)
             {
-                _inner.TrySend(data);
-                data.Release();
+                var endpoint = _innerHandler.Endpoint;
+                if (endpoint != null)
+                {
+                    endpoint.UnreliableSend(data);
+                }
+                else
+                {
+                    data.Release();
+                }
                 return true;
             }
         }
@@ -94,13 +142,14 @@ namespace Pontifex.Converters
 
             _scheduler = new dm.RetryDeliveryScheduler(TimeSpan.FromSeconds(30));
             _endpoint = new ClientEndpoint(_dm, this);
-            _sendConsumer = new SendConsumer(inner);
+            _innerHandler = new InnerHandler(this);
+            _sendConsumer = new SendConsumer(_innerHandler);
 
             _dm.Received += OnDmReceived;
             _dm.Delivered += OnDmDelivered;
             _dm.FailedToDeliver += OnDmFailedToDeliver;
 
-            _inner.OnReceived += OnInnerReceived;
+            _inner.Init(_innerHandler);
         }
 
         public override TransportType Type => TransportType.RawReliableAck;
@@ -163,13 +212,6 @@ namespace Pontifex.Converters
             _inner.Stop(reason);
         }
 
-        private void OnInnerReceived(UnionDataList data)
-        {
-            data.Acquire();
-            _incomingQueue.Enqueue(data);
-            _workEvent.Set();
-        }
-
         private void DmLoop()
         {
             while (!_stopped)
@@ -185,9 +227,18 @@ namespace Pontifex.Converters
                     {
                         try
                         {
+                            var endpoint = _innerHandler.WaitForEndpoint(TimeSpan.FromSeconds(5));
+
                             var ackData = Memory.CollectablePool.Acquire<UnionDataList>();
                             handler.FillAckData(ackData);
-                            _inner.TrySend(ackData);
+                            if (endpoint != null)
+                            {
+                                endpoint.UnreliableSend(ackData);
+                            }
+                            else
+                            {
+                                ackData.Release();
+                            }
 
                             var ackResponse = Memory.CollectablePool.Acquire<UnionDataList>();
                             ackResponse.PutFirst((long)7777);
