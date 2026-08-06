@@ -1,6 +1,5 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.StopReasons;
 using Scriba;
 
 namespace Pontifex.Raw.Unreliable.NoAck
@@ -31,22 +30,8 @@ namespace Pontifex.Raw.Unreliable.NoAck
             var dispatcher = _dispatcher;
             if (dispatcher == null) return;
 
-            dispatcher.Post(() =>
-            {
-                Conformance.BeforeHandlerStartedGate.Hit();
-                ep.MarkValid();
-                try
-                {
-                    ep.Handler.OnStarted(ep);
-                    ep.MarkOnStartedCompleted();
-                }
-                catch (Exception e)
-                {
-                    Log.wtf(e);
-                    ep.MarkInvalid();
-                    dispatcher.Post(() => Stop(new StopReasons.ExceptionFail(Name, e, "client handler.OnStarted threw")));
-                }
-            });
+            if (!dispatcher.Post(RawUnreliableNoAckWorkItem.StartClientEndpoint(ep)))
+                StartClientEndpoint(ep);
         }
     }
 }

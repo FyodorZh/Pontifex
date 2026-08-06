@@ -93,20 +93,69 @@ namespace Pontifex.Raw.Unreliable.NoAck
         /// </summary>
         protected IRawUnreliableHandler? ClientHandler => _clientHandler;
 
-        internal SerializedCallbackQueue<Action>? _dispatcher;
+        internal SerializedCallbackQueue<RawUnreliableNoAckWorkItem>? _dispatcher;
         internal RawUnreliableNoAckEndpoint? _clientEndpoint;
         private readonly Dictionary<IEndPoint, RawUnreliableNoAckEndpoint> _routes = new();
         private volatile bool _stopping;
 
-        private void RunQueuedAction(Action action)
+        private void DispatchWork(RawUnreliableNoAckWorkItem item)
         {
             try
             {
-                action();
+                switch (item.Kind)
+                {
+                    case RawUnreliableNoAckWorkKind.StartClientEndpoint:
+                        StartClientEndpoint(item.Endpoint!);
+                        break;
+                    case RawUnreliableNoAckWorkKind.DeliverClient:
+                        {
+                            var ep = _clientEndpoint;
+                            if (ep == null || _stopping || !IsStarted)
+                            {
+                                item.Message!.Release();
+                                break;
+                            }
+                            DeliverToEndpoint(ep, item.Message!);
+                        }
+                        break;
+                    case RawUnreliableNoAckWorkKind.ProcessServer:
+                        ProcessServerInbound(item.Source!, item.Message!);
+                        break;
+                    case RawUnreliableNoAckWorkKind.TeardownEndpoint:
+                        TeardownEndpoint(item.Endpoint!, item.Reason!);
+                        break;
+                    case RawUnreliableNoAckWorkKind.TeardownAll:
+                        TeardownAllEndpoints(item.Reason!);
+                        break;
+                    case RawUnreliableNoAckWorkKind.Stop:
+                        Stop(item.Reason);
+                        break;
+                }
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
+                if (item.Kind is RawUnreliableNoAckWorkKind.DeliverClient or RawUnreliableNoAckWorkKind.ProcessServer)
+                    item.Message!.Release();
+            }
+        }
+
+        protected void StartClientEndpoint(RawUnreliableNoAckEndpoint ep)
+        {
+            Conformance.BeforeHandlerStartedGate.Hit();
+            ep.MarkValid();
+            try
+            {
+                ep.Handler.OnStarted(ep);
+                ep.MarkOnStartedCompleted();
+            }
+            catch (Exception e)
+            {
+                Log.wtf(e);
+                ep.MarkInvalid();
+                var dispatcher = _dispatcher;
+                if (dispatcher == null || !dispatcher.Post(RawUnreliableNoAckWorkItem.Stop(new StopReasons.ExceptionFail(Name, e, "client handler.OnStarted threw"))))
+                    Stop(new StopReasons.ExceptionFail(Name, e, "client handler.OnStarted threw"));
             }
         }
 
@@ -116,7 +165,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
                 return false;
 
             _stopping = false;
-            _dispatcher = new SerializedCallbackQueue<Action>(1000, Name + ".dispatcher", RunQueuedAction, RunQueuedAction);
+            _dispatcher = new SerializedCallbackQueue<RawUnreliableNoAckWorkItem>(1000, Name + ".dispatcher", DispatchWork, DispatchWork);
             if (!StartCarrier())
             {
                 _dispatcher.Dispose();
@@ -143,7 +192,8 @@ namespace Pontifex.Raw.Unreliable.NoAck
             var dispatcher = _dispatcher;
             if (dispatcher != null)
             {
-                dispatcher.Post(() => TeardownAllEndpoints(reason));
+                if (!dispatcher.Post(RawUnreliableNoAckWorkItem.TeardownAll(reason)))
+                    TeardownAllEndpoints(reason);
                 dispatcher.Dispose();
             }
             else
@@ -210,12 +260,12 @@ namespace Pontifex.Raw.Unreliable.NoAck
 
             var resolvedReason = reason ?? new StopReasons.Unknown(Name);
 
-            if (_dispatcher == null || !_dispatcher.Post(() => TeardownEndpoint(ep, resolvedReason)))
+            if (_dispatcher == null || !_dispatcher.Post(RawUnreliableNoAckWorkItem.TeardownEndpoint(ep, resolvedReason)))
                 TeardownEndpoint(ep, resolvedReason);
 
             if (ReferenceEquals(ep, _clientEndpoint))
             {
-                if (_dispatcher == null || !_dispatcher.Post(() => Stop(resolvedReason)))
+                if (_dispatcher == null || !_dispatcher.Post(RawUnreliableNoAckWorkItem.Stop(resolvedReason)))
                     Stop(resolvedReason);
             }
 
@@ -305,23 +355,14 @@ namespace Pontifex.Raw.Unreliable.NoAck
 
             if (source == null)
             {
-                if (!dispatcher.Post(() =>
-                {
-                    var ep = _clientEndpoint;
-                    if (ep == null || _stopping || !IsStarted)
-                    {
-                        message.Release();
-                        return;
-                    }
-                    DeliverToEndpoint(ep, message);
-                }))
+                if (!dispatcher.Post(RawUnreliableNoAckWorkItem.DeliverClient(message)))
                 {
                     message.Release();
                 }
             }
             else
             {
-                if (!dispatcher.Post(() => ProcessServerInbound(source!, message)))
+                if (!dispatcher.Post(RawUnreliableNoAckWorkItem.ProcessServer(source, message)))
                 {
                     message.Release();
                 }
