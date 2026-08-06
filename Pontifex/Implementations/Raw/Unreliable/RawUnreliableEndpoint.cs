@@ -3,19 +3,18 @@ using System.Collections.Generic;
 using System.Threading;
 using Pontifex.Utils;
 
-namespace Pontifex.Raw.Unreliable.NoAck
+namespace Pontifex.Raw.Unreliable
 {
     /// <summary>
-    /// Base endpoint implementation for the RawUnreliableNoAck transport.
-    /// The owning transport (added in a later work package) constructs this
-    /// type and wires its send and stop delegates.
+    /// Base endpoint implementation shared by all RawUnreliable transports.
+    /// The owning transport constructs this type and wires its send and stop delegates.
     /// </summary>
-    public class RawUnreliableNoAckEndpoint : IRawUnreliableEndpoint
+    public class RawUnreliableEndpoint : IRawUnreliableEndpoint
     {
-        private readonly RawUnreliableNoAckTransport _owner;
+        private readonly RawUnreliableTransport _owner;
         private readonly IRawUnreliableHandler _handler;
         private readonly IEndPoint? _remote;
-        private readonly RawUnreliableNoAckEndpointConformanceControl _conformance = new();
+        private readonly RawUnreliableEndpointConformanceControl _conformance = new();
         private volatile bool _isValid;
         private bool _onStartedCompleted;
         private int _stopInitiated;
@@ -25,15 +24,15 @@ namespace Pontifex.Raw.Unreliable.NoAck
         /// Set by the owning transport once the endpoint can commit sends to a
         /// carrier. Null until wired; a null delegate rejects with Error.
         /// </summary>
-        internal Func<RawUnreliableNoAckEndpoint, UnionDataList, SendResult>? SendDelegate;
+        internal Func<RawUnreliableEndpoint, UnionDataList, SendResult>? SendDelegate;
 
         /// <summary>
         /// Set by the owning transport to drive the endpoint stop transition.
         /// Null until wired; a null delegate causes Stop to return false.
         /// </summary>
-        internal Func<RawUnreliableNoAckEndpoint, StopReason?, bool>? StopDelegate;
+        internal Func<RawUnreliableEndpoint, StopReason?, bool>? StopDelegate;
 
-        internal RawUnreliableNoAckEndpoint(RawUnreliableNoAckTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
+        internal RawUnreliableEndpoint(RawUnreliableTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
         {
             _owner = owner;
             _handler = handler;
@@ -46,7 +45,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
 
         public int MessageMaxByteSize => ((IRawTransport)_owner).MessageMaxByteSize;
 
-        public IRawUnreliableNoAckEndpointConformanceControl Conformance => _conformance;
+        public IRawUnreliableEndpointConformanceControl Conformance => _conformance;
 
         internal IRawUnreliableHandler Handler => _handler;
 

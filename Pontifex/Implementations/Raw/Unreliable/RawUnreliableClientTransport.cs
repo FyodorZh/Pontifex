@@ -1,13 +1,14 @@
 using System;
 using Actuarius.Memory;
+using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Raw.Unreliable.NoAck
+namespace Pontifex.Raw.Unreliable
 {
-    public abstract class RawUnreliableNoAckClientTransport : RawUnreliableNoAckTransport
+    public abstract class RawUnreliableClientTransport : RawUnreliableTransport, IRawUnreliableClient
     {
-        protected RawUnreliableNoAckClientTransport(string typeName, ILogger logger, IMemoryRental memory,
-            RawUnreliableNoAckTransportConformanceControl? conformanceControl = null)
+        protected RawUnreliableClientTransport(string typeName, ILogger logger, IMemoryRental memory,
+            RawUnreliableTransportConformanceControl? conformanceControl = null)
             : base(typeName, logger, memory, conformanceControl)
         {
         }
@@ -17,6 +18,11 @@ namespace Pontifex.Raw.Unreliable.NoAck
             if (handler == null!)
                 throw new ArgumentNullException(nameof(handler));
             return TryInitialize(handler, null);
+        }
+
+        protected override IRawUnreliableHandler? InvokeHandlerFactory(IEndPoint source, UnionDataList triggeringMessage)
+        {
+            throw new NotSupportedException("A client transport has no server handler factory.");
         }
 
         protected override void OnStarted()
@@ -30,7 +36,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
             var dispatcher = _dispatcher;
             if (dispatcher == null) return;
 
-            if (!dispatcher.Post(RawUnreliableNoAckWorkItem.StartClientEndpoint(ep)))
+            if (!dispatcher.Post(RawUnreliableWorkItem.StartClientEndpoint(ep)))
                 StartClientEndpoint(ep);
         }
     }

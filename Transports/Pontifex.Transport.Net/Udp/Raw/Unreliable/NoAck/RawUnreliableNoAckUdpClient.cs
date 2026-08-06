@@ -10,7 +10,7 @@ using Transport.Utils;
 
 namespace Pontifex.Raw.Unreliable.NoAck.Udp
 {
-    public sealed class RawUnreliableNoAckUdpClient : RawUnreliableNoAckClientTransport, IRawUnreliableNoAckClient
+    public sealed class RawUnreliableNoAckUdpClient : RawUnreliableClientTransport, IRawUnreliableNoAckClient
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;
@@ -32,7 +32,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
 
         public IEndPoint ServerAddress => _managedRemoteEndPoint;
 
-        public int MessageMaxByteSize => RawUdpInfo.MessageMaxByteSize;
+        public override int MessageMaxByteSize => RawUdpInfo.MessageMaxByteSize;
 
         protected override IEndPoint? ClientRemoteEndPoint => _managedRemoteEndPoint;
 
@@ -124,7 +124,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
             }
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableNoAckEndpoint endpoint, UnionDataList message)
+        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
         {
             var sender = _sender;
             if (sender == null)

@@ -34,7 +34,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
             _trafficCollector = new TrafficCollectorSlim(RawUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
         }
 
-        public int MessageMaxByteSize => RawUdpInfo.MessageMaxByteSize;
+        public override int MessageMaxByteSize => RawUdpInfo.MessageMaxByteSize;
 
         protected override bool StartCarrier()
         {
@@ -138,7 +138,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
             }
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableNoAckEndpoint endpoint, UnionDataList message)
+        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
         {
             var sender = _sender;
             if (sender == null)

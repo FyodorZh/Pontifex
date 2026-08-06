@@ -11,9 +11,9 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
-        private SerializedCallbackQueue<(RawUnreliableNoAckEndpoint, UnionDataList)>? _callbackQueue;
+        private SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
 
-        public int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
+        public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
 
         public override TransportType Type => TransportType.RawUnreliableNoAck;
 
@@ -25,7 +25,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
 
         protected override bool StartCarrier()
         {
-            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableNoAckEndpoint, UnionDataList)>(
+            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>(
                 100,
                 $"srv-cb-{_serverEp}",
                 pair =>
@@ -65,7 +65,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             _callbackQueue = null;
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableNoAckEndpoint endpoint, UnionDataList message)
+        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
         {
             if (!IsStarted)
             {

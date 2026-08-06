@@ -28,9 +28,13 @@ and **MAY** in this document are to be interpreted as described in
 ## 3. Public contract
 
 ```csharp
-public interface IRawUnreliableNoAckClient : IRawUnreliableTransport
+public interface IRawUnreliableClient : IRawUnreliableTransport
 {
     bool Init(IRawUnreliableHandler handler);
+}
+
+public interface IRawUnreliableNoAckClient : IRawUnreliableClient
+{
 }
 
 public interface IRawUnreliableNoAckServer : IRawUnreliableTransport
@@ -53,6 +57,11 @@ public interface IRawUnreliableHandler : IRawHandler
 ```
 
 `IRawHandler` supplies `OnReceived(UnionDataList receivedBuffer)`.
+
+The client `Init` contract is shared with the acknowledgement variant through
+`IRawUnreliableClient`. The NoAck server factory accepts only the source route;
+the acknowledgement variant's factory additionally receives the triggering
+message.
 
 Clients and servers expose neither a transport-level receive event nor a
 transport-level `TrySend` operation. A handler receives an
@@ -507,6 +516,7 @@ concurrent use.
 
 The transport control is named
 `IRawUnreliableNoAckTransportConformanceControl` and extends
+`IRawUnreliableTransportConformanceControl`, which in turn extends
 `IRawUnreliableConformanceControl`. It therefore retains the transport-wide
 members inherited from `IConformanceControl`:
 
@@ -554,8 +564,9 @@ semantics.
 ### 12.3 Endpoint conformance control
 
 The endpoint control is named
-`IRawUnreliableNoAckEndpointConformanceControl` and extends `IControl`. It
-exposes these members:
+`IRawUnreliableNoAckEndpointConformanceControl` and extends
+`IRawUnreliableEndpointConformanceControl`, which in turn extends `IControl`.
+It exposes these members:
 
 ```csharp
 ICheckPointCtl BeforeEndpointStopStateTransitionGate { get; }
@@ -601,6 +612,14 @@ otherwise consumes these shared raw-unreliable abstractions MUST be updated to
 the new handler and endpoint contract. A contract that merely has a similar
 name, including an acknowledgement variant, is not implicitly changed unless
 it exposes or inherits these shared types.
+
+A subsequent consolidation moved the shared client `Init` contract and the
+shared conformance-control gate members to the RawUnreliable level. The NoAck
+variant interfaces now inherit them from `IRawUnreliableClient`,
+`IRawUnreliableTransportConformanceControl`, and
+`IRawUnreliableEndpointConformanceControl`, which the acknowledgement variant
+shares. This change is additive for consumers: the NoAck contract exposes the
+same members through its variant interfaces as before.
 
 ## 13. Failure, shutdown, and implementation-defined behavior
 
