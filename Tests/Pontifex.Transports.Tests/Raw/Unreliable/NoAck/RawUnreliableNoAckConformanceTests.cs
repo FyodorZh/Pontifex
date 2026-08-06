@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
-using Actuarius.Memory;
+using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Pontifex.Utils.CheckPointGate;
 
 namespace Pontifex.Tests.Raw.Unreliable.NoAck;
 
@@ -32,6 +32,7 @@ public abstract class RawUnreliableNoAckConformanceTests
         using var fixture = CreateAdapter().CreateFixture();
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Stop(), Is.True);
         Assert.Multiple(() =>
         {
@@ -47,6 +48,7 @@ public abstract class RawUnreliableNoAckConformanceTests
         using var fixture = CreateAdapter().CreateFixture();
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Start(reason => stopped.TrySetResult(reason)), Is.True);
         Assert.That(fixture.Server.Start(_ => { }), Is.False);
         Assert.That(fixture.Server.Stop(new UserIntention("test", "normal stop")), Is.True);
@@ -65,6 +67,7 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
 
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
         var starts = Enumerable.Range(0, 8)
             .Select(_ => Task.Run(() => fixture.Server.Start(_ => { })));
         var results = await Task.WhenAll(starts);
@@ -99,6 +102,7 @@ public abstract class RawUnreliableNoAckConformanceTests
         var control = GetControl<IConformanceControl>(fixture.Server);
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Start(reason => stopped.TrySetResult(reason)), Is.True);
         control.InjectUnrecoverableFailure();
 
@@ -117,6 +121,7 @@ public abstract class RawUnreliableNoAckConformanceTests
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
 
+        Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
         Assert.Multiple(() =>
         {
@@ -126,63 +131,58 @@ public abstract class RawUnreliableNoAckConformanceTests
     }
 
     [Test]
-    public void TrySend_WhenUnavailable_ReturnsError()
-    {
-        using var fixture = CreateAdapter().CreateFixture();
-        var client = fixture.CreateClient();
-
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
-        Assert.That(fixture.Server.TrySend(new ForeignEndPoint(), CreateMessage(fixture.Server, 2)),
-            Is.EqualTo(SendResult.Error));
-    }
-
-    [Test]
     public void TrySend_AfterNormalStop_ReturnsError()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
+        var endpoint = WaitForEndpoint(clientHandler);
         Assert.That(client.Stop(), Is.True);
         Assert.That(fixture.Server.Stop(), Is.True);
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
-            Assert.That(fixture.Server.TrySend(new ForeignEndPoint(), CreateMessage(fixture.Server, 2)),
-                Is.EqualTo(SendResult.Error));
-        });
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
     }
 
     [Test]
-    public void TrySend_WhenRunning_ReportsInvalidMessageAndInvalidAddress()
+    public void TrySend_WhenRunning_ReportsInvalidMessage()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
+        var endpoint = WaitForEndpoint(clientHandler);
         Assert.Multiple(() =>
         {
-            Assert.That(client.TrySend(null!), Is.EqualTo(SendResult.InvalidMessage));
-            Assert.That(fixture.Server.TrySend(new ForeignEndPoint(), CreateMessage(fixture.Server, 3)),
-                Is.EqualTo(SendResult.InvalidAddress));
+            Assert.That(endpoint.UnreliableSend(null!), Is.EqualTo(SendResult.InvalidMessage));
             Assert.That(client.IsValid, Is.True);
-            Assert.That(fixture.Server.IsValid, Is.True);
         });
     }
 
     [Test]
-    public void TrySend_MessageTooBigTakesPrecedenceOverServerAddress()
+    public void TrySend_OversizedMessage_ReturnsMessageTooBig()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
+        var endpoint = WaitForEndpoint(clientHandler);
         Assert.Multiple(() =>
         {
-            Assert.That(client.TrySend(CreateOversizedMessage(client)), Is.EqualTo(SendResult.MessageTooBig));
-            Assert.That(fixture.Server.TrySend(new ForeignEndPoint(), CreateOversizedMessage(fixture.Server)),
-                Is.EqualTo(SendResult.MessageTooBig));
+            Assert.That(endpoint.UnreliableSend(CreateOversizedMessage(client)), Is.EqualTo(SendResult.MessageTooBig));
+            Assert.That(client.IsValid, Is.True);
         });
     }
 
@@ -191,27 +191,22 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        var received = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            try
-            {
-                received.TrySetResult(message.GetDataSize());
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
+        var serverHandler = new SizeRecordingHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
+
         var message = CreateExactLimitMessage(client, client.MessageMaxByteSize);
         Assert.That(message.GetDataSize(), Is.EqualTo(client.MessageMaxByteSize));
-        Assert.That(client.TrySend(message), Is.EqualTo(SendResult.Ok));
 
-        Assert.That(await received.Task.WaitAsync(DeliveryTimeout), Is.EqualTo(client.MessageMaxByteSize));
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(message), Is.EqualTo(SendResult.Ok));
+
+        await serverHandler.Received.Task.WaitAsync(DeliveryTimeout);
+        Assert.That(serverHandler.LastSize, Is.EqualTo(client.MessageMaxByteSize));
     }
 
     [Test]
@@ -219,52 +214,26 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
+        var server = fixture.Server;
+        if (!EnableReliable(client, server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
 
+        var emptyReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var serverReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var clientReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var emptyReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var expected = CreateComplexMessage(client);
-        var response = CreateComplexMessage(fixture.Server);
-        var expectedResponse = response.Clone(fixture.Server.Memory.CollectablePool);
+        var response = CreateComplexMessage(server);
+        var expectedResponse = response.Clone(server.Memory.CollectablePool);
 
-        fixture.Server.OnReceived += (endpoint, message) =>
-        {
-            if (message.Elements.Count == 0)
-            {
-                emptyReceived.TrySetResult(true);
-                message.Release();
-                return;
-            }
+        var serverHandler = new EchoServerHandler(fixture, expected, response, serverReceived, emptyReceived);
+        var clientHandler = new AssertContentClientHandler(fixture, expectedResponse, clientReceived);
+        Assert.That(server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(server, client);
 
-            try
-            {
-                serverReceived.TrySetResult(message.EqualByContent(expected));
-                Assert.That(fixture.Server.TrySend(endpoint, response), Is.EqualTo(SendResult.Ok));
-            }
-            finally
-            {
-                message.Release();
-                expected.Release();
-            }
-        };
-        client.OnReceived += message =>
-        {
-            try
-            {
-                clientReceived.TrySetResult(message.EqualByContent(expectedResponse));
-            }
-            finally
-            {
-                message.Release();
-                expectedResponse.Release();
-            }
-        };
-
-        Start(fixture.Server, client);
-
-        Assert.That(client.TrySend(CreateEmptyMessage(client)), Is.EqualTo(SendResult.Ok));
-        Assert.That(client.TrySend(expected.Clone(client.Memory.CollectablePool)), Is.EqualTo(SendResult.Ok));
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateEmptyMessage(client)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.UnreliableSend(expected.Clone(client.Memory.CollectablePool)), Is.EqualTo(SendResult.Ok));
 
         Assert.That(await emptyReceived.Task.WaitAsync(DeliveryTimeout), Is.True);
         Assert.That(await serverReceived.Task.WaitAsync(DeliveryTimeout), Is.True);
@@ -276,32 +245,21 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
 
         const int messageCount = 8;
-        var received = new ConcurrentQueue<int>();
-        var allReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            try
-            {
-                Assert.That(message.TryPopFirst(out int value), Is.True);
-                received.Enqueue(value);
-                if (received.Count == messageCount)
-                    allReceived.TrySetResult();
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
-        Start(fixture.Server, client);
+        var endpoint = WaitForEndpoint(clientHandler);
         for (var i = 0; i < messageCount; i++)
-            Assert.That(client.TrySend(CreateMessage(client, i)), Is.EqualTo(SendResult.Ok));
+            Assert.That(endpoint.UnreliableSend(CreateMessage(client, i)), Is.EqualTo(SendResult.Ok));
 
-        await allReceived.Task.WaitAsync(DeliveryTimeout);
-        Assert.That(received, Is.EqualTo(Enumerable.Range(0, messageCount)));
+        WaitUntil(() => serverHandler.ReceivedCount == messageCount);
+        Assert.That(serverHandler.ReceivedValues, Is.EqualTo(Enumerable.Range(0, messageCount)));
     }
 
     [Test]
@@ -309,43 +267,19 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        const int messageCount = 8;
-        var received = new ConcurrentQueue<int>();
-        var allReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (endpoint, message) =>
-        {
-            try
-            {
-                for (var i = 0; i < messageCount; i++)
-                    Assert.That(fixture.Server.TrySend(endpoint, CreateMessage(fixture.Server, i)), Is.EqualTo(SendResult.Ok));
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-        client.OnReceived += message =>
-        {
-            try
-            {
-                Assert.That(message.TryPopFirst(out int value), Is.True);
-                received.Enqueue(value);
-                if (received.Count == messageCount)
-                    allReceived.TrySetResult();
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
+        var serverHandler = new ReplyAllServerHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
-        await allReceived.Task.WaitAsync(DeliveryTimeout);
-        Assert.That(received, Is.EqualTo(Enumerable.Range(0, messageCount)));
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => clientHandler.ReceivedCount == 8);
+        Assert.That(clientHandler.ReceivedValues, Is.EqualTo(Enumerable.Range(0, 8)));
     }
 
     [Test]
@@ -353,40 +287,22 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        var route = new TaskCompletionSource<IEndPoint>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var replyReceived = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (endpoint, message) =>
-        {
-            try
-            {
-                route.TrySetResult(endpoint);
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-        client.OnReceived += message =>
-        {
-            try
-            {
-                Assert.That(message.TryPopFirst(out int value), Is.True);
-                replyReceived.TrySetResult(value);
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
-        var endpoint = await route.Task.WaitAsync(DeliveryTimeout);
 
-        Assert.That(fixture.Server.TrySend(endpoint, CreateMessage(fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
-        Assert.That(await replyReceived.Task.WaitAsync(DeliveryTimeout), Is.EqualTo(2));
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => serverHandler.ReceivedCount == 1);
+        Assert.That(serverHandler.Endpoint!.UnreliableSend(CreateMessage(fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => clientHandler.ReceivedCount == 1);
+        Assert.That(clientHandler.ReceivedValues, Is.EqualTo(new[] { 2 }));
     }
 
     [Test]
@@ -394,29 +310,19 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        var secondDelivery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            try
-            {
-                Assert.That(message.TryPopFirst(out int value), Is.True);
-                if (value == 1)
-                    throw new InvalidOperationException("Expected conformance test exception.");
-                secondDelivery.TrySetResult();
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
+        var serverHandler = new ThrowingHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
-        Assert.That(client.TrySend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
 
-        await secondDelivery.Task.WaitAsync(DeliveryTimeout);
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => serverHandler.DeliveredCount == 1);
         Assert.Multiple(() =>
         {
             Assert.That(fixture.Server.IsValid, Is.True);
@@ -429,40 +335,18 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        var secondDelivery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (endpoint, message) =>
-        {
-            try
-            {
-                Assert.That(fixture.Server.TrySend(endpoint, CreateMessage(fixture.Server, 1)), Is.EqualTo(SendResult.Ok));
-                Assert.That(fixture.Server.TrySend(endpoint, CreateMessage(fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-        client.OnReceived += message =>
-        {
-            try
-            {
-                Assert.That(message.TryPopFirst(out int value), Is.True);
-                if (value == 1)
-                    throw new InvalidOperationException("Expected conformance test exception.");
-                secondDelivery.TrySetResult();
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
+        var clientHandler = new ThrowingHandler(fixture);
+        var serverHandler = new ServerSendsValuesHandler(fixture, 1, 2);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
 
-        await secondDelivery.Task.WaitAsync(DeliveryTimeout);
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => clientHandler.DeliveredCount == 1);
         Assert.Multiple(() =>
         {
             Assert.That(client.IsValid, Is.True);
@@ -475,35 +359,19 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        var secondDelivery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var callbackDepth = 0;
-        var maximumDepth = 0;
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            var depth = Interlocked.Increment(ref callbackDepth);
-            SetMaximum(ref maximumDepth, depth);
-            try
-            {
-                Assert.That(message.TryPopFirst(out int value), Is.True);
-                if (value == 1)
-                    Assert.That(client.TrySend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
-                else
-                    secondDelivery.TrySetResult();
-            }
-            finally
-            {
-                message.Release();
-                Interlocked.Decrement(ref callbackDepth);
-            }
-        };
-
+        var clientHandler = new EchoOnceClientHandler(fixture, client);
+        var serverHandler = new ServerReentrancyHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
-        await secondDelivery.Task.WaitAsync(DeliveryTimeout);
-        Assert.That(maximumDepth, Is.EqualTo(1));
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        await serverHandler.SecondDelivery.Task.WaitAsync(DeliveryTimeout);
+        Assert.That(serverHandler.MaximumDepth, Is.EqualTo(1));
     }
 
     [Test]
@@ -511,52 +379,23 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        using var release = new ManualResetEventSlim();
-        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var allCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var activeCallbacks = 0;
-        var concurrentCallbacks = 0;
-        var completedCallbacks = 0;
-        fixture.Server.OnReceived += (endpoint, message) =>
-        {
-            try
-            {
-                Assert.That(fixture.Server.TrySend(endpoint, CreateMessage(fixture.Server, 1)), Is.EqualTo(SendResult.Ok));
-                Assert.That(fixture.Server.TrySend(endpoint, CreateMessage(fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-        client.OnReceived += message =>
-        {
-            try
-            {
-                if (Interlocked.Increment(ref activeCallbacks) > 1)
-                    Interlocked.Exchange(ref concurrentCallbacks, 1);
-                firstEntered.TrySetResult();
-                release.Wait(DeliveryTimeout);
-            }
-            finally
-            {
-                Interlocked.Decrement(ref activeCallbacks);
-                message.Release();
-                if (Interlocked.Increment(ref completedCallbacks) == 2)
-                    allCompleted.TrySetResult();
-            }
-        };
-
+        var clientHandler = new BlockingClientHandler(fixture);
+        var serverHandler = new ServerSendsValuesHandler(fixture, 1, 2);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
-        await firstEntered.Task.WaitAsync(DeliveryTimeout);
-        await Task.Delay(100);
-        release.Set();
-        await allCompleted.Task.WaitAsync(DeliveryTimeout);
 
-        Assert.That(concurrentCallbacks, Is.Zero);
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
+
+        await clientHandler.FirstEntered.Task.WaitAsync(DeliveryTimeout);
+        await Task.Delay(100);
+        clientHandler.Release.Set();
+        await clientHandler.AllCompleted.Task.WaitAsync(DeliveryTimeout);
+
+        Assert.That(clientHandler.ConcurrentCallbacks, Is.Zero);
     }
 
     [Test]
@@ -564,34 +403,24 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
 
         const int messageCount = 32;
-        var received = new ConcurrentDictionary<int, byte>();
-        var allReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            try
-            {
-                Assert.That(message.TryPopFirst(out int value), Is.True);
-                received.TryAdd(value, 0);
-                if (received.Count == messageCount)
-                    allReceived.TrySetResult();
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
+        var endpoint = WaitForEndpoint(clientHandler);
 
-        Start(fixture.Server, client);
         var sends = Enumerable.Range(0, messageCount)
-            .Select(value => Task.Run(() => client.TrySend(CreateMessage(client, value))));
+            .Select(value => Task.Run(() => endpoint.UnreliableSend(CreateMessage(client, value))));
         var results = await Task.WhenAll(sends);
 
         Assert.That(results, Is.All.EqualTo(SendResult.Ok));
-        await allReceived.Task.WaitAsync(DeliveryTimeout);
-        Assert.That(received.Keys, Is.EquivalentTo(Enumerable.Range(0, messageCount)));
+        WaitUntil(() => serverHandler.ReceivedCount == messageCount);
+        Assert.That(serverHandler.ReceivedValues, Is.EquivalentTo(Enumerable.Range(0, messageCount)));
     }
 
     [Test]
@@ -599,6 +428,10 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
         using var cancellation = new CancellationTokenSource();
@@ -623,10 +456,15 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
+        var endpoint = WaitForEndpoint(clientHandler);
         var sends = Enumerable.Range(0, 32)
-            .Select(value => Task.Run(() => client.TrySend(CreateMessage(client, value))));
+            .Select(value => Task.Run(() => endpoint.UnreliableSend(CreateMessage(client, value))));
         var stop = Task.Run(() => client.Stop());
         var results = await Task.WhenAll(sends);
 
@@ -640,24 +478,19 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
+        var serverHandler = new StopFromReceiveServerHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
 
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            try
-            {
-                Assert.That(fixture.Server.Stop(), Is.True);
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
         Assert.That(fixture.Server.Start(reason => stopped.TrySetResult(reason)), Is.True);
-        StartClient(client);
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(client.Start(_ => { }), Is.True);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         await stopped.Task.WaitAsync(DeliveryTimeout);
         Assert.Multiple(() =>
@@ -672,31 +505,24 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        var callbackObservedReturnedSend = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var clientControl = GetControl<IRawUnreliableNoAckConformanceControl>(client);
-        var beforeCommitReached = clientControl.BeforeSendCommitGate.Arm();
-        var sendReturned = 0;
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            try
-            {
-                callbackObservedReturnedSend.TrySetResult(Volatile.Read(ref sendReturned) == 1);
-            }
-            finally
-            {
-                message.Release();
-            }
-        };
-
+        var serverHandler = new SendReturnedObservingHandler(fixture, new ReturnedFlag());
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Task.Run(() => { Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok)); });
-        Volatile.Write(ref sendReturned, 1);
-        await beforeCommitReached.WaitAsync(DeliveryTimeout);
-        clientControl.BeforeSendCommitGate.Reset();
 
-        Assert.That(await callbackObservedReturnedSend.Task.WaitAsync(DeliveryTimeout), Is.True);
+        var endpoint = WaitForEndpoint(clientHandler);
+        var endpointControl = GetEndpointControl<IRawUnreliableNoAckEndpointConformanceControl>(endpoint);
+        var beforeCommitReached = endpointControl.BeforeSendCommitGate.Arm();
+
+        _ = Task.Run(() => endpoint.UnreliableSend(CreateMessage(client, 1)));
+        await beforeCommitReached.WaitAsync(DeliveryTimeout);
+        serverHandler.Flag.Value = 1;
+        endpointControl.BeforeSendCommitGate.Reset();
+
+        Assert.That(await serverHandler.Observed.Task.WaitAsync(DeliveryTimeout), Is.True);
     }
 
     [Test]
@@ -705,45 +531,42 @@ public abstract class RawUnreliableNoAckConformanceTests
         using var fixture = CreateAdapter().CreateFixture();
         var firstClient = fixture.CreateClient();
         var secondClient = fixture.CreateClient();
-        EnableReliable(firstClient);
-        EnableReliable(secondClient);
+        if (!EnableReliable(firstClient, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        if (!EnableReliable(secondClient, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
 
-        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var allCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
-        var activeCallbacks = 0;
-        var concurrentCallbacks = 0;
-        var completedCallbacks = 0;
-
-        fixture.Server.OnReceived += (_, message) =>
+        var probe = new ServerSerializationProbe();
+        var created = new ConcurrentQueue<BlockingServerHandler>();
+        Assert.That(fixture.Server.Init(_ =>
         {
-            try
-            {
-                if (Interlocked.Increment(ref activeCallbacks) > 1)
-                    Interlocked.Exchange(ref concurrentCallbacks, 1);
-                firstEntered.TrySetResult();
-                release.Wait(DeliveryTimeout);
-            }
-            finally
-            {
-                Interlocked.Decrement(ref activeCallbacks);
-                message.Release();
-                if (Interlocked.Increment(ref completedCallbacks) == 2)
-                    allCompleted.TrySetResult();
-            }
-        };
+            var handler = new BlockingServerHandler(fixture, probe);
+            created.Enqueue(handler);
+            return handler;
+        }), Is.True);
 
+        var firstClientHandler = new RecordingTestHandler(fixture);
+        var secondClientHandler = new RecordingTestHandler(fixture);
+        Assert.That(firstClient.Init(firstClientHandler), Is.True);
+        Assert.That(secondClient.Init(secondClientHandler), Is.True);
         Start(fixture.Server, firstClient);
-        StartClient(secondClient);
-        Assert.That(firstClient.TrySend(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
-        Assert.That(secondClient.TrySend(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(secondClient.Start(_ => { }), Is.True);
 
-        await firstEntered.Task.WaitAsync(DeliveryTimeout);
+        var firstEndpoint = WaitForEndpoint(firstClientHandler);
+        var secondEndpoint = WaitForEndpoint(secondClientHandler);
+        Assert.That(firstEndpoint.UnreliableSend(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(secondEndpoint.UnreliableSend(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
+
+        await probe.FirstEntered.Task.WaitAsync(DeliveryTimeout);
         await Task.Delay(200);
-        release.Set();
-        await allCompleted.Task.WaitAsync(DeliveryTimeout);
+        probe.Release.Set();
+        await probe.AllCompleted.Task.WaitAsync(DeliveryTimeout);
 
-        Assert.That(concurrentCallbacks, Is.Zero);
+        Assert.Multiple(() =>
+        {
+            Assert.That(probe.ConcurrentCallbacks, Is.Zero);
+            Assert.That(created.Count, Is.EqualTo(2));
+        });
     }
 
     [Test]
@@ -751,33 +574,668 @@ public abstract class RawUnreliableNoAckConformanceTests
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        EnableReliable(client);
-
-        var callbackBegan = false;
-        fixture.Server.OnReceived += (_, message) =>
-        {
-            callbackBegan = true;
-            message.Release();
-        };
-        var control = GetControl<IRawUnreliableNoAckConformanceControl>(fixture.Server);
-        var reached = control.AfterReceivedGate.Arm();
-
+        var serverHandler = new BlockingPreReceiveServerHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
-        Assert.That(client.TrySend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
-        await reached.WaitAsync(DeliveryTimeout);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => serverHandler.Reached != null);
+        await serverHandler.Reached!.WaitAsync(DeliveryTimeout);
 
         Assert.That(await Task.Run(() => fixture.Server.Stop()).WaitAsync(DeliveryTimeout), Is.True);
-        control.AfterReceivedGate.Reset();
+        serverHandler.Gate!.Reset();
         await Task.Delay(100);
 
-        Assert.That(callbackBegan, Is.False);
+        Assert.That(serverHandler.CallbackBegan, Is.False);
     }
 
-    private static void EnableReliable(IRawUnreliableNoAckClient client)
+    [Test]
+    public void Init_NullArgument_ThrowsWithoutChangingLifecycle()
     {
-        var control = GetControl<IRawUnreliableNoAckClientConformanceControl>(client);
-        if (!control.TryMakeReliable())
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+
+        Assert.Throws<ArgumentNullException>(() => client.Init(null!));
+        Assert.Throws<ArgumentNullException>(() => fixture.Server.Init(null!));
+        Assert.Multiple(() =>
+        {
+            Assert.That(client.IsValid, Is.True);
+            Assert.That(client.IsStarted, Is.False);
+            Assert.That(fixture.Server.IsValid, Is.True);
+            Assert.That(fixture.Server.IsStarted, Is.False);
+        });
+
+        Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.True);
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
+    }
+
+    [Test]
+    public void Init_IsOneTime_SecondCallReturnsFalse()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+
+        Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.True);
+        Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.False);
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.False);
+    }
+
+    [Test]
+    public void Init_AfterStart_ReturnsFalse()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.True);
+        Start(fixture.Server, client);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.False);
+            Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.False);
+        });
+    }
+
+    [Test]
+    public void Start_BeforeInit_ReturnsFalseAndInvalidates()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+
+        Assert.That(client.Start(_ => { }), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(client.IsValid, Is.False);
+            Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.False);
+            Assert.That(client.Start(_ => { }), Is.False);
+        });
+    }
+
+    [Test]
+    public void Client_OnStartedAfterStart_EndpointIsValidAndUsable()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.Multiple(() =>
+        {
+            Assert.That(endpoint.IsValid, Is.True);
+            Assert.That(endpoint.RemoteEndPoint, Is.Not.Null);
+            Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        });
+    }
+
+    [Test]
+    public async Task Client_OnReceivedObservesOnStartedCompleted()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new ServerSendsValuesHandler(fixture, 5);
+        var clientHandler = new OnStartedOrderClientHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
             Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => clientHandler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(clientHandler.SawStartedCompleted, Is.True);
+            Assert.That(clientHandler.ReceivedValues, Is.EqualTo(new[] { 5 }));
+        });
+    }
+
+    [Test]
+    public void Client_OnStartedThrows_StopsClientTransport_WithoutHandlerOnStopped()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var handler = new ThrowingOnStartedHandler(fixture);
+        var onStopped = 0;
+        Assert.That(client.Init(handler), Is.True);
+        Assert.That(client.Start(_ => Interlocked.Increment(ref onStopped)), Is.True);
+
+        WaitUntil(() => Volatile.Read(ref onStopped) == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(client.IsStarted, Is.False);
+            Assert.That(handler.StoppedReason, Is.Null);
+            Assert.That(client.IsValid, Is.True);
+        });
+    }
+
+    [Test]
+    public void Server_NewSource_OnStartedThenOnReceived_WithFactorySourceEqualsRemoteEndPoint()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var handler = new SourceCheckingHandler(fixture);
+        IEndPoint? factorySource = null;
+        Assert.That(fixture.Server.Init(source =>
+        {
+            factorySource = source;
+            handler.Source = source;
+            return handler;
+        }), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => handler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(factorySource, Is.Not.Null);
+            Assert.That(handler.OnStartedRemoteEqualsSource, Is.True);
+            Assert.That(handler.SawOnStartedCompleted, Is.True);
+            Assert.That(handler.ReceivedValues, Is.EqualTo(new[] { 1 }));
+        });
+    }
+
+    [Test]
+    public void Server_FactoryNull_DeclinesMessage_AndRetriesLater()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var serverHandler = new RecordingTestHandler(fixture);
+        var factoryCalls = 0;
+        Assert.That(fixture.Server.Init(_ =>
+            Interlocked.Increment(ref factoryCalls) == 1 ? (IRawUnreliableHandler?)null : serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        WaitUntil(() => Volatile.Read(ref factoryCalls) == 1);
+        Assert.That(serverHandler.ReceivedCount, Is.Zero);
+
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        WaitUntil(() => serverHandler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(2));
+            Assert.That(serverHandler.ReceivedValues, Is.EqualTo(new[] { 2 }));
+        });
+    }
+
+    [Test]
+    public void Server_FactoryThrows_DropsMessage_AndRetriesLater()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var serverHandler = new RecordingTestHandler(fixture);
+        var factoryCalls = 0;
+        Assert.That(fixture.Server.Init(_ =>
+        {
+            if (Interlocked.Increment(ref factoryCalls) == 1)
+                throw new InvalidOperationException("Expected conformance test factory exception.");
+            return serverHandler;
+        }), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        WaitUntil(() => Volatile.Read(ref factoryCalls) == 1);
+        Assert.That(serverHandler.ReceivedCount, Is.Zero);
+
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        WaitUntil(() => serverHandler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(2));
+            Assert.That(serverHandler.ReceivedValues, Is.EqualTo(new[] { 2 }));
+        });
+    }
+
+    [Test]
+    public void Server_HandlerOnStartedThrows_DropsTrigger_AndRecreatesRouteLater()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var throwingHandler = new ThrowingOnStartedHandler(fixture);
+        var goodHandler = new RecordingTestHandler(fixture);
+        var factoryCalls = 0;
+        Assert.That(fixture.Server.Init(_ =>
+        {
+            return Interlocked.Increment(ref factoryCalls) == 1
+                ? (IRawUnreliableHandler)throwingHandler
+                : goodHandler;
+        }), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        WaitUntil(() => Volatile.Read(ref factoryCalls) == 1);
+        Assert.That(throwingHandler.StoppedReason, Is.Null);
+
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        WaitUntil(() => goodHandler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(2));
+            Assert.That(goodHandler.ReceivedValues, Is.EqualTo(new[] { 2 }));
+            Assert.That(throwingHandler.StoppedReason, Is.Null);
+            Assert.That(fixture.Server.IsValid, Is.True);
+            Assert.That(fixture.Server.IsStarted, Is.True);
+        });
+    }
+
+    [Test]
+    public void Server_EndpointStop_RecreatesRouteForLaterMessage()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var handlers = new ConcurrentQueue<EndpointStopOnReceiveHandler>();
+        Assert.That(fixture.Server.Init(_ =>
+        {
+            var handler = new EndpointStopOnReceiveHandler(fixture);
+            handlers.Enqueue(handler);
+            return handler;
+        }), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        var firstHandler = WaitForHandler(handlers, 1);
+        WaitUntil(() => firstHandler.ReceivedCount == 1 && firstHandler.OnStoppedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(fixture.Server.IsValid, Is.True);
+            Assert.That(fixture.Server.IsStarted, Is.True);
+            Assert.That(firstHandler.ReceivedValues, Is.EqualTo(new[] { 1 }));
+        });
+
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        var secondHandler = WaitForHandler(handlers, 2);
+        WaitUntil(() => secondHandler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(secondHandler.ReceivedValues, Is.EqualTo(new[] { 2 }));
+            Assert.That(firstHandler.OnStoppedCount, Is.EqualTo(1));
+            Assert.That(firstHandler.StoppedReason, Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public async Task Server_SameRouteMessagesDuringCreation_QueueBehindTrigger()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var serverHandler = new RecordingTestHandler(fixture);
+        var factoryCalls = 0;
+        Assert.That(fixture.Server.Init(_ => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+
+        var serverControl = GetControl<IRawUnreliableNoAckTransportConformanceControl>(fixture.Server);
+        var gateReached = serverControl.BeforeHandlerStartedGate.Arm();
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        await gateReached.WaitAsync(DeliveryTimeout);
+
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 3)), Is.EqualTo(SendResult.Ok));
+
+        await Task.Delay(200);
+        Assert.Multiple(() =>
+        {
+            Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(1));
+            Assert.That(serverHandler.ReceivedCount, Is.Zero);
+        });
+
+        serverControl.BeforeHandlerStartedGate.Reset();
+        WaitUntil(() => serverHandler.ReceivedCount == 3);
+        Assert.Multiple(() =>
+        {
+            Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(1));
+            Assert.That(serverHandler.ReceivedValues, Is.EqualTo(new[] { 1, 2, 3 }));
+        });
+    }
+
+    [Test]
+    public void Endpoint_Stop_ReturnsTrueOnce_ThenFalse()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.Stop(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(endpoint.Stop(), Is.False);
+            Assert.That(endpoint.IsValid, Is.False);
+            Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
+        });
+    }
+
+    [Test]
+    public void Endpoint_StopNull_SuppliesUnknownReasonToOnStopped()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.Stop(), Is.True);
+        WaitUntil(() => clientHandler.StoppedReason != null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(clientHandler.StoppedReason, Is.InstanceOf<Unknown>());
+            Assert.That(clientHandler.StoppedReason!.Type, Does.Contain("Unknown"));
+            Assert.That(clientHandler.StoppedReason!.ToString(), Does.Contain("Unknown"));
+        });
+    }
+
+    [Test]
+    public void Client_EndpointStop_StopsClientTransport()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        var onStopped = 0;
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Assert.That(fixture.Server.Start(_ => { }), Is.True);
+        Assert.That(client.Start(_ => Interlocked.Increment(ref onStopped)), Is.True);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.Stop(new UserIntention("test", "stop")), Is.True);
+
+        WaitUntil(() => !client.IsStarted);
+        WaitUntil(() => Volatile.Read(ref onStopped) == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(client.IsValid, Is.True);
+            Assert.That(clientHandler.StoppedReason, Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public async Task Server_EndpointStop_KeepsServerRunning()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var serverHandler = new EndpointStopOnReceiveHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => serverHandler.OnStoppedCount == 1);
+        await Task.Delay(200);
+        Assert.Multiple(() =>
+        {
+            Assert.That(fixture.Server.IsValid, Is.True);
+            Assert.That(fixture.Server.IsStarted, Is.True);
+        });
+    }
+
+    [Test]
+    public void OnStopped_InvokedExactlyOncePerEndpoint()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new OnStoppedCountingHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        WaitForEndpoint(clientHandler);
+        Assert.That(client.Stop(), Is.True);
+        WaitUntil(() => clientHandler.OnStoppedCount == 1);
+        Assert.That(clientHandler.OnStoppedCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TransportStop_NotifiesEveryEndpointHandler()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var firstClient = fixture.CreateClient();
+        var secondClient = fixture.CreateClient();
+        var firstClientHandler = new RecordingTestHandler(fixture);
+        var secondClientHandler = new RecordingTestHandler(fixture);
+        var serverHandlers = new ConcurrentQueue<ServerRouteRecordingHandler>();
+        Assert.That(fixture.Server.Init(_ =>
+        {
+            var handler = new ServerRouteRecordingHandler(fixture);
+            serverHandlers.Enqueue(handler);
+            return handler;
+        }), Is.True);
+        if (!EnableReliable(firstClient, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        if (!EnableReliable(secondClient, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(firstClient.Init(firstClientHandler), Is.True);
+        Assert.That(secondClient.Init(secondClientHandler), Is.True);
+        Start(fixture.Server, firstClient);
+        Assert.That(secondClient.Start(_ => { }), Is.True);
+
+        var firstEndpoint = WaitForEndpoint(firstClientHandler);
+        var secondEndpoint = WaitForEndpoint(secondClientHandler);
+        Assert.That(firstEndpoint.UnreliableSend(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(secondEndpoint.UnreliableSend(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
+
+        var firstServerHandler = WaitForHandler(serverHandlers, 1);
+        var secondServerHandler = WaitForHandler(serverHandlers, 2);
+        WaitUntil(() => firstServerHandler.ReceivedCount == 1 && secondServerHandler.ReceivedCount == 1);
+
+        Assert.That(fixture.Server.Stop(), Is.True);
+        WaitUntil(() => firstServerHandler.OnStoppedCount == 1 && secondServerHandler.OnStoppedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstServerHandler.OnStoppedCount, Is.EqualTo(1));
+            Assert.That(secondServerHandler.OnStoppedCount, Is.EqualTo(1));
+            Assert.That(fixture.Server.IsValid, Is.True);
+            Assert.That(fixture.Server.IsStarted, Is.False);
+        });
+    }
+
+    [Test]
+    public async Task BeforeHandlerFactoryGate_IsHitPerFactoryInvocation()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var serverHandler = new RecordingTestHandler(fixture);
+        var factoryCalls = 0;
+        Assert.That(fixture.Server.Init(_ => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+
+        var serverControl = GetControl<IRawUnreliableNoAckTransportConformanceControl>(fixture.Server);
+        var gateReached = serverControl.BeforeHandlerFactoryGate.Arm();
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        await gateReached.WaitAsync(DeliveryTimeout);
+
+        Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(0));
+        serverControl.BeforeHandlerFactoryGate.Reset();
+
+        WaitUntil(() => serverHandler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(1));
+            Assert.That(serverHandler.ReceivedValues, Is.EqualTo(new[] { 1 }));
+        });
+    }
+
+    [Test]
+    public async Task BeforeHandlerStartedGate_IsHitBeforeOnStarted()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var clientHandler = new RecordingTestHandler(fixture);
+        var serverHandler = new OnStartedFlagHandler(fixture);
+        var factoryCalls = 0;
+        Assert.That(fixture.Server.Init(_ => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+
+        var serverControl = GetControl<IRawUnreliableNoAckTransportConformanceControl>(fixture.Server);
+        var gateReached = serverControl.BeforeHandlerStartedGate.Arm();
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        await gateReached.WaitAsync(DeliveryTimeout);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(1));
+            Assert.That(serverHandler.OnStartedRan, Is.False);
+        });
+        serverControl.BeforeHandlerStartedGate.Reset();
+
+        WaitUntil(() => serverHandler.ReceivedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(serverHandler.OnStartedRan, Is.True);
+            Assert.That(serverHandler.ReceivedValues, Is.EqualTo(new[] { 1 }));
+        });
+    }
+
+    [Test]
+    public async Task BeforeEndpointStopStateTransitionGate_BlocksEndpointInvalidation()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        var endpointControl = GetEndpointControl<IRawUnreliableNoAckEndpointConformanceControl>(endpoint);
+        var gateReached = endpointControl.BeforeEndpointStopStateTransitionGate.Arm();
+
+        var stopTask = Task.Run(() => endpoint.Stop());
+        await gateReached.WaitAsync(DeliveryTimeout);
+        Assert.That(endpoint.IsValid, Is.True);
+
+        endpointControl.BeforeEndpointStopStateTransitionGate.Reset();
+        Assert.That(await stopTask.WaitAsync(DeliveryTimeout), Is.True);
+        Assert.That(endpoint.IsValid, Is.False);
+    }
+
+    [Test]
+    public async Task BeforeHandlerStoppedGate_BlocksOnStopped()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new OnStoppedCountingHandler(fixture);
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        var endpoint = WaitForEndpoint(clientHandler);
+        var endpointControl = GetEndpointControl<IRawUnreliableNoAckEndpointConformanceControl>(endpoint);
+        var gateReached = endpointControl.BeforeHandlerStoppedGate.Arm();
+
+        var stopTask = Task.Run(() => client.Stop());
+        await gateReached.WaitAsync(DeliveryTimeout);
+        Assert.That(clientHandler.StoppedReason, Is.Null);
+
+        endpointControl.BeforeHandlerStoppedGate.Reset();
+        WaitUntil(() => clientHandler.OnStoppedCount == 1);
+        Assert.That(await stopTask.WaitAsync(DeliveryTimeout), Is.True);
+        Assert.That(clientHandler.StoppedReason, Is.Not.Null);
+    }
+
+    [Test]
+    public void TryMakeReliable_TransportWide_AppliesToAllRoutes()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var serverHandler = new RecordingTestHandler(fixture);
+        var clientHandler = new RecordingTestHandler(fixture);
+        if (!EnableReliable(client, fixture.Server))
+            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(fixture.Server.Init(_ => serverHandler), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        const int messageCount = 8;
+        var endpoint = WaitForEndpoint(clientHandler);
+        for (var i = 0; i < messageCount; i++)
+            Assert.That(endpoint.UnreliableSend(CreateMessage(client, i)), Is.EqualTo(SendResult.Ok));
+
+        WaitUntil(() => serverHandler.ReceivedCount == messageCount);
+        Assert.That(serverHandler.ReceivedValues, Is.EqualTo(Enumerable.Range(0, messageCount)));
+    }
+
+    private static bool EnableReliable(IRawUnreliableNoAckClient client, IRawUnreliableNoAckServer server)
+    {
+        var c = GetControl<IRawUnreliableNoAckTransportConformanceControl>(client);
+        var s = GetControl<IRawUnreliableNoAckTransportConformanceControl>(server);
+        if (!c.TryMakeReliable()) return false;
+        if (!s.TryMakeReliable()) return false;
+        return true;
     }
 
     private static void Start(IRawUnreliableNoAckServer server, IRawUnreliableNoAckClient client)
@@ -789,6 +1247,41 @@ public abstract class RawUnreliableNoAckConformanceTests
     private static void StartClient(IRawUnreliableNoAckClient client)
     {
         Assert.That(client.Start(_ => { }), Is.True);
+    }
+
+    private static IRawUnreliableEndpoint WaitForEndpoint(RawUnreliableNoAckTestHandler handler)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(DeliveryTimeout.TotalSeconds);
+        while (handler.Endpoint == null)
+        {
+            if (DateTime.UtcNow >= deadline)
+                Assert.Fail("OnStarted was not invoked within the delivery timeout.");
+            Thread.Sleep(10);
+        }
+        return handler.Endpoint;
+    }
+
+    private static void WaitUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(DeliveryTimeout.TotalSeconds);
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+                Assert.Fail("Condition was not satisfied within the delivery timeout.");
+            Thread.Sleep(10);
+        }
+    }
+
+    private static T WaitForHandler<T>(ConcurrentQueue<T> queue, int minimumCount)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(DeliveryTimeout.TotalSeconds);
+        while (queue.Count < minimumCount)
+        {
+            if (DateTime.UtcNow >= deadline)
+                Assert.Fail("Expected handler was not created within the delivery timeout.");
+            Thread.Sleep(10);
+        }
+        return queue.ToArray()[minimumCount - 1];
     }
 
     private static UnionDataList CreateEmptyMessage(ITransport transport)
@@ -854,6 +1347,14 @@ public abstract class RawUnreliableNoAckConformanceTests
         return controls.OfType<TControl>().Single();
     }
 
+    private static TControl GetEndpointControl<TControl>(IRawUnreliableEndpoint endpoint)
+        where TControl : class, IControl
+    {
+        var controls = new List<IControl>();
+        endpoint.GetControls(controls, control => control is TControl);
+        return controls.OfType<TControl>().Single();
+    }
+
     private static void SetMaximum(ref int target, int candidate)
     {
         while (true)
@@ -864,13 +1365,573 @@ public abstract class RawUnreliableNoAckConformanceTests
         }
     }
 
-    private sealed class ForeignEndPoint : IEndPoint
+    private sealed class RecordingTestHandler : RawUnreliableNoAckTestHandler
     {
-        public bool Equals(IEndPoint? other) => ReferenceEquals(this, other);
+        private readonly List<int> _received = new();
+        private readonly object _lock = new();
+        private readonly TaskCompletionSource _receivedSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public override bool Equals(object? obj) => ReferenceEquals(this, obj);
+        public int ReceivedCount { get { lock (_lock) return _received.Count; } }
 
-        public override int GetHashCode() => RuntimeHelpers.GetHashCode(this);
+        public IReadOnlyList<int> ReceivedValues { get { lock (_lock) return _received.ToArray(); } }
+
+        public RecordingTestHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                if (message.TryPopFirst(out int value)) { lock (_lock) _received.Add(value); }
+            }
+            finally { message.Release(); }
+            _receivedSignal.TrySetResult();
+        }
+    }
+
+    private sealed class SizeRecordingHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly object _lock = new();
+
+        public int? LastSize { get; private set; }
+
+        public TaskCompletionSource Received { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public SizeRecordingHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try { lock (_lock) { LastSize = message.GetDataSize(); } }
+            finally { message.Release(); }
+            Received.TrySetResult();
+        }
+    }
+
+    private sealed class EchoServerHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly UnionDataList _expected;
+        private readonly UnionDataList _response;
+        private readonly TaskCompletionSource<bool> _serverReceived;
+        private readonly TaskCompletionSource<bool> _emptyReceived;
+
+        public EchoServerHandler(IRawUnreliableNoAckConformanceFixture fixture,
+            UnionDataList expected, UnionDataList response,
+            TaskCompletionSource<bool> serverReceived, TaskCompletionSource<bool> emptyReceived)
+            : base(fixture)
+        {
+            _expected = expected;
+            _response = response;
+            _serverReceived = serverReceived;
+            _emptyReceived = emptyReceived;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            if (message.Elements.Count == 0)
+            {
+                _emptyReceived.TrySetResult(true);
+                message.Release();
+                return;
+            }
+
+            try
+            {
+                _serverReceived.TrySetResult(message.EqualByContent(_expected));
+                Assert.That(Endpoint!.UnreliableSend(_response), Is.EqualTo(SendResult.Ok));
+            }
+            finally
+            {
+                message.Release();
+                _expected.Release();
+            }
+        }
+    }
+
+    private sealed class AssertContentClientHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly UnionDataList _expectedResponse;
+        private readonly TaskCompletionSource<bool> _clientReceived;
+
+        public AssertContentClientHandler(IRawUnreliableNoAckConformanceFixture fixture,
+            UnionDataList expectedResponse, TaskCompletionSource<bool> clientReceived)
+            : base(fixture)
+        {
+            _expectedResponse = expectedResponse;
+            _clientReceived = clientReceived;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                _clientReceived.TrySetResult(message.EqualByContent(_expectedResponse));
+            }
+            finally
+            {
+                message.Release();
+                _expectedResponse.Release();
+            }
+        }
+    }
+
+    private sealed class ReplyAllServerHandler : RawUnreliableNoAckTestHandler
+    {
+        private const int ReplyCount = 8;
+        private readonly IRawUnreliableNoAckConformanceFixture _fixture;
+
+        public ReplyAllServerHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture)
+        {
+            _fixture = fixture;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                for (var i = 0; i < ReplyCount; i++)
+                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_fixture.Server, i)), Is.EqualTo(SendResult.Ok));
+            }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class ServerSendsValuesHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly IRawUnreliableNoAckConformanceFixture _fixture;
+        private readonly int[] _values;
+
+        public ServerSendsValuesHandler(IRawUnreliableNoAckConformanceFixture fixture, params int[] values)
+            : base(fixture)
+        {
+            _fixture = fixture;
+            _values = values;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                foreach (var value in _values)
+                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_fixture.Server, value)), Is.EqualTo(SendResult.Ok));
+            }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class ThrowingHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly object _lock = new();
+        private int _deliveredCount;
+
+        public int DeliveredCount { get { lock (_lock) return _deliveredCount; } }
+
+        public ThrowingHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                Assert.That(message.TryPopFirst(out int value), Is.True);
+                if (value == 1)
+                    throw new InvalidOperationException("Expected conformance test exception.");
+                lock (_lock) { _deliveredCount++; }
+            }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class ServerReentrancyHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly IRawUnreliableNoAckConformanceFixture _fixture;
+        private int _depth;
+        private int _maxDepth;
+
+        public TaskCompletionSource SecondDelivery { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int MaximumDepth { get { return Volatile.Read(ref _maxDepth); } }
+
+        public ServerReentrancyHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture)
+        {
+            _fixture = fixture;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            var depth = Interlocked.Increment(ref _depth);
+            SetMaximum(ref _maxDepth, depth);
+            try
+            {
+                Assert.That(message.TryPopFirst(out int value), Is.True);
+                if (value == 1)
+                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
+                else
+                    SecondDelivery.TrySetResult();
+            }
+            finally
+            {
+                message.Release();
+                Interlocked.Decrement(ref _depth);
+            }
+        }
+    }
+
+    private sealed class EchoOnceClientHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly IRawUnreliableNoAckClient _client;
+        private int _echoed;
+
+        public EchoOnceClientHandler(IRawUnreliableNoAckConformanceFixture fixture, IRawUnreliableNoAckClient client)
+            : base(fixture)
+        {
+            _client = client;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                if (message.TryPopFirst(out int value) && Interlocked.Exchange(ref _echoed, 1) == 0)
+                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_client, value)), Is.EqualTo(SendResult.Ok));
+            }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class BlockingClientHandler : RawUnreliableNoAckTestHandler
+    {
+        private int _activeCallbacks;
+        private int _concurrentCallbacks;
+        private int _completedCallbacks;
+
+        public ManualResetEventSlim Release { get; } = new();
+
+        public TaskCompletionSource FirstEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource AllCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ConcurrentCallbacks { get { return Volatile.Read(ref _concurrentCallbacks); } }
+
+        public BlockingClientHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                if (Interlocked.Increment(ref _activeCallbacks) > 1)
+                    Interlocked.Exchange(ref _concurrentCallbacks, 1);
+                FirstEntered.TrySetResult();
+                Release.Wait(DeliveryTimeout);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeCallbacks);
+                message.Release();
+                if (Interlocked.Increment(ref _completedCallbacks) == 2)
+                    AllCompleted.TrySetResult();
+            }
+        }
+    }
+
+    private sealed class StopFromReceiveServerHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly IRawUnreliableNoAckConformanceFixture _fixture;
+
+        public StopFromReceiveServerHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture)
+        {
+            _fixture = fixture;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try { Assert.That(_fixture.Server.Stop(), Is.True); }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class ReturnedFlag
+    {
+        private int _value;
+
+        public int Value
+        {
+            get { return Volatile.Read(ref _value); }
+            set { Volatile.Write(ref _value, value); }
+        }
+    }
+
+    private sealed class SendReturnedObservingHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly ReturnedFlag _flag;
+
+        public ReturnedFlag Flag => _flag;
+
+        public TaskCompletionSource<bool> Observed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public SendReturnedObservingHandler(IRawUnreliableNoAckConformanceFixture fixture, ReturnedFlag flag)
+            : base(fixture)
+        {
+            _flag = flag;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try { Observed.TrySetResult(_flag.Value == 1); }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class ServerSerializationProbe
+    {
+        private int _active;
+        private int _concurrent;
+        private int _completed;
+
+        public ManualResetEventSlim Release { get; } = new();
+
+        public TaskCompletionSource FirstEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource AllCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ConcurrentCallbacks { get { return Volatile.Read(ref _concurrent); } }
+
+        public void Enter()
+        {
+            if (Interlocked.Increment(ref _active) > 1)
+                Interlocked.Exchange(ref _concurrent, 1);
+            FirstEntered.TrySetResult();
+        }
+
+        public void Exit()
+        {
+            Interlocked.Decrement(ref _active);
+            if (Interlocked.Increment(ref _completed) == 2)
+                AllCompleted.TrySetResult();
+        }
+    }
+
+    private sealed class BlockingServerHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly ServerSerializationProbe _probe;
+
+        public BlockingServerHandler(IRawUnreliableNoAckConformanceFixture fixture, ServerSerializationProbe probe)
+            : base(fixture)
+        {
+            _probe = probe;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            _probe.Enter();
+            try { _probe.Release.Wait(DeliveryTimeout); }
+            finally
+            {
+                message.Release();
+                _probe.Exit();
+            }
+        }
+    }
+
+    private sealed class BlockingPreReceiveServerHandler : RawUnreliableNoAckTestHandler
+    {
+        public volatile bool CallbackBegan;
+
+        public ICheckPointCtl? Gate { get; private set; }
+
+        public Task<CheckPointWaitResult>? Reached { get; private set; }
+
+        public BlockingPreReceiveServerHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        protected override void OnStartedCore()
+        {
+            var control = GetEndpointControl<IRawUnreliableNoAckEndpointConformanceControl>(Endpoint!);
+            Gate = control.AfterReceivedGate;
+            Reached = Gate.Arm();
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            CallbackBegan = true;
+            message.Release();
+        }
+    }
+
+    private sealed class OnStartedOrderClientHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly List<int> _received = new();
+        private readonly object _lock = new();
+
+        public bool OnStartedCompleted { get; private set; }
+        public bool SawStartedCompleted { get; private set; }
+
+        public int ReceivedCount { get { lock (_lock) return _received.Count; } }
+        public IReadOnlyList<int> ReceivedValues { get { lock (_lock) return _received.ToArray(); } }
+
+        public OnStartedOrderClientHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        protected override void OnStartedCore()
+        {
+            OnStartedCompleted = true;
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                SawStartedCompleted = OnStartedCompleted;
+                if (message.TryPopFirst(out int value)) { lock (_lock) _received.Add(value); }
+            }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class ThrowingOnStartedHandler : RawUnreliableNoAckTestHandler
+    {
+        public ThrowingOnStartedHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        protected override void OnStartedCore()
+        {
+            throw new InvalidOperationException("Expected conformance test exception.");
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            message.Release();
+        }
+    }
+
+    private sealed class SourceCheckingHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly List<int> _received = new();
+        private readonly object _lock = new();
+
+        public IEndPoint? Source { get; set; }
+        public bool OnStartedCompleted { get; private set; }
+        public bool SawOnStartedCompleted { get; private set; }
+        public bool? OnStartedRemoteEqualsSource { get; private set; }
+
+        public int ReceivedCount { get { lock (_lock) return _received.Count; } }
+        public IReadOnlyList<int> ReceivedValues { get { lock (_lock) return _received.ToArray(); } }
+
+        public SourceCheckingHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        protected override void OnStartedCore()
+        {
+            OnStartedCompleted = true;
+            OnStartedRemoteEqualsSource = Endpoint!.RemoteEndPoint?.Equals(Source);
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                SawOnStartedCompleted = OnStartedCompleted;
+                if (message.TryPopFirst(out int value)) { lock (_lock) _received.Add(value); }
+            }
+            finally { message.Release(); }
+        }
+    }
+
+    private sealed class EndpointStopOnReceiveHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly List<int> _received = new();
+        private readonly object _lock = new();
+        private int _onStoppedCount;
+
+        public int ReceivedCount { get { lock (_lock) return _received.Count; } }
+        public IReadOnlyList<int> ReceivedValues { get { lock (_lock) return _received.ToArray(); } }
+        public int OnStoppedCount { get { return Volatile.Read(ref _onStoppedCount); } }
+
+        public EndpointStopOnReceiveHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                if (message.TryPopFirst(out int value)) { lock (_lock) _received.Add(value); }
+                Endpoint!.Stop();
+            }
+            finally { message.Release(); }
+        }
+
+        public override void OnStopped(StopReason reason)
+        {
+            Interlocked.Increment(ref _onStoppedCount);
+            base.OnStopped(reason);
+        }
+    }
+
+    private sealed class OnStoppedCountingHandler : RawUnreliableNoAckTestHandler
+    {
+        private int _onStoppedCount;
+
+        public int OnStoppedCount { get { return Volatile.Read(ref _onStoppedCount); } }
+
+        public OnStoppedCountingHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            message.Release();
+        }
+
+        public override void OnStopped(StopReason reason)
+        {
+            Interlocked.Increment(ref _onStoppedCount);
+            base.OnStopped(reason);
+        }
+    }
+
+    private sealed class ServerRouteRecordingHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly List<int> _received = new();
+        private readonly object _lock = new();
+        private int _onStoppedCount;
+
+        public int ReceivedCount { get { lock (_lock) return _received.Count; } }
+        public int OnStoppedCount { get { return Volatile.Read(ref _onStoppedCount); } }
+
+        public ServerRouteRecordingHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                if (message.TryPopFirst(out int value)) { lock (_lock) _received.Add(value); }
+            }
+            finally { message.Release(); }
+        }
+
+        public override void OnStopped(StopReason reason)
+        {
+            Interlocked.Increment(ref _onStoppedCount);
+            base.OnStopped(reason);
+        }
+    }
+
+    private sealed class OnStartedFlagHandler : RawUnreliableNoAckTestHandler
+    {
+        private readonly List<int> _received = new();
+        private readonly object _lock = new();
+        private int _onStartedRan;
+
+        public bool OnStartedRan { get { return Volatile.Read(ref _onStartedRan) != 0; } }
+
+        public int ReceivedCount { get { lock (_lock) return _received.Count; } }
+        public IReadOnlyList<int> ReceivedValues { get { lock (_lock) return _received.ToArray(); } }
+
+        public OnStartedFlagHandler(IRawUnreliableNoAckConformanceFixture fixture) : base(fixture) { }
+
+        protected override void OnStartedCore()
+        {
+            Volatile.Write(ref _onStartedRan, 1);
+        }
+
+        public override void OnReceived(UnionDataList message)
+        {
+            try
+            {
+                if (message.TryPopFirst(out int value)) { lock (_lock) _received.Add(value); }
+            }
+            finally { message.Release(); }
+        }
     }
 }
 

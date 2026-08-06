@@ -65,7 +65,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             _wrappedEndpoint = null;
         }
 
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             try
             {

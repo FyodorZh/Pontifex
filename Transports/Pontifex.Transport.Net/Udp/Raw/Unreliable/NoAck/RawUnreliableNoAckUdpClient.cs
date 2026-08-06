@@ -22,7 +22,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
         private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(RawUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
         public override TransportType Type => TransportType.RawUnreliableNoAck;
-        
+
         public RawUnreliableNoAckUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(RawUdpInfo.TransportName, logger, memoryRental)
         {
@@ -30,13 +30,13 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
             _managedRemoteEndPoint = new IpEndPoint(_remoteEndPoint);
         }
 
-        public event Action<UnionDataList>? OnReceived;
-
         public IEndPoint ServerAddress => _managedRemoteEndPoint;
 
         public int MessageMaxByteSize => RawUdpInfo.MessageMaxByteSize;
 
-        protected override bool TryStart()
+        protected override IEndPoint? ClientRemoteEndPoint => _managedRemoteEndPoint;
+
+        protected override bool StartCarrier()
         {
             IPEndPoint? localEndPoint = null;
             try
@@ -105,11 +105,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
             }
         }
 
-        protected override void OnStarted()
-        {
-        }
-
-        protected override void OnStopped(StopReason reason)
+        protected override void StopCarrier(StopReason reason)
         {
             _sender = null;
 
@@ -128,33 +124,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
             }
         }
 
-        private void OnReceivedInternal(EndPoint remoteEp, UnionDataList message)
-        {
-            var handler = OnReceived;
-            if (handler == null)
-            {
-                message.Release();
-                return;
-            }
-
-            Conformance.AfterReceivedGate.Hit();
-            if (!IsStarted)
-            {
-                message.Release();
-                return;
-            }
-
-            try
-            {
-                handler(message);
-            }
-            catch (Exception e)
-            {
-                Log.wtf(e);
-            }
-        }
-
-        SendResult IRawUnreliableNoAckClient.TrySend(UnionDataList message)
+        protected override SendResult SendToCarrier(RawUnreliableNoAckEndpoint endpoint, UnionDataList message)
         {
             var sender = _sender;
             if (sender == null)
@@ -163,24 +133,29 @@ namespace Pontifex.Raw.Unreliable.NoAck.Udp
                 return SendResult.Error;
             }
 
-            if (message == null!)
-            {
-                return SendResult.InvalidMessage;
-            }
-
             try
             {
-                Conformance.BeforeSendCommitGate.Hit();
+                endpoint.Conformance.BeforeSendCommitGate.Hit();
                 var result = sender.Send(message);
-                Conformance.AfterSendCommitGate.Hit();
+                endpoint.Conformance.AfterSendCommitGate.Hit();
                 return result == SendResult.NotConnected ? SendResult.Error : result;
             }
             catch (Exception e)
             {
                 Log.wtf(e);
+                return SendResult.Error;
+            }
+        }
+
+        private void OnReceivedInternal(EndPoint remoteEp, UnionDataList message)
+        {
+            if (!remoteEp.Equals(_remoteEndPoint))
+            {
+                message.Release();
+                return;
             }
 
-            return SendResult.Error;
+            OnCarrierInbound(null, message);
         }
 
         protected override bool TryMakeReliableForDebug()

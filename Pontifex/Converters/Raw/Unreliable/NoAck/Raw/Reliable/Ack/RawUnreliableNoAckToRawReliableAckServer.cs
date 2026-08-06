@@ -7,6 +7,7 @@ using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 using dm = Pontifex.DeliveryManager;
+using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
@@ -23,19 +24,13 @@ namespace Pontifex.Converters
         private Thread? _dmThread;
         private volatile bool _stopped;
         private readonly AutoResetEvent _workEvent = new AutoResetEvent(false);
-        private readonly ConcurrentQueue<(IEndPoint, UnionDataList)> _incomingQueue = new ConcurrentQueue<(IEndPoint, UnionDataList)>();
 
         private sealed class SessionOutgoingConsumer : IConsumer<UnionDataList>
         {
-            private readonly IRawUnreliableNoAckServer _inner;
-            private readonly IEndPoint _destination;
+            private readonly ServerSession _session;
             private readonly List<UnionDataList> _pending = new List<UnionDataList>();
 
-            public SessionOutgoingConsumer(IRawUnreliableNoAckServer inner, IEndPoint destination)
-            {
-                _inner = inner;
-                _destination = destination;
-            }
+            public SessionOutgoingConsumer(ServerSession session) => _session = session;
 
             public bool Put(UnionDataList data)
             {
@@ -47,11 +42,31 @@ namespace Pontifex.Converters
             {
                 foreach (var data in _pending)
                 {
-                    _inner.TrySend(_destination, data);
-                    data.Release();
+                    var endpoint = _session.UnreliableEndpoint;
+                    if (endpoint != null)
+                    {
+                        endpoint.UnreliableSend(data);
+                    }
+                    else
+                    {
+                        data.Release();
+                    }
                 }
                 _pending.Clear();
             }
+        }
+
+        private sealed class SessionInnerHandler : IRawUnreliableHandler
+        {
+            private readonly ServerSession _session;
+
+            public SessionInnerHandler(ServerSession session) => _session = session;
+
+            public void OnStarted(IRawUnreliableEndpoint endpoint) => _session.SetEndpoint(endpoint);
+
+            public void OnReceived(UnionDataList data) => _session.EnqueueIncoming(data);
+
+            public void OnStopped(StopReason reason) => _session.Disconnect(reason);
         }
 
         private sealed class ServerEndpoint : IRawReliableEndpoint
@@ -100,12 +115,15 @@ namespace Pontifex.Converters
             private readonly SessionOutgoingConsumer _consumer;
             private readonly IRawReliableAckServerHandler _handler;
             private readonly IEndPoint _remoteEndPoint;
-            private volatile bool _disconnected;
+            private readonly ManualResetEventSlim _endpointReady = new ManualResetEventSlim(false);
+            private volatile IRawUnreliableEndpoint? _unreliableEndpoint;
+            private int _disconnectInitiated;
 
             private readonly ConcurrentQueue<UnionDataList> _incomingQueue = new ConcurrentQueue<UnionDataList>();
 
             public IEndPoint RemoteEndPoint => _remoteEndPoint;
             public ServerEndpoint Endpoint => _endpoint;
+            public IRawUnreliableEndpoint? UnreliableEndpoint => _unreliableEndpoint;
 
             public ServerSession(
                 RawUnreliableNoAckToRawReliableAckServer owner,
@@ -126,7 +144,7 @@ namespace Pontifex.Converters
 
                 _scheduler = new dm.RetryDeliveryScheduler(TimeSpan.FromSeconds(30));
                 _endpoint = new ServerEndpoint(_dm, remoteEndPoint);
-                _consumer = new SessionOutgoingConsumer(owner._inner, remoteEndPoint);
+                _consumer = new SessionOutgoingConsumer(this);
 
                 _dm.Received += OnDmReceived;
                 _dm.Delivered += OnDmDelivered;
@@ -138,6 +156,14 @@ namespace Pontifex.Converters
                 _handler.OnConnected(_endpoint);
             }
 
+            public void SetEndpoint(IRawUnreliableEndpoint endpoint)
+            {
+                _unreliableEndpoint = endpoint;
+                _endpointReady.Set();
+            }
+
+            public IRawUnreliableHandler CreateInnerHandler() => new SessionInnerHandler(this);
+
             public void EnqueueIncoming(UnionDataList data)
             {
                 _incomingQueue.Enqueue(data);
@@ -145,6 +171,11 @@ namespace Pontifex.Converters
 
             public void Tick()
             {
+                if (!_endpointReady.IsSet)
+                {
+                    _endpointReady.Wait(TimeSpan.FromSeconds(5));
+                }
+
                 while (_incomingQueue.TryDequeue(out var data))
                 {
                     _dm.ProcessIncoming(data);
@@ -156,8 +187,7 @@ namespace Pontifex.Converters
 
             public void Disconnect(StopReason reason)
             {
-                if (_disconnected) return;
-                _disconnected = true;
+                if (Interlocked.CompareExchange(ref _disconnectInitiated, 1, 0) != 0) return;
 
                 _dm.Clear();
                 _endpoint.Disconnect(reason);
@@ -195,7 +225,6 @@ namespace Pontifex.Converters
             : base(inner.Name, loggerOverride ?? inner.Log, memoryOverride ?? inner.Memory)
         {
             _inner = inner;
-            _inner.OnReceived += OnInnerReceived;
         }
 
         public override TransportType Type => TransportType.RawReliableAck;
@@ -205,6 +234,7 @@ namespace Pontifex.Converters
         public bool Init(IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> acknowledger)
         {
             _acknowledger = acknowledger;
+            _inner.Init(HandleNewSource);
             return true;
         }
 
@@ -246,11 +276,32 @@ namespace Pontifex.Converters
             _inner.Stop(reason);
         }
 
-        private void OnInnerReceived(IEndPoint sender, UnionDataList data)
+        private IRawUnreliableHandler? HandleNewSource(IEndPoint source)
         {
-            data.Acquire();
-            _incomingQueue.Enqueue((sender, data));
-            _workEvent.Set();
+            var acknowledger = _acknowledger;
+            if (acknowledger == null)
+            {
+                return null;
+            }
+
+            ServerSession session;
+            try
+            {
+                session = new ServerSession(this, acknowledger, source);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                return null;
+            }
+
+            if (!_sessions.TryAdd(source, session))
+            {
+                session.Disconnect(new Unknown(Name));
+                return null;
+            }
+
+            return session.CreateInnerHandler();
         }
 
         private void ServerDmLoop()
@@ -259,33 +310,6 @@ namespace Pontifex.Converters
             {
                 _workEvent.WaitOne(TimeSpan.FromMilliseconds(20));
                 if (_stopped) break;
-
-                while (_incomingQueue.TryDequeue(out var item))
-                {
-                    var (sender, data) = item;
-
-                    if (!_sessions.TryGetValue(sender, out var session))
-                    {
-                        var acknowledger = _acknowledger;
-                        if (acknowledger == null) continue;
-
-                        try
-                        {
-                            session = new ServerSession(this, acknowledger, sender);
-                            if (!_sessions.TryAdd(sender, session))
-                            {
-                                session.Disconnect(new Unknown(Name));
-                                continue;
-                            }
-                        }
-                        catch
-                        {
-                            continue;
-                        }
-                    }
-
-                    session.EnqueueIncoming(data);
-                }
 
                 foreach (var session in _sessions.Values)
                 {

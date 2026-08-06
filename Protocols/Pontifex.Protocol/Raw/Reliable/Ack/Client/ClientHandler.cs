@@ -65,7 +65,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             mTransport.Stop(reason);
         }
 
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             try
             {

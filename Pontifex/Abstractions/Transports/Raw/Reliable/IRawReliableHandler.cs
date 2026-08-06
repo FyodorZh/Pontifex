@@ -7,19 +7,8 @@ namespace Pontifex.Raw.Reliable
     /// Implemented by business logic to receive logical disconnect notifications
     /// and incoming data from the transport.
     /// </summary>
-    public interface IRawReliableHandler : IHandler
+    public interface IRawReliableHandler : IRawHandler
     {
-        /// <summary>
-        /// Called when data arrives from the remote peer.
-        /// After OnConnected(), data starts arriving.
-        /// After OnDisconnected(), data does NOT arrive.
-        /// </summary>
-        /// <param name="receivedBuffer">
-        /// The received data. The buffer may be reused after the call returns;
-        /// copy the data if you need it beyond the scope of this method.
-        /// </param>
-        void OnReceived(UnionDataList receivedBuffer);
-        
         /// <summary>
         /// Logical disconnect. Informs business logic that the logical connection
         /// between server and client is no longer maintained.

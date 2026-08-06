@@ -1,3 +1,4 @@
+using System;
 using Actuarius.Memory;
 using Scriba;
 
@@ -5,17 +6,19 @@ namespace Pontifex.Raw.Unreliable.NoAck
 {
     public abstract class RawUnreliableNoAckServerTransport : RawUnreliableNoAckTransport
     {
-        protected new IRawUnreliableNoAckServerConformanceControl Conformance => (IRawUnreliableNoAckServerConformanceControl)base.Conformance;
-     
         protected RawUnreliableNoAckServerTransport(string typeName, ILogger logger, IMemoryRental memory,
-            RawUnreliableNoAckServerConformanceControl? conformanceControl = null) 
-            : base(typeName, logger, memory, conformanceControl ?? new RawUnreliableNoAckServerConformanceControl())
+            RawUnreliableNoAckTransportConformanceControl? conformanceControl = null)
+            : base(typeName, logger, memory, conformanceControl)
         {
         }
-        
-        protected class RawUnreliableNoAckServerConformanceControl : RawUnreliableNoAckConformanceControl, IRawUnreliableNoAckServerConformanceControl
+
+        public bool Init(Func<IEndPoint, IRawUnreliableHandler?> handlerFactory)
         {
-            
+            if (handlerFactory == null!)
+                throw new ArgumentNullException(nameof(handlerFactory));
+            return TryInitialize(null, handlerFactory);
         }
+
+        protected override IEndPoint? ClientRemoteEndPoint => null;
     }
 }

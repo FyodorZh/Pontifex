@@ -2,6 +2,7 @@ using System;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Endpoints;
+using Pontifex.Raw;
 using Pontifex.Raw.Reliable;
 using Pontifex.Utils;
 using Scriba;
@@ -56,7 +57,7 @@ namespace Pontifex.Api
             ApiStarted?.Invoke(this);
         }
         
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _transportPipeSystem!.OnReceived(receivedBuffer);
         }

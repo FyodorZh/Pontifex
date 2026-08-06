@@ -1,5 +1,6 @@
 using System;
 using Actuarius.Memory;
+using Pontifex.Raw;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 using Pontifex.StopReasons;
@@ -68,7 +69,7 @@ namespace Pontifex.Api
             }
         }
         
-        void IRawReliableHandler.OnReceived(UnionDataList receivedBuffer)
+        void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             _transportPipeSystem!.OnReceived(receivedBuffer);
         }
