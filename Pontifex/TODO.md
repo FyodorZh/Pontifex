@@ -8,4 +8,4 @@
   - State no Tasks
   - State desire for allocation free code
   - State TODO.md management rules
-- [ ] Implement RawUnreliableAck: 'bool Init(Func<IEndPoint, UnionDataList, IRawUnreliableHandler?> handlerFactory);'
+- [x] Implement RawUnreliableAck: 'bool Init(Func<IEndPoint, UnionDataList, IRawUnreliableHandler?> handlerFactory);'
