@@ -1,6 +1,6 @@
 using Pontifex.Utils;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal readonly struct QueuedMessage
     {

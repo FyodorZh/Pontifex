@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal class MessageMerger
     {

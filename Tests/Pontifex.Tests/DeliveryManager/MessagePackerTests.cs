@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.DeliveryManager;
+using Pontifex.Delivery;
 using Pontifex.Utils;
 
-namespace Pontifex.DeliveryManager.Tests
+namespace Pontifex.Delivery.Tests
 {
     [Category("DeliveryManager")]
     public class MessagePackerTests

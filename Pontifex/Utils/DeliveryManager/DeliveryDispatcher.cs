@@ -4,7 +4,7 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Utils;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal interface IDeliveryTask
     {

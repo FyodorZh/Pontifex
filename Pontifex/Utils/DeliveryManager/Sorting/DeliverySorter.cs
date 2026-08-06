@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using Actuarius.Collections;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal class DeliverySorter<TParcel>
     {

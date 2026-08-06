@@ -1,4 +1,4 @@
-namespace Pontifex.DeliveryManager.Tests
+namespace Pontifex.Delivery.Tests
 {
     [Category("DeliveryManager")]
     public class DeduplicatorTests

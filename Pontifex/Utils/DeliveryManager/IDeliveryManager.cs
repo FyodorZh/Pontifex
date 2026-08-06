@@ -2,7 +2,7 @@ using System;
 using Actuarius.Collections;
 using Pontifex.Utils;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     /// <summary>
     /// Side of the DeliveryManager visible to business logic: scheduling outgoing messages

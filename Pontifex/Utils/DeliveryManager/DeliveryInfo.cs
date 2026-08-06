@@ -1,6 +1,6 @@
 using System;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal readonly struct DeliveryInfo : IComparable<DeliveryInfo>, IEquatable<DeliveryInfo>
     {

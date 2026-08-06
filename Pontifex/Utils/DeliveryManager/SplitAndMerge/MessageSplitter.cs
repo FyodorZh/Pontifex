@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using Actuarius.Memory;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal class MessageSplitter
     {

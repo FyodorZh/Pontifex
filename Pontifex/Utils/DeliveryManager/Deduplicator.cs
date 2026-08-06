@@ -1,6 +1,6 @@
 using Actuarius.Collections;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal class Deduplicator
     {

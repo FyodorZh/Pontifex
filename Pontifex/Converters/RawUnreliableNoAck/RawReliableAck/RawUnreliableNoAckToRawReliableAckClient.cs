@@ -7,7 +7,6 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
-using dm = Pontifex.DeliveryManager;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.Utils;
@@ -18,8 +17,8 @@ namespace Pontifex.Converters
     internal sealed class RawUnreliableNoAckToRawReliableAckClient : AnyTransport, IRawReliableAckClient
     {
         private readonly IRawUnreliableNoAckClient _inner;
-        private readonly dm.DeliveryManager _dm;
-        private readonly dm.RetryDeliveryScheduler _scheduler;
+        private readonly Delivery.DeliveryManager _dm;
+        private readonly Delivery.RetryDeliveryScheduler _scheduler;
         private readonly ClientEndpoint _endpoint;
         private readonly InnerHandler _innerHandler;
         private readonly SendConsumer _sendConsumer;
@@ -91,11 +90,11 @@ namespace Pontifex.Converters
 
         private sealed class ClientEndpoint : IRawReliableEndpoint
         {
-            private readonly dm.DeliveryManager _dm;
+            private readonly Delivery.DeliveryManager _dm;
             private readonly RawUnreliableNoAckToRawReliableAckClient _owner;
             private volatile bool _disconnected;
 
-            public ClientEndpoint(dm.DeliveryManager dm, RawUnreliableNoAckToRawReliableAckClient owner)
+            public ClientEndpoint(Delivery.DeliveryManager dm, RawUnreliableNoAckToRawReliableAckClient owner)
             {
                 _dm = dm;
                 _owner = owner;
@@ -135,12 +134,12 @@ namespace Pontifex.Converters
         {
             _inner = inner;
 
-            _dm = new dm.DeliveryManager(
+            _dm = new Delivery.DeliveryManager(
                 inner.MessageMaxByteSize,
                 Memory.ByteArraysPool,
                 Memory.CollectablePool);
 
-            _scheduler = new dm.RetryDeliveryScheduler(TimeSpan.FromSeconds(30));
+            _scheduler = new Delivery.RetryDeliveryScheduler(TimeSpan.FromSeconds(30));
             _endpoint = new ClientEndpoint(_dm, this);
             _innerHandler = new InnerHandler(this);
             _sendConsumer = new SendConsumer(_innerHandler);

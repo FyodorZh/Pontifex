@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Actuarius.Collections;
 using Pontifex.Utils;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal class DeliveryReporter
     {

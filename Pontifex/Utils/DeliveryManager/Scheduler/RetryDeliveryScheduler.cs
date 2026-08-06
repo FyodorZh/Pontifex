@@ -1,6 +1,6 @@
 using System;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal class RetryDeliveryScheduler : IDeliveryAttemptScheduler
     {

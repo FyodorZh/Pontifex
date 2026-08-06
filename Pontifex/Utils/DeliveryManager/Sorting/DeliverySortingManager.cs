@@ -1,7 +1,7 @@
 using System;
 using Pontifex.Utils;
 
-namespace Pontifex.DeliveryManager
+namespace Pontifex.Delivery
 {
     internal interface IDeliverySortingManager
     {

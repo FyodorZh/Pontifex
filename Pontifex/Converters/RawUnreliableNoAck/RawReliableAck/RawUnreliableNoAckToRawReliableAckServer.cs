@@ -6,7 +6,6 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
-using dm = Pontifex.DeliveryManager;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.StopReasons;
@@ -71,11 +70,11 @@ namespace Pontifex.Converters
 
         private sealed class ServerEndpoint : IRawReliableEndpoint
         {
-            private readonly dm.DeliveryManager _dm;
+            private readonly Delivery.DeliveryManager _dm;
             private readonly IEndPoint _remoteEndPoint;
             private volatile bool _disconnected;
 
-            public ServerEndpoint(dm.DeliveryManager dm, IEndPoint remoteEndPoint)
+            public ServerEndpoint(Delivery.DeliveryManager dm, IEndPoint remoteEndPoint)
             {
                 _dm = dm;
                 _remoteEndPoint = remoteEndPoint;
@@ -109,8 +108,8 @@ namespace Pontifex.Converters
         private sealed class ServerSession
         {
             private readonly RawUnreliableNoAckToRawReliableAckServer _owner;
-            private readonly dm.DeliveryManager _dm;
-            private readonly dm.RetryDeliveryScheduler _scheduler;
+            private readonly Delivery.DeliveryManager _dm;
+            private readonly Delivery.RetryDeliveryScheduler _scheduler;
             private readonly ServerEndpoint _endpoint;
             private readonly SessionOutgoingConsumer _consumer;
             private readonly IRawReliableAckServerHandler _handler;
@@ -137,12 +136,12 @@ namespace Pontifex.Converters
                 _handler = acknowledger.TryAck(ackData) ?? throw new InvalidOperationException("Acknowledger rejected client");
                 _handler = _handler.Test(text => owner.Log.e(text)).GetSafe(e => owner.Log.wtf(e));
 
-                _dm = new dm.DeliveryManager(
+                _dm = new Delivery.DeliveryManager(
                     owner._inner.MessageMaxByteSize,
                     owner.Memory.ByteArraysPool,
                     owner.Memory.CollectablePool);
 
-                _scheduler = new dm.RetryDeliveryScheduler(TimeSpan.FromSeconds(30));
+                _scheduler = new Delivery.RetryDeliveryScheduler(TimeSpan.FromSeconds(30));
                 _endpoint = new ServerEndpoint(_dm, remoteEndPoint);
                 _consumer = new SessionOutgoingConsumer(this);
 
