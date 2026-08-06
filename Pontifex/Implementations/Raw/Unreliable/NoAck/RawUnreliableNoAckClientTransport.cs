@@ -31,7 +31,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
             var dispatcher = _dispatcher;
             if (dispatcher == null) return;
 
-            dispatcher.Enqueue(() =>
+            dispatcher.Post(() =>
             {
                 Conformance.BeforeHandlerStartedGate.Hit();
                 ep.MarkValid();
@@ -44,7 +44,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
                 {
                     Log.wtf(e);
                     ep.MarkInvalid();
-                    dispatcher.Enqueue(() => Stop(new StopReasons.ExceptionFail(Name, e, "client handler.OnStarted threw")));
+                    dispatcher.Post(() => Stop(new StopReasons.ExceptionFail(Name, e, "client handler.OnStarted threw")));
                 }
             });
         }

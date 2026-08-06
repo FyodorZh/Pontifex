@@ -93,10 +93,22 @@ namespace Pontifex.Raw.Unreliable.NoAck
         /// </summary>
         protected IRawUnreliableHandler? ClientHandler => _clientHandler;
 
-        internal SerializedCallbackDispatcher? _dispatcher;
+        internal SerializedCallbackQueue<Action>? _dispatcher;
         internal RawUnreliableNoAckEndpoint? _clientEndpoint;
         private readonly Dictionary<IEndPoint, RawUnreliableNoAckEndpoint> _routes = new();
         private volatile bool _stopping;
+
+        private void RunQueuedAction(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
+        }
 
         protected override bool TryStart()
         {
@@ -104,10 +116,10 @@ namespace Pontifex.Raw.Unreliable.NoAck
                 return false;
 
             _stopping = false;
-            _dispatcher = new SerializedCallbackDispatcher(1000, Name + ".dispatcher", Log);
+            _dispatcher = new SerializedCallbackQueue<Action>(1000, Name + ".dispatcher", RunQueuedAction, RunQueuedAction);
             if (!StartCarrier())
             {
-                _dispatcher.Close();
+                _dispatcher.Dispose();
                 _dispatcher = null;
                 return false;
             }
@@ -131,8 +143,8 @@ namespace Pontifex.Raw.Unreliable.NoAck
             var dispatcher = _dispatcher;
             if (dispatcher != null)
             {
-                dispatcher.Enqueue(() => TeardownAllEndpoints(reason));
-                dispatcher.Close();
+                dispatcher.Post(() => TeardownAllEndpoints(reason));
+                dispatcher.Dispose();
             }
             else
             {
@@ -198,12 +210,12 @@ namespace Pontifex.Raw.Unreliable.NoAck
 
             var resolvedReason = reason ?? new StopReasons.Unknown(Name);
 
-            if (_dispatcher == null || !_dispatcher.Enqueue(() => TeardownEndpoint(ep, resolvedReason)))
+            if (_dispatcher == null || !_dispatcher.Post(() => TeardownEndpoint(ep, resolvedReason)))
                 TeardownEndpoint(ep, resolvedReason);
 
             if (ReferenceEquals(ep, _clientEndpoint))
             {
-                if (_dispatcher == null || !_dispatcher.Enqueue(() => Stop(resolvedReason)))
+                if (_dispatcher == null || !_dispatcher.Post(() => Stop(resolvedReason)))
                     Stop(resolvedReason);
             }
 
@@ -293,7 +305,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
 
             if (source == null)
             {
-                if (!dispatcher.Enqueue(() =>
+                if (!dispatcher.Post(() =>
                 {
                     var ep = _clientEndpoint;
                     if (ep == null || _stopping || !IsStarted)
@@ -309,7 +321,7 @@ namespace Pontifex.Raw.Unreliable.NoAck
             }
             else
             {
-                if (!dispatcher.Enqueue(() => ProcessServerInbound(source!, message)))
+                if (!dispatcher.Post(() => ProcessServerInbound(source!, message)))
                 {
                     message.Release();
                 }

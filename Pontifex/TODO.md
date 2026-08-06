@@ -1,9 +1,6 @@
 # Pontifex TODO List
 
-- [ ] Consider consolidation of 'SerializedCallbackQueue<T>' and 'SerializedCallbackDispatcher'
-  - Try to make SerializedCallbackDispatcher allocation free
-  - Consider using a 'SerializedCallbackQueue<T>' for the dispatcher
-  - Make sure that we don't schedule messages for UDP transport twice.
+- [ ] Make sure that we don't schedule messages for UDP transport twice.
 - [ ] Check RawUnreliableNoAck
   - For correctness
   - Points of improvement
