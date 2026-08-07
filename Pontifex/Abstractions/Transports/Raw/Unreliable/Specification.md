@@ -610,12 +610,6 @@ Each variant names its endpoint control type: `IRawUnreliableNoAckEndpointConfor
 and `IRawUnreliableAckEndpointConformanceControl` both extend
 `IRawUnreliableEndpointConformanceControl`. See the variant specifications.
 
-### 12.4 Contract transition
-
-Contract transition history is variant-specific. Each variant specification
-documents its own transition; the common contract itself has no separate
-transition history.
-
 ## 13. Failure, shutdown, and implementation-defined behavior
 
 An unrecoverable internal or carrier failure after successful start **MUST**

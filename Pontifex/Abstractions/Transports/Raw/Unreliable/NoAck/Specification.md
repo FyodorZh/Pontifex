@@ -63,32 +63,6 @@ Common §12 applies. The variant transport control type is
 is `IRawUnreliableNoAckEndpointConformanceControl`, extending
 `IRawUnreliableEndpointConformanceControl`.
 
-### 7.1 Contract transition
-
-The prior RawUnreliableNoAck revision was a breaking raw-unreliable contract
-transition. It removed the RawUnreliableNoAck transport receive events and
-transport-level `TrySend` methods in favor of endpoint-owned `UnreliableSend`.
-It also changed the shared `IRawUnreliableHandler` contract by adding
-`OnStopped` and changed `IRawUnreliableEndpoint.Stop` to return `bool` and
-accept an optional reason.
-
-A subsequent consolidation moved the shared client `Init` contract and the
-shared conformance-control gate members to the RawUnreliable level. The NoAck
-variant interfaces now inherit them from `IRawUnreliableClient`,
-`IRawUnreliableTransportConformanceControl`, and
-`IRawUnreliableEndpointConformanceControl`, which the acknowledgement variant
-shares. This change is additive for consumers: the NoAck contract exposes the
-same members through its variant interfaces as before.
-
-Conformance adapters and suites using the former transport-level send, receive,
-or reliability controls MUST be rewritten for the transport and endpoint
-controls defined in Common §12 and named in this document. Any component that
-inherits from, exposes, adapts, or otherwise consumes these shared
-raw-unreliable abstractions MUST be updated to the current handler and
-endpoint contract. A contract that merely has a similar name, including an
-acknowledgement variant, is not implicitly changed unless it exposes or
-inherits these shared types.
-
 ## 8. Security considerations and conformance checklists
 
 The security considerations and both checklists of Common §14 apply to

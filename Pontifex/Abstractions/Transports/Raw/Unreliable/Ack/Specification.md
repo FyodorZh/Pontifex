@@ -72,20 +72,6 @@ Common §12 applies. The variant transport control type is
 is `IRawUnreliableAckEndpointConformanceControl`, extending
 `IRawUnreliableEndpointConformanceControl`.
 
-### 7.1 Contract transition
-
-RawUnreliableAck is introduced alongside the consolidated RawUnreliable core.
-It shares the client, endpoint, and handler contracts and the conformance
-control gate semantics with RawUnreliableNoAck; the only contract difference
-is that the server handler factory additionally receives the triggering
-message.
-
-Conformance adapters and suites MUST be written against the Ack variant types
-named in this document and the shared types of Common §12. RawUnreliableNoAck
-adapters and suites are not interchangeable without adaptation: a NoAck
-factory signature does not satisfy the Ack `Init` and a NoAck suite cannot
-exercise the Ack factory message argument.
-
 ## 8. Security considerations and conformance checklists
 
 The security considerations and both checklists of Common §14 apply to

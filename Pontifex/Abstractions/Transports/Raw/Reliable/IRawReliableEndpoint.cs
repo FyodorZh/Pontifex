@@ -10,11 +10,19 @@ namespace Pontifex.Raw.Reliable
         /// is not available to the caller before OnConnected()).
         /// Guaranteed to return false during and after OnDisconnected() — the
         /// IsConnected transition to false is synchronized with the OnDisconnected() call.
+        /// Safe to read concurrently.
         /// </summary>
         bool IsConnected { get; }
         
         /// <summary>
         /// Sends a message to the remote peer.
+        /// Thread-safe. Concurrent successful sends on one endpoint are ordered by
+        /// the transport's linearization order for those calls. Send does not wait
+        /// for network delivery or peer handling; it returns after validation and
+        /// outbound admission.
+        /// Ownership of <paramref name="bufferToSend"/> transfers to the transport
+        /// unconditionally, regardless of the returned SendResult. The caller MUST
+        /// NOT read, mutate, retain, release, or retry using that buffer afterward.
         /// Synchronous failures (e.g., buffer full, message too big, not connected)
         /// are returned as a non-Ok SendResult and do NOT affect the connection.
         /// If a failure occurs asynchronously after the method returns Ok,

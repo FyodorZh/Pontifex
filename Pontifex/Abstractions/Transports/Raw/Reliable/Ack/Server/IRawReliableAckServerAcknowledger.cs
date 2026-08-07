@@ -12,6 +12,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <summary>
         /// Identifies an incoming client and creates a new session for interaction.
         /// !!! It is guaranteed that calls to TryAck() never overlap concurrently.
+        /// This call receives ownership of <paramref name="ackData"/> and MUST release
+        /// it exactly once after validation, including on an exceptional path.
         /// </summary>
         /// <param name="ackData">Client identification data.</param>
         /// <returns>Null if the client is not recognized; otherwise a client session handler.</returns>

@@ -4,6 +4,7 @@ namespace Pontifex.Raw
     {
         /// <summary>
         /// Gets the maximum single-message size in bytes supported by the transport.
+        /// Safe to read concurrently.
         /// </summary>
         int MessageMaxByteSize { get; }
     }
