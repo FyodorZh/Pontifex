@@ -10,7 +10,7 @@ namespace Pontifex.Tests.Raw.Reliable.Ack;
 /// RawReliableAck conformance suite. Owns the server transport, creates
 /// clients, and tracks endpoints for gate cleanup on disposal.
 /// </summary>
-public interface IRawReliableAckConformanceFixture : IDisposable
+public interface IRawReliableAckConformanceFixture : IDisposable, IRawReliableAckEndpointTracker
 {
     IRawReliableAckServer Server { get; }
 
@@ -33,11 +33,4 @@ public interface IRawReliableAckConformanceFixture : IDisposable
     /// </summary>
     IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> CreateSimpleAcknowledger(
         Func<UnionDataList, IRawReliableAckServerHandler?> tryAck);
-
-    /// <summary>
-    /// Registers an endpoint so its conformance gates are reset on fixture
-    /// disposal. Called automatically by the test handler base classes in
-    /// their <c>OnConnected</c> implementations.
-    /// </summary>
-    void TrackEndpoint(IRawReliableEndpoint endpoint);
 }
