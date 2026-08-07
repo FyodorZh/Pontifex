@@ -1,17 +1,17 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Raw.Unreliable;
-using Pontifex.Raw.Unreliable.NoAck;
+using Pontifex.Raw.Unreliable.Ack;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.Raw.Unreliable.NoAck;
+namespace Pontifex.Tests.Raw.Unreliable.Ack;
 
-public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
+public sealed class DirectRawUnreliableAckConformanceAdapterTests
 {
     [Test]
     public void CreateFixture_CreatesUnstartedLinkedEndpoints()
     {
-        using var fixture = new DirectRawUnreliableNoAckConformanceAdapter().CreateFixture(
+        using var fixture = new DirectRawUnreliableAckConformanceAdapter().CreateFixture(
             new RawUnreliableConformanceFixtureOptions { MemoryRental = MemoryRental.Shared });
 
         var firstClient = fixture.CreateClient();
@@ -31,9 +31,9 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
     [Test]
     public void CreateClient_AfterServerStartsOrStops_ReturnsUnstartedClient()
     {
-        using var fixture = new DirectRawUnreliableNoAckConformanceAdapter().CreateFixture();
+        using var fixture = new DirectRawUnreliableAckConformanceAdapter().CreateFixture();
 
-        Assert.That(fixture.Server.Init(_ => null), Is.True);
+        Assert.That(fixture.Server.Init((_, _) => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Start(_ => { }), Is.True);
         var runningServerClient = fixture.CreateClient();
         Assert.That(fixture.Server.Stop(), Is.True);
@@ -50,12 +50,12 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
     [Test]
     public async Task Dispose_ResetsArmedConformanceGates()
     {
-        var fixture = new DirectRawUnreliableNoAckConformanceAdapter().CreateFixture();
+        var fixture = new DirectRawUnreliableAckConformanceAdapter().CreateFixture();
         var client = fixture.CreateClient();
         var handler = new GateTestHandler(fixture);
 
         Assert.That(client.Init(handler), Is.True);
-        Assert.That(fixture.Server.Init(_ => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.Server.Init((_, _) => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Start(_ => { }), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
 
@@ -126,7 +126,7 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
 
     private sealed class GateTestHandler : RawUnreliableTestHandler
     {
-        public GateTestHandler(IRawUnreliableConformanceFixture<IRawUnreliableNoAckServer> fixture)
+        public GateTestHandler(IRawUnreliableConformanceFixture<IRawUnreliableAckServer> fixture)
             : base(fixture)
         {
         }

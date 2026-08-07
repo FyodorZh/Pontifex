@@ -1,21 +1,21 @@
 using System;
-using System.Collections.Generic;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.Raw.Unreliable.NoAck;
+namespace Pontifex.Tests.Raw.Unreliable;
 
 /// <summary>
-/// Base test handler: captures the endpoint from OnStarted, auto-tracks it with the
-/// fixture (so Dispose resets its gates), and records the stopped reason.
+/// Base test handler: captures the endpoint from OnStarted, auto-tracks it with
+/// the fixture (so Dispose resets its gates), and records the stopped reason.
+/// Shared by the Ack and NoAck conformance suites.
 /// </summary>
-public abstract class RawUnreliableNoAckTestHandler : IRawUnreliableHandler
+public abstract class RawUnreliableTestHandler : IRawUnreliableHandler
 {
-    private readonly IRawUnreliableNoAckConformanceFixture? _fixture;
+    private readonly IRawUnreliableEndpointTracker? _tracker;
 
-    protected RawUnreliableNoAckTestHandler(IRawUnreliableNoAckConformanceFixture? fixture = null)
+    protected RawUnreliableTestHandler(IRawUnreliableEndpointTracker? tracker = null)
     {
-        _fixture = fixture;
+        _tracker = tracker;
     }
 
     public IRawUnreliableEndpoint? Endpoint { get; private set; }
@@ -26,7 +26,7 @@ public abstract class RawUnreliableNoAckTestHandler : IRawUnreliableHandler
     {
         Endpoint = endpoint;
         IsStarted = true;
-        _fixture?.TrackEndpoint(endpoint);
+        _tracker?.TrackEndpoint(endpoint);
         OnStartedCore();
     }
 
