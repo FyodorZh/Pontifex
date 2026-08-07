@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.NoAck;
@@ -11,7 +12,7 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
     public void CreateFixture_CreatesUnstartedLinkedEndpoints()
     {
         using var fixture = new DirectRawUnreliableNoAckConformanceAdapter().CreateFixture(
-            new RawUnreliableNoAckConformanceFixtureOptions { MemoryRental = MemoryRental.Shared });
+            new RawUnreliableConformanceFixtureOptions { MemoryRental = MemoryRental.Shared });
 
         var firstClient = fixture.CreateClient();
         var secondClient = fixture.CreateClient();
@@ -59,9 +60,9 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
         Assert.That(client.Start(_ => { }), Is.True);
 
         var endpoint = await WaitForEndpointAsync(handler);
-        var serverControl = GetControl<IRawUnreliableNoAckTransportConformanceControl>(fixture.Server);
-        var clientControl = GetControl<IRawUnreliableNoAckTransportConformanceControl>(client);
-        var endpointControl = GetEndpointControl<IRawUnreliableNoAckEndpointConformanceControl>(endpoint);
+        var serverControl = GetControl<IRawUnreliableTransportConformanceControl>(fixture.Server);
+        var clientControl = GetControl<IRawUnreliableTransportConformanceControl>(client);
+        var endpointControl = GetEndpointControl<IRawUnreliableEndpointConformanceControl>(endpoint);
 
         _ = serverControl.BeforeStopStateTransitionGate.Arm();
         _ = serverControl.BeforeStoppedCallbackGate.Arm();
@@ -95,7 +96,7 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
         });
     }
 
-    private static async Task<IRawUnreliableEndpoint> WaitForEndpointAsync(RawUnreliableNoAckTestHandler handler)
+    private static async Task<IRawUnreliableEndpoint> WaitForEndpointAsync(RawUnreliableTestHandler handler)
     {
         var deadline = DateTime.UtcNow.AddSeconds(2);
         while (handler.Endpoint == null)
@@ -123,9 +124,9 @@ public sealed class DirectRawUnreliableNoAckConformanceAdapterTests
         return controls.OfType<TControl>().Single();
     }
 
-    private sealed class GateTestHandler : RawUnreliableNoAckTestHandler
+    private sealed class GateTestHandler : RawUnreliableTestHandler
     {
-        public GateTestHandler(IRawUnreliableNoAckConformanceFixture fixture)
+        public GateTestHandler(IRawUnreliableConformanceFixture<IRawUnreliableNoAckServer> fixture)
             : base(fixture)
         {
         }

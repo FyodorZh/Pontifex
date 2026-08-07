@@ -1,75 +1,19 @@
-using System;
-using System.Collections.Generic;
 using System.Net;
 using Pontifex.Factory;
-using Pontifex.NetSockets;
+using Pontifex.Raw.Unreliable.Udp;
 
 namespace Pontifex.Raw.Unreliable.NoAck.Udp
 {
-    public class RawUnreliableNoAckUdpConstructor : ITransportConstructor
+    public class RawUnreliableNoAckUdpConstructor : RawUnreliableUdpConstructor
     {
-        public TransportType Type => TransportType.RawUnreliableNoAck;
-        public string Name => RawUdpInfo.TransportName;
+        public override TransportType Type => TransportType.RawUnreliableNoAck;
 
-        public ITransport ConstructServer(ITransportBuilder builder, IDescription description)
-        {
-            if (!TryParse(description, out var ip, out var port) || ip == null)
-                throw new ArgumentException("Invalid UDP server description");
+        public override string Name => RawUnreliableNoAckUdpInfo.TransportName;
 
-            return new RawUnreliableNoAckUdpServer(ip, port, builder.Logger, builder.MemoryRental);
-        }
+        protected override IRawUnreliableClient CreateClient(ITransportBuilder builder, IPAddress ipAddress, int port)
+            => new RawUnreliableNoAckUdpClient(ipAddress, port, builder.Logger, builder.MemoryRental);
 
-        public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
-        {
-            if (!TryParse(description, out var ip, out var port) || ip == null)
-                throw new ArgumentException("Invalid UDP client description");
-
-            return new RawUnreliableNoAckUdpClient(ip, port, builder.Logger, builder.MemoryRental);
-        }
-
-        private static bool TryParse(IDescription description, out IPAddress? ip, out int port)
-        {
-            try
-            {
-                if (!description.Get("host").EvaluateAsString(out var host))
-                {
-                    ip = null;
-                    port = -1;
-                    return false;
-                }
-
-                if (!description.Get("port").EvaluateAsLong(out var portLong))
-                {
-                    ip = null;
-                    port = -1;
-                    return false;
-                }
-
-                ip = IPAddress.Parse(host);
-                port = (int)portLong;
-                return true;
-            }
-            catch
-            {
-                ip = null;
-                port = -1;
-                return false;
-            }
-        }
-
-        public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()
-        {
-            yield return (RawUdpInfo.TransportName, (uriBody, factory) =>
-            {
-                if (!UrlStringParser.TryParseAddress(uriBody, out var ip, out var port))
-                    return null;
-
-                var desc = new Description();
-                desc.Add("host", new StringElement(ip.ToString()));
-                desc.Add("port", new LongElement(port));
-                desc.Add("type", new StringElement("RawUnreliableNoAck"));
-                return desc;
-            });
-        }
+        protected override IRawUnreliableTransport CreateServer(ITransportBuilder builder, IPAddress ipAddress, int port)
+            => new RawUnreliableNoAckUdpServer(ipAddress, port, builder.Logger, builder.MemoryRental);
     }
 }
