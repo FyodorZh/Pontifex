@@ -4,19 +4,29 @@ using System.Text.Json;
 using Pontifex.Factory;
 using Pontifex.VirtualDelivery;
 
-namespace Pontifex.Raw.Unreliable.NoAck.Direct
+namespace Pontifex.Raw.Unreliable.Direct
 {
-    public class RawUnreliableNoAckDirectConstructor : ITransportConstructor
+    /// <summary>
+    /// Base class for the RawUnreliable Direct transport constructors. Owns the
+    /// description parsing, client delivery-system wiring, and URI parsing shared
+    /// by the Ack and NoAck contract variants.
+    /// </summary>
+    public abstract class RawUnreliableDirectConstructor : ITransportConstructor
     {
-        public TransportType Type => TransportType.RawUnreliableNoAck;
-        public string Name => "direct-noack-raw-unreliable";
+        public abstract TransportType Type { get; }
+
+        public abstract string Name { get; }
+
+        protected abstract RawUnreliableDirectClientTransport CreateClient(ITransportBuilder builder, string id);
+
+        protected abstract IRawUnreliableTransport CreateServer(ITransportBuilder builder, string id);
 
         public ITransport ConstructServer(ITransportBuilder builder, IDescription description)
         {
             if (!description.Get("id").EvaluateAsString(out var id))
                 throw new ArgumentException("Missing 'id' in description");
 
-            return new RawUnreliableNoAckDirectServer(id, builder.Logger, builder.MemoryRental);
+            return CreateServer(builder, id);
         }
 
         public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
@@ -26,7 +36,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
             if (!description.Get("delivery").EvaluateAsDescription(out var descriptionInfo))
                 throw new ArgumentException("Missing 'delivery' in description");
 
-            var transport = new RawUnreliableNoAckDirectClient(id, builder.Logger, builder.MemoryRental);
+            var transport = CreateClient(builder, id);
             var pool = builder.MemoryRental.CollectablePool;
             var bytesPool = builder.MemoryRental.ByteArraysPool;
             transport.SetDeliverySystem(
@@ -43,11 +53,10 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
                 var serverName = uriBody.Substring(0, pos);
                 var paramsJson = uriBody.Substring(pos);
                 var deliveryDescription = factory.FromJson(JsonElement.Parse(paramsJson));
-                    
-                
+
                 var desc = new Description();
                 desc.Add("id", new StringElement(serverName));
-                desc.Add("type", new StringElement("RawUnreliableNoAck"));
+                desc.Add("type", new StringElement(Type.ToString()));
                 desc.Add("delivery", new DescriptionElement(deliveryDescription));
                 return desc;
             });

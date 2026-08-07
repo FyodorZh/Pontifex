@@ -1,24 +1,30 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Raw.Unreliable.NoAck.Direct
+namespace Pontifex.Raw.Unreliable.Direct
 {
-    public sealed class RawUnreliableNoAckDirectServer : RawUnreliableNoAckServerTransport, IRawUnreliableNoAckServer
+    /// <summary>
+    /// Base class for all RawUnreliable Direct server transports. Owns the
+    /// in-process channel registry and callback queue shared by the Ack and
+    /// NoAck contract variants. The generic parameter is the variant
+    /// handler-factory delegate type.
+    /// </summary>
+    public abstract class RawUnreliableDirectServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>
+        where TFactory : Delegate
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
         private SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
 
-        public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
+        protected abstract int QueueCapacity { get; }
 
-        public override TransportType Type => TransportType.RawUnreliableNoAck;
-
-        public RawUnreliableNoAckDirectServer(string serverName, ILogger logger, IMemoryRental memoryRental)
-            : base("direct-noack-raw-unreliable", logger, memoryRental)
+        protected RawUnreliableDirectServerTransport(string typeName, string serverName, ILogger logger, IMemoryRental memoryRental)
+            : base(typeName, logger, memoryRental)
         {
             _serverEp = new StringEndPoint(serverName);
         }
@@ -26,7 +32,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
         protected override bool StartCarrier()
         {
             _callbackQueue = new SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>(
-                100,
+                QueueCapacity,
                 $"srv-cb-{_serverEp}",
                 pair =>
                 {

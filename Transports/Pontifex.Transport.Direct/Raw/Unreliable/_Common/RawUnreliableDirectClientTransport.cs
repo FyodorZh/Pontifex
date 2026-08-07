@@ -1,13 +1,19 @@
 using System;
+using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 using Scriba;
 
-namespace Pontifex.Raw.Unreliable.NoAck.Direct
+namespace Pontifex.Raw.Unreliable.Direct
 {
-    public sealed class RawUnreliableNoAckDirectClient : RawUnreliableClientTransport, IRawUnreliableNoAckClient
+    /// <summary>
+    /// Base class for all RawUnreliable Direct client transports. Owns the
+    /// in-process channel, delivery systems, and callback queue shared by the
+    /// Ack and NoAck contract variants.
+    /// </summary>
+    public abstract class RawUnreliableDirectClientTransport : RawUnreliableClientTransport
     {
         private readonly object _connectLock = new();
         private readonly IEndPoint _serverEp;
@@ -19,12 +25,10 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
 
         private bool _askedForReliableDelivery;
 
-        public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
+        protected abstract int QueueCapacity { get; }
 
-        public override TransportType Type => TransportType.RawUnreliableNoAck;
-
-        public RawUnreliableNoAckDirectClient(string serverName, ILogger logger, IMemoryRental memoryRental)
-            : base("direct-noack-raw-unreliable", logger, memoryRental)
+        protected RawUnreliableDirectClientTransport(string typeName, string serverName, ILogger logger, IMemoryRental memoryRental)
+            : base(typeName, logger, memoryRental)
         {
             _serverEp = new StringEndPoint(serverName);
             _clientEp = new GuidEndPoint(Guid.NewGuid());
@@ -43,7 +47,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
         protected override bool StartCarrier()
         {
             _callbackQueue = new SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>(
-                100,
+                QueueCapacity,
                 $"cli-cb-{_serverEp}",
                 pair =>
                 {
@@ -100,7 +104,7 @@ namespace Pontifex.Raw.Unreliable.NoAck.Direct
                 }
             }
 
-            if (message.GetDataSize() > DirectInfo.MessageMaxByteSize)
+            if (message.GetDataSize() > MessageMaxByteSize)
             {
                 message.Release();
                 return SendResult.MessageTooBig;

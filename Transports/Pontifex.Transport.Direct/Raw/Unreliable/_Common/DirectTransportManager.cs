@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 
-namespace Pontifex.Raw.Unreliable.NoAck.Direct
+namespace Pontifex.Raw.Unreliable.Direct
 {
     internal sealed class DirectTransportManager
     {
