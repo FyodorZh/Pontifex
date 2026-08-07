@@ -1,5 +1,9 @@
 # Pontifex TODO List
 
+- [ ] Implement RawUnreliableAck conformance tests
+  - [ ] Check (update) RawUnreliableNoAck tests coverage
+- [ ] Implement RawUnreliableNoAck direct implementation
+  - [ ] Consolidate RawUnreliable direct implementation
 - [ ] Make sure that we don't schedule messages for UDP transport twice.
 - [ ] Check RawUnreliableNoAck
   - For correctness
