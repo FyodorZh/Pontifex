@@ -145,10 +145,6 @@ namespace Pontifex
                         {
                             reason = new StopReasons.Unknown(Name);
                         }
-                        else
-                        {
-                            reason = new StopReasons.Induced(Name, reason);
-                        }
 
                         try
                         {
