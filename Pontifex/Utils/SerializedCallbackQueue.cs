@@ -70,7 +70,13 @@ namespace Pontifex.Utils
                 return;
 
             _queue.CloseValve();
-            _signal.Release();
+            try
+            {
+                _signal.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
 
         private void Loop()
