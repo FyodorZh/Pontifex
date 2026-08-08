@@ -171,9 +171,14 @@ For each successful `Start(onStopped)`, `onStopped` **MUST** be invoked
 exactly once after the terminal state transition when the transport
 subsequently stops, whether by `Stop`, an endpoint action that stops a client,
 or an unrecoverable internal or carrier failure. The callback MAY be invoked
-synchronously or asynchronously; `Stop` is not required to wait for it. A
-transport-generated reason MAY preserve a supplied reason as its cause;
-callers **MUST NOT** require object identity with a supplied reason.
+synchronously or asynchronously; `Stop` is not required to wait for it. An
+explicit `Stop(reason)` call **MUST** preserve the supplied `StopReason`
+instance exactly: that same instance is supplied to the local handler
+teardown callbacks and to `onStopped`. A `Stop` call with a null reason
+supplies a newly created `Pontifex.StopReasons.Unknown` reason initialized
+with the owning transport's `Name`. A reason generated internally by the
+transport (for example from a failed `Start` or an unrecoverable failure)
+need not be supplied by the caller and is transport-defined.
 
 `Stop` is thread-safe and may be called from a handler. Once it returns, no
 new `OnReceived` invocation may begin on any endpoint of that transport. A

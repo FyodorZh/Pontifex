@@ -235,9 +235,13 @@ exactly once after the terminal state transition when the transport
 subsequently stops, whether by `Stop`, a client endpoint disconnection that
 stops the client, or an unrecoverable internal or carrier failure. The
 callback MAY be invoked synchronously or asynchronously; `Stop` is not
-required to wait for it. A transport-generated reason MAY preserve a supplied
-reason as its cause; callers **MUST NOT** require object identity with a
-supplied reason.
+required to wait for it. An explicit `Stop(reason)` call **MUST** preserve the
+supplied `StopReason` instance exactly: that same instance is supplied to the
+local handler teardown callbacks and to `onStopped`. A `Stop` call with a null
+reason supplies a newly created `Pontifex.StopReasons.Unknown` reason
+initialized with the owning transport's `Name`. A reason generated internally
+by the transport (for example from a failed `Start` or an unrecoverable
+failure) need not be supplied by the caller and is transport-defined.
 
 `Stop` is thread-safe and may be called from a handler. Once it returns, no
 new `OnReceived` invocation may begin for any endpoint of that transport. A
@@ -249,9 +253,16 @@ invalid.
 
 ### 7.3 Client connection startup
 
+During `Start`, the client **MUST** automatically connect to its configured
+remote destination. If the destination is synchronously unavailable — the
+server is not listening or cannot be reached — `Start` **MUST** return false
+and the transport **MUST** become invalid under the failed-start rules of
+Section 7.2. `Start` returning false **MUST NOT** invoke the client handler's
+`OnStopped`.
+
 After `client.Start` has successfully returned true, the client **MUST** begin
-connecting to the configured remote destination. It does not establish a
-logical connection until the ACK handshake completes. If the handshake
+the ACK handshake with the configured remote destination. It does not establish
+a logical connection until the ACK handshake completes. If the handshake
 succeeds, the client invokes `handler.OnConnected(endpoint, ackResponse)`.
 If the handshake fails, the client invokes `handler.OnStopped(reason)`.
 
@@ -308,11 +319,19 @@ sequenceDiagram
    A handler instance **MUST NOT** serve multiple sessions.
 4. `TryAck` receives ownership of its ACK-data buffer and **MUST** release it
    exactly once after validation, including on an exceptional path.
-5. Returning `null` rejects the connection attempt. The way that rejection
-   reaches the client, including whether it is reported as `AckRejected`, is
-   implementation-defined. The server **MUST NOT** cache a null return: a
-   later connection attempt from the same source is eligible to invoke
-   `TryAck` again.
+5. Returning `null` rejects the connection attempt. The server **MUST NOT**
+   cache a null return: a later connection attempt from the same source is
+   eligible to invoke `TryAck` again.
+
+The way rejection is observed by the client is implementation-defined, but the
+client **MUST** observe it: the client **MUST** receive `OnStopped` without
+`OnConnected` or `OnDisconnected` for a rejected connection attempt. An
+implementation **MAY** signal rejection by sending an explicit rejection packet
+(a "NoAck" packet) to the client, by closing the peer connection, by relying on
+a client-side timeout, or by any other mechanism that terminates the
+establishment attempt. The Direct transport **MUST** send an explicit rejection
+packet to the client. The rejection may or may not be reported to the client
+handler as `AckRejected`.
 6. For an accepted session, the server **MUST** call `FillAckResponse` before
    its `OnConnected`. The ACK response **MUST** be accepted for outbound
    delivery before server `OnConnected` is invoked.
