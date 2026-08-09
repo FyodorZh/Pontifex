@@ -1,132 +1,58 @@
 using System;
-using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Endpoints;
+using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable.Direct;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
-using Pontifex.Utils.FSM;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Direct
 {
-    public class RawReliableAckDirectClient : RawReliableAckClient, IRawReliableAckClient, IClientDirectCtl
+    /// <summary>
+    /// RawReliableAck Direct client transport. Establishes its logical
+    /// connection through the Direct channel ACK handshake.
+    /// </summary>
+    public sealed class RawReliableAckDirectClient : RawReliableDirectClientTransport, IRawReliableAckClient
     {
-        private enum State
+        public override TransportType Type => TransportType.RawReliableAck;
+
+        public override int MessageMaxByteSize => RawReliableAckDirectInfo.MessageMaxByteSize;
+
+        protected override int QueueCapacity => RawReliableAckDirectInfo.QueueCapacity;
+
+        protected override int DispatcherCapacity => RawReliableAckDirectInfo.QueueCapacity;
+
+        public RawReliableAckDirectClient(string serverName, ILogger logger, IMemoryRental memoryRental)
+            : base(RawReliableAckDirectInfo.TransportName, serverName, logger, memoryRental)
         {
-            Constructed,
-            Connecting,
-            Connected,
-            Disconnected
         }
 
-        private readonly StringEndPoint _serverEp;
-
-        private readonly IConcurrentFSM<State> _state;
-
-        private DirectTransport? _transport;
-        
-        private readonly RawReliableAckClientControl _transportControl;
-
-        public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
-
-        public RawReliableAckDirectClient(string serverName, ILogger logger, IMemoryRental memory)
-            : base(DirectInfo.TransportName, logger, memory)
+        protected override void HandleConnectingInbound(UnionDataList message)
         {
-            _serverEp = new StringEndPoint(serverName);
-
-            var fsm = new RatchetFSM<State>((a, b) => ((int)a).CompareTo((int)b), State.Constructed);
-            _state = new ConcurrentFSM<State>(fsm);
-            _transportControl = new RawReliableAckClientControl(this);
-        }
-
-        protected override bool BeginConnect()
-        {
-            var handler = Handler;
-            if (handler != null)
+            if (!message.TryPopFirst(out IMultiRefReadOnlyByteArray? marker))
             {
-                GuidEndPoint localEp = new GuidEndPoint(Guid.NewGuid());
-
-                var transport = DirectTransportManager.Instance.NewTransport(
-                    _serverEp,
-                    localEp,
-                    this);
-
-                if (transport != null)
-                {
-                    _transport = transport;
-                    _state.SetState(State.Connecting);
-                    return true;
-                }
+                message.Release();
+                FailEstablishment(new TextFail(Name, "Malformed ACK response"));
+                return;
             }
-            return false;
-        }
 
-        protected override void OnReadyToConnect()
-        {
-            _transport!.FinishConnection();
-        }
-
-        protected override void DestroyTransport(StopReason reason)
-        {
-            _state.SetState(State.Disconnected);
-
-            var transport = _transport;
-            if (transport != null)
+            if (marker.EqualByContent(RawReliableAckDirectInfo.AckOKResponse))
             {
-                _transport = null;
-                transport.Disconnect(reason);
+                marker.Release();
+                CompleteConnect(message);
             }
-        }
-
-        void IClientDirectCtl.GetAckData(UnionDataList ackData)
-        {
-            Handler?.FillAckData(ackData);
-        }
-
-        void IClientDirectCtl.GetTransportControls(List<IControl> dst, Predicate<IControl>? predicate)
-        {
-            if (predicate == null || predicate(_transportControl))
-                dst.Add(_transportControl);
-        }
-
-        void IAnyDirectCtl.OnReceived(UnionDataList buffer)
-        {
-            using var bufferDisposer = buffer.AsDisposable();
-            switch (_state.State)
+            else if (marker.EqualByContent(RawReliableAckDirectInfo.AckRejectResponse))
             {
-                case State.Connecting:
-                {
-                    if (buffer.TryPopFirst(out IMultiRefReadOnlyByteArray? ackOk) && ackOk.EqualByContent(DirectInfo.AckOKResponse))  
-                    {
-                        ackOk.Release();
-                        buffer.AddRef();
-                        _state.SetState(State.Connected, null, _ =>
-                        {
-                            ConnectionFinished(_transport!.ClientSide, buffer);
-                        });
-                    }
-                    else
-                    {
-                        Log.w("Failed to parse ack response. Disconnecting...");
-                        Stop(new AckRejected(Name));
-                    }
-                }
-                    break;
-                case State.Connected:
-                    Handler?.OnReceived(buffer.Acquire());
-                    break;
-                default:
-                    Fail(new TextFail("direct-client", "Wrong state"));
-                    break;
+                marker.Release();
+                message.Release();
+                FailEstablishment(new AckRejected(Name));
             }
-        }
-
-        void IAnyDirectCtl.OnDisconnected(StopReason reason)
-        {
-            if (IsStarted)
+            else
             {
-                Stop(reason);
+                marker.Release();
+                message.Release();
+                FailEstablishment(new TextFail(Name, "Unknown ACK response marker"));
             }
         }
     }

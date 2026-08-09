@@ -1,39 +1,19 @@
-using System;
-using System.Collections.Generic;
 using Pontifex.Factory;
+using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable.Direct;
 
 namespace Pontifex.Raw.Reliable.Ack.Direct
 {
-    public class RawReliableAckDirectConstructor : ITransportConstructor
+    public class RawReliableAckDirectConstructor : RawReliableDirectConstructor
     {
-        public TransportType Type => TransportType.RawReliableAck;
-        public string Name => DirectInfo.TransportName;
+        public override TransportType Type => TransportType.RawReliableAck;
 
-        public ITransport ConstructServer(ITransportBuilder builder, IDescription description)
-        {
-            if (!description.Get("id").EvaluateAsString(out var id))
-                throw new ArgumentException("Missing 'id' in description");
+        public override string Name => RawReliableAckDirectInfo.TransportName;
 
-            return new RawReliableAckDirectServer(id, builder.Logger, builder.MemoryRental);
-        }
+        protected override RawReliableAckClientTransport CreateClient(ITransportBuilder builder, string id)
+            => new RawReliableAckDirectClient(id, builder.Logger, builder.MemoryRental);
 
-        public ITransport ConstructClient(ITransportBuilder builder, IDescription description)
-        {
-            if (!description.Get("id").EvaluateAsString(out var id))
-                throw new ArgumentException("Missing 'id' in description");
-
-            return new RawReliableAckDirectClient(id, builder.Logger, builder.MemoryRental);
-        }
-
-        public IEnumerable<(string name, Func<string, IDescriptionUriFactory, Description?> uriParser)> GetUriParsers()
-        {
-            yield return (DirectInfo.TransportName, (uriBody, factory) =>
-            {
-                var desc = new Description();
-                desc.Add("id", new StringElement(uriBody));
-                desc.Add("type", new StringElement("RawReliableAck"));
-                return desc;
-            });
-        }
+        protected override RawReliableAckServerTransport CreateServer(ITransportBuilder builder, string id)
+            => new RawReliableAckDirectServer(id, builder.Logger, builder.MemoryRental);
     }
 }

@@ -3,8 +3,14 @@ using System.Threading;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 
-namespace Pontifex.Raw.Unreliable.Direct
+namespace Pontifex.Raw.Direct
 {
+    /// <summary>
+    /// In-process point-to-point carrier shared by the Raw Direct transports.
+    /// One channel links a single client endpoint to a single server endpoint.
+    /// Each direction has an independent <see cref="IDeliverySystem"/> that may
+    /// reorder, drop, or duplicate messages for simulation purposes.
+    /// </summary>
     public sealed class Channel : IDisposable
     {
         private readonly IEndPoint _clientEp;
@@ -14,6 +20,8 @@ namespace Pontifex.Raw.Unreliable.Direct
         private volatile IDeliverySystem _clientDeliverySystem;
         private volatile IDeliverySystem _serverDeliverySystem;
         private volatile bool _disposed;
+        private Action? _clientClosed;
+        private Action? _serverClosed;
 
         public Channel(IEndPoint clientEp, IEndPoint serverEp)
         {
@@ -21,9 +29,13 @@ namespace Pontifex.Raw.Unreliable.Direct
             _serverEp = serverEp;
             _clientDeliverySystem = new PerfectDeliverySystem();
             _serverDeliverySystem = new PerfectDeliverySystem();
+            _clientDeliverySystem.Delivered += OnClientDeliveredMessage;
+            _serverDeliverySystem.Delivered += OnServerDeliveredMessage;
         }
 
         public IEndPoint ClientEp => _clientEp;
+
+        public bool IsDisposed => _disposed;
 
         public Action<UnionDataList>? ClientHandler
         {
@@ -33,6 +45,24 @@ namespace Pontifex.Raw.Unreliable.Direct
         public Action<IEndPoint, UnionDataList>? ServerHandler
         {
             set => _serverHandler = value;
+        }
+
+        /// <summary>
+        /// Invoked exactly once when the channel is disposed, so the client side
+        /// can observe the peer connection closing. Set once during setup.
+        /// </summary>
+        public Action? ClientClosed
+        {
+            set => _clientClosed = value;
+        }
+
+        /// <summary>
+        /// Invoked exactly once when the channel is disposed, so the server side
+        /// can observe the peer connection closing. Set once during setup.
+        /// </summary>
+        public Action? ServerClosed
+        {
+            set => _serverClosed = value;
         }
 
         /// <summary>
@@ -114,6 +144,9 @@ namespace Pontifex.Raw.Unreliable.Direct
             if (_disposed) return;
             _disposed = true;
 
+            var clientClosed = Interlocked.Exchange(ref _clientClosed, null);
+            var serverClosed = Interlocked.Exchange(ref _serverClosed, null);
+
             var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, new PerfectDeliverySystem());
             oldClient.Delivered -= OnClientDeliveredMessage;
             oldClient.Clear();
@@ -124,6 +157,9 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             _clientHandler = null;
             _serverHandler = null;
+
+            clientClosed?.Invoke();
+            serverClosed?.Invoke();
         }
     }
 }

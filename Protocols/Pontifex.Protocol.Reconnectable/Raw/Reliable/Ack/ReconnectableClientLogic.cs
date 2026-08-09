@@ -133,7 +133,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         void IRawReliableClientHandler.OnStopped(StopReason reason)
         {
-            if (reason is Induced { Cause: AckRejected })
+            if (reason is AckRejected)
             {
                 Stop(reason);
             }

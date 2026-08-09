@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using Pontifex.Raw.Unreliable.Ack;
+using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.Utils;
 
 namespace Pontifex.Raw.Unreliable
@@ -9,16 +11,9 @@ namespace Pontifex.Raw.Unreliable
     /// Base endpoint implementation shared by all RawUnreliable transports.
     /// The owning transport constructs this type and wires its send and stop delegates.
     /// </summary>
-    public class RawUnreliableEndpoint : IRawUnreliableEndpoint
+    public class RawUnreliableEndpoint : RawEndpoint, IRawUnreliableEndpoint
     {
-        private readonly RawUnreliableTransport _owner;
-        private readonly IRawUnreliableHandler _handler;
-        private readonly IEndPoint? _remote;
         private readonly RawUnreliableEndpointConformanceControl _conformance = new();
-        private volatile bool _isValid;
-        private bool _onStartedCompleted;
-        private int _stopInitiated;
-        private bool _teardownDone;
 
         /// <summary>
         /// Set by the owning transport once the endpoint can commit sends to a
@@ -33,39 +28,32 @@ namespace Pontifex.Raw.Unreliable
         internal Func<RawUnreliableEndpoint, StopReason?, bool>? StopDelegate;
 
         internal RawUnreliableEndpoint(RawUnreliableTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
+            : base(owner, handler, remote)
         {
-            _owner = owner;
-            _handler = handler;
-            _remote = remote;
         }
 
-        public bool IsValid => _isValid;
-
-        public IEndPoint? RemoteEndPoint => _remote;
-
-        public int MessageMaxByteSize => ((IRawTransport)_owner).MessageMaxByteSize;
+        public bool IsValid => IsValidInternal;
 
         public IRawUnreliableEndpointConformanceControl Conformance => _conformance;
 
-        internal IRawUnreliableHandler Handler => _handler;
+        internal IRawUnreliableHandler Handler => (IRawUnreliableHandler)RawHandler;
 
-        internal bool OnStartedCompleted => _onStartedCompleted;
+        internal override void HitEndpointStopStateTransitionGate()
+            => _conformance.BeforeEndpointStopStateTransitionGate.Hit();
 
-        internal bool TeardownDone => _teardownDone;
+        internal override void HitAfterReceivedGate()
+            => _conformance.AfterReceivedGate.Hit();
 
-        internal void MarkValid() => _isValid = true;
+        internal override void HitBeforeHandlerStoppedGate()
+            => _conformance.BeforeHandlerStoppedGate.Hit();
 
-        internal void MarkInvalid() => _isValid = false;
-
-        internal void MarkOnStartedCompleted() => _onStartedCompleted = true;
-
-        internal void MarkTeardownDone() => _teardownDone = true;
-
-        internal bool TryBeginStop() => Interlocked.CompareExchange(ref _stopInitiated, 1, 0) == 0;
+        internal override void HitBeforeHandlerDisconnectedGate()
+        {
+        }
 
         public SendResult UnreliableSend(UnionDataList message)
         {
-            if (!_isValid)
+            if (!IsValidInternal)
             {
                 message?.Release();
                 return SendResult.Error;
@@ -103,7 +91,7 @@ namespace Pontifex.Raw.Unreliable
             return stopDelegate(this, reason);
         }
 
-        public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        public override void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
         {
             if (predicate?.Invoke(_conformance) ?? true)
             {
@@ -111,6 +99,6 @@ namespace Pontifex.Raw.Unreliable
             }
         }
 
-        public override string ToString() => $"raw-unreliable-endpoint[{_remote}]";
+        public override string ToString() => $"raw-unreliable-endpoint[{RemoteEndPoint}]";
     }
 }

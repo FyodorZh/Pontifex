@@ -27,7 +27,7 @@ namespace Pontifex.Raw.Unreliable
 
         protected override void OnStarted()
         {
-            var handler = ClientHandler;
+            var handler = (IRawUnreliableHandler?)ClientHandler;
             if (handler == null) return;
 
             var ep = CreateEndpoint(handler, ClientRemoteEndPoint);
@@ -36,8 +36,13 @@ namespace Pontifex.Raw.Unreliable
             var dispatcher = _dispatcher;
             if (dispatcher == null) return;
 
-            if (!dispatcher.Post(RawUnreliableWorkItem.StartClientEndpoint(ep)))
-                StartClientEndpoint(ep);
+            if (!dispatcher.Post(RawWorkItem.StartClient()))
+                StartClient();
+        }
+
+        protected override void StartClient()
+        {
+            StartClientEndpoint((RawUnreliableEndpoint)_clientEndpoint!);
         }
     }
 }

@@ -4,27 +4,28 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.Raw.Direct;
+using Pontifex.Raw.Reliable.Ack;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Raw.Unreliable.Direct
+namespace Pontifex.Raw.Reliable.Direct
 {
     /// <summary>
-    /// Base class for all RawUnreliable Direct server transports. Owns the
-    /// in-process channel registry and callback queue shared by the Ack and
-    /// NoAck contract variants. The generic parameter is the variant
-    /// handler-factory delegate type.
+    /// Base class for all RawReliable Direct server transports. Owns the
+    /// in-process channel registry and the outbound callback queue. The variant
+    /// ACK send hooks remain abstract; the Ack Direct concrete transport
+    /// supplies the handshake wire format.
     /// </summary>
-    public abstract class RawUnreliableDirectServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>
-        where TFactory : Delegate
+    public abstract class RawReliableDirectServerTransport : RawReliableAckServerTransport
     {
         private readonly IEndPoint _serverEp;
-        private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
-        private SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
+        protected readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
+        private SerializedCallbackQueue<(RawReliableEndpoint, UnionDataList)>? _callbackQueue;
 
         protected abstract int QueueCapacity { get; }
 
-        protected RawUnreliableDirectServerTransport(string typeName, string serverName, ILogger logger, IMemoryRental memoryRental)
+        protected RawReliableDirectServerTransport(string typeName, string serverName, ILogger logger, IMemoryRental memoryRental)
             : base(typeName, logger, memoryRental)
         {
             _serverEp = new StringEndPoint(serverName);
@@ -32,7 +33,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         protected override bool StartCarrier()
         {
-            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>(
+            _callbackQueue = new SerializedCallbackQueue<(RawReliableEndpoint, UnionDataList)>(
                 QueueCapacity,
                 $"srv-cb-{_serverEp}",
                 pair =>
@@ -72,7 +73,7 @@ namespace Pontifex.Raw.Unreliable.Direct
             _callbackQueue = null;
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
+        protected override SendResult SendToCarrier(RawReliableEndpoint endpoint, UnionDataList message)
         {
             if (!IsStarted)
             {
@@ -97,7 +98,22 @@ namespace Pontifex.Raw.Unreliable.Direct
         private void OnChannelCreated(Channel channel)
         {
             channel.ServerHandler = (clientEp, message) => OnCarrierInbound(clientEp, message);
+            channel.ServerClosed = () => OnChannelClosed(channel);
             _channels.TryAdd(channel.ClientEp, channel);
+        }
+
+        private void OnChannelClosed(Channel channel)
+        {
+            _channels.TryRemove(channel.ClientEp, out _);
+            DisconnectSessionEndpoint(channel.ClientEp, new GracefulRemoteIntention(_serverEp.ToString()));
+        }
+
+        protected override void OnServerSessionEnded(IEndPoint source)
+        {
+            if (_channels.TryRemove(source, out var channel))
+            {
+                channel.Dispose();
+            }
         }
 
         public override string ToString()
@@ -105,7 +121,5 @@ namespace Pontifex.Raw.Unreliable.Direct
             try { return $"direct-server[{_serverEp}]"; }
             catch (Exception) { return "direct-server[unknown]"; }
         }
-
-        protected override bool TryMakeReliableForDebug() => true;
     }
 }

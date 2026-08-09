@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 
-namespace Pontifex.Raw.Unreliable.Direct
+namespace Pontifex.Raw.Direct
 {
+    /// <summary>
+    /// In-process registry that links client transports to registered server
+    /// transports by server endpoint. Shared by the Raw Direct transports.
+    /// </summary>
     internal sealed class DirectTransportManager
     {
         public static readonly DirectTransportManager Instance = new DirectTransportManager();
