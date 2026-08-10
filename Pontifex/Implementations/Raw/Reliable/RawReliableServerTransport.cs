@@ -11,11 +11,15 @@ namespace Pontifex.Raw.Reliable
     /// is the variant session-admission mechanism: Ack servers supply an
     /// acknowledger, NoAck servers a source handler factory. A server route
     /// delivers to an existing session; a new source is admitted by the variant
-    /// <see cref="AdmitSession"/>.
+    /// <see cref="AdmitSession"/>. Carries the RawReliable shared machinery on
+    /// the server side: endpoint creation, delivery, inbound injection, session
+    /// teardown, and the session routing hooks.
     /// </summary>
-    public abstract class RawReliableServerTransport<TFactory> : RawReliableTransport
+    public abstract class RawReliableServerTransport<TFactory> : RawServerTransport
         where TFactory : class
     {
+        protected new RawReliableTransportConformanceControl Conformance => (RawReliableTransportConformanceControl)base.Conformance;
+
         private readonly object _sessionDriverLock = new();
         private ILogicDriver<INonPeriodicLogicDriverCtl>? _sessionDriver;
 
@@ -26,10 +30,169 @@ namespace Pontifex.Raw.Reliable
 
         protected bool TryInitializeServer(TFactory factory)
         {
-            return TryInitialize(null, factory);
+            return base.TryInitializeServer(factory);
         }
 
-        protected override IEndPoint? ClientRemoteEndPoint => null;
+        /// <summary>
+        /// A server transport has no configured remote destination.
+        /// </summary>
+        protected virtual IEndPoint? ClientRemoteEndPoint => null;
+
+        /// <summary>
+        /// Commits an accepted message to the carrier for the given endpoint.
+        /// Ownership of the message transfers to the carrier; it must release it
+        /// on any non-<see cref="SendResult.Ok"/> result.
+        /// </summary>
+        protected abstract SendResult SendToCarrier(RawReliableEndpoint endpoint, UnionDataList message);
+
+        /// <summary>
+        /// Creates the endpoint for a session and wires its send, disconnect,
+        /// and inbound-injection operations. Carriers may override to return a
+        /// <see cref="RawReliableEndpoint"/> subclass that exposes
+        /// transport-specific controls.
+        /// </summary>
+        protected virtual RawReliableEndpoint CreateEndpoint(IRawReliableHandler handler, IEndPoint? remote)
+        {
+            var ep = new RawReliableEndpoint(this, handler, remote)
+            {
+                SendDelegate = SendToCarrier,
+                DisconnectDelegate = StopEndpoint
+            };
+            ep.WireInjector(msg => InjectInboundToEndpoint(ep, msg));
+            return ep;
+        }
+
+        protected override void DeliverToEndpoint(RawEndpoint endpoint, UnionDataList message)
+        {
+            var ep = (RawReliableEndpoint)endpoint;
+            if (!ep.IsValidInternal)
+            {
+                message.Release();
+                return;
+            }
+
+            ep.HitAfterReceivedGate();
+
+            if (_stopping || !IsStarted || !ep.IsValidInternal)
+            {
+                message.Release();
+                return;
+            }
+
+            try
+            {
+                lock (ep.CallbackLock)
+                {
+                    if (!ep.IsValidInternal)
+                    {
+                        message.Release();
+                        return;
+                    }
+
+                    ep.RawHandler.OnReceived(message);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.wtf(e);
+                StopEndpoint(ep, new StopReasons.ExceptionFail(Name, e, "handler.OnReceived threw"));
+            }
+        }
+
+        /// <summary>
+        /// Injects an inbound message into a specific endpoint's receive path as
+        /// if it had arrived from the carrier. Used by the endpoint conformance
+        /// control's <c>InjectInboundData</c>. Malformed or oversized data is
+        /// discarded and the session is disconnected without stopping the
+        /// transport.
+        /// </summary>
+        internal void InjectInboundToEndpoint(RawReliableEndpoint ep, UnionDataList data)
+        {
+            if (data == null!)
+            {
+                Log.e("RawReliable server transport: injected inbound data is null");
+                StopEndpoint(ep, new StopReasons.TextFail(Name, "Injected inbound data is null"));
+                return;
+            }
+
+            if (data.GetDataSize() > MessageMaxByteSize)
+            {
+                data.Release();
+                Log.e("RawReliable server transport: injected oversized inbound data");
+                StopEndpoint(ep, new StopReasons.TextFail(Name, "Injected inbound data exceeds MessageMaxByteSize"));
+                return;
+            }
+
+            if (ep.RemoteEndPoint == null)
+            {
+                data.Release();
+                Log.e("RawReliable server transport: injected inbound data has no source route");
+                StopEndpoint(ep, new StopReasons.TextFail(Name, "Injected inbound data has no source route"));
+                return;
+            }
+
+            OnCarrierInbound(ep.RemoteEndPoint, data);
+        }
+
+        /// <summary>
+        /// Runs one server session's teardown: the handler's OnDisconnected
+        /// fires when the session connected, the route is removed, and the
+        /// session-end hook releases the peer connection.
+        /// </summary>
+        protected override void TeardownEndpoint(RawEndpoint endpoint, StopReason reason)
+        {
+            var ep = (RawReliableEndpoint)endpoint;
+            if (ep.TeardownDone) return;
+            ep.MarkTeardownDone();
+
+            if (ep.OnStartedCompleted)
+            {
+                ep.HitBeforeHandlerDisconnectedGate();
+                ep.MarkDisconnected();
+                lock (ep.CallbackLock)
+                {
+                    try { ep.Handler.OnDisconnected(reason); }
+                    catch (Exception e) { Log.wtf(e); }
+                }
+            }
+
+            if (ep.RemoteEndPoint != null &&
+                _routes.TryGetValue(ep.RemoteEndPoint, out var current) &&
+                ReferenceEquals(current, ep))
+            {
+                _routes.TryRemove(ep.RemoteEndPoint, out _);
+            }
+
+            if (ep.RemoteEndPoint != null)
+            {
+                OnServerSessionEnded(ep.RemoteEndPoint);
+            }
+        }
+
+        /// <summary>
+        /// Disconnects the server session for a source route, typically when the
+        /// peer connection closes. The disconnect is scheduled on the dispatcher
+        /// so session callbacks stay serialized. No-op while the server is
+        /// stopping (its own teardown already covers active sessions).
+        /// </summary>
+        protected void DisconnectSessionEndpoint(IEndPoint source, StopReason reason)
+        {
+            if (_stopping || !IsStarted) return;
+
+            if (_routes.TryGetValue(source, out var ep))
+            {
+                StopEndpoint(ep, reason);
+            }
+        }
+
+        /// <summary>
+        /// Invoked after a server session endpoint is torn down, with the
+        /// session's source route. Carriers use this to release the peer
+        /// connection so the client observes the disconnect.
+        /// </summary>
+        protected virtual void OnServerSessionEnded(IEndPoint source)
+        {
+        }
 
         protected override void ProcessServerInbound(IEndPoint source, UnionDataList message)
         {

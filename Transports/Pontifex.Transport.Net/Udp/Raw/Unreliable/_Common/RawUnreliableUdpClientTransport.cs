@@ -157,7 +157,7 @@ namespace Pontifex.Raw.Unreliable.Udp
                 return;
             }
 
-            OnCarrierInbound(null, message);
+            OnCarrierInbound(message);
         }
 
         protected override bool TryMakeReliableForDebug()

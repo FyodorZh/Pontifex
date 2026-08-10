@@ -24,7 +24,7 @@ namespace Pontifex.Raw.Reliable.Ack
         {
             if (handler == null!)
                 throw new ArgumentNullException(nameof(handler));
-            return TryInitialize(handler, null);
+            return TryInitialize(handler);
         }
 
         protected override void BeginHandshake()

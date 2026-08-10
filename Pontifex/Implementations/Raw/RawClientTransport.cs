@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
@@ -8,18 +6,19 @@ using Scriba;
 namespace Pontifex.Raw
 {
     /// <summary>
-    /// Base class for all Raw transports. Owns initialization storage, the
-    /// serialized work dispatcher, endpoint routing, carrier lifecycle hooks,
-    /// and teardown scaffolding shared by the RawReliable and RawUnreliable
-    /// families. Concrete transports implement the carrier hooks
+    /// Base class for all Raw client transports. Owns initialization storage,
+    /// the serialized work dispatcher, the client endpoint and handler, the
+    /// client-side lifecycle hooks, and the carrier lifecycle and teardown
+    /// scaffolding shared by the RawReliable and RawUnreliable client families.
+    /// Concrete transports implement the carrier hooks
     /// (<see cref="StartCarrier"/>, <see cref="StopCarrier"/>) and the
     /// family-specific dispatch operations.
     /// </summary>
-    public abstract class RawTransport : AnyTransport
+    public abstract class RawClientTransport : AnyTransport, IRawTransport
     {
         protected new IRawConformanceControl Conformance => (IRawConformanceControl)base.Conformance;
-        
-        protected RawTransport(string typeName, ILogger logger, IMemoryRental memory, RawConformanceControl conformanceControl) 
+
+        protected RawClientTransport(string typeName, ILogger logger, IMemoryRental memory, RawConformanceControl conformanceControl)
             : base(typeName, logger, memory, conformanceControl)
         {
         }
@@ -46,9 +45,8 @@ namespace Pontifex.Raw
         private bool _initAttempted;
         private bool _initSucceeded;
         private IRawHandler? _clientHandler;
-        private object? _handlerFactory;
 
-        protected bool TryInitialize(IRawHandler? handler, object? factory)
+        protected bool TryInitialize(IRawHandler? handler)
         {
             lock (_initLock)
             {
@@ -56,27 +54,19 @@ namespace Pontifex.Raw
                     return false;
                 _initAttempted = true;
                 _clientHandler = handler;
-                _handlerFactory = factory;
                 _initSucceeded = true;
                 return true;
             }
         }
 
         /// <summary>
-        /// The family-specific server handler factory stored by
-        /// <see cref="TryInitialize"/>, or null for a client transport.
-        /// </summary>
-        protected object? HandlerFactory => _handlerFactory;
-
-        /// <summary>
-        /// The client handler bound by <see cref="TryInitialize"/>. Null for a server.
+        /// The client handler bound by <see cref="TryInitialize"/>.
         /// </summary>
         protected IRawHandler? ClientHandler => _clientHandler;
 
         // ── Dispatcher ────────────────────────────────────────────────────
 
         internal SerializedCallbackQueue<RawWorkItem>? _dispatcher;
-        internal readonly ConcurrentDictionary<IEndPoint, RawEndpoint> _routes = new();
         internal RawEndpoint? _clientEndpoint;
         internal volatile bool _stopping;
 
@@ -92,9 +82,6 @@ namespace Pontifex.Raw
                     case RawWorkKind.DeliverClient:
                         DeliverClientInbound(item.Message!);
                         break;
-                    case RawWorkKind.ProcessServer:
-                        ProcessServerInbound(item.Source!, item.Message!);
-                        break;
                     case RawWorkKind.TeardownEndpoint:
                         TeardownEndpoint(item.Endpoint!, item.Reason!);
                         break;
@@ -109,7 +96,7 @@ namespace Pontifex.Raw
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                if (item.Kind is RawWorkKind.DeliverClient or RawWorkKind.ProcessServer)
+                if (item.Kind is RawWorkKind.DeliverClient)
                     item.Message!.Release();
             }
         }
@@ -135,12 +122,6 @@ namespace Pontifex.Raw
             }
             DeliverToEndpoint(ep, message);
         }
-
-        /// <summary>
-        /// Family hook invoked on the dispatcher thread for a server inbound
-        /// message addressed by its source route.
-        /// </summary>
-        protected abstract void ProcessServerInbound(IEndPoint source, UnionDataList message);
 
         /// <summary>
         /// Family-specific teardown of one endpoint. Runs on the dispatcher
@@ -176,9 +157,7 @@ namespace Pontifex.Raw
         // ── Lifecycle ─────────────────────────────────────────────────────
 
         /// <summary>
-        /// Capacity of the serialized work dispatcher queue. Concrete transports
-        /// serving many concurrent connections may raise this to avoid dropping
-        /// inbound work under load.
+        /// Capacity of the serialized work dispatcher queue.
         /// </summary>
         protected virtual int DispatcherCapacity => 1000;
 
@@ -199,8 +178,8 @@ namespace Pontifex.Raw
         }
 
         /// <summary>
-        /// Default is the server behavior. Client base classes override this to
-        /// start their client lifecycle.
+        /// Client family base classes override this to start their client
+        /// lifecycle once the carrier has started.
         /// </summary>
         protected override void OnStarted()
         {
@@ -227,19 +206,15 @@ namespace Pontifex.Raw
 
         private void TeardownAllEndpoints(StopReason reason)
         {
-            var endpoints = new List<RawEndpoint>();
-            if (_clientEndpoint != null) endpoints.Add(_clientEndpoint);
-            endpoints.AddRange(_routes.Values);
+            var ep = _clientEndpoint;
+            if (ep == null) return;
 
-            foreach (var ep in endpoints)
+            if (ep.TryBeginStop())
             {
-                if (ep.TryBeginStop())
-                {
-                    ep.HitEndpointStopStateTransitionGate();
-                    ep.MarkInvalid();
-                }
-                TeardownEndpoint(ep, reason);
+                ep.HitEndpointStopStateTransitionGate();
+                ep.MarkInvalid();
             }
+            TeardownEndpoint(ep, reason);
         }
 
         /// <summary>
@@ -269,9 +244,9 @@ namespace Pontifex.Raw
 
         /// <summary>
         /// Shared endpoint stop/disconnect driver. Returns true for the one call
-        /// that begins stopping a valid endpoint. Posts the endpoint teardown and,
-        /// for the client endpoint, the owning transport stop. Carriers with
-        /// per-connection serialization may invoke this from their own context.
+        /// that begins stopping a valid endpoint. Posts the endpoint teardown and
+        /// the owning transport stop when the client endpoint stops. Carriers
+        /// with per-connection serialization may invoke this from their own context.
         /// </summary>
         protected internal bool StopEndpoint(RawEndpoint ep, StopReason? reason)
         {
@@ -294,10 +269,9 @@ namespace Pontifex.Raw
         }
 
         /// <summary>
-        /// Inbound entry point for concrete carriers. Pass null as the source for
-        /// a client transport; pass the source route for a server transport.
+        /// Inbound entry point for concrete client carriers.
         /// </summary>
-        protected void OnCarrierInbound(IEndPoint? source, UnionDataList message)
+        protected void OnCarrierInbound(UnionDataList message)
         {
             var dispatcher = _dispatcher;
             if (dispatcher == null)
@@ -306,19 +280,9 @@ namespace Pontifex.Raw
                 return;
             }
 
-            if (source == null)
+            if (!dispatcher.Post(RawWorkItem.DeliverClient(message)))
             {
-                if (!dispatcher.Post(RawWorkItem.DeliverClient(message)))
-                {
-                    message.Release();
-                }
-            }
-            else
-            {
-                if (!dispatcher.Post(RawWorkItem.ProcessServer(source, message)))
-                {
-                    message.Release();
-                }
+                message.Release();
             }
         }
     }

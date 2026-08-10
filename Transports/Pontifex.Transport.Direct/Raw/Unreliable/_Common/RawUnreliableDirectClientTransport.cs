@@ -121,7 +121,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         private void OnChannelConnected(Channel channel)
         {
-            channel.ClientHandler = message => OnCarrierInbound(null, message);
+            channel.ClientHandler = message => OnCarrierInbound(message);
 
             if (_askedForReliableDelivery)
             {

@@ -13,7 +13,7 @@ namespace Pontifex.Raw
     /// </summary>
     public abstract class RawEndpoint
     {
-        private readonly RawTransport _owner;
+        private readonly IRawTransport _owner;
         private readonly IEndPoint? _remote;
         private volatile bool _isValid;
         private bool _onStartedCompleted;
@@ -26,18 +26,18 @@ namespace Pontifex.Raw
         /// </summary>
         internal IRawHandler RawHandler { get; }
 
-        protected RawEndpoint(RawTransport owner, IRawHandler handler, IEndPoint? remote)
+        protected RawEndpoint(IRawTransport owner, IRawHandler handler, IEndPoint? remote)
         {
             _owner = owner;
             RawHandler = handler;
             _remote = remote;
         }
 
-        internal RawTransport OwnerTransport => _owner;
+        internal IRawTransport OwnerTransport => _owner;
 
         public IEndPoint? RemoteEndPoint => _remote;
 
-        public int MessageMaxByteSize => ((IRawTransport)_owner).MessageMaxByteSize;
+        public int MessageMaxByteSize => _owner.MessageMaxByteSize;
 
         /// <summary>
         /// Internal usability flag driven by the owning transport. Not exposed

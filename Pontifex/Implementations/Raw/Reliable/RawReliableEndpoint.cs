@@ -37,11 +37,17 @@ namespace Pontifex.Raw.Reliable
         /// </summary>
         internal Func<RawReliableEndpoint, StopReason, bool>? DisconnectDelegate;
 
-        protected internal RawReliableEndpoint(RawReliableTransport owner, IRawReliableHandler handler, IEndPoint? remote)
+        protected internal RawReliableEndpoint(IRawTransport owner, IRawReliableHandler handler, IEndPoint? remote)
             : base(owner, handler, remote)
         {
-            _conformance.SetInjector(data => owner.InjectInboundToEndpoint(this, data));
         }
+
+        /// <summary>
+        /// Wires the endpoint conformance control's inbound-injection callback
+        /// to the owning transport. Set by the transport right after the
+        /// endpoint is created.
+        /// </summary>
+        internal void WireInjector(Action<UnionDataList> injector) => _conformance.SetInjector(injector);
 
         public bool IsConnected => _isConnected;
 

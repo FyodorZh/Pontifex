@@ -27,7 +27,7 @@ namespace Pontifex.Raw.Unreliable
         /// </summary>
         internal Func<RawUnreliableEndpoint, StopReason?, bool>? StopDelegate;
 
-        internal RawUnreliableEndpoint(RawUnreliableTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
+        internal RawUnreliableEndpoint(IRawTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
             : base(owner, handler, remote)
         {
         }

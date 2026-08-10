@@ -18,6 +18,6 @@ namespace Pontifex.Raw.Unreliable
 
         public ICheckPointCtl BeforeHandlerStartedGate => _beforeHandlerStartedGate;
 
-        public bool TryMakeReliable() => ((RawUnreliableTransport)_owner).TryMakeReliableForDebug();
+        public bool TryMakeReliable() => ((IRawUnreliableTransportDebug)_owner).TryMakeReliableForDebug();
     }
 }

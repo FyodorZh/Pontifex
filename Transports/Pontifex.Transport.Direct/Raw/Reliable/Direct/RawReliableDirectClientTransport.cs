@@ -70,7 +70,7 @@ namespace Pontifex.Raw.Reliable.Direct
                 return false;
             }
 
-            channel.ClientHandler = message => OnCarrierInbound(null, message);
+            channel.ClientHandler = message => OnCarrierInbound(message);
             _channel = channel;
             _peerDisconnectTimer = new Timer(_ => CheckPeerDisconnected(), null, PeerDisconnectPollPeriod, PeerDisconnectPollPeriod);
             return true;
