@@ -14,7 +14,7 @@ namespace Pontifex.Raw.Reliable.NoAck
     /// </summary>
     public abstract class RawReliableNoAckServerTransport : RawReliableServerTransport<Func<IEndPoint, IRawReliableHandler?>>
     {
-        protected RawReliableNoAckServerTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl? conformanceControl = null)
+        protected RawReliableNoAckServerTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl conformanceControl)
             : base(typeName, logger, memory, conformanceControl)
         {
         }

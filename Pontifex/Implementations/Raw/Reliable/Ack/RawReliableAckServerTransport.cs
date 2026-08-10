@@ -15,8 +15,8 @@ namespace Pontifex.Raw.Reliable.Ack
     /// </summary>
     public abstract class RawReliableAckServerTransport : RawReliableServerTransport<IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>>, IRawReliableAckServer
     {
-        protected RawReliableAckServerTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl? conformanceControl = null)
-            : base(typeName, logger, memory, conformanceControl)
+        protected RawReliableAckServerTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableAckTransportConformanceControl? conformanceControl = null)
+            : base(typeName, logger, memory, conformanceControl ?? new RawReliableAckTransportConformanceControl())
         {
         }
 

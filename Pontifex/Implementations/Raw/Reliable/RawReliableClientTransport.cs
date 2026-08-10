@@ -17,7 +17,7 @@ namespace Pontifex.Raw.Reliable
         private volatile bool _connected;
         private volatile bool _handshakeFailed;
 
-        protected RawReliableClientTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl? conformanceControl = null)
+        protected RawReliableClientTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl conformanceControl)
             : base(typeName, logger, memory, conformanceControl)
         {
         }

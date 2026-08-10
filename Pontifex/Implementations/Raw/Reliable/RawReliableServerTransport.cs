@@ -19,7 +19,7 @@ namespace Pontifex.Raw.Reliable
         private readonly object _sessionDriverLock = new();
         private ILogicDriver<INonPeriodicLogicDriverCtl>? _sessionDriver;
 
-        protected RawReliableServerTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl? conformanceControl = null)
+        protected RawReliableServerTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl conformanceControl)
             : base(typeName, logger, memory, conformanceControl)
         {
         }

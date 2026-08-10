@@ -19,12 +19,8 @@ namespace Pontifex.Raw
     {
         protected new IRawConformanceControl Conformance => (IRawConformanceControl)base.Conformance;
         
-        protected RawTransport(string typeName, ILogger logger, IMemoryRental memory, RawConformanceControl? conformanceControl = null) 
-            : base(typeName, logger, memory, conformanceControl ?? new RawConformanceControl())
-        {
-        }
-
-        protected class RawConformanceControl : ConformanceControl, IRawConformanceControl
+        protected RawTransport(string typeName, ILogger logger, IMemoryRental memory, RawConformanceControl conformanceControl) 
+            : base(typeName, logger, memory, conformanceControl)
         {
         }
 

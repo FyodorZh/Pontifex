@@ -1,8 +1,6 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
-using Pontifex.Utils.CheckPointGate;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable
@@ -17,26 +15,9 @@ namespace Pontifex.Raw.Reliable
     {
         protected new RawReliableTransportConformanceControl Conformance => (RawReliableTransportConformanceControl)base.Conformance;
 
-        protected RawReliableTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl? conformanceControl = null)
-            : base(typeName, logger, memory, conformanceControl ?? new RawReliableTransportConformanceControl())
+        protected RawReliableTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableTransportConformanceControl conformanceControl)
+            : base(typeName, logger, memory, conformanceControl)
         {
-        }
-
-        /// <summary>
-        /// Test-only conformance control for a RawReliable transport. All
-        /// checkpoint gates are inactive until armed by a conformance adapter.
-        /// </summary>
-        protected class RawReliableTransportConformanceControl : RawConformanceControl, IRawReliableAckTransportConformanceControl
-        {
-            private readonly CheckPoint _beforeAcknowledgerGate = new();
-            private readonly CheckPoint _beforeAckResponseCommitGate = new();
-            private readonly CheckPoint _beforeHandlerConnectedGate = new();
-
-            public ICheckPointCtl BeforeAcknowledgerGate => _beforeAcknowledgerGate;
-
-            public ICheckPointCtl BeforeAckResponseCommitGate => _beforeAckResponseCommitGate;
-
-            public ICheckPointCtl BeforeHandlerConnectedGate => _beforeHandlerConnectedGate;
         }
 
         /// <summary>
