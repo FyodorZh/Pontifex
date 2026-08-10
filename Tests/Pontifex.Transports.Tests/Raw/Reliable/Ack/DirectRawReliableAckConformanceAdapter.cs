@@ -38,6 +38,8 @@ public sealed class DirectRawReliableAckConformanceAdapter : IRawReliableAckConf
             _serverName = serverName;
         }
 
+        public override bool PeerStopSynchronouslyAffectsClientSend => true;
+
         protected override IRawReliableAckClient CreateClientCore()
             => new RawReliableAckDirectClient(_serverName, Logger, Memory);
     }

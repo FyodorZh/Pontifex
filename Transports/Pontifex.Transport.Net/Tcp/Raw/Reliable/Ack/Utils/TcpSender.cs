@@ -4,6 +4,7 @@ using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
 using Operarius;
+using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
 using Scriba;
 
@@ -20,6 +21,13 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
         private readonly InverseDelegateProducer<IMultiRefByteArray> _bufferProducer;
         private readonly LowLevelTcpSender _lowLevelTcpSender;
+
+        /// <summary>
+        /// Optional endpoint conformance control whose send-commit gates are
+        /// fired once per accepted send around its outbound IO commit (on the
+        /// sender's drain thread). Null in ordinary production use.
+        /// </summary>
+        public IRawReliableAckEndpointConformanceControl? CommitControl { get; set; }
         
         private readonly IMemoryRental _memoryRental;
         
@@ -61,6 +69,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                     _driver?.Stop();
                 }
             };
+            _lowLevelTcpSender.NeedMoreWork += () => _driver?.RequestInvocation();
             _lowLevelTcpSender.ErrorOccured += Fail;
         }
         
@@ -114,11 +123,16 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             if (_packetsToSend.TryPop(out var packet))
             {
                 using var dispose = packet.AsDisposable();
-                    
+
+                var commitControl = CommitControl;
+                commitControl?.BeforeSendCommitGate.Hit();
+
                 if (!UnionDataListCompositor.Encode(packet, _memoryRental.ByteArraysPool, _messagePartMaxSize, dst))
                 {
                     Fail(new Exception("Failed to encode packet"));
                 }
+
+                commitControl?.AfterSendCommitGate.Hit();
             }
         }
         

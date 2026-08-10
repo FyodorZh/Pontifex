@@ -76,6 +76,8 @@ namespace Pontifex.Raw.Reliable.Ack
             ep.MarkValid();
             ep.MarkConnected();
 
+            OnSessionAdmitted(ep);
+
             Conformance.BeforeAckResponseCommitGate.Hit();
             SendAckResponseToClient(source, ackResponse);
 
@@ -91,6 +93,8 @@ namespace Pontifex.Raw.Reliable.Ack
                 Log.wtf(e);
                 StopEndpoint(ep, new ExceptionFail(Name, e, "server handler.OnConnected threw"));
             }
+
+            OnSessionDeliveryReady(ep);
         }
 
         /// <summary>

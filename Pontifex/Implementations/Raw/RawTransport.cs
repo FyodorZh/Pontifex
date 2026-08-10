@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
@@ -80,7 +80,7 @@ namespace Pontifex.Raw
         // ── Dispatcher ────────────────────────────────────────────────────
 
         internal SerializedCallbackQueue<RawWorkItem>? _dispatcher;
-        internal readonly Dictionary<IEndPoint, RawEndpoint> _routes = new();
+        internal readonly ConcurrentDictionary<IEndPoint, RawEndpoint> _routes = new();
         internal RawEndpoint? _clientEndpoint;
         internal volatile bool _stopping;
 
@@ -247,6 +247,20 @@ namespace Pontifex.Raw
         }
 
         /// <summary>
+        /// Runs one endpoint's teardown. The default schedules it on the
+        /// transport's serialized dispatcher so session callbacks stay
+        /// serialized. Carriers with per-connection serialization (for example
+        /// a TCP connection driven by a single receive loop) may override this
+        /// to execute teardown in the connection's own serialized context,
+        /// ensuring <c>OnDisconnected</c> cannot race <c>OnReceived</c>.
+        /// </summary>
+        protected virtual void ExecuteEndpointTeardown(RawEndpoint ep, StopReason reason)
+        {
+            if (_dispatcher == null || !_dispatcher.Post(RawWorkItem.TeardownEndpoint(ep, reason)))
+                TeardownEndpoint(ep, reason);
+        }
+
+        /// <summary>
         /// Stops the owning transport on the dispatcher thread, or synchronously
         /// when no dispatcher is available. Used by carriers to react to a peer
         /// disconnect from a non-dispatcher context.
@@ -260,20 +274,19 @@ namespace Pontifex.Raw
         /// <summary>
         /// Shared endpoint stop/disconnect driver. Returns true for the one call
         /// that begins stopping a valid endpoint. Posts the endpoint teardown and,
-        /// for the client endpoint, the owning transport stop.
+        /// for the client endpoint, the owning transport stop. Carriers with
+        /// per-connection serialization may invoke this from their own context.
         /// </summary>
-        internal bool StopEndpoint(RawEndpoint ep, StopReason? reason)
+        protected internal bool StopEndpoint(RawEndpoint ep, StopReason? reason)
         {
             if (!ep.TryBeginStop())
                 return false;
-
             ep.HitEndpointStopStateTransitionGate();
             ep.MarkInvalid();
 
             var resolvedReason = reason ?? new StopReasons.Unknown(Name);
 
-            if (_dispatcher == null || !_dispatcher.Post(RawWorkItem.TeardownEndpoint(ep, resolvedReason)))
-                TeardownEndpoint(ep, resolvedReason);
+            ExecuteEndpointTeardown(ep, resolvedReason);
 
             if (ReferenceEquals(ep, _clientEndpoint))
             {

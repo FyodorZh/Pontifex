@@ -52,7 +52,13 @@ namespace Pontifex.Raw.Reliable
         /// </summary>
         protected abstract IEndPoint? ClientRemoteEndPoint { get; }
 
-        protected RawReliableEndpoint CreateEndpoint(IRawReliableHandler handler, IEndPoint? remote)
+        /// <summary>
+        /// Creates the endpoint for a logical connection and wires its send and
+        /// disconnect operations. Carriers may override to return a
+        /// <see cref="RawReliableEndpoint"/> subclass that exposes
+        /// transport-specific controls.
+        /// </summary>
+        protected virtual RawReliableEndpoint CreateEndpoint(IRawReliableHandler handler, IEndPoint? remote)
         {
             var ep = new RawReliableEndpoint(this, handler, remote)
             {
@@ -81,7 +87,16 @@ namespace Pontifex.Raw.Reliable
 
             try
             {
-                ep.RawHandler.OnReceived(message);
+                lock (ep.CallbackLock)
+                {
+                    if (!ep.IsValidInternal)
+                    {
+                        message.Release();
+                        return;
+                    }
+
+                    ep.RawHandler.OnReceived(message);
+                }
             }
             catch (Exception e)
             {
@@ -143,27 +158,36 @@ namespace Pontifex.Raw.Reliable
             {
                 ep.HitBeforeHandlerDisconnectedGate();
                 ep.MarkDisconnected();
-                try { ep.Handler.OnDisconnected(reason); }
-                catch (Exception e) { Log.wtf(e); }
+                lock (ep.CallbackLock)
+                {
+                    try { ep.Handler.OnDisconnected(reason); }
+                    catch (Exception e) { Log.wtf(e); }
+                }
 
                 if (ReferenceEquals(ep, _clientEndpoint) && ep.Handler is IRawReliableClientHandler clientHandler)
                 {
                     ep.HitBeforeHandlerStoppedGate();
-                    try { clientHandler.OnStopped(reason); }
-                    catch (Exception e) { Log.wtf(e); }
+                    lock (ep.CallbackLock)
+                    {
+                        try { clientHandler.OnStopped(reason); }
+                        catch (Exception e) { Log.wtf(e); }
+                    }
                 }
             }
             else if (ReferenceEquals(ep, _clientEndpoint) && ep.Handler is IRawReliableClientHandler clientHandler)
             {
-                try { clientHandler.OnStopped(reason); }
-                catch (Exception e) { Log.wtf(e); }
+                lock (ep.CallbackLock)
+                {
+                    try { clientHandler.OnStopped(reason); }
+                    catch (Exception e) { Log.wtf(e); }
+                }
             }
 
             if (ep.RemoteEndPoint != null &&
                 _routes.TryGetValue(ep.RemoteEndPoint, out var current) &&
                 ReferenceEquals(current, ep))
             {
-                _routes.Remove(ep.RemoteEndPoint);
+                _routes.TryRemove(ep.RemoteEndPoint, out _);
             }
 
             if (!ReferenceEquals(ep, _clientEndpoint) && ep.RemoteEndPoint != null)

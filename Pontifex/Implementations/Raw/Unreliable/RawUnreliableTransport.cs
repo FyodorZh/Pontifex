@@ -141,7 +141,7 @@ namespace Pontifex.Raw.Unreliable
             catch (Exception e)
             {
                 Log.wtf(e);
-                _routes.Remove(source);
+                _routes.TryRemove(source, out _);
                 ep.MarkInvalid();
                 message.Release();
                 return;
@@ -168,7 +168,7 @@ namespace Pontifex.Raw.Unreliable
                 _routes.TryGetValue(ep.RemoteEndPoint, out var current) &&
                 ReferenceEquals(current, ep))
             {
-                _routes.Remove(ep.RemoteEndPoint);
+                _routes.TryRemove(ep.RemoteEndPoint, out _);
             }
         }
 

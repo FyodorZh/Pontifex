@@ -28,6 +28,12 @@ namespace Pontifex.Raw.Reliable
 
         protected void MarkHandshakeFailed() => _handshakeFailed = true;
 
+        /// <summary>
+        /// The client endpoint created on start, or null until the client
+        /// lifecycle has begun.
+        /// </summary>
+        protected RawReliableEndpoint? ClientEndpoint => (RawReliableEndpoint?)_clientEndpoint;
+
         protected override void OnStarted()
         {
             var dispatcher = _dispatcher;

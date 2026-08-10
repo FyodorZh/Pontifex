@@ -17,6 +17,14 @@ namespace Pontifex.Raw.Reliable
         private volatile bool _isConnected;
 
         /// <summary>
+        /// Serializes this endpoint's application callbacks (<c>OnReceived</c>,
+        /// <c>OnDisconnected</c>, client <c>OnStopped</c>) so they never overlap,
+        /// even when delivery runs on a carrier I/O thread and teardown runs on
+        /// another thread. Reentrant, so callbacks may safely trigger teardown.
+        /// </summary>
+        internal readonly object CallbackLock = new();
+
+        /// <summary>
         /// Set by the owning transport once the endpoint can commit sends to a
         /// carrier. Null until wired; a null delegate rejects with Error.
         /// </summary>
@@ -29,7 +37,7 @@ namespace Pontifex.Raw.Reliable
         /// </summary>
         internal Func<RawReliableEndpoint, StopReason, bool>? DisconnectDelegate;
 
-        internal RawReliableEndpoint(RawReliableTransport owner, IRawReliableHandler handler, IEndPoint? remote)
+        protected internal RawReliableEndpoint(RawReliableTransport owner, IRawReliableHandler handler, IEndPoint? remote)
             : base(owner, handler, remote)
         {
             _conformance.SetInjector(data => owner.InjectInboundToEndpoint(this, data));

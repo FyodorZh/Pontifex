@@ -51,6 +51,9 @@ namespace Pontifex.Raw.Reliable.NoAck
             ep.MarkValid();
             ep.MarkOnStartedCompleted();
 
+            OnSessionAdmitted(ep);
+            OnSessionDeliveryReady(ep);
+
             Conformance.BeforeHandlerConnectedGate.Hit();
 
             DeliverToEndpoint(ep, message);

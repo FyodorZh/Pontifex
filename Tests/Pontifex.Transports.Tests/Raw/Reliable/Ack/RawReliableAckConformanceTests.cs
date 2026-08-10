@@ -1579,6 +1579,11 @@ public abstract class RawReliableAckConformanceTests
     public void Send_Error_AfterTransportStop()
     {
         using var fixture = CreateAdapter().CreateFixture();
+        if (!fixture.PeerStopSynchronouslyAffectsClientSend)
+        {
+            Assert.Ignore("A network carrier cannot deterministically return Error from Send immediately after the peer transport stops.");
+        }
+
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();

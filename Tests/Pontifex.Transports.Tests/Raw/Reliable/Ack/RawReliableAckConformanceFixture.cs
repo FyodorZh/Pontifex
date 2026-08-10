@@ -31,6 +31,15 @@ public abstract class RawReliableAckConformanceFixture : IRawReliableAckConforma
 
     public IRawReliableAckServer Server { get; }
 
+    /// <summary>
+    /// True when stopping the peer server is synchronously observable to a
+    /// client endpoint's <c>Send</c> (a Send issued immediately after the peer
+    /// transport stops returns <see cref="SendResult.Error"/>). In-process
+    /// carriers (Direct) satisfy this; network carriers (TCP) observe the peer
+    /// stop asynchronously and cannot guarantee it.
+    /// </summary>
+    public virtual bool PeerStopSynchronouslyAffectsClientSend => false;
+
     protected ILogger Logger { get; }
 
     protected IMemoryRental Memory { get; }

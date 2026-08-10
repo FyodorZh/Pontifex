@@ -26,6 +26,13 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         public event Action? ChainStopped;
         public event Action<Exception>? ErrorOccured;
 
+        /// <summary>
+        /// Fired when a single invocation quantum is exhausted while more
+        /// buffered data remains to be sent. The owner should request another
+        /// invocation so the drain continues.
+        /// </summary>
+        public event Action? NeedMoreWork;
+
         public LowLevelTcpSender(Socket socket, IProducer<IMultiRefByteArray> dataToSendSource, ILogger logger)
         {
             _socket = socket;
@@ -103,6 +110,13 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 }
 
                 DoSend(buffer);
+            }
+            else if (Volatile.Read(ref _destroyed) == 0)
+            {
+                // Invocation quantum exhausted: yield and request a fresh one so
+                // a message spanning many blocks keeps draining.
+                Interlocked.Exchange(ref _countToRun, -1);
+                NeedMoreWork?.Invoke();
             }
         }
         
