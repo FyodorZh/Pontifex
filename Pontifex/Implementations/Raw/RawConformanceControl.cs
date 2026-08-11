@@ -1,6 +1,6 @@
 namespace Pontifex.Raw
 {
-    public class RawConformanceControl : ConformanceControl, IRawConformanceControl
+    public abstract class RawConformanceControl : ConformanceControl, IRawConformanceControl
     {
     }
 }
