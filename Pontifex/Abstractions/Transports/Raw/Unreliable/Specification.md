@@ -44,7 +44,6 @@ public interface IRawUnreliableClient : IRawUnreliableTransport
 public interface IRawUnreliableEndpoint : IRawEndpoint
 {
     bool IsValid { get; }
-    SendResult UnreliableSend(UnionDataList message);
     bool Stop(StopReason? reason = null);
 }
 
@@ -56,6 +55,15 @@ public interface IRawUnreliableHandler : IRawHandler
 ```
 
 `IRawHandler` supplies `OnReceived(UnionDataList receivedBuffer)`.
+
+`IRawEndpoint` supplies `RemoteEndPoint`, `MessageMaxByteSize`, and the merged
+`Send(UnionDataList bufferToSend)` method that is shared with
+`IRawReliableEndpoint`. The single `Send` method is defined once in
+`IRawEndpoint`; its XML documentation explicitly covers both the Reliable and
+the Unreliable behaviours. This variant relies on the Unreliable behaviour:
+`Ok` means local acceptance only, and RawUnreliable never returns
+`NotConnected`. See the RawReliableAck specification for the Reliable
+behaviour of the same method.
 
 The server contract is variant-defined. Both `IRawUnreliableNoAckServer` and
 `IRawUnreliableAckServer` extend `IRawUnreliableTransport` and each declares a
@@ -76,8 +84,8 @@ sending and endpoint-local stopping.
 | **transport** | One `IRawUnreliableClient` or one variant server (`IRawUnreliableNoAckServer` or `IRawUnreliableAckServer`) instance. |
 | **endpoint** | An `IRawUnreliableEndpoint` representing one route usable by application code for sending and receiving. It is not an `IEndPoint` routing value. |
 | **source route** | A server-side route identified by an `IEndPoint` supplied to the variant server handler factory from an inbound message source. |
-| **message** | One logical `UnionDataList` supplied to `UnreliableSend` or delivered to `OnReceived`. |
-| **accepted send** | An `UnreliableSend` call that returns `SendResult.Ok`. It has been accepted for local transport processing only. |
+| **message** | One logical `UnionDataList` supplied to `Send` or delivered to `OnReceived`. |
+| **accepted send** | A `Send` call that returns `SendResult.Ok`. It has been accepted for local transport processing only. |
 | **delivery** | One `OnReceived` invocation for a message. A delivered duplicate is a separate delivery. |
 | **running** | The period after a successful `Start` and before stopping begins. |
 | **valid endpoint** | An endpoint for which `IsValid` is true and which may accept sends. |
@@ -343,7 +351,7 @@ sequenceDiagram
     participant SE as Server endpoint
     participant S as Server handler
 
-    C->>CE: UnreliableSend(message)
+    C->>CE: Send(message)
     CE-->>C: Ok: local acceptance only
     Note over CE,ST: Message may be lost, duplicated, or reordered
     CE-->>ST: zero or more complete deliveries
@@ -351,7 +359,7 @@ sequenceDiagram
     SF-->>ST: handler or null
     ST->>S: OnStarted(server endpoint), if handler returned
     ST->>S: OnReceived(owned message)
-    S->>SE: UnreliableSend(reply)
+    S->>SE: Send(reply)
     SE-->>S: SendResult
     Note over SE,CE: A reply has the same unreliable semantics
 ```
@@ -361,8 +369,8 @@ The bracketed factory form denotes the variant: RawUnreliableNoAck invokes
 `handlerFactory(source, message)`. The variant specifications define the exact
 invocation.
 
-The callback for a message accepted by `UnreliableSend` **MUST NOT** begin
-before that `UnreliableSend` call returns. Delivery may otherwise occur on any
+The callback for a message accepted by `Send` **MUST NOT** begin
+before that `Send` call returns. Delivery may otherwise occur on any
 implementation-selected scheduler after local acceptance.
 
 For each accepted send, in either direction, all of the following outcomes are
@@ -407,15 +415,18 @@ peer. A running server **MUST** treat each valid bounded message addressed to
 its listen address as eligible for route selection, without requiring a prior
 registration, connection, or admission exchange from its source.
 
-## 10. `UnreliableSend` and `SendResult`
+## 10. `Send` and `SendResult`
 
-`UnreliableSend` is thread-safe. It may run concurrently with `Stop` and with
+`Send` is the single method defined on `IRawEndpoint` and shared with
+`IRawReliableEndpoint`. This section defines its **Unreliable behaviour**; the
+RawReliableAck specification defines the **Reliable behaviour** of the same
+method. `Send` is thread-safe. It may run concurrently with `Stop` and with
 other sends; the outcome is determined by operation ordering. A call made
 before its endpoint starts, while its endpoint is stopping, after endpoint
 stopping, or while the owning transport is not running **MUST** return `Error`.
 RawUnreliable **MUST NOT** return `NotConnected`.
 
-Every `UnreliableSend` invocation transfers ownership of its non-null message
+Every `Send` invocation transfers ownership of its non-null message
 argument to the endpoint's transport regardless of its result. After the call,
 the caller **MUST NOT** read, mutate, retain, release, or retry with that
 `UnionDataList`. The transport **MUST** eventually release the transferred
@@ -423,7 +434,7 @@ reference, including when it rejects the message synchronously. A retry
 requires a new buffer containing the same logical message.
 
 ```csharp
-SendResult result = endpoint.UnreliableSend(message); // Ownership always transfers.
+SendResult result = endpoint.Send(message); // Ownership always transfers.
 
 if (result == SendResult.BufferOverflow)
 {
@@ -474,7 +485,7 @@ to be serialized. The permission for different endpoint callbacks to overlap
 does not impose a concurrency or forward-progress requirement; an
 implementation that globally serializes endpoint callbacks remains conformant.
 
-Callbacks are non-reentrant for one endpoint: an `UnreliableSend` or `Stop`
+Callbacks are non-reentrant for one endpoint: a `Send` or `Stop`
 from a handler **MUST NOT** cause a nested callback invocation on that same
 endpoint. The contract does not give the application thread affinity;
 implementations may use any scheduler.
@@ -635,7 +646,7 @@ not weaken the requirements in this specification:
 - `onStopped` dispatch scheduler and timing after the terminal state
   transition;
 - outbound queue capacity, scheduling, and drain rate;
-- carrier submission timing after `UnreliableSend` returns `Ok`;
+- carrier submission timing after `Send` returns `Ok`;
 - endpoint-local internal failure mechanisms and timing;
 - internal logging format and sink;
 - mechanisms and timing for unrecoverable transport failure detection; and
@@ -660,7 +671,7 @@ a protected transport stack.
 - [ ] Implement idempotency, sequence handling, acknowledgements, retries, and
       receipts when the application needs them.
 - [ ] Treat `SendResult.Ok` only as local acceptance.
-- [ ] Never access or release a message after passing it to `UnreliableSend`.
+- [ ] Never access or release a message after passing it to `Send`.
 - [ ] Release each received message exactly once, even if processing fails.
 - [ ] Keep handlers and server factories prompt, non-blocking, and
       exception-safe.
@@ -687,7 +698,7 @@ a protected transport stack.
       delivery.
 - [ ] Permit loss, duplication, and reordering without claiming a stronger
       delivery property.
-- [ ] Defer peer callback invocation until after the sending `UnreliableSend`
+- [ ] Defer peer callback invocation until after the sending `Send`
       returns.
 - [ ] Serialize callbacks per endpoint, prevent endpoint callback reentrancy,
       and allow server endpoints to proceed independently.

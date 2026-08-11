@@ -63,7 +63,7 @@ namespace Pontifex.Raw.Unreliable
 
         internal bool TryBeginStop() => Interlocked.CompareExchange(ref _stopInitiated, 1, 0) == 0;
 
-        public SendResult UnreliableSend(UnionDataList message)
+        public SendResult Send(UnionDataList message)
         {
             if (!_isValid)
             {

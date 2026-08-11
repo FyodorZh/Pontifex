@@ -153,7 +153,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Assert.That(client.Stop(), Is.True);
         Assert.That(fixture.Server.Stop(), Is.True);
 
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
     }
 
     [Test]
@@ -170,7 +170,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var endpoint = WaitForEndpoint(clientHandler);
         Assert.Multiple(() =>
         {
-            Assert.That(endpoint.UnreliableSend(null!), Is.EqualTo(SendResult.InvalidMessage));
+            Assert.That(endpoint.Send(null!), Is.EqualTo(SendResult.InvalidMessage));
             Assert.That(client.IsValid, Is.True);
         });
     }
@@ -189,7 +189,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var endpoint = WaitForEndpoint(clientHandler);
         Assert.Multiple(() =>
         {
-            Assert.That(endpoint.UnreliableSend(CreateOversizedMessage(client)), Is.EqualTo(SendResult.MessageTooBig));
+            Assert.That(endpoint.Send(CreateOversizedMessage(client)), Is.EqualTo(SendResult.MessageTooBig));
             Assert.That(client.IsValid, Is.True);
         });
     }
@@ -211,7 +211,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Assert.That(message.GetDataSize(), Is.EqualTo(client.MessageMaxByteSize));
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(message), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(message), Is.EqualTo(SendResult.Ok));
 
         await serverHandler.Received.Task.WaitAsync(DeliveryTimeout);
         Assert.That(serverHandler.LastSize, Is.EqualTo(client.MessageMaxByteSize));
@@ -240,8 +240,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateEmptyMessage(client)), Is.EqualTo(SendResult.Ok));
-        Assert.That(endpoint.UnreliableSend(expected.Clone(client.Memory.CollectablePool)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateEmptyMessage(client)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(expected.Clone(client.Memory.CollectablePool)), Is.EqualTo(SendResult.Ok));
 
         Assert.That(await emptyReceived.Task.WaitAsync(DeliveryTimeout), Is.True);
         Assert.That(await serverReceived.Task.WaitAsync(DeliveryTimeout), Is.True);
@@ -264,7 +264,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         const int messageCount = 8;
         var endpoint = WaitForEndpoint(clientHandler);
         for (var i = 0; i < messageCount; i++)
-            Assert.That(endpoint.UnreliableSend(CreateMessage(client, i)), Is.EqualTo(SendResult.Ok));
+            Assert.That(endpoint.Send(CreateMessage(client, i)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => serverHandler.ReceivedCount == messageCount);
         Assert.That(serverHandler.ReceivedValues, Is.EqualTo(Enumerable.Range(0, messageCount)));
@@ -284,7 +284,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => clientHandler.ReceivedCount == 8);
         Assert.That(clientHandler.ReceivedValues, Is.EqualTo(Enumerable.Range(0, 8)));
@@ -304,10 +304,10 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => serverHandler.ReceivedCount == 1);
-        Assert.That(serverHandler.Endpoint!.UnreliableSend(CreateMessage(fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(serverHandler.Endpoint!.Send(CreateMessage(fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => clientHandler.ReceivedCount == 1);
         Assert.That(clientHandler.ReceivedValues, Is.EqualTo(new[] { 2 }));
@@ -327,8 +327,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => serverHandler.DeliveredCount == 1);
         Assert.Multiple(() =>
@@ -352,7 +352,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => clientHandler.DeliveredCount == 1);
         Assert.Multiple(() =>
@@ -376,7 +376,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         await serverHandler.SecondDelivery.Task.WaitAsync(DeliveryTimeout);
         Assert.That(serverHandler.MaximumDepth, Is.EqualTo(1));
@@ -396,7 +396,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
 
         await clientHandler.FirstEntered.Task.WaitAsync(DeliveryTimeout);
         await Task.Delay(100);
@@ -423,7 +423,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var endpoint = WaitForEndpoint(clientHandler);
 
         var sends = Enumerable.Range(0, messageCount)
-            .Select(value => Task.Run(() => endpoint.UnreliableSend(CreateMessage(client, value))));
+            .Select(value => Task.Run(() => endpoint.Send(CreateMessage(client, value))));
         var results = await Task.WhenAll(sends);
 
         Assert.That(results, Is.All.EqualTo(SendResult.Ok));
@@ -472,7 +472,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         var endpoint = WaitForEndpoint(clientHandler);
         var sends = Enumerable.Range(0, 32)
-            .Select(value => Task.Run(() => endpoint.UnreliableSend(CreateMessage(client, value))));
+            .Select(value => Task.Run(() => endpoint.Send(CreateMessage(client, value))));
         var stop = Task.Run(() => client.Stop());
         var results = await Task.WhenAll(sends);
 
@@ -498,7 +498,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Assert.That(client.Start(_ => { }), Is.True);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         await stopped.Task.WaitAsync(DeliveryTimeout);
         Assert.Multiple(() =>
@@ -525,7 +525,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var endpointControl = GetEndpointControl<IRawUnreliableEndpointConformanceControl>(endpoint);
         var beforeCommitReached = endpointControl.BeforeSendCommitGate.Arm();
 
-        _ = Task.Run(() => endpoint.UnreliableSend(CreateMessage(client, 1)));
+        _ = Task.Run(() => endpoint.Send(CreateMessage(client, 1)));
         await beforeCommitReached.WaitAsync(DeliveryTimeout);
         serverHandler.Flag.Value = 1;
         endpointControl.BeforeSendCommitGate.Reset();
@@ -562,8 +562,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         var firstEndpoint = WaitForEndpoint(firstClientHandler);
         var secondEndpoint = WaitForEndpoint(secondClientHandler);
-        Assert.That(firstEndpoint.UnreliableSend(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
-        Assert.That(secondEndpoint.UnreliableSend(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(firstEndpoint.Send(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(secondEndpoint.Send(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
 
         await probe.FirstEntered.Task.WaitAsync(DeliveryTimeout);
         await Task.Delay(200);
@@ -591,7 +591,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => serverHandler.Reached != null);
         await serverHandler.Reached!.WaitAsync(DeliveryTimeout);
@@ -684,7 +684,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         {
             Assert.That(endpoint.IsValid, Is.True);
             Assert.That(endpoint.RemoteEndPoint, Is.Not.Null);
-            Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+            Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         });
     }
 
@@ -702,7 +702,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => clientHandler.ReceivedCount == 1);
         Assert.Multiple(() =>
@@ -751,7 +751,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => handler.ReceivedCount == 1);
         Assert.Multiple(() =>
@@ -779,11 +779,11 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => Volatile.Read(ref factoryCalls) == 1);
         Assert.That(serverHandler.ReceivedCount, Is.Zero);
 
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => serverHandler.ReceivedCount == 1);
         Assert.Multiple(() =>
         {
@@ -812,11 +812,11 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => Volatile.Read(ref factoryCalls) == 1);
         Assert.That(serverHandler.ReceivedCount, Is.Zero);
 
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => serverHandler.ReceivedCount == 1);
         Assert.Multiple(() =>
         {
@@ -846,11 +846,11 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => Volatile.Read(ref factoryCalls) == 1);
         Assert.That(throwingHandler.StoppedReason, Is.Null);
 
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => goodHandler.ReceivedCount == 1);
         Assert.Multiple(() =>
         {
@@ -881,7 +881,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         var firstHandler = WaitForHandler(handlers, 1);
         WaitUntil(() => firstHandler.ReceivedCount == 1 && firstHandler.OnStoppedCount == 1);
@@ -892,7 +892,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
             Assert.That(firstHandler.ReceivedValues, Is.EqualTo(new[] { 1 }));
         });
 
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
         var secondHandler = WaitForHandler(handlers, 2);
         WaitUntil(() => secondHandler.ReceivedCount == 1);
         Assert.Multiple(() =>
@@ -921,11 +921,11 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         await gateReached.WaitAsync(DeliveryTimeout);
 
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 3)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 3)), Is.EqualTo(SendResult.Ok));
 
         await Task.Delay(200);
         Assert.Multiple(() =>
@@ -960,7 +960,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         {
             Assert.That(endpoint.Stop(), Is.False);
             Assert.That(endpoint.IsValid, Is.False);
-            Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
+            Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
         });
     }
 
@@ -1026,7 +1026,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => serverHandler.OnStoppedCount == 1);
         await Task.Delay(200);
@@ -1080,8 +1080,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         var firstEndpoint = WaitForEndpoint(firstClientHandler);
         var secondEndpoint = WaitForEndpoint(secondClientHandler);
-        Assert.That(firstEndpoint.UnreliableSend(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
-        Assert.That(secondEndpoint.UnreliableSend(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(firstEndpoint.Send(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(secondEndpoint.Send(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
 
         var firstServerHandler = WaitForHandler(serverHandlers, 1);
         var secondServerHandler = WaitForHandler(serverHandlers, 2);
@@ -1116,7 +1116,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         await gateReached.WaitAsync(DeliveryTimeout);
 
         Assert.That(Volatile.Read(ref factoryCalls), Is.EqualTo(0));
@@ -1148,7 +1148,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         await gateReached.WaitAsync(DeliveryTimeout);
 
         Assert.Multiple(() =>
@@ -1231,7 +1231,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         const int messageCount = 8;
         var endpoint = WaitForEndpoint(clientHandler);
         for (var i = 0; i < messageCount; i++)
-            Assert.That(endpoint.UnreliableSend(CreateMessage(client, i)), Is.EqualTo(SendResult.Ok));
+            Assert.That(endpoint.Send(CreateMessage(client, i)), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => serverHandler.ReceivedCount == messageCount);
         Assert.That(serverHandler.ReceivedValues, Is.EqualTo(Enumerable.Range(0, messageCount)));
@@ -1442,7 +1442,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
             try
             {
                 _serverReceived.TrySetResult(message.EqualByContent(_expected));
-                Assert.That(Endpoint!.UnreliableSend(_response), Is.EqualTo(SendResult.Ok));
+                Assert.That(Endpoint!.Send(_response), Is.EqualTo(SendResult.Ok));
             }
             finally
             {
@@ -1494,7 +1494,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
             try
             {
                 for (var i = 0; i < ReplyCount; i++)
-                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_fixture.Server, i)), Is.EqualTo(SendResult.Ok));
+                    Assert.That(Endpoint!.Send(CreateMessage(_fixture.Server, i)), Is.EqualTo(SendResult.Ok));
             }
             finally { message.Release(); }
         }
@@ -1517,7 +1517,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
             try
             {
                 foreach (var value in _values)
-                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_fixture.Server, value)), Is.EqualTo(SendResult.Ok));
+                    Assert.That(Endpoint!.Send(CreateMessage(_fixture.Server, value)), Is.EqualTo(SendResult.Ok));
             }
             finally { message.Release(); }
         }
@@ -1568,7 +1568,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
             {
                 Assert.That(message.TryPopFirst(out int value), Is.True);
                 if (value == 1)
-                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
+                    Assert.That(Endpoint!.Send(CreateMessage(_fixture.Server, 2)), Is.EqualTo(SendResult.Ok));
                 else
                     SecondDelivery.TrySetResult();
             }
@@ -1596,7 +1596,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
             try
             {
                 if (message.TryPopFirst(out int value) && Interlocked.Exchange(ref _echoed, 1) == 0)
-                    Assert.That(Endpoint!.UnreliableSend(CreateMessage(_client, value)), Is.EqualTo(SendResult.Ok));
+                    Assert.That(Endpoint!.Send(CreateMessage(_client, value)), Is.EqualTo(SendResult.Ok));
             }
             finally { message.Release(); }
         }

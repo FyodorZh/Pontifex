@@ -286,7 +286,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
         public int MessageMaxByteSize { get; }
 
-        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawEndpoint.Send(UnionDataList bufferToSend)
         {
             bufferToSend.PutFirst((byte)PacketType.Regular);
             return Send(bufferToSend);

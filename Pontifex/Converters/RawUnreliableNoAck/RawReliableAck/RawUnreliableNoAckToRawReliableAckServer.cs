@@ -44,7 +44,7 @@ namespace Pontifex.Converters
                     var endpoint = _session.UnreliableEndpoint;
                     if (endpoint != null)
                     {
-                        endpoint.UnreliableSend(data);
+                        endpoint.Send(data);
                     }
                     else
                     {

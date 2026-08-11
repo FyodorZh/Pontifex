@@ -31,7 +31,7 @@ public abstract class RawUnreliableAckConformanceTests : RawUnreliableConformanc
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(message), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(message), Is.EqualTo(SendResult.Ok));
 
         WaitUntil(() => serverHandler.ReceivedCount == 1);
         Assert.Multiple(() =>
@@ -62,11 +62,11 @@ public abstract class RawUnreliableAckConformanceTests : RawUnreliableConformanc
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => Volatile.Read(ref factoryCalls) == 1);
         Assert.That(serverHandler.ReceivedCount, Is.Zero);
 
-        Assert.That(endpoint.UnreliableSend(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(endpoint.Send(CreateMessage(client, 2)), Is.EqualTo(SendResult.Ok));
         WaitUntil(() => serverHandler.ReceivedCount == 1);
         Assert.Multiple(() =>
         {

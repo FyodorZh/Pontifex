@@ -283,7 +283,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public int MessageMaxByteSize => _underlyingEndpoint?.MessageMaxByteSize ?? throw new NotImplementedException("TODO: Cache previous session message size");
 
-        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawEndpoint.Send(UnionDataList bufferToSend)
         {
             if (_underlyingEndpoint != null)
             {

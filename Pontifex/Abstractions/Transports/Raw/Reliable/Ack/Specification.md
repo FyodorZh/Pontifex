@@ -57,7 +57,6 @@ public interface IRawReliableAckServerAcknowledger<out THandler>
 public interface IRawReliableEndpoint : IRawEndpoint
 {
     bool IsConnected { get; }
-    SendResult Send(UnionDataList bufferToSend);
     bool Disconnect(StopReason reason);
 }
 ```
@@ -75,7 +74,12 @@ receive `OnStopped`). `IRawReliableHandler` extends `IRawHandler` and supplies
 `OnReceived(UnionDataList)`.
 
 `IRawEndpoint` extends `IBaseEndpoint` and supplies `RemoteEndPoint`,
-`MessageMaxByteSize`, and `GetControls`.
+`MessageMaxByteSize`, `GetControls`, and the merged `Send(UnionDataList)`
+method. The single `Send` method is defined once in `IRawEndpoint` and is
+shared with `IRawUnreliableEndpoint`; its XML documentation explicitly covers
+both the Reliable and the Unreliable behaviours. RawReliableAck relies on the
+Reliable behaviour described in Section 10.2. See the RawUnreliable
+specification for the Unreliable behaviour of the same method.
 
 Clients and servers expose neither a transport-level receive event nor a
 transport-level `TrySend` operation. A handler receives an
@@ -446,7 +450,10 @@ connection **MUST** report the same limit.
 
 ### 10.2 `Send` and `SendResult`
 
-`Send(UnionDataList)` is thread-safe. Concurrent successful sends on one
+`Send(UnionDataList)` is the single method defined on `IRawEndpoint` and shared
+with `IRawUnreliableEndpoint`. This section defines its **Reliable behaviour**;
+the RawUnreliable specification defines the **Unreliable behaviour** of the
+same method. `Send` is thread-safe. Concurrent successful sends on one
 endpoint are ordered by the transport's linearization order for those calls.
 `Send` **MUST NOT** wait for network delivery or peer handling; it returns
 after validation and outbound admission.

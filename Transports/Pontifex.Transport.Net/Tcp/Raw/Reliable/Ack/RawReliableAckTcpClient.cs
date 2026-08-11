@@ -439,7 +439,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
         IEndPoint IRawEndpoint.RemoteEndPoint => mManagedRemoteEP;
 
-        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawEndpoint.Send(UnionDataList bufferToSend)
         {
             int len = bufferToSend.GetDataSize();
 

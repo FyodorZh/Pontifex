@@ -4,15 +4,11 @@ namespace Pontifex.Raw.Unreliable
 {
     public interface IRawUnreliableEndpoint : IRawEndpoint
     {
-        bool IsValid { get; }
-
         /// <summary>
-        /// Attempts to send a message to the remote route of this endpoint.
-        /// Ownership transfers to the transport for every non-null message argument,
-        /// regardless of the result. Success indicates local acceptance only; actual
-        /// delivery is not verifiable and loss/reorder/duplication are possible.
+        /// Gets whether the endpoint is currently valid and may accept sends.
+        /// Safe to read concurrently.
         /// </summary>
-        SendResult UnreliableSend(UnionDataList message);
+        bool IsValid { get; }
 
         /// <summary>
         /// Stops this endpoint. Returns true for the one call that begins stopping a

@@ -78,7 +78,7 @@ namespace Pontifex.Converters
                 var endpoint = _innerHandler.Endpoint;
                 if (endpoint != null)
                 {
-                    endpoint.UnreliableSend(data);
+                    endpoint.Send(data);
                 }
                 else
                 {
@@ -232,7 +232,7 @@ namespace Pontifex.Converters
                             handler.FillAckData(ackData);
                             if (endpoint != null)
                             {
-                                endpoint.UnreliableSend(ackData);
+                                endpoint.Send(ackData);
                             }
                             else
                             {

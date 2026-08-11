@@ -130,7 +130,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             }
         }
 
-        SendResult IRawReliableEndpoint.Send(UnionDataList bufferToSend)
+        SendResult IRawEndpoint.Send(UnionDataList bufferToSend)
         {
             lock (mSendCallSerializer)
             {
