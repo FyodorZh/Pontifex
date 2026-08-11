@@ -11,9 +11,5 @@ namespace Pontifex.Raw
             : base(typeName, logger, memory, conformanceControl ?? new RawConformanceControl())
         {
         }
-
-        protected class RawConformanceControl : ConformanceControl, IRawConformanceControl
-        {
-        }
     }
 }

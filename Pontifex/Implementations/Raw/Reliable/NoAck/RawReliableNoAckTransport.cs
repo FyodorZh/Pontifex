@@ -13,9 +13,5 @@ namespace Pontifex.Raw.Reliable.NoAck
             : base(typeName, logger, memory, conformanceControl ?? new RawReliableNoAckConformanceControl())
         {
         }
-
-        protected class RawReliableNoAckConformanceControl : ConformanceControl, IRawReliableNoAckConformanceControl
-        {
-        }
     }
 }

@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Raw.Unreliable.Ack;
-using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
-using Pontifex.Utils.CheckPointGate;
 using Scriba;
 
 namespace Pontifex.Raw.Unreliable
@@ -27,27 +24,6 @@ namespace Pontifex.Raw.Unreliable
 
         protected RawUnreliableTransport(string typeName, ILogger logger, IMemoryRental memory, RawUnreliableTransportConformanceControl? conformanceControl = null)
             : base(typeName, logger, memory, conformanceControl ?? new RawUnreliableTransportConformanceControl())
-        {
-        }
-
-        /// <summary>
-        /// Test-only conformance control for a RawUnreliable transport.
-        /// Implements both the Ack and NoAck contract variants. All checkpoint
-        /// gates are inactive until armed by a conformance adapter.
-        /// </summary>
-        protected class RawUnreliableTransportConformanceControl : RawUnreliableConformanceControl, IRawUnreliableNoAckTransportConformanceControl, IRawUnreliableAckTransportConformanceControl
-        {
-            private readonly CheckPoint _beforeHandlerFactoryGate = new();
-            private readonly CheckPoint _beforeHandlerStartedGate = new();
-
-            public ICheckPointCtl BeforeHandlerFactoryGate => _beforeHandlerFactoryGate;
-
-            public ICheckPointCtl BeforeHandlerStartedGate => _beforeHandlerStartedGate;
-
-            public bool TryMakeReliable() => ((RawUnreliableTransport)_owner).TryMakeReliableForDebug();
-        }
-
-        protected class RawUnreliableConformanceControl : RawConformanceControl, IRawUnreliableConformanceControl
         {
         }
 
@@ -84,7 +60,7 @@ namespace Pontifex.Raw.Unreliable
         /// Enables transport-wide reliable debug mode before Start. Returns false
         /// when the implementation cannot provide the test mode.
         /// </summary>
-        protected abstract bool TryMakeReliableForDebug();
+        protected internal abstract bool TryMakeReliableForDebug();
 
         /// <summary>
         /// Invokes the variant server handler factory with the inbound source
