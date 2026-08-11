@@ -28,12 +28,6 @@ namespace Pontifex.Raw.Unreliable
         }
 
         /// <summary>
-        /// The maximum single-message size in bytes supported by the transport.
-        /// Implemented by concrete transports; it must match the carrier limit.
-        /// </summary>
-        public abstract int MessageMaxByteSize { get; }
-
-        /// <summary>
         /// Starts the underlying carrier. Called once during <see cref="TryStart"/>.
         /// </summary>
         protected abstract bool StartCarrier();
