@@ -1253,20 +1253,21 @@ public abstract class RawReliableAckConformanceTests
     }
 
     [Test]
-    public async Task Client_StartWithoutServer_NoOnConnectedUntilServerAvailable()
+    public void Client_StartWithoutServer_ReturnsFalse()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         Assert.That(client.Init(clientHandler), Is.True);
-        StartClient(client);
 
-        await Task.Delay(200);
-        Assert.That(clientHandler.OnConnectedCalled, Is.False);
-
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
-        Assert.That(fixture.Server.Start(_ => { }), Is.True);
-        WaitForConnectedEndpoint(clientHandler);
+        Assert.That(client.Start(_ => { }), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(client.IsValid, Is.False);
+            Assert.That(clientHandler.OnConnectedCalled, Is.False);
+            Assert.That(clientHandler.OnDisconnectedCalled, Is.False);
+            Assert.That(clientHandler.OnStoppedCalled, Is.False);
+        });
     }
 
     // ── Server session ──────────────────────────────────────────────────
@@ -2013,19 +2014,29 @@ public abstract class RawReliableAckConformanceTests
     public async Task Client_Stop_PreConnect_OnlyOnStopped()
     {
         using var fixture = CreateAdapter().CreateFixture();
+        var control = GetControl<IRawReliableAckTransportConformanceControl>(fixture.Server);
+        var gateHit = control.BeforeAcknowledgerGate.Arm();
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
+        var serverHandler = new RecordingServerHandler();
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        StartClient(client);
 
-        await Task.Delay(200);
-        Assert.That(client.Stop(new UserIntention("test", "prestop")), Is.True);
+        Start(fixture.Server, client);
+        await gateHit.WaitAsync(DeliveryTimeout);
+        Assert.That(clientHandler.OnConnectedCalled, Is.False);
+
+        var reason = new UserIntention("test", "prestop");
+        Assert.That(client.Stop(reason), Is.True);
         WaitUntil(() => clientHandler.OnStoppedCalled);
         Assert.Multiple(() =>
         {
             Assert.That(clientHandler.OnConnectedCalled, Is.False);
             Assert.That(clientHandler.OnDisconnectedCalled, Is.False);
+            Assert.That(clientHandler.StoppedReason, Is.SameAs(reason));
         });
+
+        control.BeforeAcknowledgerGate.Reset();
     }
 
     [Test]
@@ -2236,8 +2247,11 @@ public abstract class RawReliableAckConformanceTests
         Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
         await gateHit.WaitAsync(DeliveryTimeout);
         WaitUntil(() => epControl.AfterSendCommitHitCount == 1);
-        await Task.Delay(200);
-        Assert.That(serverHandler.ReceivedCount, Is.Zero);
+
+        // The AfterSendCommitGate fires after the message completes its outbound
+        // IO commit; it blocks the sender's commit path, not the peer's receive.
+        // The peer may process the committed message on its own scheduler while the
+        // gate is armed, so no peer-receipt assertion is made here.
 
         epControl.AfterSendCommitGate.Reset();
         WaitUntil(() => serverHandler.ReceivedCount == 1);

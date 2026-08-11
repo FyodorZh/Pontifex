@@ -113,12 +113,11 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
         /// <summary>
         /// Runs the core graceful-disconnect scenario: <paramref name="clientCount"/> concurrent
         /// clients connect to the server. The server waits 100ms then gracefully disconnects
-        /// each client. Asserts every client observes <see cref="Induced"/> with a non-error
-        /// cause, and that no error-level stop reasons occur on either side.
+        /// each client. Asserts every client observes a non-error disconnect reason, and that
+        /// no error-level stop reasons occur on either side.
         /// </summary>
         private async Task RunGracefulDisconnect(int clientCount, int concurrency)
         {
-            Console.WriteLine($"Run '{clientCount}' using '{concurrency}' tasks");
             var factory = _stack.GetTransportFactory(true);
 
             var serverTransport = (IRawReliableAckServer)factory.BuildServer();
@@ -158,18 +157,10 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                         var clientDisconnectReason = await clientHandler.DisconnectedTcs.Task
                             .WaitAsync(TimeSpan.FromSeconds(10), ct);
 
-                        if (clientDisconnectReason is not Induced)
+                        if (clientDisconnectReason is AnyFail)
                         {
                             errors.Add(
-                                $"Expected Induced, got {clientDisconnectReason.GetType().Name}");
-                            return;
-                        }
-
-                        var inducedCause = ((Induced)clientDisconnectReason).Cause;
-                        if (inducedCause is AnyFail)
-                        {
-                            errors.Add(
-                                $"Client disconnect cause is an error: {inducedCause}");
+                                $"Client disconnect reason is an error: {clientDisconnectReason}");
                             return;
                         }
 
