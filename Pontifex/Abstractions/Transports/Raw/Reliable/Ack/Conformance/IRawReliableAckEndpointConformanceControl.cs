@@ -29,7 +29,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <summary>
         /// Hit once immediately before a client handler's <c>OnStopped(reason)</c>
         /// is invoked. The session has already been disconnected. Not triggered
-        /// for server sessions (server handlers do not have <c>OnStopped</c>).
+        /// for server sessions (the reliable server transport does not invoke
+        /// <c>OnStopped</c> for server sessions).
         /// Not hit in the establishment-failure path where <c>OnConnected</c> was
         /// never invoked.
         /// </summary>

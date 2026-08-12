@@ -60,7 +60,7 @@ namespace Pontifex.Raw.Reliable.Ack
             _receivedDataQueue.CloseValve();
         }
 
-        void IRawReliableClientHandler.OnStopped(StopReason reason)
+        void IRawHandler.OnStopped(StopReason reason)
         {
             _stopServiced = false;
             _stopReason = reason;

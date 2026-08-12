@@ -62,7 +62,13 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
         {
             _logic.OnDisconnected();
             _wrappedHandler.OnDisconnected(reason);
+            _wrappedHandler.OnStopped(reason); // TODO: fix me
             _wrappedEndpoint = null;
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+            
         }
 
         void IRawHandler.OnReceived(UnionDataList receivedBuffer)

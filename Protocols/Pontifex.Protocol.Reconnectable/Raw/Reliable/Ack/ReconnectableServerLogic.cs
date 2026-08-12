@@ -33,6 +33,11 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             mAttached = false;
         }
 
+        void IRawHandler.OnStopped(StopReason reason)
+        {
+            // do nothing ???
+        }
+
         public bool Attach(SessionId sessionId)
         {
             if (sessionId.IsValid)

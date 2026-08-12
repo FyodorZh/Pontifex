@@ -66,12 +66,11 @@ public interface IRawReliableEndpoint : IRawEndpoint
 `Name`, `IsValid`, `IsStarted`, `Start(Action<StopReason>)`, `Stop(StopReason?)`,
 `Log`, `Memory`, `MessageMaxByteSize`, and `GetControls`.
 
-`IRawReliableClientHandler` extends `IRawReliableHandler` and supplies
-`OnStopped(StopReason)`. `IRawReliableServerHandler` extends
-`IRawReliableHandler` and has no additional members (server handlers do not
-receive `OnStopped`). `IRawReliableHandler` extends `IRawHandler` and supplies
-`OnDisconnected(StopReason)`. `IRawHandler` supplies
-`OnReceived(UnionDataList)`.
+`IRawReliableHandler` extends `IRawHandler` and supplies
+`OnDisconnected(StopReason)`.
+`IRawReliableClientHandler` and `IRawReliableServerHandler` extend
+`IRawReliableHandler` and add no lifecycle members of their own.
+`IRawHandler` supplies `OnReceived(UnionDataList)` and `OnStopped(StopReason)`.
 
 `IRawEndpoint` extends `IBaseEndpoint` and supplies `RemoteEndPoint`,
 `MessageMaxByteSize`, `GetControls`, and the merged `Send(UnionDataList)`
@@ -416,7 +415,9 @@ OnConnected -> OnDisconnected
 ```
 
 `OnDisconnected` **MUST** occur exactly once for each successfully connected
-server session. Server handlers do not have an `OnStopped` callback.
+server session. The server-session callback sequence is `OnConnected ->
+OnDisconnected`; the reliable server transport does not invoke `OnStopped`
+for server sessions.
 
 The server session is independent of the server transport lifecycle with
 respect to callbacks. A server transport may be stopped while sessions are
@@ -530,7 +531,7 @@ callback returns; lifecycle callbacks **MUST NOT** be reentrant.
 ### 11.1 Serialization
 
 For one logical connection, all callbacks (`OnConnected`, `OnReceived`,
-`OnDisconnected`, and client `OnStopped`) **MUST** be serialized and
+`OnDisconnected`, and `OnStopped`) **MUST** be serialized and
 non-reentrant. Callbacks for different server sessions **MAY** execute
 concurrently. Application state shared across sessions **MUST** therefore be
 thread-safe.
@@ -687,11 +688,11 @@ at this point.
 
 `BeforeHandlerStoppedGate` is hit once immediately before a client handler's
 `OnStopped(reason)` is invoked. The session has already been disconnected.
-This gate is not triggered for server sessions (server handlers do not have
-`OnStopped`). It is not hit for a client whose `OnConnected` was never invoked
-and therefore receives only `OnStopped` without a preceding `OnDisconnected`;
-in that establishment-failure path the endpoint is never exposed to the
-handler.
+This gate is not triggered for server sessions (the reliable server transport
+does not invoke `OnStopped` for server sessions). It is not hit for a client
+whose `OnConnected` was never invoked and therefore receives only `OnStopped`
+without a preceding `OnDisconnected`; in that establishment-failure path the
+endpoint is never exposed to the handler.
 
 `BeforeSendCommitGate` is hit when a message accepted from this endpoint is
 about to reach an underlying IO commit attempt. Synchronously rejected

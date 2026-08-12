@@ -41,4 +41,8 @@ public abstract class RawReliableAckTestServerHandler : IRawReliableAckServerHan
         DisconnectReason = reason;
         IsConnected = false;
     }
+
+    public void OnStopped(StopReason reason)
+    {
+    }
 }

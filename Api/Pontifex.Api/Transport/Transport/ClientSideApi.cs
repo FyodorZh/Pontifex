@@ -82,7 +82,7 @@ namespace Pontifex.Api
             Disconnected?.Invoke(reason);
         }
         
-        void IRawReliableClientHandler.OnStopped(StopReason reason)
+        void IRawHandler.OnStopped(StopReason reason)
         {
             if (!_wasConnectedEver) // prevent double invocation 
             {

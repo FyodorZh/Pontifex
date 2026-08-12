@@ -7,7 +7,7 @@ namespace Pontifex.Raw.Reliable
     /// Implemented by business logic to receive logical disconnect notifications
     /// and incoming data from the transport.
     /// For one logical connection, all callbacks (OnConnected, OnReceived,
-    /// OnDisconnected, and client OnStopped) are serialized and non-reentrant.
+    /// OnDisconnected, and OnStopped) are serialized and non-reentrant.
     /// Callbacks for different server sessions may execute concurrently, so
     /// application state shared across sessions must be thread-safe.
     /// The callback thread or scheduler is implementation-defined; handlers MUST

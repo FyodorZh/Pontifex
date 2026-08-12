@@ -50,11 +50,11 @@ public interface IRawUnreliableEndpoint : IRawEndpoint
 public interface IRawUnreliableHandler : IRawHandler
 {
     void OnStarted(IRawUnreliableEndpoint endpoint);
-    void OnStopped(StopReason reason);
 }
 ```
 
-`IRawHandler` supplies `OnReceived(UnionDataList receivedBuffer)`.
+`IRawHandler` supplies `OnReceived(UnionDataList receivedBuffer)` and
+`OnStopped(StopReason reason)`.
 
 `IRawEndpoint` supplies `RemoteEndPoint`, `MessageMaxByteSize`, and the merged
 `Send(UnionDataList bufferToSend)` method that is shared with

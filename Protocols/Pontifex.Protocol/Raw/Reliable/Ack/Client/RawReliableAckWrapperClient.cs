@@ -117,7 +117,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             // DO NOTHING
         }
 
-        void IRawReliableClientHandler.OnStopped(StopReason reason)
+        void IRawHandler.OnStopped(StopReason reason)
         {
             // DO NOTHING
         }

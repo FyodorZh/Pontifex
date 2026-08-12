@@ -99,7 +99,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _userHandler?.OnConnected(endPointWrapper, ackResponse);
         }
 
-        void IRawReliableClientHandler.OnStopped(StopReason reason)
+        void IRawHandler.OnStopped(StopReason reason)
         {
             _core.Log.i("UserHandler.OnStopped(" + reason + ")");
             _userHandler?.OnStopped(reason: reason);

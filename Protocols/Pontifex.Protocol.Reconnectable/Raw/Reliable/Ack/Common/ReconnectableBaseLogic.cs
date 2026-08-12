@@ -260,6 +260,11 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             }
         }
 
+        void IRawHandler.OnStopped(StopReason reason)
+        {
+            // Derived classes (client and server) re-implement this member.
+        }
+
         protected void OnConnectionStopped(StopReason reason)
         {
             if (!mWasConnected)

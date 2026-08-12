@@ -59,7 +59,7 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             mTransportEndpoint = null;
         }
 
-        void IRawReliableClientHandler.OnStopped(StopReason reason)
+        void IRawHandler.OnStopped(StopReason reason)
         {
             mUserHandler.OnStopped(reason: reason);
             mTransport.Stop(reason);

@@ -69,5 +69,10 @@ namespace Pontifex.Api
             _transportPipeSystem = null;
             _endpoint = null;
         }
+
+        void IRawHandler.OnStopped(StopReason reason)
+        {
+            // Do nothing
+        }
     }
 }

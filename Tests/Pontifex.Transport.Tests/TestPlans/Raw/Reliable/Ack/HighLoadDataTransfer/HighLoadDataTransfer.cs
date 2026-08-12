@@ -204,6 +204,10 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                 _endpoint = null;
             }
 
+            public void OnStopped(StopReason reason)
+            {
+            }
+
             public void OnReceived(UnionDataList receivedBuffer)
             {
                 try

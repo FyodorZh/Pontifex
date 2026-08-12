@@ -94,6 +94,10 @@ namespace TransportAnalyzer.TestLogic
                 mOwner.Remove(this);
             }
 
+            public void OnStopped(StopReason reason)
+            {
+            }
+
             public void OnReceived(UnionDataList receivedBuffer)
             {
                 try

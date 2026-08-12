@@ -43,6 +43,18 @@ namespace Pontifex.Raw.Reliable.Ack
                 }
             }
 
+            public void OnStopped(StopReason reason)
+            {
+                try
+                {
+                    _handler.OnStopped(reason);
+                }
+                catch (Exception e)
+                {
+                    _onException(e);
+                }
+            }
+
             public void OnReceived(UnionDataList receivedBuffer)
             {
                 try
@@ -72,7 +84,8 @@ namespace Pontifex.Raw.Reliable.Ack
             {
                 Constructed,
                 Connected,
-                Disconnected
+                Disconnected,
+                Stopped
             }
 
             private readonly IRawReliableAckServerHandler _core;
@@ -115,6 +128,12 @@ namespace Pontifex.Raw.Reliable.Ack
             {
                 ChangeState(HandlerState.Connected, HandlerState.Disconnected);
                 _core.OnDisconnected(reason);
+            }
+
+            void IRawHandler.OnStopped(StopReason reason)
+            {
+                // TODO: implement ChangeState() check
+                _core.OnStopped(reason);
             }
 
             void IRawHandler.OnReceived(UnionDataList receivedBuffer)

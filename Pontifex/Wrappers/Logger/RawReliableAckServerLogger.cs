@@ -83,6 +83,12 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _userHandler?.OnDisconnected(reason);
         }
 
+        public void OnStopped(StopReason reason)
+        {
+            Log.i("UserHandler.OnStopped(" + reason + ")");
+            _userHandler?.OnStopped(reason);
+        }
+
         void IRawHandler.OnReceived(UnionDataList receivedBuffer)
         {
             Log.i("UserHandler.OnReceived(" + receivedBuffer + ")");
