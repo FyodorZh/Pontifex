@@ -50,7 +50,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _core.GetControls(dst, predicate);
         }
 
-        bool IRawReliableAckClient.Init(IRawReliableAckClientHandler handler)
+        bool IRawReliableClientTransport<IRawReliableAckClientHandler>.Init(IRawReliableAckClientHandler handler)
         {
             _userHandler = handler;
             _core.Log.i("Init()");
