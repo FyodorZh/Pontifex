@@ -256,18 +256,30 @@ invalid.
 
 ### 7.3 Client connection startup
 
-During `Start`, the client **MUST** automatically connect to its configured
-remote destination. If the destination is synchronously unavailable — the
-server is not listening or cannot be reached — `Start` **MUST** return false
-and the transport **MUST** become invalid under the failed-start rules of
-Section 7.2. `Start` returning false **MUST NOT** invoke the client handler's
-`OnStopped`.
+During `Start`, the client **MUST** automatically begin connecting to its
+configured remote destination. Whether destination unavailability — for
+example, a server that is not listening or cannot be reached — is detected
+synchronously during `Start` or asynchronously after `Start` has returned is
+implementation-defined, with the following consequences:
 
-After `client.Start` has successfully returned true, the client **MUST** begin
-the ACK handshake with the configured remote destination. It does not establish
-a logical connection until the ACK handshake completes. If the handshake
-succeeds, the client invokes `handler.OnConnected(endpoint, ackResponse)`.
-If the handshake fails, the client invokes `handler.OnStopped(reason)`.
+- If the destination is detected as synchronously unavailable, `Start`
+  **MUST** return false and the transport **MUST** become invalid under the
+  failed-start rules of Section 7.2. `Start` returning false **MUST NOT**
+  invoke the client handler's `OnStopped`.
+- Otherwise `Start` **MUST** return true. Connection-establishment failure
+  detected asynchronously **MUST** stop the client transport and invoke
+  `handler.OnStopped(reason)` exactly once, without `OnConnected` and without
+  `OnDisconnected`. The failure alone **MUST NOT** invalidate the client
+  transport: `IsValid` remains true while `IsStarted` becomes false. The
+  transport-level `onStopped` callback is invoked as specified in
+  Section 7.2.
+
+After `client.Start` has successfully returned true and the underlying
+connection to the configured remote destination is established, the client
+**MUST** begin the ACK handshake. It does not establish a logical connection
+until the ACK handshake completes. If the handshake succeeds, the client
+invokes `handler.OnConnected(endpoint, ackResponse)`. If the handshake fails,
+the client invokes `handler.OnStopped(reason)`.
 
 The client **MUST NOT** deliver `OnReceived` or `OnDisconnected` before
 `OnConnected` returns successfully. The client endpoint is not available to
@@ -377,6 +389,7 @@ stateDiagram-v2
     Connected --> Disconnecting: Disconnect, local failure, remote failure, or async failure
     Disconnecting --> Disconnected: OnDisconnected
     Disconnected --> Stopped: (client only) OnStopped
+    Failed --> Stopped: (client only) OnStopped
 ```
 
 ### 9.2 Client lifecycle
@@ -736,6 +749,8 @@ exact supplied `StopReason` instance.
 
 If a started client is stopped or otherwise terminates before `OnConnected`,
 it **MUST** receive exactly one `OnStopped(reason)` and no `OnDisconnected`.
+This includes asynchronous connection-establishment failure after a
+successful `Start`, for example an unreachable or rejecting destination.
 
 A client that disconnects from its single endpoint (via `Disconnect` or
 endpoint failure) **MUST** stop the client transport. If `OnConnected`
@@ -774,6 +789,9 @@ not weaken the requirements in this specification:
 
 - handshake, idle, and keep-alive timeouts;
 - failure-detection mechanism and timing;
+- whether client connection-establishment failure (for example, an
+  unreachable destination) is detected synchronously during `Start` or
+  asynchronously after `Start`;
 - client-visible signaling of server rejection;
 - callback execution context and scheduler;
 - `onStopped` dispatch scheduler and timing after the terminal state
