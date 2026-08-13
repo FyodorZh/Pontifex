@@ -264,8 +264,37 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 }
             }
 
-            // Offload socket processing to avoid blocking the accept loop
-            Task.Run(() => mClients.AddClient(socket, TryAcknowledge, MessageMaxByteSize, Memory, Log));
+            // AddClient only queues the socket and starts async receivers, so it is safe
+            // to run it directly on the accept loop. Previously each connection was offloaded
+            // with Task.Run, which adds a ThreadPool hop right in the connection handshake and
+            // can stall clients when the pool is starved on low-core machines.
+            try
+            {
+                mClients.AddClient(socket, TryAcknowledge, MessageMaxByteSize, Memory, Log);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf("Failed to process accepted socket", ex);
+                try
+                {
+                    socket.Close();
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+                if (IsStarted)
+                {
+                    try
+                    {
+                        mMaxNumberAcceptedClients.Release();
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+                }
+            }
         }
 
         private void OnStopped()

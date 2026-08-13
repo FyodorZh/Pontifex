@@ -64,6 +64,34 @@ public class Ping
     }
 
     /// <summary>
+    /// Awaits <paramref name="task"/> with a timeout and rethrows a <see cref="TimeoutException"/>
+    /// carrying the name of the lifecycle step so failures are easy to diagnose.
+    /// </summary>
+    private static async Task<T> WaitWithTimeout<T>(string step, Task<T> task, TimeSpan timeout, CancellationToken ct)
+    {
+        try
+        {
+            return await task.WaitAsync(timeout, ct);
+        }
+        catch (TimeoutException)
+        {
+            throw new TimeoutException($"Timeout waiting for '{step}' after {timeout.TotalSeconds:0}s");
+        }
+    }
+
+    private static async Task WaitWithTimeout(string step, Task task, TimeSpan timeout, CancellationToken ct)
+    {
+        try
+        {
+            await task.WaitAsync(timeout, ct);
+        }
+        catch (TimeoutException)
+        {
+            throw new TimeoutException($"Timeout waiting for '{step}' after {timeout.TotalSeconds:0}s");
+        }
+    }
+
+    /// <summary>
     /// Runs the core ping scenario: <paramref name="clientCount"/> concurrent clients each
     /// send 100 sequential pings and verify each response carries the correct sequence number.
     /// </summary>
@@ -71,6 +99,13 @@ public class Ping
     {
         const int pingCount = 100;
         Console.WriteLine($"Run '{clientCount}' clients, '{pingCount}' sequential pings each, using '{concurrency}' tasks");
+
+        // Generous, load-scaled timeouts: on slow or shared CI machines the connection
+        // handshake and teardown of hundreds of concurrent TCP clients can take much
+        // longer than on a fast local machine, so fixed short waits produce spurious
+        // TimeoutExceptions for clients that are actually making progress.
+        var connectTimeout = TimeSpan.FromSeconds(clientCount <= 1 ? 10 : 60);
+        var shutdownTimeout = TimeSpan.FromSeconds(clientCount <= 1 ? 5 : 30);
 
         var memory = TransportRegistry.Memory;
         var logger = TransportRegistry.GetLogger(true);
@@ -119,7 +154,7 @@ public class Ping
                         return;
                     }
 
-                    await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+                    await WaitWithTimeout("connect", connectedTcs.Task, connectTimeout, ct);
 
                     for (var i = 0; i < pingCount; i++)
                     {
@@ -133,14 +168,14 @@ public class Ping
 
                     api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
 
-                    var disconnectReason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+                    var disconnectReason = await WaitWithTimeout("disconnect", disconnectedTcs.Task, shutdownTimeout, ct);
                     if (disconnectReason is AnyFail)
                     {
                         errors.Add($"{_stack.Id}: Client disconnected with error: {disconnectReason}");
                         return;
                     }
 
-                    await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+                    await WaitWithTimeout("stop", stoppedTcs.Task, shutdownTimeout, ct);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

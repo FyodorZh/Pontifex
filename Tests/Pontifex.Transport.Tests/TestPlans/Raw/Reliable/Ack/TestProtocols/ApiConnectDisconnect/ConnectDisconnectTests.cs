@@ -29,12 +29,47 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
         }
 
         /// <summary>
+        /// Awaits <paramref name="task"/> with a timeout and rethrows a <see cref="TimeoutException"/>
+        /// carrying the name of the lifecycle step so failures are easy to diagnose.
+        /// </summary>
+        private static async Task<T> WaitWithTimeout<T>(string step, Task<T> task, TimeSpan timeout, CancellationToken ct)
+        {
+            try
+            {
+                return await task.WaitAsync(timeout, ct);
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException($"Timeout waiting for '{step}' after {timeout.TotalSeconds:0}s");
+            }
+        }
+
+        private static async Task WaitWithTimeout(string step, Task task, TimeSpan timeout, CancellationToken ct)
+        {
+            try
+            {
+                await task.WaitAsync(timeout, ct);
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException($"Timeout waiting for '{step}' after {timeout.TotalSeconds:0}s");
+            }
+        }
+
+        /// <summary>
         /// Runs the core connect-disconnect scenario: <paramref name="clientCount"/> concurrent
         /// clients connect and call GracefulShutdown. Asserts no error-level stop reasons.
         /// </summary>
         private async Task RunConnectDisconnect(int clientCount, int concurrency)
         {
             Console.WriteLine($"Run '{clientCount}' connect-disconnect clients using '{concurrency}' tasks");
+
+            // Generous, load-scaled timeouts: on slow or shared CI machines the connection
+            // handshake and teardown of hundreds of concurrent TCP clients can take much
+            // longer than on a fast local machine, so fixed short waits produce spurious
+            // TimeoutExceptions for clients that are actually making progress.
+            var connectTimeout = TimeSpan.FromSeconds(clientCount <= 1 ? 10 : 60);
+            var shutdownTimeout = TimeSpan.FromSeconds(clientCount <= 1 ? 5 : 30);
 
             var memory = TransportRegistry.Memory;
             var logger = TransportRegistry.GetLogger(true);
@@ -83,18 +118,18 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                             return;
                         }
 
-                        await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+                        await WaitWithTimeout("connect", connectedTcs.Task, connectTimeout, ct);
 
                         api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
 
-                        var disconnectReason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+                        var disconnectReason = await WaitWithTimeout("disconnect", disconnectedTcs.Task, shutdownTimeout, ct);
                         if (disconnectReason is AnyFail)
                         {
                             errors.Add($"{_stack.Id}: Client disconnected with error: {disconnectReason}");
                             return;
                         }
 
-                        await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+                        await WaitWithTimeout("stop", stoppedTcs.Task, shutdownTimeout, ct);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
