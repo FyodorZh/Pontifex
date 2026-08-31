@@ -62,7 +62,7 @@ namespace Pontifex.Api
             fsm.AddTransition(State.Started, State.ShuttingDown);
             fsm.AddTransition(State.Started, State.Stopped);
             fsm.AddTransition(State.ShuttingDown, State.Stopped);
-            _stage = new ConcurrentFSM<State>(fsm); 
+            _stage = new AsyncFSM<State>(fsm); 
         }
 
         void IApiRoot.Start(bool isServerMode, IPipeSystem pipeSystem)

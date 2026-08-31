@@ -1,5 +1,3 @@
-using Pontifex.Utils;
-
 namespace Pontifex.Raw.Reliable
 {
     public interface IRawReliableEndpoint : IRawEndpoint

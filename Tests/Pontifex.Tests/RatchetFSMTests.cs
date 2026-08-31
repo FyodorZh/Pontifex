@@ -2,9 +2,9 @@ namespace Pontifex.Utils.FSM;
 
 public sealed class RatchetFSMTests
 {
-    private static RatchetFSM<int> CreateFsm()
+    private static RatchetFSM<int> CreateFsm(StateChangedReaction<int>? onStateChanged = null)
     {
-        return new RatchetFSM<int>((a, b) => a.CompareTo(b), 0);
+        return new RatchetFSM<int>((a, b) => a.CompareTo(b), 0, onStateChanged);
     }
 
     [Test]
@@ -74,8 +74,8 @@ public sealed class RatchetFSMTests
     [Test]
     public void SetState_onStateChanging_AllowsForwardMove()
     {
-        var fsm = CreateFsm();
         bool called = false;
+        var fsm = CreateFsm();
         fsm.SetState(1, (old, next) =>
         {
             called = true;
@@ -96,38 +96,39 @@ public sealed class RatchetFSMTests
     [Test]
     public void SetState_onStateChanging_NotCalledOnBackwardMove()
     {
+        bool called = false;
         var fsm = CreateFsm();
         fsm.SetState(5);
-        bool called = false;
         fsm.SetState(3, (_, _) => { called = true; return true; });
         Assert.That(called, Is.False);
     }
 
     [Test]
-    public void SetState_onStateChanged_CalledOnForwardMove()
+    public void Constructor_onStateChanged_CalledOnForwardMove()
     {
-        var fsm = CreateFsm();
         int changedTo = -1;
-        fsm.SetState(1, null, s => changedTo = s);
+        var fsm = CreateFsm((_, s) => changedTo = s);
+        fsm.SetState(1);
         Assert.That(changedTo, Is.EqualTo(1));
     }
 
     [Test]
-    public void SetState_onStateChanged_NotCalledOnBackwardMove()
+    public void Constructor_onStateChanged_NotCalledOnBackwardMove()
     {
-        var fsm = CreateFsm();
-        fsm.SetState(5);
         bool called = false;
-        fsm.SetState(3, null, _ => called = true);
+        var fsm = CreateFsm((_, _) => called = true);
+        fsm.SetState(5);
+        called = false;
+        fsm.SetState(3);
         Assert.That(called, Is.False);
     }
 
     [Test]
-    public void SetState_onStateChanged_NotCalledWhenVetoed()
+    public void Constructor_onStateChanged_NotCalledWhenVetoed()
     {
-        var fsm = CreateFsm();
         int changedTo = -1;
-        fsm.SetState(1, (_, _) => false, s => changedTo = s);
+        var fsm = CreateFsm((_, s) => changedTo = s);
+        fsm.SetState(1, (_, _) => false);
         Assert.That(changedTo, Is.EqualTo(-1));
     }
 
@@ -147,7 +148,7 @@ public sealed class RatchetFSMTests
     public void SetState_NullCallbacks_DoesNotThrow()
     {
         var fsm = CreateFsm();
-        Assert.DoesNotThrow(() => fsm.SetState(1, null, null));
+        Assert.DoesNotThrow(() => fsm.SetState(1));
         Assert.That(fsm.State, Is.EqualTo(1));
     }
 }

@@ -35,8 +35,15 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
         {
             _serverEp = new StringEndPoint(serverName);
 
-            var fsm = new RatchetFSM<State>((a, b) => ((int)a).CompareTo((int)b), State.Constructed);
-            _state = new ConcurrentFSM<State>(fsm);
+            var fsm = new RatchetFSM<State>((a, b) => ((int)a).CompareTo((int)b), State.Constructed,
+                (_, newState) =>
+                {
+                    if (newState == State.Connected)
+                    {
+                        ConnectionFinished(_transport!.ClientSide, _ackBuffer!);
+                    }
+                });
+            _state = new AsyncFSM<State>(fsm);
             _transportControl = new RawReliableAckClientControl(this);
         }
 
@@ -90,6 +97,8 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 dst.Add(_transportControl);
         }
 
+        private UnionDataList? _ackBuffer;
+        
         void IAnyDirectCtl.OnReceived(UnionDataList buffer)
         {
             using var bufferDisposer = buffer.AsDisposable();
@@ -101,10 +110,8 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                     {
                         ackOk.Release();
                         buffer.AddRef();
-                        _state.SetState(State.Connected, null, _ =>
-                        {
-                            ConnectionFinished(_transport!.ClientSide, buffer);
-                        });
+                        _ackBuffer = buffer;
+                        _state.SetState(State.Connected);
                     }
                     else
                     {

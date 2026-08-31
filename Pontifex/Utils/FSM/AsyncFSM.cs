@@ -1,29 +1,26 @@
-using System;
 using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
 
 namespace Pontifex.Utils.FSM
 {
-    public class ConcurrentFSM<TState> : IConcurrentFSM<TState>, IReleasableResource
+    public class AsyncFSM<TState> : IConcurrentFSM<TState>, IReleasableResource
         where TState : struct
     {
         private readonly struct ActionRec: ActionQueue<ActionRec>.IAction
         {
-            private readonly ConcurrentFSM<TState> _owner;
+            private readonly AsyncFSM<TState> _owner;
             private readonly bool _reset;
             private readonly TState _stateToSet;
-            private readonly StateChangeReaction<TState>? _onStateChanging;
-            private readonly Action<TState>? _onStateChanged;
+            private readonly StateChangingPredicate<TState>? _onStateChanging;
 
-            public ActionRec(ConcurrentFSM<TState> owner, bool reset, TState state, 
-                StateChangeReaction<TState>? onStateChanging, Action<TState>? onStateChanged)
+            public ActionRec(AsyncFSM<TState> owner, bool reset, TState state, 
+                StateChangingPredicate<TState>? onStateChanging)
             {
                 _owner = owner;
                 _reset = reset;
                 _stateToSet = state;
                 _onStateChanging = onStateChanging;
-                _onStateChanged = onStateChanged;
             }
 
             public void Invoke()
@@ -36,7 +33,7 @@ namespace Pontifex.Utils.FSM
                     }
                     else
                     {
-                        _owner._core.SetState(_stateToSet, _onStateChanging, _onStateChanged);
+                        _owner._core.SetState(_stateToSet, _onStateChanging);
                     }
                 }
                 finally
@@ -58,7 +55,7 @@ namespace Pontifex.Utils.FSM
 
         private readonly ActionQueue<ActionRec> _ticker = new ActionQueue<ActionRec>(new SystemConcurrentQueue<ActionRec>());
 
-        public ConcurrentFSM(IFSM<TState> core)
+        public AsyncFSM(IFSM<TState> core)
         {
             _core = core;
             _initState = core.InitState;
@@ -71,12 +68,12 @@ namespace Pontifex.Utils.FSM
 
         public void Reset()
         {
-            _ticker.Put(new ActionRec(this, true, default, null, null));
+            _ticker.Put(new ActionRec(this, true, default, null));
         }
 
-        public void SetState(TState nextState, StateChangeReaction<TState>? onStateChanging, Action<TState>? onStateChanged)
+        public void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
         {
-            _ticker.Put(new ActionRec(this, false, nextState, onStateChanging, onStateChanged));
+            _ticker.Put(new ActionRec(this, false, nextState, onStateChanging));
         }
 
         public void Release()

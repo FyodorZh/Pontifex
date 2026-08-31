@@ -27,7 +27,7 @@ namespace Pontifex.Api
         private volatile bool _stopOutgoing;
         private readonly Func<UnionDataList, SendResult> _globalSender;
 
-        private readonly IFSM<StartStopState> _state = new ConcurrentFSM<StartStopState>(
+        private readonly IFSM<StartStopState> _state = new AsyncFSM<StartStopState>(
             new RatchetFSM<StartStopState>((l, r) => l.CompareTo(r), StartStopState.NotStarted)); 
 
         public TransportPipeSystem(Func<UnionDataList, SendResult> sender, IMemoryRental memoryRental, ILogger logger)

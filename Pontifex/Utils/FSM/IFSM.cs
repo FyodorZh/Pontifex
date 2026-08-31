@@ -2,7 +2,8 @@ using System;
 
 namespace Pontifex.Utils.FSM
 {
-    public delegate bool StateChangeReaction<in TState>(TState oldState, TState newState);
+    public delegate void StateChangedReaction<in TState>(TState oldState, TState newState);
+    public delegate bool StateChangingPredicate<in TState>(TState oldState, TState newState);
 
     /// <summary>
     /// Абстракция стейтмашины
@@ -30,7 +31,7 @@ namespace Pontifex.Utils.FSM
         /// </summary>
         /// <param name="nextState"></param>
         /// <param name="onStateChanging"></param>
-        void SetState(TState nextState, StateChangeReaction<TState>? onStateChanging = null, Action<TState>? onStateChanged = null);
+        void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null);
     }
 
     /// <summary>

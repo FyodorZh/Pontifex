@@ -2,15 +2,15 @@ using System.Diagnostics;
 
 namespace Pontifex.Utils.FSM;
 
-public sealed class ConcurrentFSMTests
+public sealed class AsyncFSMTests
 {
-    private static (FSM<int, int> core, ConcurrentFSM<int> fsm) CreatePair()
+    private static (FSM<int, int> core, AsyncFSM<int> fsm) CreatePair(StateChangedReaction<int>? onStateChanged = null)
     {
-        var core = new FSM<int, int>(0, s => s);
+        var core = new FSM<int, int>(0, s => s, onStateChanged);
         core.AddTransition(0, 1);
         core.AddTransition(1, 2);
         core.AddTransition(2, 1);
-        var fsm = new ConcurrentFSM<int>(core);
+        var fsm = new AsyncFSM<int>(core);
         return (core, fsm);
     }
 
@@ -34,7 +34,7 @@ public sealed class ConcurrentFSMTests
     public void SetState_ValidTransition_EventuallyChangesState()
     {
         var (_, fsm) = CreatePair();
-        fsm.SetState(1, null, null);
+        fsm.SetState(1);
         SpinUntil(() => fsm.State == 1);
         Assert.That(fsm.State, Is.EqualTo(1));
     }
@@ -43,8 +43,8 @@ public sealed class ConcurrentFSMTests
     public void SetState_MultipleCalls_ProcessedInOrder()
     {
         var (_, fsm) = CreatePair();
-        fsm.SetState(1, null, null);
-        fsm.SetState(2, null, null);
+        fsm.SetState(1);
+        fsm.SetState(2);
         SpinUntil(() => fsm.State == 2);
         Assert.That(fsm.State, Is.EqualTo(2));
     }
@@ -53,7 +53,7 @@ public sealed class ConcurrentFSMTests
     public void Reset_EventuallyReturnsToInitState()
     {
         var (_, fsm) = CreatePair();
-        fsm.SetState(1, null, null);
+        fsm.SetState(1);
         SpinUntil(() => fsm.State == 1);
 
         fsm.Reset();
@@ -65,7 +65,7 @@ public sealed class ConcurrentFSMTests
     public void InvalidTransition_IsIgnored()
     {
         var (_, fsm) = CreatePair();
-        fsm.SetState(99, null, null);
+        fsm.SetState(99);
         SpinUntil(() => fsm.State == 0, 500);
         Assert.That(fsm.State, Is.EqualTo(0));
     }
@@ -73,9 +73,9 @@ public sealed class ConcurrentFSMTests
     [Test]
     public void SetState_Calls_onStateChanging()
     {
-        var (_, fsm) = CreatePair();
         bool called = false;
-        fsm.SetState(1, (_, _) => { called = true; return true; }, null);
+        var (_, fsm) = CreatePair();
+        fsm.SetState(1, (_, _) => { called = true; return true; });
         SpinUntil(() => fsm.State == 1);
         Assert.That(called, Is.True);
     }
@@ -83,9 +83,9 @@ public sealed class ConcurrentFSMTests
     [Test]
     public void SetState_Calls_onStateChanged()
     {
-        var (_, fsm) = CreatePair();
         int changedTo = -1;
-        fsm.SetState(1, null, s => changedTo = s);
+        var (_, fsm) = CreatePair((_, s) => changedTo = s);
+        fsm.SetState(1);
         SpinUntil(() => fsm.State == 1);
         Assert.That(changedTo, Is.EqualTo(1));
     }
@@ -94,7 +94,7 @@ public sealed class ConcurrentFSMTests
     public void SetState_Veto_QueuedCorrectly()
     {
         var (_, fsm) = CreatePair();
-        fsm.SetState(1, (_, _) => false, null);
+        fsm.SetState(1, (_, _) => false);
         SpinUntil(() => fsm.State == 0, 500);
         Assert.That(fsm.State, Is.EqualTo(0));
     }
@@ -111,7 +111,7 @@ public sealed class ConcurrentFSMTests
     {
         var (_, fsm) = CreatePair();
         fsm.Release();
-        fsm.SetState(1, null, null);
+        fsm.SetState(1);
         Thread.Sleep(50);
         Assert.That(fsm.State, Is.EqualTo(0));
     }
@@ -120,7 +120,7 @@ public sealed class ConcurrentFSMTests
     public void WrapsInnerFsm_Correctly()
     {
         var (core, fsm) = CreatePair();
-        fsm.SetState(1, null, null);
+        fsm.SetState(1);
         SpinUntil(() => fsm.State == 1);
         Assert.That(core.State, Is.EqualTo(1));
     }

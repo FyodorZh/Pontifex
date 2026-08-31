@@ -20,15 +20,17 @@ namespace Pontifex.Utils.FSM
         }
 
         private readonly Func<TState, TStateValue> _stateMapper;
+        private readonly StateChangedReaction<TState>? _onStateChanged;
         private readonly StateNode _firstState;
 
         private readonly Dictionary<TStateValue, StateNode> _states = new Dictionary<TStateValue, StateNode>();
 
         private StateNode _currentState;
 
-        public FSM(TState firstState, Func<TState, TStateValue> stateMapper)
+        public FSM(TState firstState, Func<TState, TStateValue> stateMapper, StateChangedReaction<TState>? onStateChanged = null)
         {
             _stateMapper = stateMapper;
+            _onStateChanged = onStateChanged;
 
             var firstStateValue = stateMapper(firstState);
 
@@ -78,13 +80,24 @@ namespace Pontifex.Utils.FSM
 
             return res;
         }
+        
+        public bool AddTransitions(TState fromState, TState[] toStates)
+        {
+            bool res = true;
+            foreach (var toState in toStates)
+            {
+                res = AddTransition(fromState, toState) && res;
+            }
+
+            return res;
+        }
 
         public void Reset()
         {
             _currentState = _firstState;
         }
 
-        public void SetState(TState nextState, StateChangeReaction<TState>? onStateChanging, Action<TState>? onStateChanged)
+        public void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
         {
             var nextStateValue = _stateMapper(nextState);
 
@@ -93,11 +106,14 @@ namespace Pontifex.Utils.FSM
             {
                 if (nextStateValue.Equals(element.StateValue))
                 {
-                    if (onStateChanging?.Invoke(_currentState.State, nextState) ?? true)
+                    var oldState = _currentState.State;
+                    if (onStateChanging?.Invoke(oldState, nextState) ?? true)
                     {
-                        _currentState = element;
-                        onStateChanged?.Invoke(nextState);
+                        _currentState = element; 
+                        _onStateChanged?.Invoke(oldState, nextState);
                     }
+
+                    return;
                 }
             }
         }
