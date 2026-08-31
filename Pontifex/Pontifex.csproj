@@ -42,7 +42,7 @@
 
     <ItemGroup>
       <PackageReference Include="Actuarius.Memory" Version="0.1.5-dev.0" />
-      <PackageReference Include="Operarius" Version="0.2.3-dev.0" />
+      <PackageReference Include="Operarius" Version="0.2.4-dev.0" />
       <PackageReference Include="Scriba" Version="0.2.4-dev.0" />
       <PackageReference Include="System.Text.Json" Version="11.0.0-preview.5.26302.115" />
     </ItemGroup>
