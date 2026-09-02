@@ -32,7 +32,7 @@ namespace Pontifex.Utils.FSM
             _curState = _initState;
         }
 
-        public void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
+        public bool SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
         {
             int cmp = _comparator(_curState, nextState);
             if (cmp < 0)
@@ -42,8 +42,11 @@ namespace Pontifex.Utils.FSM
                 {
                     _curState = nextState;
                     _onStateChanged?.Invoke(oldState, nextState);
+                    return true;
                 }
             }
+
+            return false;
         }
     }
 }

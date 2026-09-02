@@ -97,7 +97,7 @@ namespace Pontifex.Utils.FSM
             _currentState = _firstState;
         }
 
-        public void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
+        public bool SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
         {
             var nextStateValue = _stateMapper(nextState);
 
@@ -113,9 +113,11 @@ namespace Pontifex.Utils.FSM
                         _onStateChanged?.Invoke(oldState, nextState);
                     }
 
-                    return;
+                    return true;
                 }
             }
+
+            return false;
         }
     }
 }

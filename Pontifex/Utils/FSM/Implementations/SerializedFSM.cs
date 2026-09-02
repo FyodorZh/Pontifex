@@ -40,11 +40,11 @@ namespace Pontifex.Utils.FSM
             }
         }
 
-        public void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
+        public bool SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
         {
             lock (_locker)
             {
-                _inner.SetState(nextState, onStateChanging);
+                return _inner.SetState(nextState, onStateChanging);
             }
         }
     }

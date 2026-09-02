@@ -29,7 +29,7 @@ namespace Pontifex.Api
         private bool _isServerMode;
         private IPipeSystem? _pipeSystem;
 
-        private readonly IFSM<State> _stage;
+        private readonly IConcurrentFSM<State> _stage;
         
         private StopReason? _stopReason;
 

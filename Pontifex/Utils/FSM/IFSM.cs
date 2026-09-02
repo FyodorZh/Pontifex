@@ -9,7 +9,7 @@ namespace Pontifex.Utils.FSM
     /// Абстракция стейтмашины
     /// </summary>
     /// <typeparam name="TState"> Тип стейта </typeparam>
-    public interface IFSM<TState>
+    public interface IFSMBase<TState>
     {
         /// <summary>
         /// Стартовый (дефолтный) стейт
@@ -22,34 +22,19 @@ namespace Pontifex.Utils.FSM
         TState State { get; }
 
         /// <summary>
-        /// Сбрасывает стейт в деолтное положение
+        /// Сбрасывает стейт в дефолтное положение
         /// </summary>
         void Reset();
+    }
 
+    public interface IFSM<TState> : IFSMBase<TState>
+    {
         /// <summary>
         /// Попытка перевести текущий стейт в новый. При переводе вызывается делегат, который может отменить перевод в новый стейт
         /// </summary>
         /// <param name="nextState"></param>
         /// <param name="onStateChanging"></param>
-        void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null);
-    }
-
-    /// <summary>
-    /// Настройка стейт машины
-    /// </summary>
-    public interface IFSM_Ctl<in TState>
-    {
-        /// <summary>
-        /// Регистрирует допустимый переход между двумя стейтами
-        /// </summary>
-        /// <returns></returns>
-        bool AddTransition(TState fromState, TState toState);
-
-        /// <summary>
-        /// Регистрирует допустимые переходы в пакетном режиме
-        /// </summary>
-        /// <returns></returns>
-        bool AddTransitions(TState[] fromStates, TState toState);
+        bool SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null);
     }
 
     /// <summary>
@@ -57,7 +42,13 @@ namespace Pontifex.Utils.FSM
     /// Делегаты переданные в SetState() метод вызываются строго последовательно друг относительно друга
     /// </summary>
     /// <typeparam name="TState"></typeparam>
-    public interface IConcurrentFSM<TState> : IFSM<TState>
+    public interface IConcurrentFSM<TState> : IFSMBase<TState>
     {
+        /// <summary>
+        /// Попытка перевести текущий стейт в новый. При переводе вызывается делегат, который может отменить перевод в новый стейт
+        /// </summary>
+        /// <param name="nextState"></param>
+        /// <param name="onStateChanging"></param>
+        void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null);
     }
 }
