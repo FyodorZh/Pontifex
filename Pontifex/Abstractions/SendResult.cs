@@ -5,6 +5,8 @@
     /// </summary>
     public enum SendResult : byte
     {
+        Unknown = 0,
+        
         /// <summary>
         /// The transport accepted the message for local processing. It does not
         /// guarantee carrier submission, peer receipt, or delivery.
