@@ -9,7 +9,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 {
     internal class TransportEndPoint : IRawReliableEndpoint
     {
-        private struct SendReceiveAction: ActionQueue<SendReceiveAction>.IAction
+        private struct SendReceiveAction: ICommandBearer
         {
             private readonly IAnyDirectCtl _ctl;
             private UnionDataList _buffer;
@@ -35,7 +35,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
         private readonly DirectTransport _owner;
         private readonly IAnyDirectCtl _ctl;
 
-        private readonly ActionQueue<SendReceiveAction> _actionSerializer;
+        private readonly SerialCommandQueue<SendReceiveAction> _actionSerializer;
 
         private volatile TransportEndPoint? _other;
 
@@ -46,7 +46,9 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             _owner = owner;
             _ctl = ctl;
             LocalEndPoint = localEp;
-            _actionSerializer = new ActionQueue<SendReceiveAction>(new LimitedConcurrentQueue<SendReceiveAction>(DirectInfo.BufferCapacity));
+            _actionSerializer = new SerialCommandQueue<SendReceiveAction>(
+                new LimitedConcurrentQueue<SendReceiveAction?>(DirectInfo.BufferCapacity),
+                Log.wtf);
         }
 
         public void SetOther(TransportEndPoint other)
@@ -56,7 +58,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
         private SendResult Receive(UnionDataList buffer)
         {
-            if (!_actionSerializer.Put(new SendReceiveAction(buffer, _ctl)))
+            if (!_actionSerializer.Schedule(new SendReceiveAction(buffer, _ctl)))
             {
                 buffer.Release();
                 Log.e("Direct transport buffer overflow");

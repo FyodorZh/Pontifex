@@ -1,13 +1,14 @@
 using Actuarius.Collections;
 using Actuarius.Concurrent;
 using Actuarius.Memory;
+using Scriba;
 
 namespace Pontifex.Utils.FSM
 {
     public class AsyncFSM<TState> : IConcurrentFSM<TState>, IReleasableResource
         where TState : struct
     {
-        private readonly struct ActionRec: ActionQueue<ActionRec>.IAction
+        private readonly struct ActionRec: ICommandBearer
         {
             private readonly AsyncFSM<TState> _owner;
             private readonly bool _reset;
@@ -53,7 +54,8 @@ namespace Pontifex.Utils.FSM
 
         private readonly AtomicBox<TState> _curState = new AtomicBox<TState>();
 
-        private readonly ActionQueue<ActionRec> _ticker = new ActionQueue<ActionRec>(new SystemConcurrentQueue<ActionRec>());
+        private readonly SerialCommandQueue<ActionRec> _ticker = new SerialCommandQueue<ActionRec>(
+            new SystemConcurrentQueue<ActionRec?>(), Log.wtf);
 
         public AsyncFSM(IFSM<TState> core)
         {
@@ -68,12 +70,12 @@ namespace Pontifex.Utils.FSM
 
         public void Reset()
         {
-            _ticker.Put(new ActionRec(this, true, default, null));
+            _ticker.Schedule(new ActionRec(this, true, default, null));
         }
 
         public void SetState(TState nextState, StateChangingPredicate<TState>? onStateChanging = null)
         {
-            _ticker.Put(new ActionRec(this, false, nextState, onStateChanging));
+            _ticker.Schedule(new ActionRec(this, false, nextState, onStateChanging));
         }
 
         public void Release()
