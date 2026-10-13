@@ -13,6 +13,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </summary>
         /// <param name="endPoint">The endpoint to the remote agent.</param>
         /// <param name="ackResponse">The server's response to the client's AckData.</param>
+        /// TODO: return true/false if ACK is not OK. MAKE IT SEPARATE ACK CHECKER
         void OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse);
         
         /// <summary>

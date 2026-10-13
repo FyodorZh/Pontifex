@@ -47,7 +47,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 packet => packet.Release());
 
             _bufferProducer = new InverseDelegateProducer<IMultiRefByteArray>(ProcessDataToSend);
-            _lowLevelTcpSender = new LowLevelTcpSender(socket, _bufferProducer, logger);
+            _lowLevelTcpSender = new LowLevelTcpSender(socket, _bufferProducer);
 
             _lowLevelTcpSender.ChainStopped += () =>
             {
@@ -82,7 +82,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         
         void INonPeriodicLogic.LogicTick(INonPeriodicLogicDriverCtl driver)
         {
-            _lowLevelTcpSender.Run();
+            _lowLevelTcpSender.StartSendingChain();
         }
 
         void ILogic<INonPeriodicLogicDriverCtl>.LogicStopped()

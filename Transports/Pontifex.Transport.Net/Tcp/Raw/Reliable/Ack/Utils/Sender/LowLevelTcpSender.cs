@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Tcp
 {
@@ -16,38 +15,29 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
         private IMultiRefByteArray? _currentBuffer;
 
-
-        private int _countToRun = -1;
+        private int _chainState;
 
         private int _destroyed;
 
-        private readonly ILogger Log;
+        private readonly object _locker = new();
 
         public event Action? ChainStopped;
         public event Action<Exception>? ErrorOccured;
 
-        public LowLevelTcpSender(Socket socket, IProducer<IMultiRefByteArray> dataToSendSource, ILogger logger)
+        public LowLevelTcpSender(Socket socket, IProducer<IMultiRefByteArray> dataToSendSource)
         {
             _socket = socket;
             _dataToSendSource = dataToSendSource;
             _asyncArgs = new SocketAsyncEventArgs();
-            _asyncArgs.Completed += SendCallback;
+            _asyncArgs.Completed += (_, _) => ContinueSendingChain();
             _asyncArgs.SocketFlags = SocketFlags.None;
-            Log = logger;
         }
 
-        public void Run()
+        public void StartSendingChain()
         {
-            if (Interlocked.CompareExchange(ref _countToRun, 100, -1) == -1)
+            if (Interlocked.CompareExchange(ref _chainState, 1, 0) == 0)
             {
-                if (!_dataToSendSource.TryPop(out var buffer))
-                {
-                    Interlocked.Exchange(ref _countToRun, -1);
-                    ChainStopped?.Invoke();
-                    return;
-                }
-                
-                DoSend(buffer);
+                ContinueSendingChain();
             }
         }
 
@@ -55,6 +45,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         {
             if (Interlocked.CompareExchange(ref _destroyed, 1, 0) == 0)
             {
+                Volatile.Write(ref _chainState, 0);
                 _asyncArgs?.Dispose();
                 _asyncArgs = null;
                 return true;
@@ -63,19 +54,29 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             return false;
         }
 
-        private void DoSend(IMultiRefByteArray buffer)
+        private void ContinueSendingChain()
         {
-            _currentBuffer?.Release();
-            
-            using var disposer = buffer.AsDisposable();
             try
             {
-                _currentBuffer = buffer.Acquire();
-                _asyncArgs!.SetBuffer(buffer.Array, buffer.Offset, buffer.Count);
-
-                if (!_socket.SendAsync(_asyncArgs))
+                while (Volatile.Read(ref _destroyed) == 0)
                 {
-                    SendCallback(_socket, _asyncArgs);
+                    _currentBuffer?.Release();
+                    _currentBuffer = null;
+                    if (_dataToSendSource.TryPop(out var buffer))
+                    {
+                        _currentBuffer = buffer;
+                        _asyncArgs!.SetBuffer(buffer.Array, buffer.Offset, buffer.Count);
+                        if (_socket.SendAsync(_asyncArgs))
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        Volatile.Write(ref _chainState, 0);
+                        ChainStopped?.Invoke();
+                        break;
+                    }
                 }
             }
             catch (Exception ex)
@@ -83,26 +84,6 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 _currentBuffer?.Release();
                 _currentBuffer = null;
                 Fail(ex);
-            }
-        }
-        
-        private void SendCallback(object sender, SocketAsyncEventArgs args)
-        {
-            _currentBuffer?.Release();
-            _currentBuffer = null;
-
-            _countToRun -= 1;
-
-            if (_countToRun >= 0 && Volatile.Read(ref _destroyed) == 0)
-            {
-                if (!_dataToSendSource.TryPop(out var buffer))
-                {
-                    Interlocked.Exchange(ref _countToRun, -1);
-                    ChainStopped?.Invoke();
-                    return;
-                }
-
-                DoSend(buffer);
             }
         }
         

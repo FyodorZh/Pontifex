@@ -17,6 +17,7 @@ namespace Pontifex.Raw.Reliable
         /// </summary>
         /// <param name="reason">The reason for the disconnection.</param>
         /// <returns>True if the disconnect was initiated successfully.</returns>
+        /// TODO: remove bool result
         bool Disconnect(StopReason reason);
     }
 }

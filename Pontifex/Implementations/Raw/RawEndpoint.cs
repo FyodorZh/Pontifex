@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using Actuarius.Collections;
-using Actuarius.Concurrent;
 using Actuarius.Memory;
-using Operarius;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
@@ -13,61 +10,74 @@ namespace Pontifex.Raw
 {
     /// <summary>
     /// Abstract base class for a raw data endpoint. Provides thread-safe outbound message admission and
-    /// serialization through a command queue drained on the non-periodic driver thread, inbound message
-    /// dispatch to the handler, and the one-shot start/stop lifecycle shared by raw transports.
+    /// serialization through an internal action queue, inbound message dispatch to the handler, and the
+    /// one-shot start and stop lifecycle shared by raw transports.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Thread safety</b>: All public and protected instance members are safe to call
-    /// concurrently from any thread. Outbound messages are transmitted in admission order on the single
-    /// driver thread; inbound delivery and stop notifications are serialized through
-    /// <see cref="_handlerLock"/>.</description></item>
-    /// <item><description><b>Preconditions/Postconditions</b>: A stop request is latched. Once StopNow,
-    /// StopGracefully, or the driver has stopped this endpoint, it cannot be started again.</description></item>
+    /// concurrently from any thread. State transitions and handler dispatch are serialized by an internal
+    /// action queue that runs one action at a time; the executing thread is not fixed. Outbound messages are
+    /// transmitted in admission order.</description></item>
+    /// <item><description><b>Preconditions/Postconditions</b>: The lifecycle is one-shot. A stop request is
+    /// latched, and after the endpoint has stopped it cannot be started again.</description></item>
+    /// <item><description><b>Other notes</b>: An exception that escapes a queued action fails the endpoint
+    /// hard: it is logged, the stop reason is set to an ExceptionFail, and FailHard is invoked. The base
+    /// implementation of FailHard delivers the handler's stop notification when the endpoint had started and
+    /// then transitions the stage to Stopped; derived classes override it to release resources.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawEndpoint : IRawEndpoint, INonPeriodicLogic
+    public abstract class RawEndpoint : IRawEndpoint
     {
         private readonly IRawTransport _owner;
         private readonly long _bufferCapacityBytes;
         private readonly IRawHandler _handler;
-        
-        private readonly ConcurrentQueueValve<Command> _commandsQueue;
-        
+
+        /// <summary>
+        /// The serial action queue that executes all endpoint state transitions and handler dispatch, one
+        /// action at a time.
+        /// </summary>
+        protected readonly SerialActionQueue _actionQueue;
+
         private long _totalBuffersSize;
 
-        private volatile int _stopRequested;
+        private enum State
+        {
+            Constructed = 0,
+            Starting,
+            Started,
+            Stopping,
+            Stopped
+        }
 
-        private volatile INonPeriodicLogicDriverCtl? _driverCtl;
+        private volatile State _currentStage = State.Constructed;
+        private volatile StopReason? _stopReason;
 
+        private readonly Action<UnionDataList> _sendAction;
+        private readonly Action<UnionDataList> _receiveAction;
 
         /// <summary>
-        /// Serializes handler callback delivery. It is re-entrant for the calling thread and guards every
-        /// invocation of the endpoint handler.
-        /// </summary>
-        protected readonly object _handlerLock = new();
-        
-        /// <summary>
-        /// Gets the remote endpoint address, or null when no remote address is known. Safe to read
-        /// concurrently.
+        /// Gets the remote endpoint address, or <see langword="null"/> when no remote address is known.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The value is captured at construction and never changes for the
-        /// lifetime of the endpoint, including after a stop.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: The value is captured at construction and never changes for
+        /// the lifetime of the endpoint, including after a stop.</description></item>
         /// </list>
         /// </remarks>
         public IEndPoint? RemoteEndPoint { get; }
 
         /// <summary>
-        /// Gets the maximum message size in bytes supported by the transport. It is an inclusive maximum
-        /// for the application payload and excludes transport framing and control metadata. Empty payloads
-        /// are valid. Safe to read concurrently.
+        /// Gets the maximum message size in bytes supported by the transport. It is an inclusive maximum for
+        /// the application payload and excludes transport framing and control metadata; empty payloads are
+        /// valid.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The value is fixed at construction. Admission compares the size of
-        /// a message to be sent against this limit.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: The value is fixed at construction. Admission compares the
+        /// size of a message to be sent against this limit.</description></item>
         /// </list>
         /// </remarks>
         public int MessageMaxByteSize { get; }
@@ -86,60 +96,249 @@ namespace Pontifex.Raw
         /// Gets the memory rental system of the owning transport, used to rent buffers.
         /// </summary>
         protected IMemoryRental Memory => _owner.Memory;
-        
+
+        /// <summary>
+        /// Gets a value indicating whether the endpoint is running and accepting new work, meaning the stage
+        /// is Started and no stop has been requested.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: Becomes false as soon as a stop is requested, even while
+        /// work already accepted may still be draining. Derived classes expose transport-specific validity
+        /// getters in terms of this property.</description></item>
+        /// </list>
+        /// </remarks>
+        public bool IsRunning => _currentStage == State.Started && _stopReason == null;
+
         /// <summary>
         /// Initializes a new raw endpoint owned by the given transport.
         /// </summary>
-        /// <param name="owner">The owning transport that provides the transport name, logging, and
-        /// memory rental.</param>
-        /// <param name="remoteEndpoint">The remote endpoint address, or null when it is unknown.</param>
+        /// <param name="owner">The owning transport that provides the transport name, logging, and memory
+        /// rental.</param>
+        /// <param name="remoteEndpoint">The remote endpoint address, or <see langword="null"/> when it is
+        /// unknown.</param>
         /// <param name="handler">The handler that receives inbound messages and stop notifications.</param>
-        /// <param name="messageMaxByteSize">The inclusive maximum message size, in bytes,
-        /// admitted by this endpoint.</param>
-        /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint
-        /// but not yet transmitted.</param>
-        protected RawEndpoint(IRawTransport owner, IEndPoint remoteEndpoint, IRawHandler handler, 
+        /// <param name="messageMaxByteSize">The inclusive maximum message size, in bytes, admitted by this
+        /// endpoint; must be at least 1.</param>
+        /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint but not
+        /// yet transmitted; must be at least 1.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: messageMaxByteSize and bufferCapacityBytes
+        /// must each be at least 1.</description></item>
+        /// <item><description><b>Other notes</b>: The owning transport and the handler are expected to be
+        /// non-null and are retained, not disposed, by the endpoint.</description></item>
+        /// </list>
+        /// </remarks>
+        protected RawEndpoint(IRawTransport owner, IEndPoint remoteEndpoint, IRawHandler handler,
             int messageMaxByteSize, long bufferCapacityBytes)
         {
+            if (bufferCapacityBytes < 1)
+            {
+                throw new ArgumentException(nameof(bufferCapacityBytes));
+            }
+
+            if (messageMaxByteSize < 1)
+            {
+                throw new ArgumentException(nameof(messageMaxByteSize));
+            }
+
             RemoteEndPoint = remoteEndpoint;
             MessageMaxByteSize = messageMaxByteSize;
 
             _owner = owner;
             _bufferCapacityBytes = bufferCapacityBytes;
             _handler = handler;
-            
-            _commandsQueue = new ConcurrentQueueValve<Command>(
-                new SynchronizedBySpinLockConcurrentQueue<Command>(
-                    new SystemQueue<Command>()),
-                command =>
+
+            _actionQueue = new SerialActionQueue(ex =>
+            {
+                Log.wtf(ex);
+                _stopReason = new ExceptionFail(TransportName, ex, "Unhandled exception");
+                FailHard(_stopReason);
+            });
+
+            _sendAction = msg =>
+            {
+                int size = msg.GetDataSize();
+                try
                 {
-                    switch (command.Type)
+                    if (_currentStage == State.Started)
                     {
-                        case CommandType.SendData:
-                            Interlocked.Add(ref _totalBuffersSize, -command.DataSize);
-                            command.Data?.Release();
-                            break;
+                        DoSendRaw(msg);
                     }
-                });
+                    else
+                    {
+                        msg.Release();
+                    }
+                }
+                finally
+                {
+                    Interlocked.Add(ref _totalBuffersSize, -size);
+                }
+            };
+
+            _receiveAction = msg =>
+            {
+                if (_currentStage == State.Started)
+                {
+                    _handler.OnReceived(msg);
+                }
+                else
+                {
+                    msg.Release();
+                }
+            };
         }
 
         /// <summary>
-        /// Transmits a single outbound buffer through the concrete carrier.
+        /// Handles a fatal endpoint failure. Invoked after the stop reason has been recorded. The base
+        /// implementation delivers the handler's stop notification when the endpoint had started and then
+        /// transitions the stage to Stopped; derived classes override to release unmanaged resources and
+        /// terminate their work.
         /// </summary>
-        /// <param name="bufferToSend">The buffer to transmit. Ownership transfers to the implementation.</param>
+        /// <param name="reason">The error description that caused the failure.</param>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Preconditions/Postconditions</b>: The implementation receives ownership of
-        /// bufferToSend and must call Release() on it exactly once, including when the carrier cannot
-        /// accept it. It must not throw.</description></item>
-        /// <item><description><b>Thread safety</b>: Invoked only on the non-periodic driver thread, never
-        /// concurrently with another invocation.</description></item>
-        /// <item><description><b>Side effects</b>: A throwing override stops the endpoint; the buffer already
-        /// popped from the queue is not released by the base.</description></item>
+        /// <item><description><b>Thread safety</b>: Invoked on the thread that executed the failing action;
+        /// the base implementation delivers the stop notification and sets the stage to
+        /// Stopped.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The base implementation delivers the stop
+        /// notification only when the stage is Started, then sets the stage to Stopped, and the override must
+        /// not throw.</description></item>
         /// </list>
         /// </remarks>
-        protected abstract void DoSendRaw(UnionDataList bufferToSend);
-        
+        protected virtual void FailHard(StopReason reason)
+        {
+            if (_currentStage == State.Started)
+            {
+                _handler.OnStopped(reason);
+            }
+            _currentStage = State.Stopped;
+        }
+
+        #region Start
+
+        /// <summary>
+        /// Requests a start of the endpoint, scheduling BeginStart on the endpoint's serial action queue. May
+        /// be called at most once, before any stop.
+        /// </summary>
+        /// <returns>true if the start request was accepted for processing; otherwise false. A successful
+        /// return means the request was queued, not that the endpoint has started.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the transition is serialized
+        /// on the internal action queue.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: Legal only while the endpoint is in the
+        /// constructed stage. A redundant call fails the endpoint hard.</description></item>
+        /// <item><description><b>Other notes</b>: Observe OnStarted or IsRunning to learn when the endpoint is
+        /// actually running.</description></item>
+        /// </list>
+        /// </remarks>
+        public bool Start()
+        {
+            return _actionQueue.Schedule(() =>
+            {
+                if (_currentStage != State.Constructed)
+                {
+                    throw new InvalidOperationException($"Stage expected to be 'Constructed' but was {_currentStage}");
+                }
+                _currentStage = State.Starting;
+                BeginStart();
+            });
+        }
+
+        /// <summary>
+        /// Performs the transport-specific start work. Invoked on the serial action queue after the endpoint
+        /// enters the starting stage.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Called on the serial action queue; never concurrently with
+        /// another transition.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The implementation must call FinishStart
+        /// exactly once, either synchronously or later from any thread, passing a callback that releases
+        /// resources allocated during the start attempt. An exception fails the endpoint hard.</description></item>
+        /// </list>
+        /// </remarks>
+        protected abstract void BeginStart();
+
+        /// <summary>
+        /// Completes the start transition, invoking OnStarted when the endpoint is still starting.
+        /// </summary>
+        /// <param name="onFail">A callback that releases resources allocated by BeginStart when the start
+        /// cannot complete. It is invoked on the serial action queue and must not throw.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: The transition is serialized on the internal action queue;
+        /// the call may be scheduled from any thread.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: Intended to be called exactly once per
+        /// endpoint by BeginStart or its continuation. When the stage is Starting the endpoint becomes Started
+        /// and OnStarted is invoked; if a stop was already requested, the endpoint then transitions to
+        /// Stopping and BeginStop is invoked. Any other stage invokes onFail and fails the endpoint
+        /// hard.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void FinishStart(Action onFail)
+        {
+            _actionQueue.Schedule(() =>
+            {
+                switch (_currentStage)
+                {
+                    case State.Starting:
+                        _currentStage = State.Started;
+                        
+                        if (_stopReason != null)
+                        {
+                            _currentStage = State.Stopping;
+                            BeginStop(_stopReason, false);
+                        }
+                        break;
+
+                    case State.Constructed:
+                    case State.Started:
+                    case State.Stopping:
+                    case State.Stopped:
+                        onFail();
+                        throw new InvalidOperationException($"Invalid RawEndpoint.Stage {_currentStage}");
+
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+            });
+        }
+
+        #endregion
+
+        #region Work
+
+        /// <summary>
+        /// Delivers one inbound message to the handler, or drops it when the endpoint is not running.
+        /// </summary>
+        /// <param name="message">The received message. On delivery, ownership transfers to the handler; on
+        /// drop, the endpoint releases it.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any number of threads; delivery is
+        /// serialized with the stop notification, so a message is never delivered after the stop
+        /// notification.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The message must not be
+        /// <see langword="null"/>. It is released exactly once when the endpoint is not running or the message
+        /// cannot be scheduled.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual void ProcessInboundMessage(UnionDataList message)
+        {
+            if (!IsRunning)
+            {
+                message.Release();
+            }
+            else if (!_actionQueue.Schedule(message, _receiveAction, msg => msg.Release()))
+            {
+                message.Release();
+            }
+        }
+
         /// <summary>
         /// Determines whether the endpoint can currently admit a new outbound message.
         /// </summary>
@@ -148,42 +347,46 @@ namespace Pontifex.Raw
         /// <returns>true when a message may be admitted; otherwise false with errorCode set.</returns>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The default implementation returns false with NotConnected when a
-        /// stop was requested or the endpoint logic has not been started yet. Overrides add transport-specific
-        /// flow control and must not throw.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe to call concurrently; the observed state is a
+        /// best-effort snapshot.</description></item>
+        /// <item><description><b>Other notes</b>: The default implementation rejects with SendResult.NotConnected
+        /// when a stop has been requested or the endpoint is not in the started stage. Overrides add
+        /// transport-specific flow control and must not throw.</description></item>
         /// </list>
         /// </remarks>
         protected virtual bool CanSendNow(out SendResult errorCode)
         {
             errorCode = SendResult.Ok;
-            
-            if (_stopRequested != 0)
+
+            if (_stopReason != null)
             {
                 errorCode = SendResult.NotConnected;
             }
-            else if (_driverCtl == null)
+            else if (_currentStage != State.Started)
             {
                 errorCode = SendResult.NotConnected;
             }
-            
+
             return errorCode == SendResult.Ok;
         }
 
         /// <summary>
         /// Validates and admits one outbound buffer for transmission, or rejects it synchronously.
         /// </summary>
-        /// <param name="bufferToSend">The buffer to send. Ownership transfers to the endpoint
-        /// unconditionally, whatever the result.</param>
+        /// <param name="bufferToSend">The buffer to send. Ownership transfers to the endpoint on every result
+        /// except InvalidMessage; on InvalidMessage the buffer is null or not alive and cannot be transferred,
+        /// so the caller retains ownership.</param>
         /// <returns>A SendResult describing the admission: Ok, or a synchronous rejection.</returns>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Preconditions/Postconditions</b>: On any result other than InvalidMessage the base
-        /// consumes and releases the buffer. On Ok the buffer is owned by the endpoint and released after
-        /// transmission or when it is dropped by a stop.</description></item>
-        /// <item><description><b>Thread safety</b>: Safe for concurrent calls from any thread; concurrent Ok sends
-        /// are transmitted in admission order.</description></item>
-        /// <item><description><b>Other notes</b>: The byte budget enforced by bufferCapacityBytes is a best-effort
-        /// bound under concurrent senders. A successful admission requests a driver invocation.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe for concurrent calls from any thread; concurrent Ok
+        /// sends are transmitted in admission order.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: On any result other than InvalidMessage the
+        /// endpoint consumes and releases the buffer. On Ok the endpoint owns the buffer and releases it after
+        /// transmission or when it is dropped by a stop. The byte budget is a best-effort bound under
+        /// concurrent senders.</description></item>
+        /// <item><description><b>Other notes</b>: A successful admission requests processing of the internal
+        /// action queue.</description></item>
         /// </list>
         /// </remarks>
         protected SendResult ScheduleToSend(UnionDataList bufferToSend)
@@ -199,13 +402,13 @@ namespace Pontifex.Raw
                 bufferToSend.Release();
                 return SendResult.MessageTooBig;
             }
-            
+
             if (!CanSendNow(out var errorCode))
             {
                 bufferToSend.Release();
                 return errorCode;
             }
-            
+
             Interlocked.Add(ref _totalBuffersSize, bufferSize);
             if (_totalBuffersSize > _bufferCapacityBytes)
             {
@@ -214,25 +417,17 @@ namespace Pontifex.Raw
                 return SendResult.BufferOverflow;
             }
 
-            switch (_commandsQueue.EnqueueEx(new Command(bufferToSend, bufferSize)))
+            if (!_actionQueue.Schedule(bufferToSend, _sendAction, msg =>
+                {
+                    Interlocked.Add(ref _totalBuffersSize, -msg.GetDataSize());
+                    msg.Release();
+                }))
             {
-                case ValveEnqueueResult.Ok:
-                    // continue
-                    break;
-                
-                case ValveEnqueueResult.Overflown:
-                    Interlocked.Add(ref _totalBuffersSize, -bufferSize);
-                    bufferToSend.Release();
-                    return SendResult.BufferOverflow;
-                
-                case ValveEnqueueResult.Rejected:
-                    return SendResult.NotConnected;
-                
-                default:
-                    throw new ArgumentOutOfRangeException();
+                Interlocked.Add(ref _totalBuffersSize, -bufferSize);
+                bufferToSend.Release();
+                return SendResult.Error;
             }
-            
-            _driverCtl?.RequestInvocation();
+
             return SendResult.Ok;
         }
 
@@ -242,67 +437,127 @@ namespace Pontifex.Raw
             return ScheduleToSend(bufferToSend);
         }
 
+        #endregion
+
+        #region Stop
+
         /// <summary>
-        /// Stops the endpoint immediately: discards accepted but not yet transmitted messages, requests the
-        /// driver to stop, and notifies the handler once.
+        /// Requests a stop of the endpoint and latches the given reason. Only the first call performs the
+        /// transition; later calls do nothing.
         /// </summary>
         /// <param name="reason">The reason the endpoint is being stopped.</param>
+        /// <param name="tryBeGentle">A hint forwarded to BeginStop indicating whether the transport should
+        /// attempt a graceful stop; the base class does not interpret it.</param>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread, including concurrently with other
-        /// stop calls and handler callbacks. Only the first caller performs the stop; later calls are
-        /// no-ops.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: Exactly one handler stop notification is delivered
-        /// per endpoint. After this call the endpoint is permanently stopped.</description></item>
-        /// <item><description><b>Side effects</b>: Queued messages not yet transmitted are released. A transmission
-        /// already in progress may still complete.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread, including concurrently with
+        /// other stop calls.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The endpoint stops accepting new work
+        /// immediately, while work already accepted may still drain. Stopping an endpoint that was never
+        /// started moves it directly to Stopped; stopping one that is still starting defers the transition
+        /// until FinishStart completes. A stopped endpoint cannot be started again.</description></item>
+        /// <item><description><b>Other notes</b>: The reason becomes the endpoint's stop reason. If the
+        /// endpoint had started, the reason is supplied to the handler through OnStopped.</description></item>
         /// </list>
         /// </remarks>
-        public void StopNow(StopReason reason)
+        public void Stop(StopReason reason, bool tryBeGentle)
         {
-            if (Interlocked.Exchange(ref _stopRequested, 1) == 0)
+            if (Interlocked.CompareExchange(ref _stopReason, reason, null) == null)
             {
-                _commandsQueue.CloseValve();
-                _driverCtl?.Stop();
-                OnStopped(reason);
+                _actionQueue.Schedule(() =>
+                {
+                    switch (_currentStage)
+                    {
+                        case State.Constructed:
+                            _currentStage = State.Stopped;
+                            break;
+                        case State.Starting:
+                            // wait for FinishStart
+                            break;
+                        case State.Started:
+                            _currentStage = State.Stopping;
+                            BeginStop(reason, tryBeGentle);
+                            break;
+                        case State.Stopping:
+                        case State.Stopped:
+                            throw new InvalidOperationException($"Impossible RawEndpoint.Stage '{_currentStage}'");
+                        default:
+                            throw new ArgumentOutOfRangeException();
+                    }
+                });
             }
         }
 
         /// <summary>
-        /// Requests a graceful stop: messages already accepted are flushed before the stop completes.
+        /// Performs the transport-specific stop work. Invoked on the serial action queue after the endpoint
+        /// enters the stopping stage.
         /// </summary>
         /// <param name="reason">The reason the endpoint is being stopped.</param>
-        /// <returns>true if this call performed the stop transition; false if a stop had already been
-        /// requested.</returns>
+        /// <param name="tryBeGentle">A hint indicating whether a graceful stop should be attempted.</param>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Preconditions/Postconditions</b>: A later driver tick is required to finalize the
-        /// stop. Messages admitted before the graceful-stop marker are transmitted first; messages admitted
-        /// after it are dropped. A message admitted concurrently with the stop may return Ok and still be
-        /// dropped.</description></item>
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread, including concurrently with other
-        /// stop calls. Only the first caller performs the stop transition.</description></item>
+        /// <item><description><b>Thread safety</b>: Called on the serial action queue; never concurrently with
+        /// another transition.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The implementation must call FinishStop
+        /// exactly once, either synchronously or later from any thread. An exception fails the endpoint
+        /// hard.</description></item>
         /// </list>
         /// </remarks>
-        public bool StopGracefully(StopReason reason)
-        {
-            if (Interlocked.Exchange(ref _stopRequested, 1) == 0)
-            {
-                _commandsQueue.Put(new Command());
-                OnStopped(reason);
-                return true;
-            }
+        protected abstract void BeginStop(StopReason reason, bool tryBeGentle);
 
-            return false;
+        /// <summary>
+        /// Completes the stop transition, setting the stage to Stopped and invoking the handler's stop
+        /// notification.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: The transition is serialized on the internal action queue;
+        /// the call may be scheduled from any thread.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: Intended to be called exactly once per
+        /// endpoint by BeginStop or its continuation, while the endpoint is in the stopping stage. An invalid
+        /// stage fails the endpoint hard.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void FinishStop()
+        {
+            _actionQueue.Schedule(() =>
+            {
+                if (_currentStage != State.Stopping)
+                {
+                    throw new InvalidOperationException($"Stage expected to be 'Stopping' but was {_currentStage}");
+                }
+
+                _currentStage = State.Stopped;
+                _handler.OnStopped(_stopReason!);
+            });
         }
-        
+
+        #endregion
+
+        /// <summary>
+        /// Transmits a single outbound buffer through the concrete carrier.
+        /// </summary>
+        /// <param name="bufferToSend">The buffer to transmit. Ownership transfers to the implementation.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Invoked only on the serial action queue, never concurrently
+        /// with another invocation.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The implementation receives ownership of
+        /// the buffer and must release it exactly once, including when the carrier cannot accept it. It must
+        /// not throw.</description></item>
+        /// <item><description><b>Side effects</b>: If the override throws, the endpoint fails hard and the
+        /// buffer is not released by the base class.</description></item>
+        /// </list>
+        /// </remarks>
+        protected abstract void DoSendRaw(UnionDataList bufferToSend);
+
         /// <summary>
         /// Populates dst with the IControl interfaces exposed by this endpoint, optionally filtered by
         /// predicate.
         /// </summary>
         /// <param name="dst">The list that receives the exposed controls.</param>
-        /// <param name="predicate">An optional filter; when non-null, a control is added only if
-        /// it is accepted.</param>
+        /// <param name="predicate">An optional filter; when provided, a control is added only if it is
+        /// accepted.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Other notes</b>: The base implementation adds no controls; overrides add the
@@ -311,136 +566,6 @@ namespace Pontifex.Raw
         /// </remarks>
         public virtual void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
         {
-        }
-        
-        /// <summary>
-        /// Delivers one inbound message to the handler, or drops it when the endpoint is not active.
-        /// </summary>
-        /// <param name="message">The received message. On delivery, ownership transfers to the handler;
-        /// on drop, the base releases it.</param>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Callers may invoke this from several threads but should serialize
-        /// their calls. Delivery and the stop notification are mutually exclusive, so a message is never
-        /// delivered after the stop notification has been raised.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: The message is released exactly once when the
-        /// endpoint is stopped or has not been started yet.</description></item>
-        /// </list>
-        /// </remarks>
-        protected virtual void ProcessInboundMessage(UnionDataList message)
-        {
-            bool canProcess;
-            lock (_handlerLock)
-            {
-                canProcess = (_stopRequested == 0 && _driverCtl != null);
-                if (canProcess)
-                {
-                    _handler.OnReceived(message);
-                }
-            }
-            if (!canProcess)
-            {
-                message.Release();
-            }
-        }
-
-        /// <summary>
-        /// Invoked once when the endpoint logic is started successfully.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Called on the non-periodic driver thread, without holding the
-        /// handler lock.</description></item>
-        /// </list>
-        /// </remarks>
-        protected virtual void OnStarted()
-        {
-        }
-        
-        /// <summary>
-        /// Notifies the handler that the endpoint has stopped, holding the handler lock.
-        /// </summary>
-        /// <param name="reason">The reason the endpoint stopped.</param>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Delivered exactly once per endpoint, from the thread that
-        /// performed the stop transition; it is serialized with inbound delivery.</description></item>
-        /// </list>
-        /// </remarks>
-        protected virtual void OnStopped(StopReason reason)
-        {
-            lock (_handlerLock)
-            {
-                _handler.OnStopped(reason);
-            }
-        }
-
-        bool ILogic<INonPeriodicLogicDriverCtl>.LogicStarted(INonPeriodicLogicDriverCtl driver)
-        {
-            if (_stopRequested == 0)
-            {
-                _driverCtl = driver;
-                OnStarted();
-                return true;
-            }
-
-            return false;
-        }
-
-        void ILogic<INonPeriodicLogicDriverCtl>.LogicStopped()
-        {
-            StopNow(new Unknown(_owner.Name));
-            _driverCtl = null;
-        }
-
-        void INonPeriodicLogic.LogicTick(INonPeriodicLogicDriverCtl driver)
-        {
-            while (_commandsQueue.TryPop(out var cmd))
-            {
-                switch (cmd.Type)
-                {
-                    case CommandType.Stop:
-                        _commandsQueue.CloseValve();
-                        _driverCtl?.Stop();
-                        return;
-                    case CommandType.SendData:
-                        try
-                        {
-                            DoSendRaw(cmd.Data!);
-                        }
-                        catch (Exception ex)
-                        {
-                            StopNow(new ExceptionFail(TransportName, ex, "Fatal! RawEndpoint.DoSendRaw newer throws"));
-                        }
-                        finally
-                        {
-                            Interlocked.Add(ref _totalBuffersSize, -cmd.DataSize);    
-                        }
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-            }
-        }
-        
-        private enum CommandType
-        {
-            Stop = 0,
-            SendData
-        }
-        
-        private readonly struct Command
-        {
-            public readonly CommandType Type;
-            public readonly UnionDataList? Data;
-            public readonly int DataSize;
-
-            public Command(UnionDataList data, int dataSize)
-            {
-                Type = CommandType.SendData;
-                Data = data;
-                DataSize = dataSize;
-            }
         }
     }
 }
