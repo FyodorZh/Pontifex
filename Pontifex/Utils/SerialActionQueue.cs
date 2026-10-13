@@ -15,7 +15,7 @@ namespace Pontifex.Utils
     /// not fixed.</item>
     /// </list>
     /// </remarks>
-    public class SerialActionQueue
+    public class SerialActionQueue : ISerialActionQueue
     {
         private readonly SerialCommandQueue<Job> _commandQueue;
 

@@ -37,7 +37,7 @@ namespace Pontifex.Raw
         /// The serial action queue that executes all endpoint state transitions and handler dispatch, one
         /// action at a time.
         /// </summary>
-        protected readonly SerialActionQueue _actionQueue;
+        protected readonly ISerialActionQueue _actionQueue;
 
         private long _totalBuffersSize;
 
@@ -151,7 +151,7 @@ namespace Pontifex.Raw
             _bufferCapacityBytes = bufferCapacityBytes;
             _handler = handler;
 
-            _actionQueue = new SerialActionQueue(ex =>
+            _actionQueue = SerialQueueConstructor(ex =>
             {
                 Log.wtf(ex);
                 _stopReason = new ExceptionFail(TransportName, ex, "Unhandled exception");
@@ -189,6 +189,25 @@ namespace Pontifex.Raw
                     msg.Release();
                 }
             };
+        }
+
+        /// <summary>
+        /// Creates the serial action queue that executes all endpoint transitions and handler dispatch.
+        /// </summary>
+        /// <param name="onError">The handler invoked with exceptions that escape a queued action. It must be
+        /// non-null and must not throw.</param>
+        /// <returns>The serial action queue used by this endpoint.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default implementation returns an unbounded
+        /// <see cref="SerialActionQueue"/>. It is invoked exactly once, during construction, and derived classes
+        /// override it to supply a custom queue. An override must not depend on derived state that is not yet
+        /// initialized, because the call originates from the base constructor.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual ISerialActionQueue SerialQueueConstructor(Action<Exception> onError)
+        {
+            return new SerialActionQueue(onError);
         }
 
         /// <summary>
