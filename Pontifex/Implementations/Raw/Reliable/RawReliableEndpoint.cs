@@ -141,7 +141,7 @@ namespace Pontifex.Raw.Reliable
         protected RawReliableEndpoint(
             IRawReliableTransport owner, IEndPoint remoteEndPoint, IRawReliableHandler handler, 
             int messageMaxByteSize, long bufferCapacityBytes)
-            : base(owner, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes)
+            : base(owner.Name, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, owner.Memory, owner.Log)
         {
             _handler = handler;
         }

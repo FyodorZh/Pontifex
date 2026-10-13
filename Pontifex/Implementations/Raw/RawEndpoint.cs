@@ -29,7 +29,6 @@ namespace Pontifex.Raw
     /// </remarks>
     public abstract class RawEndpoint : IRawEndpoint
     {
-        private readonly IRawTransport _owner;
         private readonly long _bufferCapacityBytes;
         private readonly IRawHandler _handler;
 
@@ -83,19 +82,19 @@ namespace Pontifex.Raw
         public int MessageMaxByteSize { get; }
 
         /// <summary>
-        /// Gets the name of the owning transport.
+        /// Gets the name of the transport that owns this endpoint.
         /// </summary>
-        protected string TransportName => _owner.Name;
+        protected string TransportName { get; }
 
         /// <summary>
-        /// Gets the logging system of the owning transport.
+        /// Gets the logging system used by this endpoint.
         /// </summary>
-        protected ILogger Log => _owner.Log;
+        protected ILogger Log { get; }
 
         /// <summary>
-        /// Gets the memory rental system of the owning transport, used to rent buffers.
+        /// Gets the memory rental system used to rent buffers.
         /// </summary>
-        protected IMemoryRental Memory => _owner.Memory;
+        protected IMemoryRental Memory { get; }
 
         /// <summary>
         /// Gets a value indicating whether the endpoint is running and accepting new work, meaning the stage
@@ -112,10 +111,10 @@ namespace Pontifex.Raw
         public bool IsRunning => _currentStage == State.Started && _stopReason == null;
 
         /// <summary>
-        /// Initializes a new raw endpoint owned by the given transport.
+        /// Initializes a new raw endpoint with the transport name, logging, and memory rental supplied
+        /// explicitly by the caller.
         /// </summary>
-        /// <param name="owner">The owning transport that provides the transport name, logging, and memory
-        /// rental.</param>
+        /// <param name="transportName">The name of the transport that owns this endpoint.</param>
         /// <param name="remoteEndpoint">The remote endpoint address, or <see langword="null"/> when it is
         /// unknown.</param>
         /// <param name="handler">The handler that receives inbound messages and stop notifications.</param>
@@ -123,16 +122,18 @@ namespace Pontifex.Raw
         /// endpoint; must be at least 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint but not
         /// yet transmitted; must be at least 1.</param>
+        /// <param name="memory">The memory rental system used to rent buffers.</param>
+        /// <param name="log">The logging system used by this endpoint.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: messageMaxByteSize and bufferCapacityBytes
         /// must each be at least 1.</description></item>
-        /// <item><description><b>Other notes</b>: The owning transport and the handler are expected to be
+        /// <item><description><b>Other notes</b>: The logging system and the handler are expected to be
         /// non-null and are retained, not disposed, by the endpoint.</description></item>
         /// </list>
         /// </remarks>
-        protected RawEndpoint(IRawTransport owner, IEndPoint remoteEndpoint, IRawHandler handler,
-            int messageMaxByteSize, long bufferCapacityBytes)
+        protected RawEndpoint(string transportName, IEndPoint remoteEndpoint,
+            IRawHandler handler, int messageMaxByteSize, long bufferCapacityBytes, IMemoryRental memory, ILogger log)
         {
             if (bufferCapacityBytes < 1)
             {
@@ -147,7 +148,9 @@ namespace Pontifex.Raw
             RemoteEndPoint = remoteEndpoint;
             MessageMaxByteSize = messageMaxByteSize;
 
-            _owner = owner;
+            TransportName = transportName;
+            Log = log;
+            Memory = memory;
             _bufferCapacityBytes = bufferCapacityBytes;
             _handler = handler;
 
