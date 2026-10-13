@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- Kill the run instead of hanging if a test deadlocks on an unbounded await. -->
+    <TestSessionTimeout>300000</TestSessionTimeout>
+  </RunConfiguration>
+  <NUnit>
+    <!-- 0 disables parallel test workers: shared global state and lifecycle races require serial execution. -->
+    <NumberOfTestWorkers>0</NumberOfTestWorkers>
+  </NUnit>
+</RunSettings>
