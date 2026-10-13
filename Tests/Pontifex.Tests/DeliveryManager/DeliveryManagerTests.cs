@@ -81,8 +81,8 @@ namespace Pontifex.Delivery.Tests
             var badReport = CPool.Acquire<UnionDataList>();
             badReport.PutLast(new UnionData(false));
             badReport.PutLast(new UnionData((ushort)5));
+            // ProcessIncoming consumes the reference via AsDisposable: ownership transferred.
             bool result = dm.ProcessIncoming(badReport);
-            badReport.Release();
             Assert.That(result, Is.False);
         }
 

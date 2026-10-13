@@ -201,10 +201,9 @@ public sealed class UnionDataListTests
     public void SerializeDeserialize_ManyElements()
     {
         var list = CreateList();
-        using var _ = list.AsDisposable();
         for (int i = 0; i < 100; i++)
             list.PutLast(new UnionData(i));
-        AssertRoundTrip(list);
+        AssertRoundTrip(list); // AssertRoundTrip takes ownership and disposes `original`
     }
 
     [Test]
