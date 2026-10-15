@@ -1,8 +1,10 @@
 using System;
 using System.Threading.Tasks;
 using Actuarius.Concurrent;
+using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Raw.Reliable
 {
@@ -23,16 +25,19 @@ namespace Pontifex.Raw.Reliable
     /// </remarks>
     public abstract class RawReliableClientEndpoint : RawReliableEndpoint
     {
+        private const int KeepAlivePollPeriodMs = 100;
+
         private readonly PingOptions? _pingOptions;
         
         private readonly AtomicBox<DateTime> _lastPongReceiveTime = new ();
 
+        private DateTime _lastPingSentTime;
+
         /// <summary>
-        /// Initializes a new reliable client endpoint owned by the given transport, with an optional keep-alive
-        /// configuration.
+        /// Initializes a new reliable client endpoint with the given transport name, logging, and memory
+        /// rental, and an optional keep-alive configuration.
         /// </summary>
-        /// <param name="owner">The owning transport that provides the transport name, logging, and memory
-        /// rental.</param>
+        /// <param name="transportName">The name of the transport that owns this endpoint.</param>
         /// <param name="remoteEndPoint">The remote endpoint address, or <see langword="null"/> when it is
         /// unknown.</param>
         /// <param name="handler">The handler that receives inbound messages and connection lifecycle
@@ -41,6 +46,8 @@ namespace Pontifex.Raw.Reliable
         /// endpoint; must be at least 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint but not
         /// yet transmitted; must be at least 1.</param>
+        /// <param name="memory">The memory rental system used to rent buffers.</param>
+        /// <param name="log">The logging system used by this endpoint.</param>
         /// <param name="pingOptions">The keep-alive configuration, or <see langword="null"/> to disable
         /// keep-alive.</param>
         /// <remarks>
@@ -48,14 +55,14 @@ namespace Pontifex.Raw.Reliable
         /// <item><description><b>Preconditions/Postconditions</b>: When <paramref name="pingOptions"/> is
         /// provided, its PingPeriod must be positive and its DisconnectTimeout must be at least twice its
         /// PingPeriod.</description></item>
-        /// <item><description><b>Other notes</b>: The owning transport and the handler are retained, not
-        /// disposed, by the endpoint.</description></item>
+        /// <item><description><b>Other notes</b>: The handler is retained, not disposed, by the
+        /// endpoint.</description></item>
         /// </list>
         /// </remarks>
-        protected RawReliableClientEndpoint(IRawReliableTransport owner, IEndPoint remoteEndPoint, IRawReliableClientHandler handler, 
-            int messageMaxByteSize, long bufferCapacityBytes,
+        protected RawReliableClientEndpoint(string transportName, IEndPoint remoteEndPoint, IRawReliableClientHandler handler, 
+            int messageMaxByteSize, long bufferCapacityBytes, IMemoryRental memory, ILogger log,
             PingOptions? pingOptions)
-            : base(owner.Name, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, owner.Memory, owner.Log)
+            : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log)
         {
             if (pingOptions != null &&
                 (pingOptions.Value.PingPeriod <= TimeSpan.Zero ||
@@ -66,6 +73,20 @@ namespace Pontifex.Raw.Reliable
 
             _pingOptions = pingOptions;
         }
+
+        /// <summary>
+        /// Gets the current time used by the keep-alive mechanism.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently; the returned value is read by
+        /// the background keep-alive loop.</description></item>
+        /// <item><description><b>Other notes</b>: The default implementation returns
+        /// <see cref="DateTime.Now"/>. It is a testability seam; overrides should return a monotonically
+        /// non-decreasing local time.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual DateTime Now => DateTime.Now;
 
         /// <summary>
         /// Records the initial pong receive time and, when keep-alive is configured, starts the background
@@ -86,49 +107,98 @@ namespace Pontifex.Raw.Reliable
             {
                 if (IsLowLevelConnected)
                 {
-                    _lastPongReceiveTime.Value = DateTime.Now;
-                    if (_pingOptions != null)
-                    {
-                        Task.Run(async () =>
-                        {
-                            try
-                            {
-                                DateTime lastPingSentTime = new();
-                                while (IsLowLevelConnected)
-                                {
-                                    DateTime now = DateTime.Now;
-                                    if (now - _lastPongReceiveTime.Value > _pingOptions.Value.DisconnectTimeout)
-                                    {
-                                        Stop(new TimeOut(TransportName), false);
-                                        break;
-                                    }
-
-                                    if (now - lastPingSentTime > _pingOptions.Value.PingPeriod)
-                                    {
-                                        var buffer = Memory.CollectablePool.Acquire<UnionDataList>();
-                                        buffer.PutFirst((byte)MessageType.PingMessage);
-                                        var res = ScheduleToSend(buffer);
-                                        if (res != SendResult.Ok)
-                                        {
-                                            Stop(new TextFail(TransportName, $"Ping failed with {res}"), false);
-                                            break;
-                                        }
-
-                                        lastPingSentTime = now;
-                                    }
-
-                                    await Task.Delay(100);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.wtf(ex);
-                                Stop(new ExceptionFail(TransportName, ex), false);
-                            }
-                        });
-                    }
+                    _lastPongReceiveTime.Value = Now;
+                    _lastPingSentTime = default;
+                    StartKeepAlive();
                 }
             });
+        }
+
+        /// <summary>
+        /// Starts the background keep-alive loop when keep-alive is configured; otherwise does nothing.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Called on the serial action queue; the loop runs on a
+        /// thread-pool thread.</description></item>
+        /// <item><description><b>Other notes</b>: The default implementation runs <see cref="KeepAliveTick"/>
+        /// on a thread-pool thread, pausing between steps. It is a scheduling seam: overrides may run the loop
+        /// differently.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual void StartKeepAlive()
+        {
+            if (_pingOptions == null)
+            {
+                return;
+            }
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    while (IsLowLevelConnected)
+                    {
+                        if (!KeepAliveTick())
+                        {
+                            break;
+                        }
+
+                        await Task.Delay(KeepAlivePollPeriodMs);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                    Stop(new ExceptionFail(TransportName, ex), false);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Performs one keep-alive step: stops the endpoint when the pong timeout has elapsed, otherwise sends
+        /// a ping frame when <see cref="PingOptions.PingPeriod"/> has elapsed.
+        /// </summary>
+        /// <returns><see langword="true"/> to continue the keep-alive loop; <see langword="false"/> when the
+        /// loop must end because the endpoint has been stopped.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Intended to be called by the keep-alive loop; it reads and
+        /// updates the ping and pong timestamps.</description></item>
+        /// <item><description><b>Other notes</b>: A no-op that keeps the loop running when keep-alive is
+        /// disabled. The first call after a connection sends a ping immediately, because the last-sent-ping
+        /// time starts at <see cref="DateTime.MinValue"/>.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool KeepAliveTick()
+        {
+            if (_pingOptions == null)
+            {
+                return true;
+            }
+
+            DateTime now = Now;
+            if (now - _lastPongReceiveTime.Value > _pingOptions.Value.DisconnectTimeout)
+            {
+                Stop(new TimeOut(TransportName), false);
+                return false;
+            }
+
+            if (now - _lastPingSentTime > _pingOptions.Value.PingPeriod)
+            {
+                var buffer = Memory.CollectablePool.Acquire<UnionDataList>();
+                buffer.PutFirst((byte)MessageType.PingMessage);
+                var res = ScheduleToSend(buffer);
+                if (res != SendResult.Ok)
+                {
+                    Stop(new TextFail(TransportName, $"Ping failed with {res}"), false);
+                    return false;
+                }
+
+                _lastPingSentTime = now;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -152,7 +222,7 @@ namespace Pontifex.Raw.Reliable
             switch (messageType)
             {
                 case MessageType.PongMessage:
-                    _lastPongReceiveTime.Value = DateTime.Now;
+                    _lastPongReceiveTime.Value = Now;
                     message.Release();
                     return true;
                 default:

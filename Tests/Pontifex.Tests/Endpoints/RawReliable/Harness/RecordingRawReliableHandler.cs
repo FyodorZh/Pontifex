@@ -5,9 +5,10 @@ namespace Pontifex.Tests.Endpoints;
 
 /// <summary>
 /// Recording reliable handler. Inherits the received/stopped recording and buffer cloning from
-/// <see cref="RecordingRawHandler"/> and adds the logical-disconnect notification.
+/// <see cref="RecordingRawHandler"/> and adds the logical-disconnect notification. It is the base for the
+/// client-side and server-side recording handlers.
 /// </summary>
-internal sealed class RecordingRawReliableHandler : RecordingRawHandler, IRawReliableHandler
+internal class RecordingRawReliableHandler : RecordingRawHandler, IRawReliableHandler
 {
     public RecordingRawReliableHandler(IMemoryRental memory)
         : base(memory)

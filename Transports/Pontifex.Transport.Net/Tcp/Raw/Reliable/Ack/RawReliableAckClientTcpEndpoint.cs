@@ -1,10 +1,12 @@
 using System;
 using System.Net.Sockets;
+using Actuarius.Memory;
 using Operarius;
 using Pontifex.NetSockets;
 using Pontifex.Raw.Reliable.Ack.Tcp;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack
 {
@@ -18,15 +20,19 @@ namespace Pontifex.Raw.Reliable.Ack
         private TcpSender? _socketSender;
 
         public RawReliableAckTcpEndpoint(
-            IRawReliableTransport owner, 
+            string transportName,
             IpEndPoint remoteEndPoint, 
-            IRawReliableAckClientHandler handler) 
+            IRawReliableAckClientHandler handler,
+            IMemoryRental memory,
+            ILogger log) 
             : base(
-                owner, 
+                transportName, 
                 remoteEndPoint, 
                 handler, 
                 TcpInfo.DefaultMessageMaxSize, 
                 TcpInfo.DefaultBufferCapacity,
+                memory,
+                log,
                 new PingOptions(TimeSpan.FromSeconds(180), TimeSpan.FromSeconds(30)))
         {
             _endPoint = remoteEndPoint;

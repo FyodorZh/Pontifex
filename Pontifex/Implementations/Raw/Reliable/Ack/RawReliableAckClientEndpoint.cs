@@ -2,6 +2,7 @@ using System;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack
 {
@@ -50,11 +51,10 @@ namespace Pontifex.Raw.Reliable.Ack
         private volatile State _stage;
 
         /// <summary>
-        /// Initializes a new reliable client endpoint that performs an acknowledgement handshake, owned by the
-        /// given transport.
+        /// Initializes a new reliable client endpoint that performs an acknowledgement handshake, with the given
+        /// transport name, logging, and memory rental.
         /// </summary>
-        /// <param name="owner">The owning transport that provides the transport name, logging, and memory
-        /// rental.</param>
+        /// <param name="transportName">The name of the transport that owns this endpoint.</param>
         /// <param name="remoteEndPoint">The remote endpoint address, or <see langword="null"/> when it is
         /// unknown.</param>
         /// <param name="handler">The handler that provides the ack request data and receives the connection
@@ -63,19 +63,21 @@ namespace Pontifex.Raw.Reliable.Ack
         /// endpoint; must be at least 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint but not
         /// yet transmitted; must be at least 1.</param>
+        /// <param name="memory">The memory rental system used to rent buffers.</param>
+        /// <param name="log">The logging system used by this endpoint.</param>
         /// <param name="pingOptions">The keep-alive configuration, or <see langword="null"/> to disable
         /// keep-alive.</param>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The owning transport and the handler are retained, not
-        /// disposed, by the endpoint. The endpoint starts in the constructed stage.</description></item>
+        /// <item><description><b>Other notes</b>: The handler is retained, not disposed, by the endpoint. The
+        /// endpoint starts in the constructed stage.</description></item>
         /// </list>
         /// </remarks>
-        protected RawReliableAckClientEndpoint(IRawReliableTransport owner,
+        protected RawReliableAckClientEndpoint(string transportName,
             IEndPoint remoteEndPoint, IRawReliableAckClientHandler handler,
-            int messageMaxByteSize, long bufferCapacityBytes,
+            int messageMaxByteSize, long bufferCapacityBytes, IMemoryRental memory, ILogger log,
             PingOptions? pingOptions)
-            : base(owner, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, pingOptions)
+            : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log, pingOptions)
         {
             _handler = handler;
         }

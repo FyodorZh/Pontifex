@@ -1,7 +1,9 @@
 using System;
 using Actuarius.Concurrent;
+using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Raw.Reliable
 {
@@ -30,11 +32,10 @@ namespace Pontifex.Raw.Reliable
         private volatile bool _timeInitialized;
 
         /// <summary>
-        /// Initializes a new reliable server endpoint owned by the given transport, with the idle-session
-        /// timeout.
+        /// Initializes a new reliable server endpoint with the given transport name, logging, and memory
+        /// rental, and the idle-session timeout.
         /// </summary>
-        /// <param name="owner">The owning transport that provides the transport name, logging, and memory
-        /// rental.</param>
+        /// <param name="transportName">The name of the transport that owns this endpoint.</param>
         /// <param name="remoteEndPoint">The remote endpoint address, or <see langword="null"/> when it is
         /// unknown.</param>
         /// <param name="handler">The handler that receives inbound messages and connection lifecycle
@@ -43,20 +44,22 @@ namespace Pontifex.Raw.Reliable
         /// endpoint; must be at least 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint but not
         /// yet transmitted; must be at least 1.</param>
+        /// <param name="memory">The memory rental system used to rent buffers.</param>
+        /// <param name="log">The logging system used by this endpoint.</param>
         /// <param name="disconnectTimeout">The maximum time without an inbound message before the endpoint is
         /// stopped as timed out; must be positive.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: <paramref name="disconnectTimeout"/> must
         /// be greater than zero.</description></item>
-        /// <item><description><b>Other notes</b>: The owning transport and the handler are retained, not
-        /// disposed, by the endpoint.</description></item>
+        /// <item><description><b>Other notes</b>: The handler is retained, not disposed, by the
+        /// endpoint.</description></item>
         /// </list>
         /// </remarks>
-        protected RawReliableServerEndpoint(IRawReliableTransport owner, IEndPoint remoteEndPoint, IRawReliableServerHandler handler,
-            int messageMaxByteSize, long bufferCapacityBytes,
+        protected RawReliableServerEndpoint(string transportName, IEndPoint remoteEndPoint, IRawReliableServerHandler handler,
+            int messageMaxByteSize, long bufferCapacityBytes, IMemoryRental memory, ILogger log,
             TimeSpan disconnectTimeout)
-            : base(owner.Name, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, owner.Memory, owner.Log)
+            : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log)
         {
             if (disconnectTimeout <= TimeSpan.Zero)
             {
@@ -64,6 +67,19 @@ namespace Pontifex.Raw.Reliable
             }
             _disconnectTimeout = disconnectTimeout;
         }
+
+        /// <summary>
+        /// Gets the current time used by the idle-session watchdog.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: The default implementation returns
+        /// <see cref="DateTime.Now"/>. It is a testability seam; overrides should return a monotonically
+        /// non-decreasing local time.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual DateTime Now => DateTime.Now;
 
         /// <summary>
         /// Advances the idle-session watchdog, stopping the endpoint with a timeout when no inbound message has
@@ -83,7 +99,7 @@ namespace Pontifex.Raw.Reliable
         {
             if (IsLowLevelConnected && _timeInitialized)
             {
-                if (DateTime.Now - _lastInboundMessage.Value > _disconnectTimeout)
+                if (Now - _lastInboundMessage.Value > _disconnectTimeout)
                 {
                     Stop(new TimeOut(TransportName), false);
                 }
@@ -107,7 +123,7 @@ namespace Pontifex.Raw.Reliable
             {
                 if (IsLowLevelConnected)
                 {
-                    _lastInboundMessage.Value = DateTime.Now;
+                    _lastInboundMessage.Value = Now;
                     _timeInitialized = true;
                 }
             });
@@ -120,7 +136,7 @@ namespace Pontifex.Raw.Reliable
         /// </summary>
         protected void RefreshLastInboundMessage()
         {
-            _lastInboundMessage.Value = DateTime.Now;
+            _lastInboundMessage.Value = Now;
         }
 
         /// <summary>

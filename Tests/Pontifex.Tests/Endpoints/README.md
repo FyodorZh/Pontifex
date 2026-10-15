@@ -14,16 +14,22 @@ Endpoints/
 │   ├── TestBuffers.cs
 │   └── TestRawEndpoint.cs             test double for RawEndpoint
 ├── RawEndpointTests.cs                test-set for RawEndpoint
-└── RawReliable/                       test-set for RawReliableEndpoint
+└── RawReliable/                       test-sets for the raw-reliable endpoint family
     ├── Harness/
     │   ├── RecordingRawReliableHandler.cs
-    │   └── TestRawReliableEndpoint.cs
-    └── RawReliableEndpointTests.cs
+    │   ├── RecordingRawReliableClientHandler.cs
+    │   ├── RecordingRawReliableServerHandler.cs
+    │   ├── TestRawReliableEndpoint.cs
+    │   ├── TestRawReliableClientEndpoint.cs
+    │   └── TestRawReliableServerEndpoint.cs
+    ├── RawReliableEndpointTests.cs
+    ├── RawReliableClientEndpointTests.cs
+    └── RawReliableServerEndpointTests.cs
 ```
 
-Layout rule: each class-specific test-set lives in its own directory (`<Class>/`) with its
-class-specific test doubles under `<Class>/Harness/`. Test doubles shared across test-sets stay in
-the top-level `Harness/`. The folder structure does not change the namespace: every file in this
+Layout rule: each endpoint family lives in its own directory (`<Family>/`) with the family-specific
+test doubles under `<Family>/Harness/`, one `<ClassName>Tests.cs` file per class. Test doubles shared
+across families stay in the top-level `Harness/`. The folder structure does not change the namespace: every file in this
 suite uses `namespace Pontifex.Tests.Endpoints;`.
 
 ## Goals
@@ -38,8 +44,8 @@ suite uses `namespace Pontifex.Tests.Endpoints;`.
 |---|---|---|---|
 | `RawEndpoint` | `RawEndpointTests` | covered (32 tests) | lifecycle, send admission, inbound dispatch, hard-fail |
 | `RawReliableEndpoint` | `RawReliableEndpointTests` | covered (25 tests) | connect/disconnect stage machine, framing |
-| `RawReliableClientEndpoint` | — | planned | ping/pong keep-alive |
-| `RawReliableServerEndpoint` | — | planned | idle watchdog (`PeriodicTick`) |
+| `RawReliableClientEndpoint` | `RawReliableClientEndpointTests` | covered (8 tests) | keep-alive loop, config, pong handling |
+| `RawReliableServerEndpoint` | `RawReliableServerEndpointTests` | covered (7 tests) | idle watchdog (`PeriodicTick`), ping answering |
 | `RawReliableAckClientEndpoint` | — | planned | ack handshake (client side) |
 | `RawReliableAckServerEndpoint` | — | planned | ack handshake (server side) |
 
@@ -98,6 +104,34 @@ some line coverage of `RawEndpoint.cs` is shared by construction.)
 
 > Note: the base class never invokes `IRawReliableHandler.OnDisconnected`; only the ack
 > subclasses do. `DisconnectCycle_DoesNotInvokeOnDisconnected` pins this invariant.
+
+### `RawReliableClientEndpoint` contract matrix
+
+- **Keep-alive configuration**: when `PingOptions` are supplied the constructor requires a positive
+  `PingPeriod` and `DisconnectTimeout >= 2 * PingPeriod`, otherwise it throws
+  `InvalidOperationException`; valid options do not throw.
+- **Inbound pong**: a `PongMessage` frame is handled (not delegated) — released, not delivered to
+  the handler, and it does not stop the endpoint (proving the override against the base `TextFail`).
+- **Keep-alive loop (`KeepAliveTick`)**: sends a `PingMessage` frame when `PingPeriod` has elapsed
+  and continues; sends nothing within the period; stops with `TimeOut` when `DisconnectTimeout`
+  has elapsed; stops with `TextFail` when the ping cannot be admitted.
+
+### `RawReliableServerEndpoint` contract matrix
+
+- **Constructor**: a non-positive `disconnectTimeout` throws `ArgumentException`.
+- **Ping answering**: a `PingMessage` frame is answered with a `PongMessage` frame, is not delivered
+  to the handler, and keeps the endpoint connected; when the pong cannot be admitted the endpoint
+  stops with `TextFail`.
+- **Idle-session watchdog (`PeriodicTick`)**: does nothing when not connected or within the
+  disconnect timeout; after the timeout elapses it stops the endpoint with `TimeOut`; an inbound
+  frame refreshes the deadline so a subsequent tick within the timeout does nothing.
+
+Both time-driven paths are exercised deterministically through the `protected virtual DateTime Now`
+seam (`TestRawReliableServerEndpoint.SetNow`/`AdvanceNow` for the watchdog, and
+`TestRawReliableClientEndpoint.SetNow`/`AdvanceNow` for the keep-alive). The client keep-alive loop
+body lives in the synchronous `KeepAliveTick`; the harness overrides the `protected virtual
+StartKeepAlive` scheduling seam to a no-op and drives `KeepAliveTick` directly, so the asynchronous
+`Task.Run`/`Task.Delay` wrapper is the only part left untested.
 
 ## How it works
 
@@ -196,6 +230,13 @@ Assert.That(ep.OnConnectedCalls, Is.EqualTo(1));
   `BeginConnect`/`BeginDisconnect`/`OnConnected` and captured sends, exposes the `MessageType`
   bytes as public consts and static `Frame(...)` builders, and provides `CompleteConnect`/
   `CompleteDisconnect`/`ConnectAndComplete`.
+- **`RecordingRawReliableClientHandler` / `RecordingRawReliableServerHandler`** — thin subclasses of
+  `RecordingRawReliableHandler` that implement `IRawReliableClientHandler`/`IRawReliableServerHandler`.
+- **`TestRawReliableClientEndpoint : RawReliableClientEndpoint, IDisposable`** and
+  **`TestRawReliableServerEndpoint : RawReliableServerEndpoint, IDisposable`** — the same double
+  pattern one layer up. The client double builds `PingOptions` from optional `pingPeriod`/
+  `disconnectTimeout` constructor arguments; the server double overrides the `Now` seam with
+  `SetNow`/`AdvanceNow` so the idle-session watchdog is deterministic.
 
 Buffers are acquired exactly as in production:
 `MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>()` (via `TestBuffers`) and released
@@ -204,10 +245,12 @@ and releases the originals so tests can inspect content without leaking pooled m
 
 ### Why these test-sets need no fake transport
 
-`RawEndpoint` and `RawReliableEndpoint` constructors take the transport name, logger, and memory
-rental explicitly rather than a transport owner, so these test-sets need no transport at all. The
-deeper `RawReliableClient*`/`RawReliableServer*`/`RawReliableAck*` constructors still take an
-owner; a transport fake will be added when those test-sets are introduced.
+`RawEndpoint`, `RawReliableEndpoint`, `RawReliableClientEndpoint`, and `RawReliableServerEndpoint`
+constructors take the transport name, logger, and memory rental explicitly rather than a transport
+owner, so these test-sets need no transport at all. (The `IRawReliableTransport owner` parameter
+was removed from the client and server endpoint constructors for exactly this reason; the Ack
+subclasses were updated to match.) The remaining `RawReliableAck*` test-sets can follow the same
+pattern once their constructors are similarly decoupled.
 
 ## Harness invariants (important)
 
@@ -222,7 +265,7 @@ owner; a transport fake will be added when those test-sets are introduced.
 
 ## How to extend: add a test-set for a new endpoint class
 
-1. Add a test double under `<Class>/Harness/`, e.g. `RawReliable/Harness/TestRawReliableEndpoint.cs`,
+1. Add a test double under `<Family>/Harness/`, e.g. `RawReliable/Harness/TestRawReliableEndpoint.cs`,
    deriving from the class under test:
    - implement the class's `abstract` hooks;
    - override `SerialQueueConstructor` to install a `ManualSerialActionQueue`;
@@ -236,7 +279,7 @@ owner; a transport fake will be added when those test-sets are introduced.
      (`RawReliableClient*`/`RawReliableServer*`/`RawReliableAck*`);
    - a recording handler if the class uses a new handler interface (follow
      `RecordingRawHandler`/`RecordingRawReliableHandler`).
-3. Add `<Class>/<ClassName>Tests.cs` and cover **that class's delta** plus its invariants.
+3. Add `<Family>/<ClassName>Tests.cs` and cover **that class's delta** plus its invariants.
 4. Follow the conventions below.
 5. Run the suite.
 
