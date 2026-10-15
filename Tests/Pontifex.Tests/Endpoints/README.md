@@ -24,13 +24,19 @@ Endpoints/
     │   └── TestRawReliableServerEndpoint.cs
     ├── RawReliableEndpointTests.cs
     ├── RawReliableClientEndpointTests.cs
-    └── RawReliableServerEndpointTests.cs
+    ├── RawReliableServerEndpointTests.cs
+    └── RawReliableAck/                 test-set for RawReliableAckClientEndpoint
+        ├── Harness/
+        │   ├── RecordingRawReliableAckClientHandler.cs
+        │   └── TestRawReliableAckClientEndpoint.cs
+        └── RawReliableAckClientEndpointTests.cs
 ```
 
 Layout rule: each endpoint family lives in its own directory (`<Family>/`) with the family-specific
-test doubles under `<Family>/Harness/`, one `<ClassName>Tests.cs` file per class. Test doubles shared
-across families stay in the top-level `Harness/`. The folder structure does not change the namespace: every file in this
-suite uses `namespace Pontifex.Tests.Endpoints;`.
+test doubles under `<Family>/Harness/`, one `<ClassName>Tests.cs` file per class. A sub-family may be
+nested the same way (`<Family>/<SubFamily>/Harness/`). Test doubles shared across families stay in the
+top-level `Harness/`. The folder structure does not change the namespace: every file in this suite
+uses `namespace Pontifex.Tests.Endpoints;`.
 
 ## Goals
 
@@ -46,7 +52,7 @@ suite uses `namespace Pontifex.Tests.Endpoints;`.
 | `RawReliableEndpoint` | `RawReliableEndpointTests` | covered (25 tests) | connect/disconnect stage machine, framing |
 | `RawReliableClientEndpoint` | `RawReliableClientEndpointTests` | covered (8 tests) | keep-alive loop, config, pong handling |
 | `RawReliableServerEndpoint` | `RawReliableServerEndpointTests` | covered (7 tests) | idle watchdog (`PeriodicTick`), ping answering |
-| `RawReliableAckClientEndpoint` | — | planned | ack handshake (client side) |
+| `RawReliableAckClientEndpoint` | `RawReliableAckClientEndpointTests` | covered (9 tests) | ack handshake (client side) |
 | `RawReliableAckServerEndpoint` | — | planned | ack handshake (server side) |
 
 Test-sets are **independent per class**: a test-set covers the behavior that class itself
@@ -132,6 +138,20 @@ seam (`TestRawReliableServerEndpoint.SetNow`/`AdvanceNow` for the watchdog, and
 body lives in the synchronous `KeepAliveTick`; the harness overrides the `protected virtual
 StartKeepAlive` scheduling seam to a no-op and drives `KeepAliveTick` directly, so the asynchronous
 `Task.Run`/`Task.Delay` wrapper is the only part left untested.
+
+### `RawReliableAckClientEndpoint` contract matrix
+
+- **Handshake request**: on connection the endpoint calls `FillAckData` once and sends one
+  `AckRequestMessage`-framed message; the logical `IsConnected` stays false until the response
+  arrives (the low-level connection is already up).
+- **Handshake completion**: an `AckResponseMessage` frame completes the handshake — `OnConnected`
+  is invoked once with the endpoint and the response payload, and `IsConnected` becomes true.
+- **Handshake failure**: a second acknowledgement response (wrong stage) fails the endpoint hard
+  (`ExceptionFail`); a `FillAckData` that throws stops with `TextFail`; an ack request that cannot be
+  admitted stops with `TextFail`.
+- **Disconnect / FailHard notifications**: `OnDisconnected` is raised exactly once when the endpoint
+  was logically connected (both on graceful disconnect and on hard failure), and never while the
+  handshake is still pending.
 
 ## How it works
 
@@ -237,6 +257,11 @@ Assert.That(ep.OnConnectedCalls, Is.EqualTo(1));
   pattern one layer up. The client double builds `PingOptions` from optional `pingPeriod`/
   `disconnectTimeout` constructor arguments; the server double overrides the `Now` seam with
   `SetNow`/`AdvanceNow` so the idle-session watchdog is deterministic.
+- **`RecordingRawReliableAckClientHandler : RecordingRawReliableClientHandler, IRawReliableAckClientHandler`**
+  — records `FillAckData` (with an optional throw mode) and `OnConnected` (endpoint + response payload).
+- **`TestRawReliableAckClientEndpoint : RawReliableAckClientEndpoint, IDisposable`** — the same double
+  pattern again; its `BeginDisconnect` delegates to the ack base implementation (to raise the logical
+  disconnect notification) before recording, and keep-alive is disabled.
 
 Buffers are acquired exactly as in production:
 `MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>()` (via `TestBuffers`) and released
@@ -245,12 +270,12 @@ and releases the originals so tests can inspect content without leaking pooled m
 
 ### Why these test-sets need no fake transport
 
-`RawEndpoint`, `RawReliableEndpoint`, `RawReliableClientEndpoint`, and `RawReliableServerEndpoint`
-constructors take the transport name, logger, and memory rental explicitly rather than a transport
-owner, so these test-sets need no transport at all. (The `IRawReliableTransport owner` parameter
-was removed from the client and server endpoint constructors for exactly this reason; the Ack
-subclasses were updated to match.) The remaining `RawReliableAck*` test-sets can follow the same
-pattern once their constructors are similarly decoupled.
+`RawEndpoint`, `RawReliableEndpoint`, `RawReliableClientEndpoint`, `RawReliableServerEndpoint`, and
+`RawReliableAckClientEndpoint` constructors take the transport name, logger, and memory rental
+explicitly rather than a transport owner, so these test-sets need no transport at all. (The
+`IRawReliableTransport owner` parameter was removed from the client and server endpoint constructors
+for exactly this reason; the Ack subclasses were updated to match.) The planned
+`RawReliableAckServerEndpoint` test-set can follow the same pattern.
 
 ## Harness invariants (important)
 
