@@ -55,7 +55,7 @@ namespace Pontifex.Raw.Reliable
         protected RawReliableClientEndpoint(IRawReliableTransport owner, IEndPoint remoteEndPoint, IRawReliableClientHandler handler, 
             int messageMaxByteSize, long bufferCapacityBytes,
             PingOptions? pingOptions)
-            : base(owner, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes)
+            : base(owner.Name, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, owner.Memory, owner.Log)
         {
             if (pingOptions != null &&
                 (pingOptions.Value.PingPeriod <= TimeSpan.Zero ||

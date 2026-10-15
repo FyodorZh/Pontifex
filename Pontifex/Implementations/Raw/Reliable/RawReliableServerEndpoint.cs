@@ -56,7 +56,7 @@ namespace Pontifex.Raw.Reliable
         protected RawReliableServerEndpoint(IRawReliableTransport owner, IEndPoint remoteEndPoint, IRawReliableServerHandler handler,
             int messageMaxByteSize, long bufferCapacityBytes,
             TimeSpan disconnectTimeout)
-            : base(owner, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes)
+            : base(owner.Name, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, owner.Memory, owner.Log)
         {
             if (disconnectTimeout <= TimeSpan.Zero)
             {

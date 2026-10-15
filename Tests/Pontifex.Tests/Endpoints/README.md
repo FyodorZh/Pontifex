@@ -7,14 +7,24 @@ directly (no transports, sockets, or threads), one test-set per endpoint class.
 
 ```
 Endpoints/
-├── README.md                  (this file)
-├── Harness/                   shared test doubles
+├── README.md                          (this file)
+├── Harness/                           test doubles shared by all test-sets
 │   ├── ManualSerialActionQueue.cs
 │   ├── RecordingRawHandler.cs
 │   ├── TestBuffers.cs
-│   └── TestRawEndpoint.cs     test double for RawEndpoint
-└── RawEndpointTests.cs        test-set for RawEndpoint
+│   └── TestRawEndpoint.cs             test double for RawEndpoint
+├── RawEndpointTests.cs                test-set for RawEndpoint
+└── RawReliable/                       test-set for RawReliableEndpoint
+    ├── Harness/
+    │   ├── RecordingRawReliableHandler.cs
+    │   └── TestRawReliableEndpoint.cs
+    └── RawReliableEndpointTests.cs
 ```
+
+Layout rule: each class-specific test-set lives in its own directory (`<Class>/`) with its
+class-specific test doubles under `<Class>/Harness/`. Test doubles shared across test-sets stay in
+the top-level `Harness/`. The folder structure does not change the namespace: every file in this
+suite uses `namespace Pontifex.Tests.Endpoints;`.
 
 ## Goals
 
@@ -27,14 +37,18 @@ Endpoints/
 | Endpoint class | Test-set | Status | Focus |
 |---|---|---|---|
 | `RawEndpoint` | `RawEndpointTests` | covered (32 tests) | lifecycle, send admission, inbound dispatch, hard-fail |
-| `RawReliableEndpoint` | — | planned | connect/disconnect stage machine, framing |
+| `RawReliableEndpoint` | `RawReliableEndpointTests` | covered (25 tests) | connect/disconnect stage machine, framing |
 | `RawReliableClientEndpoint` | — | planned | ping/pong keep-alive |
 | `RawReliableServerEndpoint` | — | planned | idle watchdog (`PeriodicTick`) |
 | `RawReliableAckClientEndpoint` | — | planned | ack handshake (client side) |
 | `RawReliableAckServerEndpoint` | — | planned | ack handshake (server side) |
 
 Test-sets are **independent per class**: a test-set covers the behavior that class itself
-introduces (its own delta + invariants), not the inherited layers again.
+introduces (its own delta + invariants), not the inherited layers again. For example,
+`RawReliableEndpointTests` deliberately omits inherited reject paths (e.g. `Send`/`CanSendNow` when
+not connected) because those are covered once by `RawEndpointTests`; it keeps only the framing,
+dispatch, and connect/disconnect deltas. (Such tests still exercise the base machinery as setup, so
+some line coverage of `RawEndpoint.cs` is shared by construction.)
 
 ### `RawEndpoint` contract matrix
 
@@ -58,6 +72,32 @@ introduces (its own delta + invariants), not the inherited layers again.
 - **FailHard**: started path → `OnStopped` + `Stopped`; reached via the queue's `onError`
   when a queued action throws.
 - **GetControls**: the base implementation adds nothing.
+
+### `RawReliableEndpoint` contract matrix
+
+- **Connect**: `Start` reaches `Connecting` and calls `BeginConnect`; `FinishConnect` →
+  `Connected` + `OnConnected` (and `IsLowLevelConnected`/`IsConnected`/`IsRunning` become true);
+  before completion those are false; `FinishConnect` without `Start` → `ifFailed`, no
+  `OnConnected`.
+- **Stop while connecting**: the connection is still reported (`OnConnected` once) and then torn
+  down (`BeginDisconnect`, then `OnStopped`).
+- **Send**: frames the payload with `PayloadMessage`; framing counts toward `MessageMaxByteSize`
+  (a payload that fits raw can be `MessageTooBig` once framed).
+- **Inbound**: payload frame → `OnReceived` (type byte stripped); disconnect frame →
+  `OnStopped(GracefulRemoteIntention)`; invalid/empty/unhandled (ping/pong/ack) frame →
+  `OnStopped(TextFail)` and the buffer is released; inbound while not low-level connected is
+  released and stops with `TextFail` without delivery.
+- **Disconnect**: `DisconnectGracefully()` frames `DisconnectMessage` and stops with
+  `UserIntention` sourced from the transport name; when the frame cannot be admitted the stop is
+  not gentle; `IRawReliableEndpoint.Disconnect(r)` → `BeginDisconnect(r, gentle: true)`.
+  Stopping while connected reaches `Disconnecting` (not low-level connected, no `OnStopped` yet)
+  before `FinishDisconnect` raises `OnStopped`.
+- **Fail**: `FailHard` → `Disconnected` + `OnStopped`, and no `OnDisconnected`.
+- **Guards**: `FinishDisconnect` in the wrong stage → hard-fail; default
+  `IsConnected == IsLowLevelConnected`.
+
+> Note: the base class never invokes `IRawReliableHandler.OnDisconnected`; only the ack
+> subclasses do. `DisconnectCycle_DoesNotInvokeOnDisconnected` pins this invariant.
 
 ## How it works
 
@@ -118,6 +158,19 @@ ep.CompleteStop();                   // Stopping -> Stopped + handler.OnStopped(
 Assert.That(handler.StoppedReason, Is.Not.Null);
 ```
 
+For a reliable endpoint, connection completion goes through `FinishConnect` (which also completes
+the raw start):
+
+```csharp
+using var handler = new RecordingRawReliableHandler(MemoryRental.Shared);
+using var ep = new TestRawReliableEndpoint(handler);
+
+ep.ConnectAndComplete();        // Start -> BeginConnect -> FinishConnect -> OnConnected
+
+Assert.That(ep.IsConnected, Is.True);
+Assert.That(ep.OnConnectedCalls, Is.EqualTo(1));
+```
+
 ### Test doubles
 
 - **`ManualSerialActionQueue : ISerialActionQueue`** — the controllable queue described above.
@@ -127,6 +180,9 @@ Assert.That(handler.StoppedReason, Is.Not.Null);
   `OnReceived` for inspection, releases the original, and releases the clones on `Dispose`;
   records `StoppedReason`/`StoppedCount` and an `Events` sequence (`received`/`stopped`) for
   callback-ordering assertions.
+- **`RecordingRawReliableHandler : RecordingRawHandler, IRawReliableHandler`** — inherits the
+  received/stopped recording and buffer cloning, and adds `OnDisconnected`
+  (`DisconnectedReason`/`DisconnectedCount`, plus the `disconnected` event).
 - **`TestBuffers`** — builds `UnionDataList` buffers of controlled size
   (`Acquire`/`WithByte`/`WithPayload`).
 - **`TestRawEndpoint : RawEndpoint, IDisposable`** — the seam for the class under test. It
@@ -135,18 +191,23 @@ Assert.That(handler.StoppedReason, Is.Not.Null);
   `FinishStop`, `TransportName`/`Log`/`Memory`), records `BeginStart`/`BeginStop` and captures
   `DoSendRaw` buffers as clones, and provides the completion helpers (`CompleteStart`,
   `CompleteStop`, `StartAndComplete`, `StopAndComplete`).
+- **`TestRawReliableEndpoint : RawReliableEndpoint, IDisposable`** — same idea one layer up:
+  exposes `FinishConnect`/`FinishDisconnect`/`DisconnectGracefully`/framed inbound, records
+  `BeginConnect`/`BeginDisconnect`/`OnConnected` and captured sends, exposes the `MessageType`
+  bytes as public consts and static `Frame(...)` builders, and provides `CompleteConnect`/
+  `CompleteDisconnect`/`ConnectAndComplete`.
 
 Buffers are acquired exactly as in production:
 `MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>()` (via `TestBuffers`) and released
 with `Release()`/`using var _ = list.AsDisposable()`. The harness clones-out captured buffers
 and releases the originals so tests can inspect content without leaking pooled memory.
 
-### Why this iteration has no fake transport
+### Why these test-sets need no fake transport
 
-`RawEndpoint`'s constructor takes the transport name, logger, and memory rental explicitly
-rather than an `IRawTransport`, so the `RawEndpoint` test-set needs no transport at all. The
-`RawReliable*` constructors still take a transport owner; a `FakeRawTransport` will be added
-when those test-sets are introduced.
+`RawEndpoint` and `RawReliableEndpoint` constructors take the transport name, logger, and memory
+rental explicitly rather than a transport owner, so these test-sets need no transport at all. The
+deeper `RawReliableClient*`/`RawReliableServer*`/`RawReliableAck*` constructors still take an
+owner; a transport fake will be added when those test-sets are introduced.
 
 ## Harness invariants (important)
 
@@ -161,8 +222,8 @@ when those test-sets are introduced.
 
 ## How to extend: add a test-set for a new endpoint class
 
-1. Add a test double in `Harness/`, e.g. `TestRawReliableEndpoint.cs`, deriving from the class
-   under test:
+1. Add a test double under `<Class>/Harness/`, e.g. `RawReliable/Harness/TestRawReliableEndpoint.cs`,
+   deriving from the class under test:
    - implement the class's `abstract` hooks;
    - override `SerialQueueConstructor` to install a `ManualSerialActionQueue`;
    - expose the `protected` members you need for the test-set;
@@ -170,12 +231,12 @@ when those test-sets are introduced.
      outbound buffers as clones;
    - provide completion helpers for the class's `Begin*`/`Finish*` hooks (follow
      `TestRawEndpoint`).
-2. Add any shared fakes the class needs in `Harness/`:
-   - a `FakeRawTransport` if the class's constructor takes a transport owner (`RawReliable*`);
+2. Add any shared fakes the class needs:
+   - a transport fake (top-level `Harness/`) if the class's constructor takes a transport owner
+     (`RawReliableClient*`/`RawReliableServer*`/`RawReliableAck*`);
    - a recording handler if the class uses a new handler interface (follow
-     `RecordingRawHandler`).
-3. Add `<ClassName>Tests.cs` next to `RawEndpointTests.cs` and cover **that class's delta**
-   plus its invariants.
+     `RecordingRawHandler`/`RecordingRawReliableHandler`).
+3. Add `<Class>/<ClassName>Tests.cs` and cover **that class's delta** plus its invariants.
 4. Follow the conventions below.
 5. Run the suite.
 

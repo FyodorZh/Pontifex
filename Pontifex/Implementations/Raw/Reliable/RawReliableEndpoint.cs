@@ -1,6 +1,8 @@
 using System;
+using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Raw.Reliable
 {
@@ -22,8 +24,6 @@ namespace Pontifex.Raw.Reliable
     /// </remarks>
     public abstract class RawReliableEndpoint : RawEndpoint, IRawReliableEndpoint
     {
-        private readonly IRawReliableHandler _handler;
-
         /// <summary>
         /// Identifies the leading control byte that frames every inbound and outbound message.
         /// </summary>
@@ -122,8 +122,7 @@ namespace Pontifex.Raw.Reliable
         /// <summary>
         /// Initializes a new reliable endpoint owned by the given transport.
         /// </summary>
-        /// <param name="owner">The owning transport that provides the transport name, logging, and memory
-        /// rental.</param>
+        /// <param name="transportName">The name of the transport that owns this endpoint.</param>
         /// <param name="remoteEndPoint">The remote endpoint address, or <see langword="null"/> when it is
         /// unknown.</param>
         /// <param name="handler">The handler that receives inbound messages and connection lifecycle
@@ -132,6 +131,8 @@ namespace Pontifex.Raw.Reliable
         /// endpoint; must be at least 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint but not
         /// yet transmitted; must be at least 1.</param>
+        /// <param name="memory">The memory rental system used to rent buffers.</param>
+        /// <param name="log">The logging system used by this endpoint.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Other notes</b>: The owning transport and the handler are retained, not
@@ -139,11 +140,10 @@ namespace Pontifex.Raw.Reliable
         /// </list>
         /// </remarks>
         protected RawReliableEndpoint(
-            IRawReliableTransport owner, IEndPoint remoteEndPoint, IRawReliableHandler handler, 
-            int messageMaxByteSize, long bufferCapacityBytes)
-            : base(owner.Name, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, owner.Memory, owner.Log)
+            string transportName, IEndPoint remoteEndPoint, IRawReliableHandler handler, 
+            int messageMaxByteSize, long bufferCapacityBytes, IMemoryRental memory, ILogger log)
+            : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log)
         {
-            _handler = handler;
         }
 
         /// <summary>
@@ -300,6 +300,7 @@ namespace Pontifex.Raw.Reliable
         /// Begins the transport-specific disconnection. Invoked on the serial action queue only when the
         /// endpoint was connected.
         /// </summary>
+        /// <param name="reason">The reason the endpoint is being stopped.</param>
         /// <param name="tryBeGentle">A hint indicating whether a graceful disconnection should be
         /// attempted.</param>
         /// <remarks>
@@ -311,8 +312,8 @@ namespace Pontifex.Raw.Reliable
         protected abstract void BeginDisconnect(StopReason reason, bool tryBeGentle);
 
         /// <summary>
-        /// Completes the disconnection. Moves the reliable stage to disconnected, invokes OnDisconnected, and
-        /// completes the stop transition.
+        /// Completes the disconnection. Moves the reliable stage to disconnected and completes the stop
+        /// transition. Invoked from the transport-specific <see cref="BeginDisconnect"/> implementation.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
@@ -336,6 +337,7 @@ namespace Pontifex.Raw.Reliable
             });
         }
 
+        /// <inheritdoc/>
         bool IRawReliableEndpoint.Disconnect(StopReason reason)
         {
             Stop(reason, true);

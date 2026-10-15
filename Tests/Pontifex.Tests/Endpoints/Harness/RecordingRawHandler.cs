@@ -11,7 +11,7 @@ namespace Pontifex.Tests.Endpoints;
 /// the handler, so it clones each one for inspection and releases the original, then releases the
 /// clones on <see cref="Dispose"/>.
 /// </summary>
-internal sealed class RecordingRawHandler : IRawHandler, IDisposable
+internal class RecordingRawHandler : IRawHandler, IDisposable
 {
     private readonly IMemoryRental _memory;
     private readonly List<UnionDataList> _received = new();
@@ -43,14 +43,19 @@ internal sealed class RecordingRawHandler : IRawHandler, IDisposable
     {
         _received.Add(receivedBuffer.Clone(_memory.CollectablePool));
         receivedBuffer.Release();
-        _events.Add("received");
+        RecordEvent("received");
     }
 
     public void OnStopped(StopReason reason)
     {
         StoppedReason = reason;
         StoppedCount++;
-        _events.Add("stopped");
+        RecordEvent("stopped");
+    }
+
+    protected void RecordEvent(string name)
+    {
+        _events.Add(name);
     }
 
     public void Dispose()
