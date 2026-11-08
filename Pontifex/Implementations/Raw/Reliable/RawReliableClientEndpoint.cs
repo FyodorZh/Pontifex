@@ -239,7 +239,7 @@ namespace Pontifex.Raw.Reliable
         /// values when the options are supplied.</description></item>
         /// </list>
         /// </remarks>
-        protected struct PingOptions
+        public struct PingOptions
         {
             /// <summary>
             /// The maximum time without a pong reply before the endpoint is stopped as timed out.
