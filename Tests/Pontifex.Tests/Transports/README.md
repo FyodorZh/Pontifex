@@ -29,7 +29,11 @@ Transports/
 └── Raw/                               test-sets for the raw transport family
     ├── Harness/
     │   └── TestRawTransport.cs        test double for RawTransport
-    └── RawTransportTests.cs           test-set for RawTransport
+    ├── RawTransportTests.cs           test-set for RawTransport
+    └── Reliable/
+        ├── Harness/
+        │   └── TestRawReliableTransport.cs
+        └── RawReliableTransportTests.cs
 ```
 
 Layout rule: each transport family lives in its own directory (`Raw/`, then
@@ -66,13 +70,14 @@ assertions stay on the class's own contract.
 |---|---|---|---|
 | `AnyTransport` | `AnyTransportTests` | covered (32 tests) | lifecycle, start/stop/fail, callbacks, validity |
 | `RawTransport` | `RawTransportTests` | covered (6 tests) | raw transport contract, message size, constructor forwarding |
+| `RawReliableTransport` | `RawReliableTransportTests` | covered (2 tests) | reliable raw transport contract, constructor forwarding |
 
 Planned families:
 
 | Family | Status |
 |---|---|
-| `Raw/Reliable*` transports | not started |
-| `Raw/Unreliable*` transports | not started |
+| `Raw/Reliable` client/server/Ack/NoAck transports | not started |
+| `Raw/Unreliable` transports | not started |
 
 ### `AnyTransport` contract matrix
 
@@ -117,6 +122,18 @@ stays small and deliberately does not repeat the full `AnyTransport` matrix.
 This test-set asserts only the `RawTransport`-specific items above. Inherited behavior is not
 repeated; see the coverage rule above.
 
+### `RawReliableTransport` contract matrix
+
+`RawReliableTransport` is a marker facade over `RawTransport` and adds no lifecycle or
+message-handling behavior.
+
+- **Constructor**: `Name` and `Memory` are forwarded to the base; `Log` is non-null.
+- **Interface exposure**: an instance is assignable to `IRawReliableTransport`,
+  `IRawTransport`, and `ITransport`.
+
+This test-set asserts only the `RawReliableTransport`-specific contract above. Inherited behavior
+and inherited properties are not repeated; see the coverage rule above.
+
 Not covered here: `GetControls`, because its only current contribution is the conformance
 control, which this suite deliberately does not use.
 
@@ -150,6 +167,10 @@ never use reflection. Only these are asserted:
 implements the inherited lifecycle hooks with no additional behavior. It passes a trivial
 `RawConformanceControl` only because the constructor currently requires one; the control is never
 armed, inspected, or asserted.
+
+`TestRawReliableTransport : RawReliableTransport` is the same idea one layer up: it supplies the
+inherited abstract members and a trivial `RawReliableConformanceControl` constructor argument
+only, without adding or asserting behavior.
 
 No conformance control is supplied, armed, or inspected by the harness for testing purposes.
 
