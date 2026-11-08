@@ -60,6 +60,20 @@ namespace Pontifex.Raw.Reliable
         /// </summary>
         protected abstract void OnReadyToConnect();
 
+        /// <summary>
+        /// Destroys the transport-specific connection. Called from <see cref="OnStopped"/> after the
+        /// transport state has moved to disconnected.
+        /// </summary>
+        /// <param name="reason">The reason the transport is stopping.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: For the connecting and connected states the handler
+        /// notifications run first; for the initialized state this method runs before the handler stop
+        /// notification. The attached endpoint, when present, is available through
+        /// <see cref="AttachedEndpoint"/>. The base class detaches it after this method returns;
+        /// implementations must not detach it themselves.</description></item>
+        /// </list>
+        /// </remarks>
         protected abstract void DestroyTransport(StopReason reason);
         
         protected RawReliableClientTransport(string typeName, ILogger logger, IMemoryRental memory, RawReliableConformanceControl conformanceControl) 
@@ -148,10 +162,24 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <summary>
+        /// Gets the endpoint currently attached to this transport, or <see langword="null"/> when none is
+        /// attached.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: The base class detaches the endpoint after
+        /// <see cref="DestroyTransport"/> completes. Overrides use this property to stop the endpoint but must
+        /// not detach it themselves.</description></item>
+        /// </list>
+        /// </remarks>
+        protected RawReliableClientEndpoint? AttachedEndpoint => Volatile.Read(ref _attachedEndpoint);
+
+        /// <summary>
         /// Detaches the current endpoint, if any, and unsubscribes from its terminal notification.
         /// </summary>
         /// <returns>The detached endpoint, or <see langword="null"/> when none was attached.</returns>
-        protected RawReliableClientEndpoint? DetachEndpoint()
+        private RawReliableClientEndpoint? DetachEndpoint()
         {
             var endpoint = Interlocked.Exchange(ref _attachedEndpoint, null);
             if (endpoint != null)
@@ -169,26 +197,47 @@ namespace Pontifex.Raw.Reliable
 
         protected sealed override void OnStopped(StopReason reason)
         {
-            bool notifyHandler = Volatile.Read(ref _attachedEndpoint) == null;
+            bool notifyHandler = AttachedEndpoint == null;
+            bool wasConnected = _state == State.Connected;
+            bool wasActive = wasConnected || _state == State.Connecting;
 
-            if (_state == State.Connecting || _state == State.Connected)
+            if (wasActive)
             {
+                // The transport is no longer connected before any application callback runs, so
+                // IsConnected remains false during OnDisconnected and OnStopped.
+                _state = State.Disconnected;
+
                 if (notifyHandler && _handler != null)
                 {
-                    if (_state == State.Connected)
+                    if (wasConnected)
                     {
                         _handler.OnDisconnected(reason);
                     }
                     _handler.OnStopped(reason: reason);
                 }
 
-                _state = State.Disconnected;
-                DestroyTransport(reason);
+                try
+                {
+                    DestroyTransport(reason);
+                }
+                finally
+                {
+                    DetachEndpoint();
+                }
             }
             else if (_state == State.Initialized)
             {
                 _state = State.Disconnected;
-                DestroyTransport(reason);
+
+                try
+                {
+                    DestroyTransport(reason);
+                }
+                finally
+                {
+                    DetachEndpoint();
+                }
+
                 if (notifyHandler)
                 {
                     _handler?.OnStopped(reason);
