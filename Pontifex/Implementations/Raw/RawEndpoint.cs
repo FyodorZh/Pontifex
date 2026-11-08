@@ -52,6 +52,8 @@ namespace Pontifex.Raw
         private volatile State _currentStage = State.Constructed;
         private volatile StopReason? _stopReason;
 
+        private int _stoppedRaised;
+
         private readonly Action<UnionDataList> _sendAction;
         private readonly Action<UnionDataList> _receiveAction;
 
@@ -109,6 +111,23 @@ namespace Pontifex.Raw
         /// </list>
         /// </remarks>
         public bool IsRunning => _currentStage == State.Started && _stopReason == null;
+
+        /// <summary>
+        /// Raised exactly once when the endpoint reaches the terminal stopped stage.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Raised on the serial action queue; observers must not
+        /// block. Subscriber exceptions are caught and logged and cannot disrupt the terminal
+        /// transition.</description></item>
+        /// <item><description><b>Other notes</b>: The handler's <see cref="IRawHandler.OnStopped"/> is
+        /// delivered only when the endpoint had started; this event is raised on every path that reaches the
+        /// terminal stopped stage, including endpoints that never started, so a transport can always detach.
+        /// It is transport-level observability and does not replace the handler lifecycle
+        /// callbacks.</description></item>
+        /// </list>
+        /// </remarks>
+        public event Action<StopReason>? Stopped;
 
         /// <summary>
         /// Initializes a new raw endpoint with the transport name, logging, and memory rental supplied
@@ -232,11 +251,38 @@ namespace Pontifex.Raw
         /// </remarks>
         protected virtual void FailHard(StopReason reason)
         {
-            if (_currentStage == State.Started)
+            try
             {
-                _handler.OnStopped(reason);
+                if (_currentStage == State.Started)
+                {
+                    _handler.OnStopped(reason);
+                }
             }
-            _currentStage = State.Stopped;
+            finally
+            {
+                _currentStage = State.Stopped;
+                RaiseStopped(reason);
+            }
+        }
+
+        /// <summary>
+        /// Raises <see cref="Stopped"/> at most once, isolating subscriber failures.
+        /// </summary>
+        private void RaiseStopped(StopReason reason)
+        {
+            if (Interlocked.Exchange(ref _stoppedRaised, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                Stopped?.Invoke(reason);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
         }
 
         #region Start
@@ -492,6 +538,7 @@ namespace Pontifex.Raw
                     {
                         case State.Constructed:
                             _currentStage = State.Stopped;
+                            RaiseStopped(reason);
                             break;
                         case State.Starting:
                             // wait for FinishStart
@@ -550,7 +597,14 @@ namespace Pontifex.Raw
                 }
 
                 _currentStage = State.Stopped;
-                _handler.OnStopped(_stopReason!);
+                try
+                {
+                    _handler.OnStopped(_stopReason!);
+                }
+                finally
+                {
+                    RaiseStopped(_stopReason!);
+                }
             });
         }
 
