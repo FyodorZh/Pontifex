@@ -146,19 +146,21 @@ namespace Pontifex.Raw.Reliable.Ack
         }
 
         /// <summary>
-        /// Initializes the inherited keep-alive behavior and begins the acknowledgement handshake.
+        /// Begins the acknowledgement handshake.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Called on the serial action queue.</description></item>
         /// <item><description><b>Other notes</b>: The ack request is sent from a deferred action; if the
-        /// endpoint is no longer connected when that action runs, no ack request is sent. Overrides must call the
-        /// base implementation to keep the handshake and keep-alive working.</description></item>
+        /// endpoint is no longer connected when that action runs, no ack request is sent. The inherited
+        /// keep-alive behavior is deliberately not initialized here: starting it before the ack request is sent
+        /// can put a ping frame ahead of the ack handshake. It is initialized from
+        /// <see cref="FinishAckConnect"/> once the handshake completes. Overrides must call the base
+        /// implementation to keep the handshake working.</description></item>
         /// </list>
         /// </remarks>
         protected override void OnConnected()
         {
-            base.OnConnected();
             BeginAckConnect();
         }
 
@@ -205,6 +207,9 @@ namespace Pontifex.Raw.Reliable.Ack
                 {
                     case State.AckRequestSent:
                         _stage = State.LogicallyConnected;
+                        // Keep-alive must start only after the ack request, otherwise a ping frame can
+                        // reach the server before the handshake frame and the connection is rejected.
+                        base.OnConnected();
                         RaiseAcknowledged();
                         _handler.OnConnected(this, message);
                         break;
