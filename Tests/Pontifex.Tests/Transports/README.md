@@ -7,29 +7,36 @@ directly (no carriers, sockets, threads, timers, or sleeping), one test-set per 
 transport-level counterpart of the `Endpoints` suite: the same deterministic and
 public-plus-protected-contract approach, applied one layer up.
 
-Currently the suite covers `AnyTransport`, the root that owns the common transport lifecycle.
-Tests for `RawTransport` and its abstract derivatives will be added incrementally, following the
-same layout and rules.
+Currently the suite covers `AnyTransport`, the root that owns the common transport lifecycle, and
+`RawTransport`, the raw typed facade over it. Tests for the raw reliable and raw unreliable
+transport families will be added incrementally, following the same layout and rules.
 
 > **Conformance controls are explicitly out of scope.**
 > Do not test, arm, inject, assert, or otherwise use anything from the conformance subsystem:
 > `Conformance`, `IConformanceControl`, `GetControls` in its conformance role, checkpoint gates,
 > `FailNextStart`, `InjectUnrecoverableFailure`, and related controls. That subsystem is planned
 > for a significant rewrite and may be removed. Tests in this suite must not depend on it.
+>
+> Some production constructors currently require a conformance-control instance. The harness
+> passes a trivial one only to satisfy the signature; it is never armed, inspected, or asserted.
 
 ```
 Transports/
 ├── README.md                          (this file)
 ├── Harness/                           test doubles shared by all test-sets
 │   └── TestAnyTransport.cs            test double for AnyTransport
-└── AnyTransportTests.cs               test-set for AnyTransport
+├── AnyTransportTests.cs               test-set for AnyTransport
+└── Raw/                               test-sets for the raw transport family
+    ├── Harness/
+    │   └── TestRawTransport.cs        test double for RawTransport
+    └── RawTransportTests.cs           test-set for RawTransport
 ```
 
-Layout rule: each transport family will live in its own directory (`<Family>/`) with the
-family-specific test doubles under `<Family>/Harness/`, one `<ClassName>Tests.cs` file per class.
-A sub-family may be nested the same way (`<Family>/<SubFamily>/Harness/`). Test doubles shared
-across families stay in the top-level `Harness/`. The folder structure does not change the
-namespace: every file in this suite uses `namespace Pontifex.Tests.Transports;`.
+Layout rule: each transport family lives in its own directory (`Raw/`, then
+`Raw/<SubFamily>/` as the hierarchy grows) with the family-specific test doubles under
+`<Family>/Harness/`, one `<ClassName>Tests.cs` file per class. Test doubles shared across
+families stay in the top-level `Harness/`. The folder structure does not change the namespace:
+every file in this suite uses `namespace Pontifex.Tests.Transports;`.
 
 ## Goals
 
@@ -37,6 +44,13 @@ namespace: every file in this suite uses `namespace Pontifex.Tests.Transports;`.
 - Assert only **observable effects**, never private state.
 - Be deterministic and fast: no real carriers, no real time, no background work, no sleeping.
 - Test the class's own delta, not the inherited layers again.
+
+## Coverage rule
+
+Each test-set covers only the behavior its class introduces: its own delta and invariants.
+Inherited behavior is covered once, by the test-set for the layer that owns it, and is not
+repeated in derived test-sets. A derived test-set may use inherited machinery as setup, but its
+assertions stay on the class's own contract.
 
 ## Non-goals
 
@@ -51,13 +65,14 @@ namespace: every file in this suite uses `namespace Pontifex.Tests.Transports;`.
 | Transport class | Test-set | Status | Focus |
 |---|---|---|---|
 | `AnyTransport` | `AnyTransportTests` | covered (32 tests) | lifecycle, start/stop/fail, callbacks, validity |
+| `RawTransport` | `RawTransportTests` | covered (6 tests) | raw transport contract, message size, constructor forwarding |
 
 Planned families:
 
 | Family | Status |
 |---|---|
-| `RawTransport` and `RawReliable*` transports | not started |
-| `RawUnreliable*` transports | not started |
+| `Raw/Reliable*` transports | not started |
+| `Raw/Unreliable*` transports | not started |
 
 ### `AnyTransport` contract matrix
 
@@ -89,6 +104,19 @@ Planned families:
   failed `TryStart`; a stop before the first start leaves it false; it never resets.
 - **ToString** returns the runtime type name.
 
+### `RawTransport` contract matrix
+
+`RawTransport` is a thin typed facade over `AnyTransport`; its delta is small, so this test-set
+stays small and deliberately does not repeat the full `AnyTransport` matrix.
+
+- **Constructor**: `Name` and `Memory` are forwarded to the base; `Log` is non-null.
+- **Message size**: `MessageMaxByteSize` is supplied by the derived transport, reflects the
+  configured value, and is exposed through `IRawTransport`.
+- **Interface exposure**: an instance is assignable to `IRawTransport` and `ITransport`.
+
+This test-set asserts only the `RawTransport`-specific items above. Inherited behavior is not
+repeated; see the coverage rule above.
+
 Not covered here: `GetControls`, because its only current contribution is the conformance
 control, which this suite deliberately does not use.
 
@@ -118,7 +146,12 @@ never use reflection. Only these are asserted:
 - lets each test choose the `TryStart` result or supply behavior for `OnStarted`/`OnStopped`;
 - exposes `HasStartBeenAttempted`.
 
-No conformance control is supplied, armed, or inspected by the harness.
+`TestRawTransport : RawTransport` supplies the abstract `MessageMaxByteSize` and `Type` values and
+implements the inherited lifecycle hooks with no additional behavior. It passes a trivial
+`RawConformanceControl` only because the constructor currently requires one; the control is never
+armed, inspected, or asserted.
+
+No conformance control is supplied, armed, or inspected by the harness for testing purposes.
 
 ### Typical test shape
 
