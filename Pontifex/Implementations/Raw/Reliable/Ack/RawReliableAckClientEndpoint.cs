@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
@@ -21,9 +22,27 @@ namespace Pontifex.Raw.Reliable.Ack
     /// outside the expected stage is treated as a fatal protocol violation.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawReliableAckClientEndpoint : RawReliableClientEndpoint
+    public abstract class RawReliableAckClientEndpoint : RawReliableClientEndpoint, IRawReliableAckEndpoint
     {
         private readonly IRawReliableAckClientHandler _handler;
+
+        private int _acknowledgedRaised;
+
+        /// <summary>
+        /// Raised exactly once when the acknowledgement handshake completes and the endpoint becomes
+        /// logically connected.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Raised on the serial action queue; observers must not
+        /// block. Subscriber exceptions are caught and logged.</description></item>
+        /// <item><description><b>Other notes</b>: Raised before the endpoint invokes the handler's
+        /// <c>OnConnected</c>, so a transport that observes this event is already connected when the handler
+        /// runs. It is transport-level observability and does not replace the handler
+        /// lifecycle.</description></item>
+        /// </list>
+        /// </remarks>
+        public event Action<IRawReliableAckEndpoint>? Acknowledged;
 
         private enum State
         {
@@ -186,6 +205,7 @@ namespace Pontifex.Raw.Reliable.Ack
                 {
                     case State.AckRequestSent:
                         _stage = State.LogicallyConnected;
+                        RaiseAcknowledged();
                         _handler.OnConnected(this, message);
                         break;
 
@@ -202,6 +222,26 @@ namespace Pontifex.Raw.Reliable.Ack
                         throw new ArgumentOutOfRangeException();
                 }
             });
+        }
+
+        /// <summary>
+        /// Raises <see cref="Acknowledged"/> at most once, isolating subscriber failures.
+        /// </summary>
+        private void RaiseAcknowledged()
+        {
+            if (Interlocked.Exchange(ref _acknowledgedRaised, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                Acknowledged?.Invoke(this);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
         }
 
         /// <summary>
