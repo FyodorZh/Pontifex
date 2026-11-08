@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
@@ -20,11 +21,19 @@ namespace Pontifex.Raw.Reliable
         private State _state = State.Constructed;
 
         private volatile TClientHandler? _handler;
-        
+
+        private RawReliableClientEndpoint? _attachedEndpoint;
+
         public bool IsConnected
         {
             get
             {
+                var endpoint = Volatile.Read(ref _attachedEndpoint);
+                if (endpoint != null)
+                {
+                    return endpoint.IsConnected;
+                }
+
                 lock (_locker)
                 {
                     return _state == State.Connected;
@@ -32,6 +41,12 @@ namespace Pontifex.Raw.Reliable
             }
         }
         
+        /// <summary>
+        /// Gets the initialized client handler, or <see langword="null"/> before <see cref="Init"/>
+        /// succeeds.
+        /// </summary>
+        protected TClientHandler? Handler => _handler;
+
         protected virtual TClientHandler? SetupHandler(TClientHandler handler) => handler;
         
         /// <summary>
@@ -104,11 +119,61 @@ namespace Pontifex.Raw.Reliable
             OnReadyToConnect();
         }
         
+        /// <summary>
+        /// Attaches the endpoint that owns this transport's connection. The endpoint is the single source of
+        /// truth for logical connectivity and for the user handler's connection lifecycle notifications.
+        /// </summary>
+        /// <param name="endpoint">The endpoint to attach. Must be non-null.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from the transport lifecycle thread. Only one
+        /// endpoint may be attached per transport.</description></item>
+        /// <item><description><b>Other notes</b>: Subscribes to the endpoint's terminal
+        /// <see cref="RawEndpoint.Stopped"/> notification so the transport stops with it.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void AttachEndpoint(RawReliableClientEndpoint endpoint)
+        {
+            if (endpoint == null)
+            {
+                throw new ArgumentNullException(nameof(endpoint));
+            }
+
+            if (Interlocked.CompareExchange(ref _attachedEndpoint, endpoint, null) != null)
+            {
+                throw new InvalidOperationException("An endpoint is already attached.");
+            }
+
+            endpoint.Stopped += OnAttachedEndpointStopped;
+        }
+
+        /// <summary>
+        /// Detaches the current endpoint, if any, and unsubscribes from its terminal notification.
+        /// </summary>
+        /// <returns>The detached endpoint, or <see langword="null"/> when none was attached.</returns>
+        protected RawReliableClientEndpoint? DetachEndpoint()
+        {
+            var endpoint = Interlocked.Exchange(ref _attachedEndpoint, null);
+            if (endpoint != null)
+            {
+                endpoint.Stopped -= OnAttachedEndpointStopped;
+            }
+
+            return endpoint;
+        }
+
+        private void OnAttachedEndpointStopped(StopReason reason)
+        {
+            Stop(reason);
+        }
+
         protected sealed override void OnStopped(StopReason reason)
         {
+            bool notifyHandler = Volatile.Read(ref _attachedEndpoint) == null;
+
             if (_state == State.Connecting || _state == State.Connected)
             {
-                if (_handler != null)
+                if (notifyHandler && _handler != null)
                 {
                     if (_state == State.Connected)
                     {
@@ -124,7 +189,10 @@ namespace Pontifex.Raw.Reliable
             {
                 _state = State.Disconnected;
                 DestroyTransport(reason);
-                _handler?.OnStopped(reason);
+                if (notifyHandler)
+                {
+                    _handler?.OnStopped(reason);
+                }
             }
         }
 
