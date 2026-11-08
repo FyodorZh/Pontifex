@@ -170,6 +170,12 @@ namespace Pontifex.Raw.Reliable.Ack
                 _handler.FillAckResponse(ackResponse);
                 ackResponse.PutFirst((byte)MessageType.AckResponseMessage);
 
+                if (ackResponse.GetDataSize() > RawReliableAckInfo.AckMaxByteSize)
+                {
+                    Stop(new TextFail(TransportName, "Ack response exceeds AckMaxByteSize"), false);
+                    return false;
+                }
+
                 if (ScheduleToSend(ackResponse.Acquire()) != SendResult.Ok)
                 {
                     Stop(new TextFail(TransportName, "Failed to send ACK response"), false);
@@ -212,6 +218,12 @@ namespace Pontifex.Raw.Reliable.Ack
             if (messageType == MessageType.AckRequestMessage)
             {
                 RefreshLastInboundMessage();
+                if (message.GetDataSize() > RawReliableAckInfo.AckMaxByteSize)
+                {
+                    message.Release();
+                    Stop(new TextFail(TransportName, "Ack request exceeds AckMaxByteSize"), false);
+                    return true;
+                }
                 FinishAckConnect(message);
                 return true;
             }
