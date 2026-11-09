@@ -104,6 +104,27 @@ namespace Pontifex.Tests.Delivery
         }
 
         [Test]
+        public void DuplicateIdAfterPop_SecondPopFiresOnErrorWithIds()
+        {
+            var sorter = Create();
+            sorter.Push(new DeliveryId(5), "a");
+            sorter.Push(new DeliveryId(5), "b");
+
+            Assert.That(sorter.TryPop(out var first, out _), Is.True);
+            Assert.That(first.Id, Is.EqualTo(5));
+
+            DeliveryId? expected = null;
+            DeliveryId? unexpected = null;
+            sorter.OnError += (e, u) => { expected = e; unexpected = u; };
+
+            Assert.That(sorter.TryPop(out _, out _), Is.False);
+            Assert.That(expected, Is.EqualTo(new DeliveryId(6)));
+            Assert.That(unexpected, Is.EqualTo(new DeliveryId(5)));
+            Assert.That(sorter.Push(new DeliveryId(7), "c"), Is.False);
+            Assert.That(sorter.TryPop(out _, out _), Is.False);
+        }
+
+        [Test]
         public void FirstMessageLowerThanStartId_Accepted()
         {
             var sorter = new DeliverySorter<string>(new DeliveryId(100));

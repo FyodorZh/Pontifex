@@ -62,6 +62,8 @@
 | `NewFormat_DispatchedData_HasDiscriminatorAndWireChunkId` | The dispatched wire message has `[true, wireChunkId]` before the packed data. | The wire envelope is the dispatcher's responsibility, not the packer's. | Wire chunk ids start at 1. |
 | `NewFormat_Retry_PreservesDiscriminator` | Retransmission reuses the same wire envelope. | Retry does not rebuild or corrupt the envelope. | The first consumer releases its reference without retaining the message. |
 | `NewFormat_SequentialDispatches_HaveUniqueWireChunkIds` | Each scheduled chunk gets a unique wire chunk id. | The wire chunk id is a per-chunk sequence, not the delivery id. | Three sequential admissions produce ids 1, 2, 3. |
+| `ScheduleDeliver_AfterWireChunkIdWrap_RestartsAtOne` | The 16-bit wire chunk id wraps from 65,535 to 1. | The sequence never emits 0. | The loop clears each task to keep memory flat while advancing 65,535 admissions. |
+| `ScheduleDeliver_WithNonPositiveCapacity_ReturnsBufferOverflow` | Capacity must be positive for admission to succeed. | Zero and negative capacity behave as a full queue. | Runs for capacity 0 and -1. |
 
 ### DeliveryInfoSerializer
 
@@ -75,6 +77,7 @@
 | `LoadDeliveryReport_MultipleConfirmations_PopulatesAll` | All pairs are parsed in order. | Multi-confirmation reports round-trip. | — |
 | `LoadDeliveryReport_WrongFirstElement_ReturnsFalse` | The first element must be a `ushort` count. | Type validation rejects malformed reports. | The list contains a byte followed by valid-looking pairs. |
 | `LoadDeliveryReport_TruncatedAfterCount_ReturnsFalse` | A count without its pairs is malformed. | Truncation is rejected instead of partially accepted. | Count 5 with no pairs. |
+| `LoadDeliveryReport_TruncatedPair_ReturnsFalse` | A pair must contain both an id and a chunk id. | A partially written pair is rejected. | Count 1 followed by an id only. |
 | `LoadDeliveryReport_CountZero_ReturnsTrueEmptyList` | A zero count is valid and yields an empty report. | Empty reports are accepted. | — |
 | `RoundTrip_DeliveryInfo_PreservesIdsAndChunks` | Create followed by load preserves every id/chunk pair. | The serializer is symmetric for valid input. | Two confirmations. |
 
@@ -96,6 +99,7 @@
 | `ProcessIncoming_AfterClear_StillProcesses` | `Clear` does not break the inbound path. | Outgoing reset and inbound processing are independent. | A message scheduled before `Clear` is still delivered inbound. |
 | `MultipleSends_AllReceived` | Multiple scheduled messages are all delivered. | The pipeline handles a small burst. | Five messages, delivered through one pump. |
 | `ProcessIncoming_GarbageBytes_ReturnsFalse` | Malformed/truncated wire data is rejected. | Garbage does not throw or fire events. | The test supplies a `ushort` followed by a byte that cannot complete a message. |
+| `ProcessIncoming_WireChunkIdBeyondWindow_ReturnsFalse` | A wire chunk id jump beyond the deduplication window is an overflow. | The facade rejects the packet without delivering or throwing. | Chunk id 2,000 against the 1,024-entry window. |
 | `ScheduleDelivery_EmptyData_RoundTripsEmptyPayload` | Zero-byte user data is valid. | Empty payloads survive packing, dispatch, and delivery. | The received payload is observed as an empty element list. |
 | `ProcessOutgoing_WithoutSchedule_ProducesNothing` | An idle manager emits nothing. | The pump is side-effect-free when there is no work. | — |
 | `MultipleProcessOutgoing_ConfirmationsAccumulate` | A received message produces one outgoing report. | The report is flushed once, not once per pump. | A second pump produces no report. |
@@ -104,6 +108,15 @@
 | `MultiChunk_DuplicateChunk_ReceivedFiresOnce` | A duplicate chunk after completion does not re-deliver. | Inbound deduplication covers multi-chunk messages. | The first chunk is replayed after the complete message. |
 | `MultiChunkAckRoundTrip_DeliveredFires` | All chunks must be acknowledged before delivery fires. | Multi-chunk acknowledgement counting works at the facade. | Sender reports `Delivered` with the scheduled id. |
 | `MultiChunkRetryTimeout_FiresFailedToDeliver` | An unacknowledged multi-chunk message reports failure. | Retry exhaustion applies to the whole message. | Timeout 50 ms, 150-byte payload. |
+
+### DeliveryReporter
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+|---|---|---|---|
+| `Flush_WhenEmpty_ProducesNothing` | Flushing with no confirmations emits nothing. | The reporter has no phantom output. | — |
+| `Flush_SingleReport_StartsWithDiscriminatorAndClears` | A flush prepends the non-user discriminator and clears pending confirmations. | The report is ready to send and is emitted once. | Message size 100 fits both confirmations in one packet. |
+| `Flush_WhenConfirmationsExceedPacket_SplitsIntoBatches` | Confirmations are split by the packet capacity. | Five confirmations with a two-per-packet limit produce 2 + 2 + 1. | Packet limit is derived from `(19 - 4 - 4) / 5 = 2`; removing the safety-margin subtraction would give 3. |
+| `Clear_DropsPendingConfirmations` | `Clear` discards accumulated confirmations. | Reset suppresses a pending report. | — |
 
 ### DeliverySorter
 
@@ -117,6 +130,7 @@
 | `AfterClear_PushReturnsFalse` | `Clear` permanently disables the sorter for pushes. | The sorter is not reusable after reset. | A replacement sorter is required. |
 | `AfterClear_TryPopReturnsFalse` | `Clear` permanently disables the sorter for pops. | No buffered parcel survives a reset. | — |
 | `Clear_ReleasesAllAndSetsError` | `Clear` invokes the destructor for every buffered parcel. | Reset releases caller-owned parcels exactly once. | Two buffered parcels. |
+| `DuplicateIdAfterPop_SecondPopFiresOnErrorWithIds` | A buffered key below the advanced expectation raises `OnError` with both ids. | The sorter reports the expected id and the stale id. | Duplicate id 5 is accepted twice; the second pop observes 5 below expectation 6. |
 | `FirstMessageLowerThanStartId_Accepted` | The first message wins over the configured start id. | Start id is only an initial expectation for an empty sorter. | Start id 100, first push 50. |
 | `TryPop_WhenEmpty_ReturnsFalse` | Popping an empty sorter is harmless. | The sorter reports absence rather than throwing. | — |
 | `GapFill_ThenPopsInOrder` | Filling a gap unblocks the buffered sequence. | The sorter resumes after the missing id arrives. | Push 1, pop; buffer 3 and 4; push 2; pop 2, 3, 4. |
@@ -163,6 +177,11 @@
 | `Pack_DataAtSingleChunkLimit_ProducesOneChunk` | Exactly the single-chunk maximum stays on the fast path. | The boundary is inclusive. | 86 bytes serialize to 90 bytes. |
 | `Pack_DataJustOverSingleChunkLimit_ProducesMultipleChunks` | One byte over the boundary switches to multi-chunk. | The boundary is not off by one. | 87 bytes serialize to 91 bytes. |
 | `Pack_DataTooBig_ReturnsMessageTooBig` | Data over the maximum is rejected without output. | The size guard runs before splitting. | 30,000 bytes; the consumer list stays empty. |
+| `TryPeekDeliveryInfo_SingleChunk_ReturnsIdAndChunkZero` | A single-chunk wire message exposes its id with chunk 0. | Duplicate packets can be acknowledged without unpacking. | — |
+| `TryPeekDeliveryInfo_MultiChunk_ReturnsIdAndChunkId` | A multi-chunk wire message exposes both its id and chunk id. | The peek path reads the same prefix as full unpacking. | — |
+| `TryPeekDeliveryInfo_Empty_ReturnsFalse` | An empty list has no delivery info. | Malformed input is rejected. | — |
+| `TryPeekDeliveryInfo_SingleMissingId_ReturnsFalse` | A single-chunk prefix requires an id. | Truncated input is rejected. | — |
+| `TryPeekDeliveryInfo_MultiTruncated_ReturnsFalse` | A multi-chunk prefix requires a part id and an id. | Truncated multi-chunk input is rejected. | — |
 | `Clear_DoesNotThrow` | `Clear` is safe on a packer with no partial inbound state. | Reset does not destabilise the packer. | The packer has just produced outbound chunks. |
 | `Pack_ReleasesDataOnSuccess` | A successful pack consumes the caller's data list. | The caller must not release the input after a successful pack. | Observed through the tracked pool: the input list's reference count reaches zero. |
 
@@ -191,17 +210,7 @@
 
 ## Planned
 
-| Missing test | Owner | Reason |
-|---|---|---|
-| `DeliveryReporter` direct tests: batching by packet size, clearing after flush, and `Clear`. | This layer | The reporter has no test file and is covered only indirectly through `DeliveryManager`. |
-| Acknowledgment batching when confirmations exceed one report packet. | This layer | The reporter's batch-splitting loop is not exercised. |
-| `DeliverySorter.OnError` callback arguments when `TryPop` observes a top key below the expected id. | This layer | `FailedToSort` is covered through the wrapper; the sorter's own callback payload is not. |
-| `DeliveryDispatcher` wire chunk id wrap-around from 65,535 to 1. | This layer | The wrap branch is not exercised. |
-| `DeliveryDispatcher` zero or negative capacity behaviour. | This layer | Tests use positive capacities only. |
-| `MessagePacker.TryPeekDeliveryInfo` malformed and truncated paths. | This layer | Only the happy path is currently reached through duplicate delivery. |
-| `DeliveryInfoSerializer` truncated pair (id without chunk id) and a count larger than the supplied list. | This layer | Only the wrong-first-type and missing-pairs truncations are covered. |
-| `DeliveryManager` deduplicator overflow causing `ProcessIncoming` to return false. | This layer | Requires a wire chunk id jump beyond the dedup window. |
-| `MessageSplitter.GetNextChunk` negative chunk ids and invalid maximum sizes. | This layer | Constructor and guard boundaries are not covered. |
+No known missing tests in this layer. New gaps must be added here with an owner and a reason.
 
 ## Deferred by design
 
@@ -214,6 +223,8 @@
 | Production capacity values (5,000 pending deliveries, 1,024 dedup window). | Tests use small capacities to stay fast and deterministic; the arithmetic and boundary behaviour are covered at small scale. |
 | Shared primitives `DeliveryId`, `UnionDataList`, and zig-zag varint encoding. | They have loose tests at the project root and are not part of this suite's selected subject group. |
 | Dispatcher buffer overflow at the production capacity. | Reaching 5,000 pending deliveries adds no contract meaning beyond the small-capacity overflow test. |
+| `DeliveryInfoSerializer.CreateDeliveryReport` with a count larger than the supplied list. | The method is a trusted internal API; an out-of-range count is a programming error, not a recoverable input. |
+| `MessageSplitter` negative chunk ids or non-positive maximum chunk size. | Internal callers pass validated positive sizes and non-negative ids; no graceful behaviour is defined for those inputs. |
 
 ## Notes
 

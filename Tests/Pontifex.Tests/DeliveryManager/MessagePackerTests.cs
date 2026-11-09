@@ -29,6 +29,17 @@ namespace Pontifex.Tests.Delivery
             return data;
         }
 
+        private UnionDataList WireList(params UnionData[] elements)
+        {
+            var data = CPool.Acquire<UnionDataList>();
+            foreach (var element in elements)
+            {
+                data.PutLast(element);
+            }
+
+            return data;
+        }
+
         private const int UserSingleOverhead = 6;
         private const int UserMultiOverhead = 10;
 
@@ -204,6 +215,72 @@ namespace Pontifex.Tests.Delivery
             Assert.That(result, Is.EqualTo(SendResult.Ok));
             Assert.That(sent.Count, Is.GreaterThan(1));
             foreach (var qm in sent) qm.Data.Release();
+        }
+
+        // ── TryPeekDeliveryInfo ──
+
+        [Test]
+        public void TryPeekDeliveryInfo_SingleChunk_ReturnsIdAndChunkZero()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)1), new UnionData((ushort)42));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out var info);
+            data.Release();
+
+            Assert.That(peeked, Is.True);
+            Assert.That(info.Id, Is.EqualTo(new DeliveryId(42)));
+            Assert.That(info.ChunkId, Is.Zero);
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_MultiChunk_ReturnsIdAndChunkId()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)3), new UnionData((byte)2), new UnionData((ushort)42));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out var info);
+            data.Release();
+
+            Assert.That(peeked, Is.True);
+            Assert.That(info.Id, Is.EqualTo(new DeliveryId(42)));
+            Assert.That(info.ChunkId, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_Empty_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList();
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out _);
+            data.Release();
+
+            Assert.That(peeked, Is.False);
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_SingleMissingId_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)1));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out _);
+            data.Release();
+
+            Assert.That(peeked, Is.False);
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_MultiTruncated_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)2), new UnionData((byte)1));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out _);
+            data.Release();
+
+            Assert.That(peeked, Is.False);
         }
 
         // ── Error cases ──

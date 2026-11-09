@@ -150,6 +150,19 @@ namespace Pontifex.Tests.Delivery
         }
 
         [Test]
+        public void LoadDeliveryReport_TruncatedPair_ReturnsFalse()
+        {
+            var ser = CreateSerializer();
+            var data = CPool.Acquire<UnionDataList>();
+            data.PutLast(new UnionData((ushort)1)); // count
+            data.PutLast(new UnionData((ushort)100)); // id without chunk id
+
+            bool loaded = ser.LoadDeliveryReport(data);
+            data.Release();
+            Assert.That(loaded, Is.False);
+        }
+
+        [Test]
         public void LoadDeliveryReport_CountZero_ReturnsTrueEmptyList()
         {
             var ser = CreateSerializer();

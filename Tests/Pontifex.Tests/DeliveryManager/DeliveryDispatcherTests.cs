@@ -21,6 +21,8 @@ namespace Pontifex.Tests.Delivery
             return data;
         }
 
+        private UnionDataList EmptyData() => CPool.Acquire<UnionDataList>();
+
         private static DeliveryInfo Info(ushort id, byte chunk = 0) => new DeliveryInfo(new DeliveryId(id), chunk);
 
         private DeliveryDispatcher NewDispatcher(int capacity)
@@ -257,6 +259,40 @@ namespace Pontifex.Tests.Delivery
 
             Assert.That(sent, Has.Count.EqualTo(3));
             foreach (var b in sent) b.Release();
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void ScheduleDeliver_WithNonPositiveCapacity_ReturnsBufferOverflow(int capacity)
+        {
+            var d = NewDispatcher(capacity);
+
+            Assert.That(d.ScheduleDeliver(Info(1), DummyData(), T0),
+                Is.EqualTo(DeliveryDispatcher.ScheduleResult.BufferOverflow));
+        }
+
+        [Test]
+        public void ScheduleDeliver_AfterWireChunkIdWrap_RestartsAtOne()
+        {
+            var d = NewDispatcher(ushort.MaxValue);
+
+            // Advance the 16-bit wire sequence to its wrap point without retaining 65,535 tasks.
+            for (int i = 0; i < ushort.MaxValue; i++)
+            {
+                d.ScheduleDeliver(new DeliveryInfo(new DeliveryId((ushort)(i + 1)), 0), EmptyData(), T0);
+                d.Clear();
+            }
+
+            d.ScheduleDeliver(Info(1), DummyData(), T0);
+            var sent = new List<UnionDataList>();
+            var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
+            var scheduler = new RetryDeliveryScheduler(TimeSpan.FromHours(1));
+            d.TryToDeliver(consumer, scheduler, T0);
+
+            Assert.That(sent, Has.Count.EqualTo(1));
+            Assert.That(sent[0].Elements[0].Alias.BoolValue, Is.True);
+            Assert.That(sent[0].Elements[1].Alias.UShortValue, Is.EqualTo(1));
+            foreach (var message in sent) message.Release();
         }
 
         // Wire-format contract: the dispatcher prepends [bool(true), ushort(wireChunkId)]

@@ -256,6 +256,23 @@ namespace Pontifex.Tests.Delivery
             Assert.That(result, Is.False);
         }
 
+        [Test]
+        public void ProcessIncoming_WireChunkIdBeyondWindow_ReturnsFalse()
+        {
+            var dm = NewManager();
+            bool received = false;
+            dm.Received += (_, d) => { received = true; d.Release(); };
+
+            var data = CPool.Acquire<UnionDataList>();
+            data.PutLast(new UnionData(true));
+            data.PutLast(new UnionData((ushort)2000));
+            data.PutLast(new UnionData((byte)1));
+            data.PutLast(new UnionData((ushort)42));
+
+            Assert.That(dm.ProcessIncoming(data), Is.False);
+            Assert.That(received, Is.False);
+        }
+
         private UnionDataList CreateGarbageList()
         {
             var data = CPool.Acquire<UnionDataList>();

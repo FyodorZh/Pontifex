@@ -87,6 +87,7 @@ DeliveryManager/
 ├── DeliveryDispatcherTests.cs
 ├── DeliveryInfoSerializerTests.cs
 ├── DeliveryManagerTests.cs
+├── DeliveryReporterTests.cs
 ├── DeliverySorterTests.cs
 ├── DeliverySortingManagerTests.cs
 ├── MessageMergerTests.cs
@@ -175,8 +176,6 @@ and place it in the root layer's `Coverage.md`.
 - End-to-end integration with a live transport or a remote peer.
 - The loose tests at the project root for shared primitives (`DeliveryIdTests`,
   `UnionDataListTests`, `ZigZagVarIntSerializerTests`). They are not part of this suite.
-- `DeliveryReporter` has no direct test file; its batching behaviour is currently exercised only
-  through `DeliveryManager` and is recorded as a planned gap in `Coverage.md`.
 
 ## Rules
 
