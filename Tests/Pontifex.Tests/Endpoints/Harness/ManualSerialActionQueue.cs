@@ -25,11 +25,6 @@ internal sealed class ManualSerialActionQueue : ISerialActionQueue
         _onError = onError;
     }
 
-    /// <summary>
-    /// Gets the number of actions accepted but not yet run.
-    /// </summary>
-    public int PendingCount => _actions.Count;
-
     public bool Schedule(Action action)
     {
         _actions.Enqueue(action);
@@ -42,10 +37,7 @@ internal sealed class ManualSerialActionQueue : ISerialActionQueue
         return true;
     }
 
-    /// <summary>
-    /// Runs the next accepted action, if any. Exceptions are routed to the error callback.
-    /// </summary>
-    public void DrainOne()
+    private void DrainOne()
     {
         if (_actions.Count == 0)
         {

@@ -13,13 +13,13 @@ namespace Pontifex.Tests.Endpoints;
 /// </summary>
 internal sealed class RecordingRawReliableAckServerHandler : RecordingRawReliableServerHandler, IRawReliableAckServerHandler
 {
+    private readonly bool _throwOnFillAckResponse;
+
     public RecordingRawReliableAckServerHandler(IMemoryRental memory, bool throwOnFillAckResponse = false)
         : base(memory)
     {
-        ThrowOnFillAckResponse = throwOnFillAckResponse;
+        _throwOnFillAckResponse = throwOnFillAckResponse;
     }
-
-    public bool ThrowOnFillAckResponse { get; }
 
     public int FillAckResponseCalls { get; private set; }
 
@@ -31,7 +31,7 @@ internal sealed class RecordingRawReliableAckServerHandler : RecordingRawReliabl
     {
         FillAckResponseCalls++;
 
-        if (ThrowOnFillAckResponse)
+        if (_throwOnFillAckResponse)
         {
             throw new InvalidOperationException("FillAckResponse test failure");
         }

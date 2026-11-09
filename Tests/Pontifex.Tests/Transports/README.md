@@ -462,8 +462,8 @@ and assert the observable result.
    - record hook invocations and capture observable results;
    - provide helpers that complete or trigger the class's protected transitions explicitly.
 2. Add any shared fakes the class needs (recording handlers, endpoint doubles, and so on). The
-   existing `Endpoints/Harness` doubles may be reused when a transport test needs a real endpoint
-   object, because both suites live in the same test assembly.
+   existing doubles from the `Endpoints` suite may be reused when a transport test needs a real
+   endpoint object, because both suites live in the same test assembly.
 3. Add `<Family>/<ClassName>Tests.cs` and cover **that class's delta** plus its invariants.
 4. Follow the conventions above.
 5. Update the coverage table in this README.
