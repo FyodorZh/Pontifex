@@ -3,17 +3,54 @@
 Deterministic and loopback tests for the internal `LowLevelTcpSocket` transport in
 `Transports/Pontifex.Transport.Net`.
 
+## Suite type
+
+**Test Suit.** The suite covers the single concrete internal `LowLevelTcpSocket` type. It has
+exactly one root layer; the `Tests/` groups organise its tests and are not layers.
+
+Root subject: `Pontifex.NetSockets.Tcp.LowLevelTcpSocket`.
+
+## Contract references
+
+- [LowLevelTcpSocket.cs](../../../Transports/Pontifex.Transport.Net/Common/LowLevelTcpSocket/LowLevelTcpSocket.cs)
+- [ILowLevelTcpSocket.cs](../../../Transports/Pontifex.Transport.Net/Common/LowLevelTcpSocket/ILowLevelTcpSocket.cs)
+- [ReceivePools.cs](../../../Transports/Pontifex.Transport.Net/Common/LowLevelTcpSocket/ReceivePools.cs)
+- [ReusablePartialView.cs](../../../Transports/Pontifex.Transport.Net/Common/LowLevelTcpSocket/ReusablePartialView.cs)
+- [TeardownExecutor.cs](../../../Transports/Pontifex.Transport.Net/Common/LowLevelTcpSocket/TeardownExecutor.cs)
+- [DeadlineScheduler.cs](../../../Transports/Pontifex.Transport.Net/Common/LowLevelTcpSocket/DeadlineScheduler.cs)
+
 - **Root:** `Tests/Pontifex.Transport.Net.Tests/LowLevelTcpSocket/`
 - **Test namespace:** `Pontifex.Tests.NetSockets.LowLevelTcpSocketTests`
 - **Harness namespace:** `Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness`
-- **Suite category:** every fixture is tagged `[LowLevelTcpSocketSuite]`, so other suites in the
-  same project can include or exclude this one with `--filter "TestCategory=LowLevelTcpSocket"`.
+- **Suite category:** every non-harness fixture is tagged `[LowLevelTcpSocketSuite]`, so other
+  suites in the same project can include or exclude this one with
+  `--filter "TestCategory=LowLevelTcpSocket"`. Harness self-tests are tagged
+  `[LowLevelTcpSocketHarnessSuite]` and carry only `LowLevelTcpSocket.Harness`.
+
+## Layers
+
+The layer table is the authoritative declaration of layer name, subject, directory, and coverage
+file.
+
+| Layer | Subject | Directory | Coverage |
+|---|---|---|---|
+| `LowLevelTcpSocket` | `Pontifex.NetSockets.Tcp.LowLevelTcpSocket` | `Tests/Pontifex.Transport.Net.Tests/LowLevelTcpSocket` | [`Coverage.md`](Coverage.md) |
+
+A Test Suit has exactly one layer, placed at the suite root. The `Tests/` groups are not layers:
+they must not contain `Coverage.md` or `Harness/`.
+
+## Groups
+
+The single layer contains these `Tests/` subfolders: `Construction`, `Sending`, `Receiving`,
+`Draining`, `Completion`, `Teardown`, `Ownership`, `Policies`, `Composition`, and `Probes`. They
+organise tests only; they are not layers and do not have their own `Coverage.md` or `Harness/`.
 
 ## Layout
 
 ```
 LowLevelTcpSocket/
 ├── README.md
+├── Coverage.md
 ├── Harness/                 ns …LowLevelTcpSocketTests.Harness
 │   ├── LowLevelSocketHarness.cs          wires LowLevelTcpSocket to all doubles
 │   ├── FakeSocketAccessor.cs             scripted ISocketAccessor (strict contract checks)
@@ -34,6 +71,7 @@ LowLevelTcpSocket/
 │   ├── ApplicationByteLedger.cs          executable byte-budget composition example
 │   ├── ApplicationLivenessWatchdog.cs    executable liveness composition example
 │   ├── TestCategories.cs / LowLevelTcpSocketSuiteAttribute.cs
+│   ├── LowLevelTcpSocketHarnessSuiteAttribute.cs
 │   └── Tests/               harness self-tests (same Harness namespace)
 │       ├── HarnessSanityTests.cs          wiring smoke through LowLevelSocketHarness
 │       ├── FakeSocketAccessorTests.cs     accessor contract and completion semantics
@@ -62,24 +100,34 @@ LowLevelTcpSocket/
     ├── Composition/         ProducerCompositionTests, LoopbackSocketTests,
     │                        LoopbackHalfClosePolicyTests,
     │                        ApplicationByteLedgerTests, ApplicationLivenessWatchdogTests
-    └── Probes/              AllocationBaselineTests, LoadProbeTests, TransportProfilingProbes
+    └── Probes/              AllocationBaselineTests, LoadProbeTests, TransportProfilingProbesTests
 ```
 
-## Conventions
+## Coverage
 
+Coverage is recorded in [`Coverage.md`](Coverage.md) for the single root layer. It lists every test
+in the layer, including tests in `Tests/` groups and harness self-tests, plus planned gaps and gaps
+deferred by design. This README does not duplicate volatile coverage status.
+
+## Naming and structure conventions
+
+- Layer name = subject type name.
 - One cohesive contract per fixture, one fixture per file, file name = class name (`<Subject>Tests`).
 - Groups follow the connection lifecycle — construction → sending → receiving → draining →
   completion → teardown — with cross-cutting concerns (ownership, policies, composition, probes)
-  as separate groups. A fixture belongs to exactly one group.
+  as separate groups. A fixture belongs to exactly one group. Groups are `Tests/` subfolders, are
+  not layers, and do not get their own `Coverage.md` or `Harness/`.
 - Harness types are internal, live under `Harness/`, and are never used by production code. Tests of
-  the harness itself live in `Harness/Tests/` and share the Harness namespace.
+  the harness itself live in `Harness/Tests/`, share the Harness namespace, and carry only
+  `LowLevelTcpSocket.Harness`.
 - Test method names are descriptive sentences.
 - Class summaries describe the contract the fixture pins.
 
 ## Running the suite
 
 ```sh
-# whole suite (use a configuration where the selected categories are calibrated)
+# subject contract tests, including Release-only probes
+# (excludes harness self-tests; use the Harness filter below for those)
 dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
   --filter "TestCategory=LowLevelTcpSocket"
 
@@ -94,6 +142,10 @@ dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csp
 # throughput/latency/retention probes (Release only)
 dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
   -c Release --filter "TestCategory=LowLevelTcpSocket.Load"
+
+# harness self-tests only (excluded from the suite root category)
+dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
+  --filter "TestCategory=LowLevelTcpSocket.Harness"
 ```
 
 ## Pinned dependency versions
@@ -240,7 +292,7 @@ the application's account, not transport flow control, and no implicit credit pr
 
 ## Profiling matrix
 
-`TransportProfilingProbes` (Release-only `Load` category) plus `LoadProbeTests` cover: cold
+`TransportProfilingProbesTests` (Release-only `Load` category) plus `LoadProbeTests` cover: cold
 connection churn vs long-lived steady state (bytes/connection, args setup/disposal), ambient-context
 sync/async cost, idle-after-large-send retention, delayed consumer retention with bounded cache
 misses, many pending receives sized by a documented 4 MiB storage budget, shutdown storms with
@@ -255,7 +307,12 @@ builds its args through `ISocketAccessor.CreateEventArgs()`; tests inject `FakeS
 returns `TestSocketAsyncEventArgs` (writes the transfer count into the private backing field and raises
 `Completed`).
 
-## Harness catalog
+## Harness layout and catalog
+
+Harness is test-only: it contains no production code and no mocking library. This suite has one
+layer, so all harness belongs to the root layer's `Harness/`; there are no sibling layers to share
+between. If the suite is ever split, shared harness moves to the nearest common ancestor layer.
+Harness self-tests are optional and live in `Harness/Tests/`.
 
 All in `Harness/` (tests of the harness live in `Harness/Tests/`):
 
@@ -290,7 +347,8 @@ All in `Harness/` (tests of the harness live in `Harness/Tests/`):
   normal-I/O liveness).
 - `LowLevelSocketHarness` — assembles all of the above.
 - `TestWait` — bounded waits so hanging paths fail instead of deadlocking the runner.
-- `LowLevelTcpSocketSuiteAttribute` — fixture-level suite category (see below).
+- `LowLevelTcpSocketSuiteAttribute` — fixture-level suite root category.
+- `LowLevelTcpSocketHarnessSuiteAttribute` — fixture-level harness self-test category.
 
 ## Categories
 
@@ -299,8 +357,13 @@ facet nests under it as `LowLevelTcpSocket.<facet>` (NUnit categories are flat s
 what makes explorers and filters present them together). A facet-tagged test carries the root
 through its fixture and the facet on the method.
 
-- `TestCategories.LowLevelTcpSocket` (via `[LowLevelTcpSocketSuite]`) — suite root, inherited by
-  every fixture; include or exclude the whole suite with `--filter "TestCategory=LowLevelTcpSocket"`.
+- `TestCategories.LowLevelTcpSocket` (via `[LowLevelTcpSocketSuite]`) — suite root, carried by every
+  non-harness fixture; include or exclude the whole suite with
+  `--filter "TestCategory=LowLevelTcpSocket"`.
+- `TestCategories.Harness` (`LowLevelTcpSocket.Harness`, via
+  `[LowLevelTcpSocketHarnessSuite]`) — harness self-tests only. These fixtures carry only this
+  category, not the suite root, and are run with
+  `--filter "TestCategory=LowLevelTcpSocket.Harness"`.
 - `TestCategories.Allocation` (`LowLevelTcpSocket.Allocation`) and `TestCategories.Load`
   (`LowLevelTcpSocket.Load`) — calibrated managed-allocation probes/baselines and longer
   throughput/latency/retention probes. Both are calibrated for Release and must be run there; the
@@ -313,3 +376,27 @@ Measurement fixtures: `AllocationMeasurer` (warmup + per-thread counter + thread
 `NoCopyReceiveConsumer` (counts bytes/ops without copying or storing payload, releases in
 `finally`). Baselines/probes print warmed per-operation bytes and throughput/latency percentiles;
 exact byte figures are environment-specific, not universal budgets.
+
+## Adding a layer and tests
+
+A Test Suit has exactly one layer, so adding a layer is not applicable. If the suite starts needing
+nested layers, split it into multiple Test Suits or convert it to an Abstract Test Suit.
+
+To add a test, place it in the `Tests/<Group>/` file that owns the contract, keep one fixture per
+file named `<Subject>Tests`, tag non-harness fixtures with `[LowLevelTcpSocketSuite]`, and update
+[`Coverage.md`](Coverage.md) in the same change. New groups are subfolders of `Tests/`; they are not
+layers and must not contain `Coverage.md` or `Harness/`. Harness self-tests go under
+`Harness/Tests/`, carry `[LowLevelTcpSocketHarnessSuite]`, and are also recorded in `Coverage.md`.
+
+## Out of scope
+
+- Production implementation changes to `LowLevelTcpSocket` or its supporting types.
+- Other transports, endpoints, carriers, and their conformance suites.
+- Real network conditions beyond deterministic loopback TCP and scripted socket failures.
+- Fairness budgets, wall-clock performance SLOs, and universal allocation numbers; the probes are
+  calibration/sanity checks, not cross-platform budgets.
+- Transport-level idle, read, or write deadlines; liveness enforcement is an application concern.
+
+## Rules
+
+This suite follows [Tests/RULES.md](../../RULES.md).

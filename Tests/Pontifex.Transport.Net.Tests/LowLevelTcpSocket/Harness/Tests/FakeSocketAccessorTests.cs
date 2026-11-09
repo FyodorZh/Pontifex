@@ -7,7 +7,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
     /// Scripted socket accessor and completion semantics: pending/post reuse, exactly-once completion,
     /// synchronous-vs-asynchronous results, and explicit bounded teardown of outstanding fake operations.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class FakeSocketAccessorTests
     {
         [Test]

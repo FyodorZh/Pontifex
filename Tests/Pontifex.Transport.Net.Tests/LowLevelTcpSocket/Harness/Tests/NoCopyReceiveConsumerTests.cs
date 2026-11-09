@@ -6,7 +6,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
     /// Measurement consumer fixture: no per-delivery allocation, release-in-finally ownership
     /// even when validation throws, and retain mode that does not release behind the caller's back.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class NoCopyReceiveConsumerTests
     {
         [Test]

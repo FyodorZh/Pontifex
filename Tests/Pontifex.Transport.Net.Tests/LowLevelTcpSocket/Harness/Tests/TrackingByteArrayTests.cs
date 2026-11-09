@@ -7,7 +7,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
     /// Ownership-tracking buffer double: final release, release-call and underflow accounting
     /// pinned against the installed Actuarius.Memory reference-count diagnostics.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class TrackingByteArrayTests
     {
         [Test]

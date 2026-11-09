@@ -4,7 +4,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
     /// Validates that the test infrastructure itself is wired correctly (it exercises only current,
     /// expected-green behavior). The real behavioral suite is built on top of these fixtures.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class HarnessSanityTests
     {
         [Test]
