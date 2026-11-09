@@ -94,7 +94,7 @@ namespace Pontifex.Raw.Unreliable
         /// </summary>
         protected IRawUnreliableHandler? ClientHandler => _clientHandler;
 
-        internal SerializedCallbackQueue<RawUnreliableWorkItem>? _dispatcher;
+        internal ISerializedCallbackQueue<RawUnreliableWorkItem>? _dispatcher;
         internal RawUnreliableEndpoint? _clientEndpoint;
         private readonly Dictionary<IEndPoint, RawUnreliableEndpoint> _routes = new();
         private volatile bool _stopping;
@@ -160,13 +160,19 @@ namespace Pontifex.Raw.Unreliable
             }
         }
 
+        protected virtual ISerializedCallbackQueue<RawUnreliableWorkItem> ConstructCallbackQueue(int capacity, string threadName,
+            Action<RawUnreliableWorkItem> handler, Action<RawUnreliableWorkItem> disposer)
+        {
+            return new SerializedCallbackQueue<RawUnreliableWorkItem>(capacity, threadName, handler, disposer);
+        }
+
         protected override bool TryStart()
         {
             if (!_initSucceeded)
                 return false;
 
             _stopping = false;
-            _dispatcher = new SerializedCallbackQueue<RawUnreliableWorkItem>(1000, Name + ".dispatcher", DispatchWork, DispatchWork);
+            _dispatcher = ConstructCallbackQueue(1000, Name + ".dispatcher", DispatchWork, DispatchWork);
             if (!StartCarrier())
             {
                 _dispatcher.Dispose();
