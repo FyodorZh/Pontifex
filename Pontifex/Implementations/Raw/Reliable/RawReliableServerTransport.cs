@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Actuarius.Memory;
+using Operarius;
 using Pontifex.StopReasons;
 using Scriba;
 using Transport.Utils;
@@ -131,6 +132,24 @@ namespace Pontifex.Raw.Reliable
         /// </list>
         /// </remarks>
         protected abstract void StopCarrier(StopReason reason);
+
+        /// <summary>
+        /// Creates the driver that runs the shared session ticker.
+        /// </summary>
+        /// <returns>The logic driver used to execute the session ticker.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default implementation returns a
+        /// <see cref="ThreadBasedPeriodicMultiLogicDriver"/> configured with the transport's tick period.
+        /// Override this method to supply a different driver.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual ILogicDriver<IPeriodicLogicDriverCtl> LogicDriverFactory()
+        {
+            return new ThreadBasedPeriodicMultiLogicDriver(
+                NowDateTimeProvider.Instance,
+                TimeSpan.FromMilliseconds(_tickPeriodMs));
+        }
 
         /// <summary>
         /// Marks the transport as initialized exactly once.
@@ -300,7 +319,7 @@ namespace Pontifex.Raw.Reliable
 
         protected override void OnStarted()
         {
-            var ticker = new SessionTicker(_tickPeriodMs, TickSessions);
+            var ticker = new SessionTicker(TickSessions, LogicDriverFactory);
             _ticker = ticker;
             ticker.Start();
         }
@@ -467,19 +486,45 @@ namespace Pontifex.Raw.Reliable
             }
         }
 
-        private sealed class SessionTicker : PeriodicLogic
+        private sealed class SessionTicker : IPeriodicLogic
         {
             private readonly Action _tick;
+            private readonly Func<ILogicDriver<IPeriodicLogicDriverCtl>> _logicDriverFactory;
 
-            public SessionTicker(int periodMs, Action tick)
-                : base(periodMs)
+            private ILogicDriver<IPeriodicLogicDriverCtl>? _driver;
+            private volatile IPeriodicLogicDriverCtl? _driverCtl;
+
+            public SessionTicker(Action tick, Func<ILogicDriver<IPeriodicLogicDriverCtl>> logicDriverFactory)
             {
                 _tick = tick;
+                _logicDriverFactory = logicDriverFactory;
             }
 
-            protected override void LogicTick()
+            public void Start()
+            {
+                _driver = _logicDriverFactory();
+                _driver.Start(this);
+            }
+
+            public void Stop()
+            {
+                _driverCtl?.Stop();
+            }
+
+            bool ILogic<IPeriodicLogicDriverCtl>.LogicStarted(IPeriodicLogicDriverCtl driver)
+            {
+                _driverCtl = driver;
+                return true;
+            }
+
+            void IPeriodicLogic.LogicTick(IPeriodicLogicDriverCtl driver)
             {
                 _tick();
+            }
+
+            void ILogic<IPeriodicLogicDriverCtl>.LogicStopped()
+            {
+                _driverCtl = null;
             }
         }
     }
