@@ -288,8 +288,23 @@ namespace Pontifex.Raw.Reliable
             {
                 if (_state == State.Connecting)
                 {
-                    endpointConstructor.Invoke(_handler!);
-                    _state = State.Connected;
+                    try
+                    {
+                        endpointConstructor.Invoke(_handler!);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                        Fail(new StopReasons.ExceptionFail(Name, ex, "ConnectionFinished action failed"));
+                        return;
+                    }
+
+                    // The action may synchronously stop or fail the transport. Do not resurrect a
+                    // transport that has already moved out of Connecting in that case.
+                    if (_state == State.Connecting)
+                    {
+                        _state = State.Connected;
+                    }
                 }
                 else
                 {

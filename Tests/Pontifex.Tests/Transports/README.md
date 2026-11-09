@@ -7,9 +7,11 @@ directly (no carriers, sockets, threads, timers, or sleeping), one test-set per 
 transport-level counterpart of the `Endpoints` suite: the same deterministic and
 public-plus-protected-contract approach, applied one layer up.
 
-Currently the suite covers `AnyTransport`, the root that owns the common transport lifecycle, and
-`RawTransport`, the raw typed facade over it. Tests for the raw reliable and raw unreliable
-transport families will be added incrementally, following the same layout and rules.
+Currently the suite covers `AnyTransport`, the root that owns the common transport lifecycle,
+`RawTransport`, the raw typed facade over it, the `RawReliableTransport` marker facade, and
+`RawReliableClientTransport<TClientHandler>`, the reliable client connection state machine. Tests
+for the remaining raw reliable and raw unreliable transport families will be added incrementally,
+following the same layout and rules.
 
 > **Conformance controls are explicitly out of scope.**
 > Do not test, arm, inject, assert, or otherwise use anything from the conformance subsystem:
@@ -32,7 +34,10 @@ Transports/
     ├── RawTransportTests.cs           test-set for RawTransport
     └── Reliable/
         ├── Harness/
+        │   ├── RecordingRawReliableClientHandler.cs
+        │   ├── TestRawReliableClientTransport.cs
         │   └── TestRawReliableTransport.cs
+        ├── RawReliableClientTransportTests.cs
         └── RawReliableTransportTests.cs
 ```
 
@@ -71,12 +76,13 @@ assertions stay on the class's own contract.
 | `AnyTransport` | `AnyTransportTests` | covered (32 tests) | lifecycle, start/stop/fail, callbacks, validity |
 | `RawTransport` | `RawTransportTests` | covered (6 tests) | raw transport contract, message size, constructor forwarding |
 | `RawReliableTransport` | `RawReliableTransportTests` | covered (2 tests) | reliable raw transport contract, constructor forwarding |
+| `RawReliableClientTransport<TClientHandler>` | `RawReliableClientTransportTests` | covered (45 tests) | init, connect state machine, connectivity, endpoint ownership, terminal notifications, handler exception isolation |
 
 Planned families:
 
 | Family | Status |
 |---|---|
-| `Raw/Reliable` client/server/Ack/NoAck transports | not started |
+| `Raw/Reliable` client/server/Ack/NoAck transports | client covered; server/Ack/NoAck not started |
 | `Raw/Unreliable` transports | not started |
 
 ### `AnyTransport` contract matrix
@@ -134,6 +140,51 @@ message-handling behavior.
 This test-set asserts only the `RawReliableTransport`-specific contract above. Inherited behavior
 and inherited properties are not repeated; see the coverage rule above.
 
+### `RawReliableClientTransport<TClientHandler>` contract matrix
+
+The client transport owns a small state machine (`Constructed`, `Initialized`, `Connecting`,
+`Connected`, `Disconnected`) and the endpoint hand-off. This test-set covers that delta; the
+inherited `AnyTransport` lifecycle and the `RawTransport`/`RawReliableTransport` facades are not
+repeated.
+
+- **Init**: from `Constructed`, `Init` runs `SetupHandler`, stores the returned handler, and moves
+  to `Initialized`; a null handler, a null `SetupHandler` result, a wrong state, or an already
+  started transport fails and invalidates. A second `Init` fails but keeps the first handler.
+  `Init` after a failed start does not call `SetupHandler`; `Init` while connecting or connected
+  fails and drives the stop path (handler `OnStopped`, or `OnDisconnected` then `OnStopped`).
+- **Start / connect**: `Start` works only from `Initialized`; it calls `BeginConnect` and, while
+  the state is still `Initialized`, moves to `Connecting`; `OnStarted` invokes
+  `OnReadyToConnect`. A `false` from `BeginConnect` fails, destroys, and notifies the handler
+  `OnStopped`; a `BeginConnect` that stops the transport synchronously makes `Start` return
+  `false` without `OnReadyToConnect`.
+- **ConnectionFinished / ConnectionFailed**: `ConnectionFinished` is legal only from `Connecting`;
+  it invokes the supplied action with the stored handler *before* setting `Connected`. If the
+  action stops or fails the transport synchronously, the state is not overwritten back to
+  `Connected`. If the action throws, the transport fails with an `ExceptionFail` carrying that
+  exception and does not become connected. `ConnectionFailed` is legal only from `Connecting` and
+  fails with a `TextFail` whose text is `Connection failed`. From any other state both methods
+  call `Stop` with a `TextFail`; while `Constructed` or `Initialized` that stop is a no-op and a
+  later `Init`/`Start` can still succeed.
+- **IsConnected**: without an attached endpoint it mirrors the internal state (`Connected` only)
+  and is already `false` during `OnDisconnected`, during `OnStopped`, and inside
+  `DestroyTransport`. With an attached endpoint it delegates to `endpoint.IsConnected` until the
+  base detaches, so a still-connected attached endpoint can report `true` inside
+  `DestroyTransport`.
+- **Endpoint attach / detach ownership**: `AttachEndpoint` rejects `null` and a second endpoint
+  (the first stays attached); an attached endpoint's terminal `Stopped` event stops the transport
+  with the same reason instance. The base class owns detachment: `DestroyTransport` can still read
+  `AttachedEndpoint`, and after `Stop` completes the exposed attached endpoint is `null`.
+  `DetachEndpoint` is **private**; implementations must not detach.
+- **Stop notification matrix**: stopping after `Init` but before `Start` is a no-op that keeps the
+  `Initialized` state and still allows a later `Start`. While `Connecting` the order is
+  `handler.OnStopped`, `DestroyTransport`, detach, start callback. While `Connected` it is
+  `handler.OnDisconnected`, `handler.OnStopped`, `DestroyTransport`, detach, start callback. While
+  `Initialized` it is `DestroyTransport`, detach, `handler.OnStopped`. With an attached endpoint the
+  transport skips its own handler notifications because the endpoint owns them.
+- **Handler exception isolation**: exceptions from `OnDisconnected` or `OnStopped` are caught,
+  logged, and swallowed at this layer; the remaining notifications, `DestroyTransport`, detach, and
+  the start callback still run, and the transport ends in the disconnected state.
+
 Not covered here: `GetControls`, because its only current contribution is the conformance
 control, which this suite deliberately does not use.
 
@@ -172,7 +223,36 @@ armed, inspected, or asserted.
 inherited abstract members and a trivial `RawReliableConformanceControl` constructor argument
 only, without adding or asserting behavior.
 
-No conformance control is supplied, armed, or inspected by the harness for testing purposes.
+`TestRawReliableClientTransport : RawReliableClientTransport<IRawReliableClientHandler>` is the
+seam for the client transport. It:
+
+- supplies the constructor's trivial `RawReliableConformanceControl` only (never armed, inspected,
+  or asserted) plus the abstract `Type`, `MessageMaxByteSize`, `BeginConnect`,
+  `OnReadyToConnect`, and `DestroyTransport` members;
+- lets each test choose the `BeginConnect` result and the `SetupHandler` transformation;
+- records `BeginConnectCalls`, `OnReadyToConnectCalls`, `DestroyTransportCalls`,
+  `SetupHandlerCalls`, `LastSetupHandlerArgument`, and `LastDestroyReason`;
+- exposes `Handler`, the protected `AttachedEndpoint` as `ExposedAttachedEndpoint`, and wrappers
+  for `ConnectionFinished`, `ConnectionFailed`, and `AttachEndpoint`;
+- records `EndpointDuringDestroy` and `IsConnectedDuringDestroy` from inside `DestroyTransport`,
+  and can throw a configured `DestroyException` to verify that detachment still runs from the
+  base-class `finally`;
+- shares an `EventLog` with the recording handler and the test-supplied start callback so callback
+  ordering can be asserted.
+
+`DestroyTransport` is a pure recorder: it never stops or detaches the endpoint. Detachment belongs
+to the base class, and `DetachEndpoint` is **private**, so the double cannot (and must not) call it.
+The base detaches the endpoint in a `finally` after `DestroyTransport` returns.
+
+`RecordingRawReliableClientHandler : IRawReliableClientHandler, IDisposable` records
+`Received`/`Disconnected`/`Stopped` counts and reasons, can throw a configured exception from any
+callback, and optionally appends callback names to the shared `EventLog`. `OnReceived` does not
+release the delivered buffer; the test owns it (buffers still alive at `Dispose` are released as a
+safety net). `IsConnectedProbe` lets a test observe the transport's connectivity from inside
+`OnDisconnected`/`OnStopped`.
+
+A trivial `RawReliableConformanceControl` is passed only because the production constructor
+requires one. It is never armed, inspected, or asserted.
 
 ### Typical test shape
 

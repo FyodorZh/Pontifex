@@ -103,6 +103,28 @@ internal sealed class TestRawReliableClientEndpoint : RawReliableClientEndpoint,
         CompleteConnect();
     }
 
+    /// <summary>
+    /// Stops the endpoint and completes the disconnect when the endpoint was connected. The
+    /// terminal stopped event is raised by <see cref="CompleteDisconnect"/>.
+    /// </summary>
+    /// <remarks>
+    /// Intended for one stop initiated after <see cref="ConnectAndComplete"/>. It does not complete
+    /// a disconnect that was already initiated before this call, and it does not complete a start
+    /// that is still in progress.
+    /// </remarks>
+    public void StopAndComplete(StopReason reason, bool tryBeGentle)
+    {
+        int disconnectsBefore = BeginDisconnectCalls;
+
+        Stop(reason, tryBeGentle);
+        DrainAll();
+
+        if (BeginDisconnectCalls > disconnectsBefore)
+        {
+            CompleteDisconnect();
+        }
+    }
+
     #endregion
 
     #region Recorded hooks
