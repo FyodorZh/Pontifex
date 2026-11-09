@@ -211,9 +211,24 @@ namespace Pontifex.Raw.Reliable
                 {
                     if (wasConnected)
                     {
-                        _handler.OnDisconnected(reason);
+                        try
+                        {
+                            _handler.OnDisconnected(reason);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                        }
                     }
-                    _handler.OnStopped(reason: reason);
+
+                    try
+                    {
+                        _handler.OnStopped(reason: reason);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                    }
                 }
 
                 try
@@ -238,9 +253,16 @@ namespace Pontifex.Raw.Reliable
                     DetachEndpoint();
                 }
 
-                if (notifyHandler)
+                if (notifyHandler && _handler != null)
                 {
-                    _handler?.OnStopped(reason);
+                    try
+                    {
+                        _handler.OnStopped(reason);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                    }
                 }
             }
         }

@@ -138,7 +138,14 @@ namespace Pontifex.Raw.Reliable.Ack
             if (_stage == State.LogicallyConnected)
             {
                 _stage = State.LogicallyDisconnected;
-                _handler.OnDisconnected(reason);
+                try
+                {
+                    _handler.OnDisconnected(reason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
             }
             _stage = State.LogicallyDisconnected;
             
@@ -175,7 +182,18 @@ namespace Pontifex.Raw.Reliable.Ack
                     using var disposer = ackRequest.AsDisposable();
                     try
                     {
-                        _handler.FillAckData(ackRequest);
+                        try
+                        {
+                            _handler.FillAckData(ackRequest);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                            _stage = State.LogicallyDisconnected;
+                            Stop(new ExceptionFail(TransportName, ex, "FillAckData throw an exception"), false);
+                            return;
+                        }
+
                         ackRequest.PutFirst((byte)MessageType.AckRequestMessage);
 
                         if (ackRequest.GetDataSize() > RawReliableAckInfo.AckMaxByteSize)
@@ -211,7 +229,15 @@ namespace Pontifex.Raw.Reliable.Ack
                         // reach the server before the handshake frame and the connection is rejected.
                         base.OnConnected();
                         RaiseAcknowledged();
-                        _handler.OnConnected(this, message);
+                        try
+                        {
+                            _handler.OnConnected(this, message);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                            Stop(new ExceptionFail(TransportName, ex, "OnConnected failed"), false);
+                        }
                         break;
 
                     case State.Constructed:
@@ -306,7 +332,14 @@ namespace Pontifex.Raw.Reliable.Ack
             if (_stage == State.LogicallyConnected)
             {
                 _stage = State.LogicallyDisconnected;
-                _handler.OnDisconnected(reason);
+                try
+                {
+                    _handler.OnDisconnected(reason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
             }
             _stage = State.LogicallyDisconnected;
         }

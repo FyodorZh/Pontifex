@@ -1,4 +1,6 @@
+using System;
 using Actuarius.Memory;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
@@ -18,7 +20,15 @@ namespace Pontifex.Raw.Reliable.Ack
             using var ackResponseDisposer = ackResponse.AsDisposable();
             ConnectionFinished((handler) =>
             {
-                handler.OnConnected(endPoint, ackResponse.Acquire());
+                try
+                {
+                    handler.OnConnected(endPoint, ackResponse.Acquire());
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                    Stop(new ExceptionFail(Name, ex, "OnConnected failed"));
+                }
             });
         }
     }

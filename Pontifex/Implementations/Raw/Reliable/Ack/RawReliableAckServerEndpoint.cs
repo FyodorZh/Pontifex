@@ -116,7 +116,14 @@ namespace Pontifex.Raw.Reliable.Ack
             if (_stage == State.LogicallyConnected)
             {
                 _stage = State.LogicallyDisconnected;
-                _handler.OnDisconnected(reason);
+                try
+                {
+                    _handler.OnDisconnected(reason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
             }
             _stage = State.LogicallyDisconnected;
 
@@ -167,7 +174,18 @@ namespace Pontifex.Raw.Reliable.Ack
             using var disposer = ackResponse.AsDisposable();
             try
             {
-                _handler.FillAckResponse(ackResponse);
+                try
+                {
+                    _handler.FillAckResponse(ackResponse);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                    _stage = State.LogicallyDisconnected;
+                    Stop(new ExceptionFail(TransportName, ex, "FillAckResponse throw an exception"), false);
+                    return false;
+                }
+
                 ackResponse.PutFirst((byte)MessageType.AckResponseMessage);
 
                 if (ackResponse.GetDataSize() > RawReliableAckInfo.AckMaxByteSize)
@@ -251,7 +269,14 @@ namespace Pontifex.Raw.Reliable.Ack
             if (_stage == State.LogicallyConnected)
             {
                 _stage = State.LogicallyDisconnected;
-                _handler.OnDisconnected(reason);
+                try
+                {
+                    _handler.OnDisconnected(reason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
             }
             _stage = State.LogicallyDisconnected;
         }
