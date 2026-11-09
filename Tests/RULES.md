@@ -21,14 +21,15 @@ Normative rules for test suites in this repository.
 - **TERM-02** **Abstract Test Suit** — a suite for an inheritance tree of abstract types
   without gaps.
 - **TERM-03** **Layer** — a folder that owns the tests for one suite subject. A layer
-  contains `Coverage.md`, optional `Harness/`, one or more `*Tests.cs` files, and, for an
-  Abstract Test Suit, optional nested layers.
+  contains `Coverage.md`, optional `Harness/`, its test files, and, for an Abstract Test Suit,
+  optional nested layers. In a Test Suit, the test files live under `Tests/`; in an Abstract
+  Test Suit, they live directly in the layer directory.
 - **TERM-04** **Root layer** — the layer at the suite root. Every suite has exactly one root
   layer.
 - **TERM-05** **Inheritance parent** — the abstract type from which a layer’s abstract type
   derives.
-- **TERM-06** **Group** — a Test Suit subfolder that organises tests inside the single layer.
-  A group is not a layer.
+- **TERM-06** **Group** — a Test Suit subfolder under the layer’s `Tests/` directory that
+  organises tests inside the single layer. A group is not a layer.
 - **TERM-07** **Grouping folder** — an Abstract Test Suit subfolder that organises layers.
   A grouping folder is not a layer.
 - **TERM-08** **Harness** — optional test-only types used by a layer: stubs, dummies, fakes,
@@ -38,6 +39,9 @@ Normative rules for test suites in this repository.
 - **TERM-10** **Fixture** — a test class carrying `[TestFixture]` or an equivalent NUnit
   fixture marker.
 - **TERM-11** **Suite root category** — the single NUnit category that identifies the suite.
+  It is the value substituted for `{TestSuitName}` in category names.
+- **TERM-12** **Harness category** — the NUnit category `{TestSuitName}.Harness`, where
+  `{TestSuitName}` is the suite root category.
 
 ## 2. Suite type selection
 
@@ -58,25 +62,28 @@ Normative rules for test suites in this repository.
 - **STRUCT-01** Every suite MUST have its own dedicated directory.
 - **STRUCT-02** The suite root MUST contain `README.md`.
 - **STRUCT-03** The suite root MUST contain the root layer: `Coverage.md`, optional
-  `Harness/`, and one or more `*Tests.cs` files.
+  `Harness/`, and one or more test files. In a Test Suit the test files MUST be under `Tests/`;
+  in an Abstract Test Suit they MUST be directly in the layer directory.
 - **STRUCT-04** Only the suite root has `README.md`. Layers and groups MUST NOT contain
   `README.md`.
 - **STRUCT-05** Every layer MUST contain `Coverage.md`.
-- **STRUCT-06** A layer MUST contain one or more `*Tests.cs` files. Empty layers are not
-  allowed.
+- **STRUCT-06** A layer MUST contain one or more suite test files. Empty layers are not
+  allowed. Harness self-tests in `Harness/Tests/` do not satisfy this requirement.
 - **STRUCT-07** A test file belongs to exactly one layer.
 - **STRUCT-08** A test file inside a suite MUST belong to that suite. Loose test files MUST
   live outside suite directories.
 - **STRUCT-09** A suite MUST declare one suite root category. Every fixture in the suite MUST
-  carry that category.
+  carry that category, except a harness self-test fixture, which MUST carry the
+  `{TestSuitName}.Harness` category instead.
 - **STRUCT-10** Suite test files SHOULD use the suite root namespace. Harness types MAY use
   `<SuiteRootNamespace>.Harness`.
 - **STRUCT-11** A layer’s exact directory path MUST be declared in the suite `README.md`.
   Directory nesting does not imply inheritance.
-- **STRUCT-12** A grouping folder MUST contain only layers or other grouping folders. It MUST
-  NOT contain tests, `Coverage.md`, or `Harness/`.
-- **STRUCT-13** A Test Suit group MUST contain only tests or nested groups. It MUST NOT
-  contain layers, `Coverage.md`, or `Harness/`.
+- **STRUCT-12** An Abstract Test Suit grouping folder MUST contain only layers or other
+  grouping folders. It MUST NOT contain tests, `Coverage.md`, or `Harness/`.
+- **STRUCT-13** A Test Suit group MUST be a subfolder of the layer’s `Tests/` directory and
+  MUST contain only test files or nested groups. It MUST NOT contain layers, `Coverage.md`, or
+  `Harness/`.
 - **STRUCT-14** Every `*Tests.cs` file MUST contain exactly one fixture class named
   `<Subject>Tests`.
 - **STRUCT-15** Test names MUST describe the scenario and expected result. A suite MUST use
@@ -87,13 +94,20 @@ Normative rules for test suites in this repository.
 - **TS-01** A Test Suit MUST have exactly one layer, placed at the suite root.
 - **TS-02** The root layer MUST cover the suite’s non-abstract type or tightly coupled group.
 - **TS-03** A Test Suit layer MUST NOT contain nested layers.
-- **TS-04** A Test Suit layer MAY contain groups for organisation.
+- **TS-04** A Test Suit layer MAY contain groups under its `Tests/` directory for
+  organisation. Groups MAY be nested.
 - **TS-05** Groups MUST NOT have `Coverage.md`. The root layer’s `Coverage.md` covers every
   test in the layer, including tests in groups.
 - **TS-06** Harness belongs to the root layer’s `Harness/`. Groups MUST NOT have their own
   `Harness/`.
 - **TS-07** If the subject becomes an inheritance tree, the suite MUST be converted to an
   Abstract Test Suit.
+- **TS-08** Every Test Suit test file MUST be placed under the root layer’s `Tests/`
+  directory. The root layer MUST NOT contain `*Tests.cs` files directly.
+- **TS-09** Test files MAY sit directly in `Tests/` or in groups. A Test Suit MUST still have
+  exactly one layer; `Tests/` and its groups are part of that layer.
+- **TS-10** `Coverage.md` and `Harness/` MUST remain at the layer root. `Tests/` MUST contain
+  only test files and groups.
 
 ## 5. Abstract Test Suit layers
 
@@ -135,20 +149,29 @@ Normative rules for test suites in this repository.
   Test Suit the table MUST contain the single root layer and its coverage path.
 - **README-07** `README.md` MUST define the layer naming convention.
 - **README-08** `README.md` MUST contain the directory layout, including layers, grouping
-  folders, groups, and harness directories.
-- **README-09** `README.md` MUST describe the harness layout and the harness-sharing rule.
+  folders, groups (for a Test Suit, their `Tests/` subfolders), and harness directories
+  (`Harness/` and, when present, `Harness/Tests/`).
+- **README-09** `README.md` MUST describe the harness layout, including `Harness/Tests/` when
+  harness self-tests exist, and the harness-sharing rule.
 - **README-10** `README.md` MUST link the root `Coverage.md` and explain that coverage is
   recorded per layer.
-- **README-11** `README.md` MUST declare the suite root category and every additional
-  filtering category used by the suite.
+- **README-11** `README.md` MUST declare the suite root category, every additional filtering
+  category used by the suite, and, when harness self-tests exist, the
+  `{TestSuitName}.Harness` category.
 - **README-12** `README.md` MUST contain the run and filter commands for the suite.
-- **README-13** `README.md` MUST describe how to add a layer and how to add tests.
+- **README-13** `README.md` MUST describe how to add a layer and how to add tests. For a Test
+  Suit it MUST also describe where test files and groups go under `Tests/`.
 - **README-14** `README.md` MUST list what is explicitly out of scope.
 - **README-15** `README.md` MUST link to `Tests/RULES.md`.
 - **README-16** `README.md` MUST NOT contain volatile coverage status. Status belongs in
   `Coverage.md`.
-- **README-17** For a Test Suit, `README.md` MUST list the groups and state that groups are
-  not layers.
+- **README-17** For a Test Suit, `README.md` MUST list the groups and their `Tests/`
+  subfolders and state that groups are not layers.
+- **README-18** `README.md` MAY contain any additional information relevant to the particular
+  suite, such as contract summaries, dependency-specific behaviour, profiling notes, or
+  suite-specific conventions. Additional information MUST NOT contradict these rules, replace
+  the layer table, or duplicate volatile coverage status. This rule applies to both Test Suit
+  and Abstract Test Suit.
 
 ## 7. Coverage rules
 
@@ -189,12 +212,18 @@ Normative rules for test suites in this repository.
 - **HARNESS-06** When sibling layers need shared harness, the shared logic MUST move to the
   nearest common ancestor layer’s `Harness/`.
 - **HARNESS-07** Grouping folders and Test Suit groups MUST NOT contain `Harness/`.
-- **HARNESS-08** Harness self-tests MAY live under `Harness/Tests/`. They belong to the
-  owning layer and MUST be listed in that layer’s `Coverage.md`.
+- **HARNESS-08** Harness self-tests MAY live under `Harness/Tests/` in a Test Suit or an
+  Abstract Test Suit. They are optional; a harness does not require self-tests. They belong to
+  the owning layer and MUST be listed in that layer’s `Coverage.md`. `Harness/Tests/` is not
+  the suite’s `Tests/` directory and does not create a group. Harness self-tests MUST NOT be
+  used to satisfy the layer’s minimum test requirement.
 - **HARNESS-09** The repository MUST NOT use a mocking library. Test doubles are
   hand-written.
 - **HARNESS-10** Harness types MUST expose only the surface required by the tests. They MUST
   NOT expose private production state.
+- **HARNESS-11** Every harness self-test fixture MUST carry the `{TestSuitName}.Harness`
+  category instead of the suite root category. The `{TestSuitName}.Harness` category MUST NOT
+  be applied to non-harness tests.
 
 ## 9. Test construction rules
 
@@ -223,13 +252,15 @@ Normative rules for test suites in this repository.
   placed in a separate group or layer and MUST use a declared category.
 - **TEST-11** Test method names MUST use one consistent convention within the suite and MUST
   describe the scenario and expected result.
-- **TEST-12** A fixture MUST carry the suite root category.
+- **TEST-12** A fixture MUST carry the suite root category. A harness self-test fixture MUST
+  carry the `{TestSuitName}.Harness` category instead.
 
 ## 10. Evolution rules
 
 - **EVOL-01** A new layer requires its parent layer to exist first.
 - **EVOL-02** A new layer MUST include its directory, `Coverage.md`, optional `Harness/`, one
-  or more `*Tests.cs` files, and its README layer-table row.
+  or more suite test files (for a Test Suit, under `Tests/`; for an Abstract Test Suit,
+  directly in the layer directory), and its README layer-table row.
 - **EVOL-03** Adding or changing a test MUST update the owning layer’s `Coverage.md` in the
   same change.
 - **EVOL-04** Moving a layer MUST update the README layer table, the coverage path, and every
@@ -262,8 +293,8 @@ Normative rules for test suites in this repository.
   §9.
 - **LOOSE-04** When loose tests become a cohesive, reusable, or contract-driven group, they
   MUST be promoted to a Test Suit or Abstract Test Suit.
-- **LOOSE-05** A promoted loose test file MUST be moved into the appropriate layer and
-  recorded in that layer’s `Coverage.md`.
+- **LOOSE-05** A promoted loose test file MUST be moved into the appropriate layer (for a Test
+  Suit, under `Tests/` or a group) and recorded in that layer’s `Coverage.md`.
 
 ## 12. Compliance checklist
 
@@ -274,10 +305,14 @@ Normative rules for test suites in this repository.
   coverage.
 - **CHECK-05** No derived layer duplicates an ancestor layer’s tests.
 - **CHECK-06** No sibling layer references another sibling’s harness.
-- **CHECK-07** Every fixture carries the suite root category.
+- **CHECK-07** Every non-harness fixture carries the suite root category; every harness
+  self-test fixture carries `{TestSuitName}.Harness` instead.
 - **CHECK-08** The default suite run is deterministic; non-default facets are categorised.
 - **CHECK-09** Buffer ownership and release are asserted where the contract defines them.
 - **CHECK-10** `Coverage.md` records contract meaning and non-extractable notes, not a copy
   of test code.
 - **CHECK-11** `README.md` and `Coverage.md` match the current directory structure and test
-  set.
+  set, including `Tests/` groups and harness self-tests.
+- **CHECK-12** Test Suit test files live under `Tests/`; groups are subfolders of `Tests/`;
+  `Coverage.md` and `Harness/` stay at the layer root. Harness self-tests, when present, live
+  under `Harness/Tests/` and carry `{TestSuitName}.Harness`.
