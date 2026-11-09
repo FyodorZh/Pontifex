@@ -9,10 +9,11 @@ public-plus-protected-contract approach, applied one layer up.
 
 Currently the suite covers `AnyTransport`, the root that owns the common transport lifecycle,
 `RawTransport`, the raw typed facade over it, the `RawReliableTransport` marker facade,
-`RawReliableClientTransport<TClientHandler>`, the reliable client connection state machine, and
-`RawReliableServerTransport<TServerHandler>`, the reliable server admission and session registry.
-Tests for the remaining raw reliable and raw unreliable transport families will be added
-incrementally, following the same layout and rules.
+`RawReliableClientTransport<TClientHandler>`, the reliable client connection state machine,
+`RawReliableServerTransport<TServerHandler>`, the reliable server admission and session registry,
+`RawReliableAckClientTransport`, the Ack client facade, and `RawReliableAckServerTransport`, the Ack
+server acknowledger lifecycle. Tests for the remaining raw reliable and raw unreliable transport
+families will be added incrementally, following the same layout and rules.
 
 > **Conformance controls are explicitly out of scope.**
 > Do not test, arm, inject, assert, or otherwise use anything from the conformance subsystem:
@@ -44,7 +45,14 @@ Transports/
         │   └── TestRawReliableTransport.cs
         ├── RawReliableClientTransportTests.cs
         ├── RawReliableServerTransportTests.cs
-        └── RawReliableTransportTests.cs
+        ├── RawReliableTransportTests.cs
+        └── Ack/
+            ├── Harness/
+            │   ├── RecordingRawReliableAckServerAcknowledger.cs
+            │   ├── TestRawReliableAckClientTransport.cs
+            │   └── TestRawReliableAckServerTransport.cs
+            ├── RawReliableAckClientTransportTests.cs
+            └── RawReliableAckServerTransportTests.cs
 ```
 
 Layout rule: each transport family lives in its own directory (`Raw/`, then
@@ -89,12 +97,14 @@ type (an out-of-scope subsystem) introduces no new observable state and does not
 | `RawReliableTransport` | `RawReliableTransportTests` | covered (1 test) | reliable raw transport contract |
 | `RawReliableClientTransport<TClientHandler>` | `RawReliableClientTransportTests` | covered (45 tests) | init, connect state machine, connectivity, endpoint ownership, terminal notifications, handler exception isolation |
 | `RawReliableServerTransport<TServerHandler>` | `RawReliableServerTransportTests` | covered (52 tests) | initialization, carrier hooks, admission gates, session registry, ticker |
+| `RawReliableAckClientTransport` | `RawReliableAckClientTransportTests` | covered (2 tests) | Ack client facade contract |
+| `RawReliableAckServerTransport` | `RawReliableAckServerTransportTests` | covered (19 tests) | acknowledger init, acknowledgement hand-off, lifecycle gating |
 
 Planned families:
 
 | Family | Status |
 |---|---|
-| `Raw/Reliable` client/server/Ack/NoAck transports | client and server covered; Ack/NoAck not started |
+| `Raw/Reliable` client/server/Ack/NoAck transports | client, server, and Ack bases covered; NoAck not started |
 | `Raw/Unreliable` transports | not started |
 
 ### `AnyTransport` contract matrix
@@ -252,6 +262,44 @@ the `RawTransport`/`RawReliableTransport` facades are not repeated.
 
 Not covered here: `GetControls`, for the same conformance-control reason as the client test-set.
 
+### `RawReliableAckClientTransport` contract matrix
+
+`RawReliableAckClientTransport` is a facade over
+`RawReliableClientTransport<IRawReliableAckClientHandler>`. It only fixes `Type` to
+`RawReliableAck` and exposes `IRawReliableAckClient`; the inherited init, connect state machine,
+endpoint ownership, connectivity, and terminal notifications are covered by
+`RawReliableClientTransportTests` and are not repeated.
+
+- **Interface exposure**: `IRawReliableAckClient`,
+  `IRawReliableClientTransport<IRawReliableAckClientHandler>`, `IRawReliableTransport`,
+  `IRawTransport`, and `ITransport`.
+- **Type**: `Type` is `TransportType.RawReliableAck`.
+
+### `RawReliableAckServerTransport` contract matrix
+
+The Ack server transport adds the acknowledger lifecycle and the acknowledgement hand-off to
+`RawReliableServerTransport<IRawReliableAckServerHandler>`. The inherited session admission and
+ticker behavior is covered by `RawReliableServerTransportTests` and is not repeated.
+
+- **Interface / type**: `IRawReliableAckServer`,
+  `IRawReliableServerTransport<IRawReliableAckServerHandler>`, `IRawReliableTransport`,
+  `IRawTransport`, and `ITransport`; `Type` is `TransportType.RawReliableAck`.
+- **Init**: null throws without changing the lifecycle and a later valid `Init` succeeds. The first
+  call succeeds; a second call returns `false` and keeps the first acknowledger. `Init` after a start
+  attempt, after a normal stop, after a failed start, or after a fail returns `false`. `Init` after a
+  stop before the first start succeeds. Concurrent calls have exactly one winner. If a subclass
+  already marked the transport initialized, `Init` returns `false` without installing the
+  acknowledger.
+- **TryAcknowledge gating**: returns `null` without calling the acknowledger when the transport is
+  invalid, not started, or has no acknowledger. This covers before-start, after-stop, and after-fail.
+- **TryAcknowledge hand-off**: when started, passes the remote endpoint and the same
+  `UnionDataList` with one additional reference to the acknowledger, and returns its handler
+  unchanged. The caller keeps its own reference; the acknowledger must release the added reference
+  exactly once. A rejection returns `null`. An acknowledger exception is caught/logged, returns
+  `null`, and leaves the transport valid and started.
+- **Ownership**: the caller's buffer remains alive with its original reference count after the
+  acknowledger releases; mutations made through the shared list are visible to the caller.
+
 ## How it works
 
 ### Black-box boundary
@@ -355,6 +403,19 @@ adds `RunImmediately`, `RejectNextSchedule`, and `ThrowNextSchedule` for the adm
 `OnSessionStopped` is intentionally invoked only for sessions that were actually added to the
 registry. A session that stops during admission is reported through the `false` return of
 `TryStartAndRegisterSession` instead, and the carrier owns any cleanup it needs there.
+
+`TestRawReliableAckClientTransport : RawReliableAckClientTransport` supplies the inherited abstract
+members (`MessageMaxByteSize`, `BeginConnect`, `OnReadyToConnect`, `DestroyTransport`) and adds no
+behavior. It exists only so the facade contract can be instantiated.
+
+`TestRawReliableAckServerTransport : RawReliableAckServerTransport` supplies the carrier hooks and a
+hand-driven ticker, and exposes `TryAcknowledge`, `TryMarkInitialized`, `HasStartBeenAttempted`,
+and the carrier call counters. It lets each test choose the `StartCarrier` result.
+
+`RecordingRawReliableAckServerAcknowledger : IRawReliableAckServerAcknowledger<...>` records the
+remote endpoint, the acknowledgement buffer, and its reference count around a configurable behavior.
+The behavior owns the additional reference; the recorder releases it as a safety net if the behavior
+does not, so tests can verify both the transport hand-off and the caller's remaining reference.
 
 A trivial `RawReliableConformanceControl` is passed only because the production constructor
 requires one. It is never armed, inspected, or asserted.
