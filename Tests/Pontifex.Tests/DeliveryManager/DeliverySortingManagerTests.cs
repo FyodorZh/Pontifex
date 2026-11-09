@@ -11,6 +11,7 @@ namespace Pontifex.Tests.Delivery
     [Category("DeliveryManager")]
     public sealed class DeliverySortingManagerTests
     {
+        private static readonly DateTime T0 = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private const int MaxMsgSize = 100;
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
@@ -34,7 +35,7 @@ namespace Pontifex.Tests.Delivery
         private static List<UnionDataList> CaptureAll(DeliveryManager dm, DateTime? now = null)
         {
             var sent = new List<UnionDataList>();
-            dm.ProcessOutgoing(Scheduler, now ?? DateTime.UtcNow,
+            dm.ProcessOutgoing(Scheduler, now ?? T0,
                 new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
             return sent;
         }
@@ -185,7 +186,7 @@ namespace Pontifex.Tests.Delivery
             var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            var t0 = DateTime.UtcNow;
+            var t0 = T0;
 
             sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1
             var msg1batch = CaptureAll(sender, t0);
@@ -222,7 +223,7 @@ namespace Pontifex.Tests.Delivery
             var sorted = new DeliverySortingManager(inner);
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
 
-            var t0 = DateTime.UtcNow;
+            var t0 = T0;
 
             sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1
             var msg1batch = CaptureAll(sender, t0);

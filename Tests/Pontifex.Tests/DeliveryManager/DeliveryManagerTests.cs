@@ -11,6 +11,7 @@ namespace Pontifex.Tests.Delivery
     [Category("DeliveryManager")]
     public sealed class DeliveryManagerTests
     {
+        private static readonly DateTime T0 = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private const int MaxMsgSize = 100;
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
@@ -34,7 +35,7 @@ namespace Pontifex.Tests.Delivery
         private static List<UnionDataList> Capture(DeliveryManager dm, IDeliveryAttemptScheduler? scheduler = null, DateTime? now = null)
         {
             var sent = new List<UnionDataList>();
-            dm.ProcessOutgoing(scheduler ?? RetryScheduler, now ?? DateTime.UtcNow,
+            dm.ProcessOutgoing(scheduler ?? RetryScheduler, now ?? T0,
                 new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
             return sent;
         }
@@ -177,7 +178,7 @@ namespace Pontifex.Tests.Delivery
         public void DeliveryFailure_FiresFailedToDeliver()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromMilliseconds(50), baseIntervalMs: 100);
 
             DeliveryId? failedId = null;
@@ -477,7 +478,7 @@ namespace Pontifex.Tests.Delivery
         public void MultiChunkRetryTimeout_FiresFailedToDeliver()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromMilliseconds(50), baseIntervalMs: 100);
 
             DeliveryId? failedId = null;

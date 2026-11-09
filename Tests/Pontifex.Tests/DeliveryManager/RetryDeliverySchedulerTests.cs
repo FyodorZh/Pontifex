@@ -6,6 +6,8 @@ namespace Pontifex.Tests.Delivery
     [Category("DeliveryManager")]
     public sealed class RetryDeliverySchedulerTests
     {
+        private static readonly DateTime T0 = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
         private static IDeliveryTask MakeTask(int attempt, DateTime scheduleTime)
         {
             return new StubDeliveryTask(new DeliveryInfo(DeliveryId.Zero, 0), scheduleTime, attempt);
@@ -28,7 +30,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void FirstAttempt_ReturnsDeltaBaseInterval()
         {
-            var now = DateTime.UtcNow;
+            var now = T0;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
             var task = MakeTask(1, now);
 
@@ -41,7 +43,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void MultipleAttempts_DeltaGrowsLinearly()
         {
-            var now = DateTime.UtcNow;
+            var now = T0;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
             var task = MakeTask(3, now);
 
@@ -53,7 +55,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void TimeoutExceeded_ReturnsFalse()
         {
-            var scheduleTime = DateTime.UtcNow;
+            var scheduleTime = T0;
             var later = scheduleTime + TimeSpan.FromSeconds(5);
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(3));
 
@@ -66,7 +68,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ExactTimeoutBoundary_StillRetries()
         {
-            var scheduleTime = DateTime.UtcNow;
+            var scheduleTime = T0;
             var later = scheduleTime + TimeSpan.FromSeconds(3);
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(3));
 
@@ -79,7 +81,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void JustBeforeTimeout_ReturnsTrue()
         {
-            var scheduleTime = DateTime.UtcNow;
+            var scheduleTime = T0;
             var later = scheduleTime + TimeSpan.FromMilliseconds(2999);
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(3));
 
@@ -92,7 +94,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void CustomBaseInterval_UsedForDelta()
         {
-            var now = DateTime.UtcNow;
+            var now = T0;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10), baseIntervalMs: 500);
             var task = MakeTask(2, now);
 
@@ -104,7 +106,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ZeroTimeout_FailsImmediately()
         {
-            var scheduleTime = DateTime.UtcNow;
+            var scheduleTime = T0;
             var later = scheduleTime + TimeSpan.FromMilliseconds(1);
             var scheduler = new RetryDeliveryScheduler(TimeSpan.Zero);
 

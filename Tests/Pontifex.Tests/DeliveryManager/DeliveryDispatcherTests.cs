@@ -11,6 +11,7 @@ namespace Pontifex.Tests.Delivery
     [Category("DeliveryManager")]
     public sealed class DeliveryDispatcherTests
     {
+        private static readonly DateTime T0 = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
         private static ICollectablePool CPool => Memory.CollectablePool;
@@ -28,7 +29,7 @@ namespace Pontifex.Tests.Delivery
         public void ScheduleDeliver_ReturnsOk()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            Assert.That(d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow),
+            Assert.That(d.ScheduleDeliver(Info(1), DummyData(), T0),
                 Is.EqualTo(DeliveryDispatcher.ScheduleResult.Ok));
         }
 
@@ -36,8 +37,8 @@ namespace Pontifex.Tests.Delivery
         public void ScheduleDeliver_DuplicateId_ReturnsIdIsNotUnique()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
-            var result = d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
+            d.ScheduleDeliver(Info(1), DummyData(), T0);
+            var result = d.ScheduleDeliver(Info(1), DummyData(), T0);
             Assert.That(result, Is.EqualTo(DeliveryDispatcher.ScheduleResult.IdIsNotUnique));
         }
 
@@ -49,7 +50,7 @@ namespace Pontifex.Tests.Delivery
             data.AddRef();
             int originalCount = data.Elements.Count;
 
-            d.ScheduleDeliver(Info(1), data, DateTime.UtcNow);
+            d.ScheduleDeliver(Info(1), data, T0);
 
             Assert.That(data.Elements.Count, Is.EqualTo(originalCount));
             data.Release();
@@ -61,9 +62,9 @@ namespace Pontifex.Tests.Delivery
         public void ScheduleDeliver_AtCapacity_ReturnsBufferOverflow()
         {
             var d = new DeliveryDispatcher(2, CPool);
-            d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
-            d.ScheduleDeliver(Info(2), DummyData(), DateTime.UtcNow);
-            var result = d.ScheduleDeliver(Info(3), DummyData(), DateTime.UtcNow);
+            d.ScheduleDeliver(Info(1), DummyData(), T0);
+            d.ScheduleDeliver(Info(2), DummyData(), T0);
+            var result = d.ScheduleDeliver(Info(3), DummyData(), T0);
             Assert.That(result, Is.EqualTo(DeliveryDispatcher.ScheduleResult.BufferOverflow));
         }
 
@@ -71,13 +72,13 @@ namespace Pontifex.Tests.Delivery
         public void TryToDeliver_NoDueTasks_SendsNothing()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            d.ScheduleDeliver(Info(1), DummyData(), DateTime.UtcNow);
+            d.ScheduleDeliver(Info(1), DummyData(), T0);
 
             var sent = new List<UnionDataList>();
             var consumer = new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; });
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
-            d.TryToDeliver(consumer, scheduler, DateTime.UtcNow - TimeSpan.FromHours(1));
+            d.TryToDeliver(consumer, scheduler, T0 - TimeSpan.FromHours(1));
 
             Assert.That(sent, Is.Empty);
         }
@@ -86,7 +87,7 @@ namespace Pontifex.Tests.Delivery
         public void TryToDeliver_DueTask_SendsOnce()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
 
             var sent = new List<UnionDataList>();
@@ -104,7 +105,7 @@ namespace Pontifex.Tests.Delivery
         public void TryToDeliver_ConfirmedDelivery_Skipped()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
             d.ConfirmDelivered(Info(1));
 
@@ -121,7 +122,7 @@ namespace Pontifex.Tests.Delivery
         public void TryToDeliver_Retry_SendsMultipleTimes()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
 
             var sent = new List<UnionDataList>();
@@ -140,7 +141,7 @@ namespace Pontifex.Tests.Delivery
         public void TryToDeliver_Failure_FiresFailedToDeliver()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
 
             DeliveryId? failedId = null;
@@ -161,7 +162,7 @@ namespace Pontifex.Tests.Delivery
         public void ConfirmDelivered_SingleChunk_FiresDelivered()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
 
             DeliveryId? deliveredId = null;
@@ -175,7 +176,7 @@ namespace Pontifex.Tests.Delivery
         public void ConfirmDelivered_MultiChunk_AllConfirmed_FiresOnce()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1, 0), DummyData(), now);
             d.ScheduleDeliver(Info(1, 1), DummyData(), now);
 
@@ -203,7 +204,7 @@ namespace Pontifex.Tests.Delivery
         public void ConfirmDelivered_DoubleAck_IsNoOp()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
 
             int delivered = 0;
@@ -220,7 +221,7 @@ namespace Pontifex.Tests.Delivery
         public void Clear_EmptiesQueue()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
             d.ScheduleDeliver(Info(2), DummyData(), now);
             d.Clear();
@@ -238,7 +239,7 @@ namespace Pontifex.Tests.Delivery
         public void MultipleTasks_AllDue_AllSent()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
             d.ScheduleDeliver(Info(2), DummyData(), now);
             d.ScheduleDeliver(Info(3), DummyData(), now);
@@ -260,7 +261,7 @@ namespace Pontifex.Tests.Delivery
         public void NewFormat_DispatchedData_HasDiscriminatorAndWireChunkId()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
 
             UnionDataList? dispatched = null;
@@ -284,7 +285,7 @@ namespace Pontifex.Tests.Delivery
         public void NewFormat_Retry_PreservesDiscriminator()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
 
             // First send — consumer just releases without popping (production transport clones)
@@ -313,7 +314,7 @@ namespace Pontifex.Tests.Delivery
         public void NewFormat_SequentialDispatches_HaveUniqueWireChunkIds()
         {
             var d = new DeliveryDispatcher(10, CPool);
-            var now = DateTime.UtcNow;
+            var now = T0;
             d.ScheduleDeliver(Info(1), DummyData(), now);
             d.ScheduleDeliver(Info(2), DummyData(), now);
             d.ScheduleDeliver(Info(3), DummyData(), now);
