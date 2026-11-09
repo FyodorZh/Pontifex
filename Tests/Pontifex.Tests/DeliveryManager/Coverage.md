@@ -3,15 +3,16 @@
 - **Layer:** DeliveryManager (root layer)
 - **Suite type:** Test Suit
 - **Subject:** the `Pontifex.Delivery` delivery subsystem: `DeliveryManager`,
-  `DeliveryDispatcher`, `DeliveryInfoSerializer`, `Deduplicator`, `DeliverySorter<T>`,
-  `DeliverySortingManager`, `MessagePacker`, `MessageSplitter`, `MessageMerger`, and
-  `RetryDeliveryScheduler`
+  `DeliveryReporter`, `DeliveryDispatcher`, `DeliveryInfoSerializer`, `Deduplicator`,
+  `DeliverySorter<T>`, `DeliverySortingManager`, `MessagePacker`, `MessageSplitter`,
+  `MessageMerger`, and `RetryDeliveryScheduler`
 - **Directory:** `Tests/Pontifex.Tests/DeliveryManager`
 - **Inheritance parent:** — (Test Suit root layer)
 - **Contract:** [how-it-works.md](../../../Pontifex/Utils/DeliveryManager/how-it-works.md),
   [IDeliveryManager.cs](../../../Pontifex/Utils/DeliveryManager/IDeliveryManager.cs),
   [DeliveryManager.cs](../../../Pontifex/Utils/DeliveryManager/DeliveryManager.cs),
   [DeliveryDispatcher.cs](../../../Pontifex/Utils/DeliveryManager/DeliveryDispatcher.cs),
+  [DeliveryReporter.cs](../../../Pontifex/Utils/DeliveryManager/DeliveryReporter.cs),
   [DeliveryInfoSerializer.cs](../../../Pontifex/Utils/DeliveryManager/Serialization/DeliveryInfoSerializer.cs),
   [Deduplicator.cs](../../../Pontifex/Utils/DeliveryManager/Deduplicator.cs),
   [DeliverySorter.cs](../../../Pontifex/Utils/DeliveryManager/Sorting/DeliverySorter.cs),
@@ -244,8 +245,8 @@ No known missing tests in this layer. New gaps must be added here with an owner 
   `DeliverySortingManager` follows the same rule for its own `Received` event.
 - `TrackedFixture` releases every captured outgoing message, runs registered cleanup actions
   (`Clear` on managers, dispatchers, packers, mergers, and sorters), and then asserts that the
-  tracked pools have no live resources and no release errors. This enforces `TEST-07` and
-  `CHECK-09` for the default suite run.
+  tracked pools have no live resources and no release errors. This enforces the buffer-ownership
+  and release guarantees for the default suite run.
 - The suite tests `internal` production types through `InternalsVisibleTo("Pontifex.Tests")`.
   This is an assembly-level seam, not reflection or private-state inspection.
 - `RetryDeliverySchedulerTests` uses a hand-written `StubDeliveryTask`; no mocking library is
