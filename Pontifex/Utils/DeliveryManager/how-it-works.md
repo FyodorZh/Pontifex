@@ -198,7 +198,8 @@ ProcessIncoming(data)
   │   │   ├─ DeliveryReporter.Add(info) — always (so ACK is sent)
   │   │   │
   │   │   └─ if unpacked.UserData != null (New path):
-  │   │         └─ fire Received(id, userData), release userData
+  │   │         ├─ subscriber attached → fire Received(id, userData); subscriber owns and releases it
+  │   │         └─ no subscriber → release userData
   │   │
   │   └─ return true
   │
@@ -338,6 +339,8 @@ Optional wrapper around `IDeliveryManagerUserSide` that reorders incoming messag
 
 - Wraps the inner DM's `Received` event through a `DeliverySorter<UnionDataList>`
 - Exposes its own `Received` (in-order) and `FailedToSort` events
+- Forwards ownership of each delivered parcel to its own `Received` subscriber; releases the
+  parcel only when no subscriber is attached
 - `Clear()` calls `_sorter.Clear()` (releases pending parcels, permanently stops the sorter)
 
 ---

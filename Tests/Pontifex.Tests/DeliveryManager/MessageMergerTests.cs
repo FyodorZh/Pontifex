@@ -1,27 +1,32 @@
-using Pontifex.Delivery;
-
 using Actuarius.Memory;
+using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 
 namespace Pontifex.Tests.Delivery
 {
     [TestFixture]
     [Category("DeliveryManager")]
-    public sealed class MessageMergerTests
+    public sealed class MessageMergerTests : TrackedFixture
     {
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-
-        private static IMultiRefByteArray Data(params byte[] bytes)
+        private IMultiRefByteArray Data(params byte[] bytes)
         {
             var buf = Pool.Acquire(bytes.Length);
             Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
+            AddCleanup(buf.Release);
             return buf;
+        }
+
+        private MessageMerger NewMerger()
+        {
+            var merger = new MessageMerger(Pool);
+            AddCleanup(merger.Clear);
+            return merger;
         }
 
         [Test]
         public void Combine_FirstChunk_ReturnsNull()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
             var result = merger.Combine(new DeliveryId(1), 0, 2, Data(1));
 
             Assert.That(result, Is.Null);
@@ -30,7 +35,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Combine_AllChunksInOrder_ReturnsCombined()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
             var id = new DeliveryId(1);
 
             merger.Combine(id, 0, 2, Data(10, 20));
@@ -48,7 +53,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Combine_OutOfOrder_ReturnsCombined()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
             var id = new DeliveryId(2);
 
             merger.Combine(id, 1, 2, Data(5, 6, 7));
@@ -66,7 +71,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Combine_DuplicateChunk_Ignored()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
             var id = new DeliveryId(3);
             byte parts = 2;
 
@@ -84,7 +89,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Combine_InvalidPartId_Ignored()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
             var id = new DeliveryId(4);
 
             var result = merger.Combine(id, 5, 2, Data(1));
@@ -94,7 +99,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Clear_WithPending_PreventsLaterCombine()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
             var id = new DeliveryId(5);
 
             merger.Combine(id, 0, 2, Data(1));
@@ -107,7 +112,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Combine_PartsNumber1_TreatedAsMulti()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
             var result = merger.Combine(new DeliveryId(6), 0, 1, Data(42));
 
             Assert.That(result, Is.Not.Null);
@@ -118,7 +123,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Combine_DifferentIds_TrackedSeparately()
         {
-            var merger = new MessageMerger(Pool);
+            var merger = NewMerger();
 
             merger.Combine(new DeliveryId(1), 0, 2, Data(1));
             merger.Combine(new DeliveryId(2), 0, 2, Data(10));

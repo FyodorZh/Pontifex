@@ -141,8 +141,15 @@ namespace Pontifex.Delivery
 
                     if (unpacked.UserData != null)
                     {
-                        Received?.Invoke(unpacked.Info.Id, unpacked.UserData);
-                        unpacked.UserData.Release();
+                        var onReceived = Received;
+                        if (onReceived != null)
+                        {
+                            onReceived(unpacked.Info.Id, unpacked.UserData);
+                        }
+                        else
+                        {
+                            unpacked.UserData.Release();
+                        }
                     }
 
                     return true;

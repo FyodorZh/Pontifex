@@ -3,21 +3,19 @@ using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 using Pontifex.Utils;
 
 namespace Pontifex.Tests.Delivery
 {
     [TestFixture]
     [Category("DeliveryManager")]
-    public sealed class MessagePackerTests
+    public sealed class MessagePackerTests : TrackedFixture
     {
         private const int MaxMsgSize = 100;
         private const int SafetyMargin = 4;
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-        private static ICollectablePool CPool => Memory.CollectablePool;
 
-        private static UnionDataList DataList(params byte[] bytes)
+        private UnionDataList DataList(params byte[] bytes)
         {
             var data = CPool.Acquire<UnionDataList>();
             if (bytes.Length > 0)
@@ -34,13 +32,15 @@ namespace Pontifex.Tests.Delivery
         private const int UserSingleOverhead = 6;
         private const int UserMultiOverhead = 10;
 
-        private static MessagePacker CreatePackEnvironment()
+        private MessagePacker CreatePackEnvironment()
         {
             int singleMax = MaxMsgSize - UserSingleOverhead - SafetyMargin;
             int multiMax = MaxMsgSize - UserMultiOverhead - SafetyMargin;
             var splitter = new MessageSplitter(Pool, multiMax);
             var merger = new MessageMerger(Pool);
-            return new MessagePacker(Pool, CPool, splitter, merger, singleMax, multiMax);
+            var packer = new MessagePacker(Pool, CPool, splitter, merger, singleMax, multiMax);
+            AddCleanup(packer.Clear);
+            return packer;
         }
 
         // ── DeliveryMaxByteSize ──
@@ -243,11 +243,14 @@ namespace Pontifex.Tests.Delivery
         {
             var packer = CreatePackEnvironment();
             var data = DataList(1, 2, 3);
+            var sent = new List<QueuedMessage>();
 
             var result = packer.Pack(new DeliveryId(1), data,
-                new ConsumerDelegate<QueuedMessage>(_ => true));
+                new ConsumerDelegate<QueuedMessage>(x => { sent.Add(x); return true; }));
 
             Assert.That(result, Is.EqualTo(SendResult.Ok));
+            Assert.That(((IMultiRefResource_Debug)data).RefCount.RefCount, Is.Zero);
+            foreach (var qm in sent) qm.Data.Release();
         }
     }
 }

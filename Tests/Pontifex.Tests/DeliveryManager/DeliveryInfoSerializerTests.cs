@@ -1,20 +1,16 @@
-using Pontifex.Delivery;
-
 using System.Collections.Generic;
 using Actuarius.Memory;
+using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 using Pontifex.Utils;
 
 namespace Pontifex.Tests.Delivery
 {
     [TestFixture]
     [Category("DeliveryManager")]
-    public sealed class DeliveryInfoSerializerTests
+    public sealed class DeliveryInfoSerializerTests : TrackedFixture
     {
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-        private static ICollectablePool CPool => Memory.CollectablePool;
-
-        private static DeliveryInfoSerializer CreateSerializer() => new DeliveryInfoSerializer(CPool);
+        private DeliveryInfoSerializer CreateSerializer() => new DeliveryInfoSerializer(CPool);
 
         // ── CreateDeliveryReport tests ──
 
@@ -92,7 +88,6 @@ namespace Pontifex.Tests.Delivery
                 new DeliveryInfo(new DeliveryId(7), 3)
             };
             var msg = ser.CreateDeliveryReport(confirmations, 0, 1);
-            msg.AddRef();
 
             bool loaded = ser.LoadDeliveryReport(msg);
             msg.Release();
@@ -114,7 +109,6 @@ namespace Pontifex.Tests.Delivery
                 new DeliveryInfo(new DeliveryId(3), 2)
             };
             var msg = ser.CreateDeliveryReport(confirmations, 0, 3);
-            msg.AddRef();
 
             ser.LoadDeliveryReport(msg);
             msg.Release();
@@ -180,7 +174,6 @@ namespace Pontifex.Tests.Delivery
                 new DeliveryInfo(new DeliveryId(200), 6)
             };
             var msg = ser.CreateDeliveryReport(confirmations, 0, 2);
-            msg.AddRef();
 
             Assert.That(ser.LoadDeliveryReport(msg), Is.True);
             msg.Release();

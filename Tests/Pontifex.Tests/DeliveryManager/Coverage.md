@@ -71,7 +71,7 @@
 | `CreateDeliveryReport_MultipleConfirmations_WritesAllPairs` | Multiple confirmations are written in order. | The report preserves confirmation order and count. | — |
 | `CreateDeliveryReport_PartialRange_HonorsStartAndCount` | `start` and `count` select a slice of the source list. | The reporter can batch a list without copying it. | Start 1, count 2. |
 | `CreateDeliveryReport_ZeroCount_WritesCountOnly` | An empty batch is a single zero count. | Zero-length reports are well-formed. | — |
-| `LoadDeliveryReport_Valid_ReturnsTrueAndPopulatesList` | A well-formed report loads into `CurrentDeliveryReport`. | Parsing exposes id and chunk id. | The input has an extra reference for the load and is released afterwards. |
+| `LoadDeliveryReport_Valid_ReturnsTrueAndPopulatesList` | A well-formed report loads into `CurrentDeliveryReport`. | Parsing exposes id and chunk id. | The report message is released after the load. |
 | `LoadDeliveryReport_MultipleConfirmations_PopulatesAll` | All pairs are parsed in order. | Multi-confirmation reports round-trip. | — |
 | `LoadDeliveryReport_WrongFirstElement_ReturnsFalse` | The first element must be a `ushort` count. | Type validation rejects malformed reports. | The list contains a byte followed by valid-looking pairs. |
 | `LoadDeliveryReport_TruncatedAfterCount_ReturnsFalse` | A count without its pairs is malformed. | Truncation is rejected instead of partially accepted. | Count 5 with no pairs. |
@@ -87,8 +87,8 @@
 | `ScheduleDelivery_MessageTooBig_ReturnsMessageTooBig` | Data over `DeliveryMaxByteSize` is rejected. | The size guard is enforced before packing. | 30,000 bytes. |
 | `DeliveryMaxByteSize_ReturnsCorrectValue` | The maximum is `(messageMaxByteSize - multiOverhead - safetyMargin) * 255`. | The public limit matches the documented wire size arithmetic. | 100-byte message size yields 21,930 bytes. |
 | `ProcessIncoming_MalformedDeliveryReport_ReturnsFalse` | A non-user packet with an invalid report is rejected. | Malformed acknowledgements do not confirm deliveries. | The report declares five confirmations but carries none. |
-| `ProcessOutgoing_ProducesBuffer` | A scheduled message is emitted on the next pump. | Scheduling feeds the outgoing queue. | The captured message is released by the test. |
-| `RoundTrip_SingleChunk_ReceivedFires` | A single-chunk message is delivered with its id and payload. | End-to-end send/receive through two managers. | Payload is copied out because the received buffer is released after the callback. |
+| `ProcessOutgoing_ProducesBuffer` | A scheduled message is emitted on the next pump. | Scheduling feeds the outgoing queue. | The captured message is released by the fixture. |
+| `RoundTrip_SingleChunk_ReceivedFires` | A single-chunk message is delivered with its id and payload. | End-to-end send/receive through two managers. | Payload is copied out; the handler owns and releases the received buffer inside the callback. |
 | `DuplicateInbound_ReceivedFiresOnce` | A retransmitted message is delivered once. | Inbound deduplication is active at the facade level. | The same wire message is processed twice. |
 | `AckRoundTrip_DeliveredFires` | An acknowledgement round trip fires `Delivered` on the sender. | Delivery confirmation crosses the two managers. | Acknowledged id equals the scheduled id. |
 | `DeliveryFailure_FiresFailedToDeliver` | An unacknowledged message reports failure after retries. | The retry timeout is observable through the facade. | Timeout 50 ms, base interval 100 ms, second pump 200 ms later. |
@@ -126,7 +126,7 @@
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|
-| `AheadIdsBuffered_ReceivedInOrder` | The wrapper delivers messages in delivery-id order. | The manager buffers an ahead id and releases it after the gap fills. | Pushes equivalent to ids 1, 3, 2. |
+| `AheadIdsBuffered_ReceivedInOrder` | The wrapper delivers messages in delivery-id order. | The wrapper buffers an ahead id and forwards it in order once the gap fills. | Pushes equivalent to ids 1, 3, 2; the subscriber releases each parcel. |
 | `SingleMessage_PassesThroughInOrder` | A single message passes through unchanged. | Ordering adds no corruption for the trivial case. | — |
 | `Clear_StopsFurtherProcessing` | `Clear` permanently stops the wrapper. | A cleared sorting manager drops subsequent inbound messages. | The underlying sorter is put into its error state. |
 | `DuplicateMessage_NotSentToSorter` | Duplicates are filtered before ordering. | The inner delivery manager deduplicates and the wrapper fires once. | The same wire message is processed twice. |
@@ -164,7 +164,7 @@
 | `Pack_DataJustOverSingleChunkLimit_ProducesMultipleChunks` | One byte over the boundary switches to multi-chunk. | The boundary is not off by one. | 87 bytes serialize to 91 bytes. |
 | `Pack_DataTooBig_ReturnsMessageTooBig` | Data over the maximum is rejected without output. | The size guard runs before splitting. | 30,000 bytes; the consumer list stays empty. |
 | `Clear_DoesNotThrow` | `Clear` is safe on a packer with no partial inbound state. | Reset does not destabilise the packer. | The packer has just produced outbound chunks. |
-| `Pack_ReleasesDataOnSuccess` | A successful pack consumes the caller's data list. | The caller must not release the input after a successful pack. | The test does not independently observe the release count; release assertions are a planned gap. |
+| `Pack_ReleasesDataOnSuccess` | A successful pack consumes the caller's data list. | The caller must not release the input after a successful pack. | Observed through the tracked pool: the input list's reference count reaches zero. |
 
 ### MessageSplitter
 
@@ -193,7 +193,6 @@
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| Exactly-once buffer release assertions for packed, dispatched, and received messages. | This layer | Tests release most captured messages, but do not observe release counts. A tracking pool harness is needed to prove `TEST-07` and `CHECK-09`. |
 | `DeliveryReporter` direct tests: batching by packet size, clearing after flush, and `Clear`. | This layer | The reporter has no test file and is covered only indirectly through `DeliveryManager`. |
 | Acknowledgment batching when confirmations exceed one report packet. | This layer | The reporter's batch-splitting loop is not exercised. |
 | `DeliverySorter.OnError` callback arguments when `TryPop` observes a top key below the expected id. | This layer | `FailedToSort` is covered through the wrapper; the sorter's own callback payload is not. |
@@ -228,8 +227,13 @@
   loading another report.
 - `ProcessIncoming` takes ownership of the incoming list and releases it. Tests add an extra
   reference before handoff when they still need the message after the call.
-- Captured outgoing messages are released by most tests. A small number of tests intentionally
-  drop captured references; exact release accounting is recorded as a planned gap above.
+- `DeliveryManager.Received` transfers the delivered user buffer to the subscriber. The
+  subscriber must release it; the manager releases it only when no handler is attached.
+  `DeliverySortingManager` follows the same rule for its own `Received` event.
+- `TrackedFixture` releases every captured outgoing message, runs registered cleanup actions
+  (`Clear` on managers, dispatchers, packers, mergers, and sorters), and then asserts that the
+  tracked pools have no live resources and no release errors. This enforces `TEST-07` and
+  `CHECK-09` for the default suite run.
 - The suite tests `internal` production types through `InternalsVisibleTo("Pontifex.Tests")`.
   This is an assembly-level seam, not reflection or private-state inspection.
 - `RetryDeliverySchedulerTests` uses a hand-written `StubDeliveryTask`; no mocking library is
