@@ -31,15 +31,9 @@ internal sealed class RecordingRawReliableClientHandler : IRawReliableClientHand
     /// </summary>
     public Func<bool>? IsConnectedProbe { get; set; }
 
-    public Exception? ReceivedException { get; set; }
-
     public Exception? DisconnectedException { get; set; }
 
     public Exception? StoppedException { get; set; }
-
-    public IReadOnlyList<UnionDataList> Received => _received;
-
-    public int ReceivedCount => _received.Count;
 
     public StopReason? DisconnectedReason { get; private set; }
 
@@ -53,8 +47,6 @@ internal sealed class RecordingRawReliableClientHandler : IRawReliableClientHand
 
     public bool? IsConnectedDuringStopped { get; private set; }
 
-    public Exception? ThrownReceivedException { get; private set; }
-
     public Exception? ThrownDisconnectedException { get; private set; }
 
     public Exception? ThrownStoppedException { get; private set; }
@@ -63,12 +55,6 @@ internal sealed class RecordingRawReliableClientHandler : IRawReliableClientHand
     {
         _received.Add(receivedBuffer);
         _events?.Add("handlerReceived");
-
-        if (ReceivedException != null)
-        {
-            ThrownReceivedException = ReceivedException;
-            throw ReceivedException;
-        }
     }
 
     public void OnDisconnected(StopReason reason)

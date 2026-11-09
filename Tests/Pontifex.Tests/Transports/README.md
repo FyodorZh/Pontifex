@@ -24,22 +24,9 @@ AnyTransport
     │   │   └── RawReliableAckClientTransport
     │   └── RawReliableServerTransport<TServerHandler>
     │       └── RawReliableAckServerTransport
-    └── RawUnreliableTransport                       (planned)
-        ├── RawUnreliableClientTransport             (planned)
-        └── RawUnreliableServerTransport<TFactory>   (planned)
-            ├── RawUnreliableAckServerTransport      (planned)
-            └── RawUnreliableNoAckServerTransport    (planned)
 ```
 
-The following abstract `AnyTransport` descendants also have no layer yet and are recorded as
-planned in the root `Coverage.md`:
-
-- `RawReliableNoAckTransport`
-- `RawReliableAckClient`
-- `RawReliableAckServer`
-
-Planned types are not layers; they have no directory and no `Coverage.md` of their own until
-their layer is added.
+Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md`.
 
 ## Contract references
 
@@ -151,9 +138,9 @@ manual drivers. It contains no production code.
 - A layer may reference harness from an ancestor layer. Sibling layers must not reference each
   other's harness. When siblings need shared logic, it moves to the nearest common ancestor's
   `Harness/`.
-- The client layer reuses the endpoint double from `Tests/Pontifex.Tests/Endpoints/Harness`.
-  Both suites live in the same test assembly and the endpoint double is covered by the
-  `Endpoints` suite.
+- The client layer reuses the endpoint double from
+  `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness`. Both suites live in the same test
+  assembly and the endpoint double is covered by the `Endpoints` suite.
 
 ## Coverage
 

@@ -37,20 +37,8 @@ internal sealed class ScriptedSerialActionQueue : ISerialActionQueue
     /// </summary>
     public Exception? ThrowNextSchedule { get; set; }
 
-    /// <summary>
-    /// Gets the number of actions accepted but not yet run.
-    /// </summary>
-    public int PendingCount => _actions.Count;
-
-    /// <summary>
-    /// Gets the number of calls made to either <c>Schedule</c> overload.
-    /// </summary>
-    public int ScheduleCalls { get; private set; }
-
     public bool Schedule(Action action)
     {
-        ScheduleCalls++;
-
         if (TryConsumeScheduleFailure())
         {
             return false;
@@ -62,8 +50,6 @@ internal sealed class ScriptedSerialActionQueue : ISerialActionQueue
 
     public bool Schedule<T>(T param, Action<T> action, Action<T>? onFailToRun) where T : class
     {
-        ScheduleCalls++;
-
         if (TryConsumeScheduleFailure())
         {
             return false;
@@ -76,7 +62,7 @@ internal sealed class ScriptedSerialActionQueue : ISerialActionQueue
     /// <summary>
     /// Runs the next accepted action, if any. Exceptions are routed to the error callback.
     /// </summary>
-    public void DrainOne()
+    private void DrainOne()
     {
         if (_actions.Count == 0)
         {

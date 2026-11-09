@@ -46,13 +46,7 @@ internal sealed class TestRawReliableServerSession : RawReliableServerEndpoint
 
     public int BeginConnectCalls { get; private set; }
 
-    public int BeginDisconnectCalls { get; private set; }
-
-    public StopReason? LastDisconnectReason { get; private set; }
-
     public bool? LastTryBeGentle { get; private set; }
-
-    public int OnConnectedCalls { get; private set; }
 
     /// <summary>
     /// Gets the number of times the <see cref="Now"/> seam was read.
@@ -69,18 +63,6 @@ internal sealed class TestRawReliableServerSession : RawReliableServerEndpoint
     /// Gets or sets an action invoked at the start of <see cref="BeginConnect"/>.
     /// </summary>
     public Action<TestRawReliableServerSession>? BeginConnectBehavior { get; set; }
-
-    /// <summary>
-    /// Gets or sets whether <see cref="BeginConnect"/> completes the connection automatically.
-    /// </summary>
-    public bool AutoCompleteConnect { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets whether <see cref="BeginDisconnect"/> completes the disconnection automatically.
-    /// </summary>
-    public bool AutoCompleteDisconnect { get; set; } = true;
-
-    public void DrainOne() => _queue!.DrainOne();
 
     public void DrainAll() => _queue!.DrainAll();
 
@@ -108,29 +90,13 @@ internal sealed class TestRawReliableServerSession : RawReliableServerEndpoint
     {
         BeginConnectCalls++;
         BeginConnectBehavior?.Invoke(this);
-
-        if (AutoCompleteConnect)
-        {
-            FinishConnect(NoOp);
-        }
+        FinishConnect(NoOp);
     }
 
     protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
     {
-        BeginDisconnectCalls++;
-        LastDisconnectReason = reason;
         LastTryBeGentle = tryBeGentle;
-
-        if (AutoCompleteDisconnect)
-        {
-            FinishDisconnect();
-        }
-    }
-
-    protected override void OnConnected()
-    {
-        OnConnectedCalls++;
-        base.OnConnected();
+        FinishDisconnect();
     }
 
     protected override void DoSendRaw(UnionDataList bufferToSend)

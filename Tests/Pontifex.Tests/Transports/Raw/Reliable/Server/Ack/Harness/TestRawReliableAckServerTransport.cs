@@ -36,15 +36,11 @@ internal sealed class TestRawReliableAckServerTransport : RawReliableAckServerTr
 
     public override int MessageMaxByteSize { get; }
 
-    public ManualPeriodicLogicDriver Driver { get; } = new();
-
-    public Func<bool> StartCarrierBehavior { get; set; } = static () => true;
+    private readonly ManualPeriodicLogicDriver _driver = new();
 
     public int StartCarrierCalls { get; private set; }
 
     public int StopCarrierCalls { get; private set; }
-
-    public StopReason? LastStopCarrierReason { get; private set; }
 
     public bool ExposedHasStartBeenAttempted => HasStartBeenAttempted;
 
@@ -57,18 +53,17 @@ internal sealed class TestRawReliableAckServerTransport : RawReliableAckServerTr
 
     protected override ILogicDriver<IPeriodicLogicDriverCtl> LogicDriverFactory()
     {
-        return Driver;
+        return _driver;
     }
 
     protected override bool StartCarrier()
     {
         StartCarrierCalls++;
-        return StartCarrierBehavior();
+        return true;
     }
 
     protected override void StopCarrier(StopReason reason)
     {
         StopCarrierCalls++;
-        LastStopCarrierReason = reason;
     }
 }
