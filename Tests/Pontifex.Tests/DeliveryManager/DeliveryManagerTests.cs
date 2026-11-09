@@ -3,21 +3,20 @@ using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 using Pontifex.Utils;
 
 namespace Pontifex.Tests.Delivery
 {
     [TestFixture]
     [Category("DeliveryManager")]
-    public sealed class DeliveryManagerTests
+    public sealed class DeliveryManagerTests : TrackedFixture
     {
+        private static readonly DateTime T0 = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private const int MaxMsgSize = 100;
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-        private static ICollectablePool CPool => Memory.CollectablePool;
         private static IDeliveryAttemptScheduler RetryScheduler => new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
-        private static UnionDataList DataList(params byte[] bytes)
+        private UnionDataList DataList(params byte[] bytes)
         {
             var data = CPool.Acquire<UnionDataList>();
             if (bytes.Length > 0)
@@ -31,39 +30,46 @@ namespace Pontifex.Tests.Delivery
             return data;
         }
 
-        private static List<UnionDataList> Capture(DeliveryManager dm, IDeliveryAttemptScheduler? scheduler = null, DateTime? now = null)
+        private DeliveryManager NewManager()
+        {
+            var manager = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            AddCleanup(manager.Clear);
+            return manager;
+        }
+
+        private List<UnionDataList> Capture(DeliveryManager dm, IDeliveryAttemptScheduler? scheduler = null, DateTime? now = null)
         {
             var sent = new List<UnionDataList>();
-            dm.ProcessOutgoing(scheduler ?? RetryScheduler, now ?? DateTime.UtcNow,
-                new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            dm.ProcessOutgoing(scheduler ?? RetryScheduler, now ?? T0,
+                new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); TrackCaptured(x); return true; }));
             return sent;
         }
 
         [Test]
         public void ScheduleDelivery_SingleChunk_Ok()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             Assert.That(dm.ScheduleDelivery(DataList(1, 2, 3), out _), Is.EqualTo(SendResult.Ok));
         }
 
         [Test]
         public void ScheduleDelivery_InvalidData_ReturnsInvalidMessage()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             Assert.That(dm.ScheduleDelivery(null!, out _), Is.EqualTo(SendResult.InvalidMessage));
         }
 
         [Test]
         public void ScheduleDelivery_MessageTooBig_ReturnsMessageTooBig()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             Assert.That(dm.ScheduleDelivery(DataList(new byte[30000]), out _), Is.EqualTo(SendResult.MessageTooBig));
         }
 
         [Test]
         public void DeliveryMaxByteSize_ReturnsCorrectValue()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             int multiMax = MaxMsgSize - 10 - 4;
             Assert.That(dm.DeliveryMaxByteSize, Is.EqualTo(multiMax * 255));
         }
@@ -71,7 +77,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ProcessIncoming_MalformedDeliveryReport_ReturnsFalse()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             var badReport = CPool.Acquire<UnionDataList>();
             badReport.PutLast(new UnionData(false));
             badReport.PutLast(new UnionData((ushort)5));
@@ -83,18 +89,17 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ProcessOutgoing_ProducesBuffer()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             dm.ScheduleDelivery(DataList(10, 20, 30), out _);
             var sent = Capture(dm);
             Assert.That(sent, Has.Count.EqualTo(1));
-            foreach (var m in sent) m.Release();
         }
 
         [Test]
         public void RoundTrip_SingleChunk_ReceivedFires()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             sender.ScheduleDelivery(DataList(1, 2, 3, 4, 5), out _);
             var outbound = Capture(sender);
@@ -111,10 +116,10 @@ namespace Pontifex.Tests.Delivery
                 var element = d.Elements[0].Bytes!;
                 receivedBytes = new byte[element.Count];
                 element.CopyTo(receivedBytes, 0, 0, element.Count);
+                d.Release();
             };
 
             receiver.ProcessIncoming(msg);
-            msg.Release();
 
             Assert.That(receivedId, Is.EqualTo(new DeliveryId(1)));
             Assert.That(receivedBytes, Is.EqualTo(new byte[] { 1, 2, 3, 4, 5 }));
@@ -123,21 +128,20 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void DuplicateInbound_ReceivedFiresOnce()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             sender.ScheduleDelivery(DataList(1, 2, 3), out _);
             var outbound = Capture(sender);
             var msg = outbound[0];
 
             int received = 0;
-            receiver.Received += (_, _) => received++;
+            receiver.Received += (_, d) => { received++; d.Release(); };
 
             msg.AddRef();
             receiver.ProcessIncoming(msg);
             msg.AddRef();
             receiver.ProcessIncoming(msg);
-            msg.Release();
 
             Assert.That(received, Is.EqualTo(1));
         }
@@ -145,8 +149,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void AckRoundTrip_DeliveredFires()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             DeliveryId? deliveredId = null;
             sender.Delivered += id => deliveredId = id;
@@ -158,7 +162,6 @@ namespace Pontifex.Tests.Delivery
             var msg = toReceiver[0];
             msg.AddRef();
             receiver.ProcessIncoming(msg);
-            msg.Release();
 
             var toSender = Capture(receiver);
             Assert.That(toSender, Has.Count.GreaterThanOrEqualTo(1));
@@ -167,7 +170,6 @@ namespace Pontifex.Tests.Delivery
             {
                 ack.AddRef();
                 sender.ProcessIncoming(ack);
-                ack.Release();
             }
 
             Assert.That(deliveredId, Is.EqualTo(deliveryId));
@@ -176,8 +178,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void DeliveryFailure_FiresFailedToDeliver()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var now = DateTime.UtcNow;
+            var dm = NewManager();
+            var now = T0;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromMilliseconds(50), baseIntervalMs: 100);
 
             DeliveryId? failedId = null;
@@ -185,10 +187,8 @@ namespace Pontifex.Tests.Delivery
 
             dm.ScheduleDelivery(DataList(1), out var dmFailedId);
             var batch1 = Capture(dm, scheduler, now);
-            foreach (var m in batch1) m.Release();
 
             var batch2 = Capture(dm, scheduler, now + TimeSpan.FromMilliseconds(200));
-            foreach (var m in batch2) m.Release();
 
             Assert.That(failedId, Is.EqualTo(dmFailedId));
         }
@@ -196,7 +196,7 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void Clear_ThenProcessOutgoing_ProducesNothing()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             dm.ScheduleDelivery(DataList(1, 2, 3), out _);
             dm.Clear();
             Assert.That(Capture(dm), Is.Empty);
@@ -205,8 +205,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ProcessIncoming_AfterClear_StillProcesses()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             sender.ScheduleDelivery(DataList(1, 2, 3), out _);
             var outbound = Capture(sender);
@@ -214,12 +214,11 @@ namespace Pontifex.Tests.Delivery
             receiver.Clear();
 
             DeliveryId? receivedId = null;
-            receiver.Received += (id, _) => receivedId = id;
+            receiver.Received += (id, d) => { receivedId = id; d.Release(); };
 
             var msg = outbound[0];
             msg.AddRef();
             bool processed = receiver.ProcessIncoming(msg);
-            msg.Release();
 
             Assert.That(processed, Is.True);
             Assert.That(receivedId, Is.EqualTo(new DeliveryId(1)));
@@ -228,8 +227,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void MultipleSends_AllReceived()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             for (ushort i = 1; i <= 5; i++)
                 sender.ScheduleDelivery(DataList((byte)i), out _);
@@ -238,13 +237,12 @@ namespace Pontifex.Tests.Delivery
             Assert.That(outbound, Has.Count.EqualTo(5));
 
             int received = 0;
-            receiver.Received += (_, _) => received++;
+            receiver.Received += (_, d) => { received++; d.Release(); };
 
             foreach (var msg in outbound)
             {
                 msg.AddRef();
                 receiver.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(received, Is.EqualTo(5));
@@ -253,12 +251,29 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ProcessIncoming_GarbageBytes_ReturnsFalse()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var dm = NewManager();
             bool result = dm.ProcessIncoming(CreateGarbageList());
             Assert.That(result, Is.False);
         }
 
-        private static UnionDataList CreateGarbageList()
+        [Test]
+        public void ProcessIncoming_WireChunkIdBeyondWindow_ReturnsFalse()
+        {
+            var dm = NewManager();
+            bool received = false;
+            dm.Received += (_, d) => { received = true; d.Release(); };
+
+            var data = CPool.Acquire<UnionDataList>();
+            data.PutLast(new UnionData(true));
+            data.PutLast(new UnionData((ushort)2000));
+            data.PutLast(new UnionData((byte)1));
+            data.PutLast(new UnionData((ushort)42));
+
+            Assert.That(dm.ProcessIncoming(data), Is.False);
+            Assert.That(received, Is.False);
+        }
+
+        private UnionDataList CreateGarbageList()
         {
             var data = CPool.Acquire<UnionDataList>();
             data.PutLast(new UnionData((ushort)1));
@@ -269,8 +284,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ScheduleDelivery_EmptyData_RoundTripsEmptyPayload()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             sender.ScheduleDelivery(DataList(), out _);
             var outbound = Capture(sender);
@@ -290,10 +305,10 @@ namespace Pontifex.Tests.Delivery
                 {
                     receivedBytes = Array.Empty<byte>();
                 }
+                d.Release();
             };
 
             receiver.ProcessIncoming(msg);
-            msg.Release();
 
             Assert.That(receivedBytes, Is.Not.Null);
             Assert.That(receivedBytes!.Length, Is.EqualTo(0));
@@ -302,14 +317,14 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void ProcessOutgoing_WithoutSchedule_ProducesNothing()
         {
-            Assert.That(Capture(new DeliveryManager(MaxMsgSize, Pool, CPool)), Is.Empty);
+            Assert.That(Capture(NewManager()), Is.Empty);
         }
 
         [Test]
         public void MultipleProcessOutgoing_ConfirmationsAccumulate()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             sender.ScheduleDelivery(DataList(1, 2, 3), out _);
             var batch1 = Capture(sender);
@@ -318,11 +333,9 @@ namespace Pontifex.Tests.Delivery
 
             msg.AddRef();
             receiver.ProcessIncoming(msg);
-            msg.Release();
 
             var ack1 = Capture(receiver);
             Assert.That(ack1, Has.Count.EqualTo(1));
-            foreach (var a in ack1) a.Release();
 
             Assert.That(Capture(receiver), Is.Empty);
         }
@@ -330,8 +343,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void MultiChunkRoundTrip_WithLargeData()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
@@ -350,13 +363,13 @@ namespace Pontifex.Tests.Delivery
                     resultData = new byte[element.Count];
                     element.CopyTo(resultData, 0, 0, element.Count);
                 }
+                d.Release();
             };
 
             foreach (var msg in outbound)
             {
                 msg.AddRef();
                 receiver.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(resultData, Is.Not.Null);
@@ -368,8 +381,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void MultiChunkRoundTrip_OutOfOrder()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
@@ -388,6 +401,7 @@ namespace Pontifex.Tests.Delivery
                     resultData = new byte[element.Count];
                     element.CopyTo(resultData, 0, 0, element.Count);
                 }
+                d.Release();
             };
 
             for (int i = outbound.Count - 1; i >= 0; i--)
@@ -395,7 +409,6 @@ namespace Pontifex.Tests.Delivery
                 var msg = outbound[i];
                 msg.AddRef();
                 receiver.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(resultData, Is.Not.Null);
@@ -407,8 +420,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void MultiChunk_DuplicateChunk_ReceivedFiresOnce()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             var bytes = new byte[150];
             for (int i = 0; i < 150; i++) bytes[i] = (byte)(i % 256);
@@ -419,19 +432,17 @@ namespace Pontifex.Tests.Delivery
             Assert.That(outbound.Count, Is.GreaterThan(1));
 
             int received = 0;
-            receiver.Received += (_, _) => received++;
+            receiver.Received += (_, d) => { received++; d.Release(); };
 
             foreach (var msg in outbound)
             {
                 msg.AddRef();
                 receiver.ProcessIncoming(msg);
-                msg.Release();
             }
 
             var first = outbound[0];
             first.AddRef();
             receiver.ProcessIncoming(first);
-            first.Release();
 
             Assert.That(received, Is.EqualTo(1));
         }
@@ -439,8 +450,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void MultiChunkAckRoundTrip_DeliveredFires()
         {
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var sender = NewManager();
+            var receiver = NewManager();
 
             DeliveryId? deliveredId = null;
             sender.Delivered += id => deliveredId = id;
@@ -457,7 +468,6 @@ namespace Pontifex.Tests.Delivery
             {
                 msg.AddRef();
                 receiver.ProcessIncoming(msg);
-                msg.Release();
             }
 
             var toSender = Capture(receiver);
@@ -467,7 +477,6 @@ namespace Pontifex.Tests.Delivery
             {
                 ack.AddRef();
                 sender.ProcessIncoming(ack);
-                ack.Release();
             }
 
             Assert.That(deliveredId, Is.EqualTo(new DeliveryId(1)));
@@ -476,8 +485,8 @@ namespace Pontifex.Tests.Delivery
         [Test]
         public void MultiChunkRetryTimeout_FiresFailedToDeliver()
         {
-            var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var now = DateTime.UtcNow;
+            var dm = NewManager();
+            var now = T0;
             var scheduler = new RetryDeliveryScheduler(TimeSpan.FromMilliseconds(50), baseIntervalMs: 100);
 
             DeliveryId? failedId = null;
@@ -489,10 +498,8 @@ namespace Pontifex.Tests.Delivery
             dm.ScheduleDelivery(largeData, out _);
             var batch1 = Capture(dm, scheduler, now);
             Assert.That(batch1.Count, Is.GreaterThan(1));
-            foreach (var m in batch1) m.Release();
 
             var batch2 = Capture(dm, scheduler, now + TimeSpan.FromMilliseconds(200));
-            foreach (var m in batch2) m.Release();
 
             Assert.That(failedId, Is.EqualTo(new DeliveryId(1)));
         }

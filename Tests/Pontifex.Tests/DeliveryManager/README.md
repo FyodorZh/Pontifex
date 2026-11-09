@@ -69,9 +69,9 @@ layers and do not get their own `Coverage.md`.
 - Test file = `<Subject>Tests.cs`; fixture class = `public sealed class <Subject>Tests`.
 - Test methods = `Scenario_ExpectedResult`, for example
   `ScheduleDeliver_AtCapacity_ReturnsBufferOverflow`.
-- Namespace = `Pontifex.Tests.Delivery` for every file in the suite, including future harness
-  files. The namespace is intentionally not `...DeliveryManager`, because that would shadow the
-  `DeliveryManager` type inside its own tests.
+- Namespace = `Pontifex.Tests.Delivery` for test files; harness files use
+  `Pontifex.Tests.Delivery.Harness`. The root namespace is intentionally not
+  `...DeliveryManager`, because that would shadow the `DeliveryManager` type inside its own tests.
 - Every fixture carries `[TestFixture]` and `[Category("DeliveryManager")]`.
 
 ## Directory layout
@@ -80,10 +80,14 @@ layers and do not get their own `Coverage.md`.
 DeliveryManager/
 ├── README.md
 ├── Coverage.md                              root layer
+├── Harness/
+│   ├── TrackedFixture.cs
+│   └── TrackedResources.cs
 ├── DeduplicatorTests.cs
 ├── DeliveryDispatcherTests.cs
 ├── DeliveryInfoSerializerTests.cs
 ├── DeliveryManagerTests.cs
+├── DeliveryReporterTests.cs
 ├── DeliverySorterTests.cs
 ├── DeliverySortingManagerTests.cs
 ├── MessageMergerTests.cs
@@ -92,18 +96,25 @@ DeliveryManager/
 └── RetryDeliverySchedulerTests.cs
 ```
 
-There are currently no groups and no `Harness/` directory.
+There are currently no groups.
 
 ## Harness layout and sharing
 
 Harness is test-only: stubs, recording doubles, test buffers, and manual drivers. It contains no
 production code and no mocking library is used; doubles are hand-written.
 
+- `Harness/TrackedResources.cs` wraps the per-test byte-array and collectable pools and attaches a
+  `MultiRefResourceMonitor` to every rented resource. `TrackedFixture` creates it per test and
+  asserts at teardown that every resource was released exactly once.
+- `Harness/TrackedFixture.cs` is the base class for fixtures that use the pools. It creates a
+  fresh `MemoryRental` per test, exposes `Pool` and `CPool`, lets a test register cleanup actions
+  (`AddCleanup`) and captured messages (`TrackCaptured`), and fails the test if a rented resource
+  is still alive or was released twice.
 - Double classes that are used by one fixture stay nested in that fixture (for example
-  `RetryDeliverySchedulerTests.StubDeliveryTask`).
-- When two or more fixtures need the same double, create `Harness/` at the suite root
-  (`Tests/Pontifex.Tests/DeliveryManager/Harness/`) and move the shared logic there. Harness
-  types may use the `Pontifex.Tests.Delivery.Harness` namespace.
+  `RetryDeliverySchedulerTests.StubDeliveryTask`); they use no pools and do not derive from
+  `TrackedFixture`.
+- When new shared test-only helpers are needed, add them under `Harness/` with the
+  `Pontifex.Tests.Delivery.Harness` namespace.
 - A Test Suit has no nested layers, so harness is never shared between sibling layers. If the
   suite is ever split, shared harness moves to the nearest common ancestor layer.
 
@@ -152,8 +163,9 @@ and place it in the root layer's `Coverage.md`.
    wall clock for a pass/fail decision.
 4. Assert observable results: return values, event callbacks, captured wire messages, ordering,
    counts, and contract-visible buffer state.
-5. Release every rented buffer that the test acquires or captures, and update
-   [`Coverage.md`](Coverage.md) in the same change.
+5. Derive pool-using fixtures from `TrackedFixture`, register manager `Clear` methods with
+   `AddCleanup`, and let the fixture verify release; update [`Coverage.md`](Coverage.md) in the
+   same change.
 
 ## Out of scope
 
@@ -164,8 +176,6 @@ and place it in the root layer's `Coverage.md`.
 - End-to-end integration with a live transport or a remote peer.
 - The loose tests at the project root for shared primitives (`DeliveryIdTests`,
   `UnionDataListTests`, `ZigZagVarIntSerializerTests`). They are not part of this suite.
-- `DeliveryReporter` has no direct test file; its batching behaviour is currently exercised only
-  through `DeliveryManager` and is recorded as a planned gap in `Coverage.md`.
 
 ## Rules
 

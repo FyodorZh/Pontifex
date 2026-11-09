@@ -1,20 +1,18 @@
-using Pontifex.Delivery;
-
 using Actuarius.Memory;
+using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 
 namespace Pontifex.Tests.Delivery
 {
     [TestFixture]
     [Category("DeliveryManager")]
-    public sealed class MessageSplitterTests
+    public sealed class MessageSplitterTests : TrackedFixture
     {
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-
-        private static IMultiRefByteArray Data(params byte[] bytes)
+        private IMultiRefByteArray Data(params byte[] bytes)
         {
             var buf = Pool.Acquire(bytes.Length);
             Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
+            AddCleanup(buf.Release);
             return buf;
         }
 
