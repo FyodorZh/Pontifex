@@ -61,6 +61,11 @@ Inherited behavior is covered once, by the test-set for the layer that owns it, 
 repeated in derived test-sets. A derived test-set may use inherited machinery as setup, but its
 assertions stay on the class's own contract.
 
+Constructor forwarding is treated as a delta only at the layer that introduces the forwarding
+surface: `RawTransport` declares the first typed constructor over `AnyTransport`, so its
+forwarding is tested there. A further facade whose constructor only changes the conformance-control
+type (an out-of-scope subsystem) introduces no new observable state and does not repeat that test.
+
 ## Non-goals
 
 - Re-testing endpoint behavior: `RawUnreliableEndpoint` and the raw-reliable endpoint family are
@@ -75,7 +80,7 @@ assertions stay on the class's own contract.
 |---|---|---|---|
 | `AnyTransport` | `AnyTransportTests` | covered (32 tests) | lifecycle, start/stop/fail, callbacks, validity |
 | `RawTransport` | `RawTransportTests` | covered (6 tests) | raw transport contract, message size, constructor forwarding |
-| `RawReliableTransport` | `RawReliableTransportTests` | covered (2 tests) | reliable raw transport contract, constructor forwarding |
+| `RawReliableTransport` | `RawReliableTransportTests` | covered (1 test) | reliable raw transport contract |
 | `RawReliableClientTransport<TClientHandler>` | `RawReliableClientTransportTests` | covered (45 tests) | init, connect state machine, connectivity, endpoint ownership, terminal notifications, handler exception isolation |
 
 Planned families:
@@ -87,9 +92,9 @@ Planned families:
 
 ### `AnyTransport` contract matrix
 
-- **Constructor / observables**: `Name`, `Memory`, and `Type` are captured; `Log` is a non-null
-  wrapped logger; `IsValid` is `true`; `IsStarted` is `false`; `HasStartBeenAttempted` is
-  `false`.
+- **Constructor / observables**: `Name` and `Memory` are captured by the base constructor;
+  `Type` is abstract and supplied by the concrete transport; `Log` is a non-null wrapped logger;
+  `IsValid` is `true`; `IsStarted` is `false`; `HasStartBeenAttempted` is `false`.
 - **Start**: null callback throws `ArgumentNullException` without attempting a start; the happy
   path calls `TryStart` then `OnStarted` and returns `true`; a `TryStart` that returns `false`
   invalidates the transport, returns `false`, and raises no stop notification; a second `Start`
@@ -125,20 +130,21 @@ stays small and deliberately does not repeat the full `AnyTransport` matrix.
   configured value, and is exposed through `IRawTransport`.
 - **Interface exposure**: an instance is assignable to `IRawTransport` and `ITransport`.
 
-This test-set asserts only the `RawTransport`-specific items above. Inherited behavior is not
-repeated; see the coverage rule above.
+This test-set asserts only the `RawTransport`-specific items above; the inherited `AnyTransport`
+lifecycle is not repeated. See the coverage rule above.
 
 ### `RawReliableTransport` contract matrix
 
 `RawReliableTransport` is a marker facade over `RawTransport` and adds no lifecycle or
 message-handling behavior.
 
-- **Constructor**: `Name` and `Memory` are forwarded to the base; `Log` is non-null.
-- **Interface exposure**: an instance is assignable to `IRawReliableTransport`,
-  `IRawTransport`, and `ITransport`.
+- **Interface exposure**: an instance is assignable to `IRawReliableTransport`.
 
-This test-set asserts only the `RawReliableTransport`-specific contract above. Inherited behavior
-and inherited properties are not repeated; see the coverage rule above.
+This test-set asserts only the `RawReliableTransport`-specific contract above. The constructor is
+not re-tested because it only forwards to `RawTransport` and narrows the conformance-control type;
+`Name`, `Memory`, and `Log` are inherited state already covered by `AnyTransportTests` and
+`RawTransportTests`, and the inherited `IRawTransport`/`ITransport` exposure is covered by
+`RawTransportTests` as well. See the coverage rule above.
 
 ### `RawReliableClientTransport<TClientHandler>` contract matrix
 
@@ -199,7 +205,7 @@ never use reflection. Only these are asserted:
 - method return values,
 - the `Start`-supplied stop callback and its reason,
 - the abstract hook invocations (`TryStart`, `OnStarted`, `OnStopped`) and their order,
-- read-only observables (`Name`, `Type`, `Memory`, `Log`, `IsValid`, `IsStarted`,
+- read-only observables (`Name`, `Memory`, `Log`, `IsValid`, `IsStarted`,
   `HasStartBeenAttempted`),
 - the state observed from inside `OnStopped`.
 

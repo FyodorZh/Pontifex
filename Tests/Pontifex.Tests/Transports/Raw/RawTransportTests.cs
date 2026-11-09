@@ -6,8 +6,9 @@ namespace Pontifex.Tests.Transports;
 /// <summary>
 /// Black-box contract tests for <see cref="RawTransport"/>. The class is a thin typed facade over
 /// <see cref="AnyTransport"/>, so this test-set covers only its delta: constructor forwarding, the
-/// derived message-size value, and the raw transport interface. Inherited lifecycle and inherited
-/// properties are covered once by <see cref="AnyTransportTests"/> and are not repeated here.
+/// derived message-size value, and the raw transport interface. The inherited lifecycle is covered
+/// once by <see cref="AnyTransportTests"/> and is not repeated here; the constructor test verifies
+/// only that the forwarded arguments reach the base state.
 /// </summary>
 [Category("Transports")]
 public sealed class RawTransportTests

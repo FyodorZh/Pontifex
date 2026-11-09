@@ -30,7 +30,7 @@ public sealed class AnyTransportTests
     #region Constructor and observables
 
     [Test]
-    public void Constructor_CapturesNameMemoryAndType()
+    public void Constructor_CapturesNameMemoryAndLog()
     {
         IMemoryRental memory = MemoryRental.Shared;
 
@@ -38,7 +38,6 @@ public sealed class AnyTransportTests
 
         Assert.That(transport.Name, Is.EqualTo("MyTransport"));
         Assert.That(transport.Memory, Is.SameAs(memory));
-        Assert.That(transport.Type, Is.EqualTo(TransportType.RawReliableAck));
         Assert.That(transport.Log, Is.Not.Null);
     }
 
