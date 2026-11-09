@@ -5,23 +5,17 @@ using Actuarius.Memory;
 using Pontifex.Delivery;
 using Pontifex.Utils;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class DeliverySortingManagerTests
+    public sealed class DeliverySortingManagerTests
     {
         private const int MaxMsgSize = 100;
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
         private static ICollectablePool CPool => Memory.CollectablePool;
         private static IDeliveryAttemptScheduler Scheduler => new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
-
-        private static IMultiRefByteArray Data(params byte[] bytes)
-        {
-            var buf = Pool.Acquire(bytes.Length);
-            Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
-            return buf;
-        }
 
         private static UnionDataList DataList(params byte[] bytes)
         {
@@ -81,7 +75,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void SingleMessage_PassesThrough()
+        public void SingleMessage_PassesThroughInOrder()
         {
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new DeliverySortingManager(inner);
@@ -156,7 +150,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void BusyOrder_MultipleBatches()
+        public void BusyOrder_MultipleBatches_ReceivedInOrder()
         {
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new DeliverySortingManager(inner);
@@ -210,7 +204,7 @@ namespace Pontifex.Delivery.Tests
             inner.ProcessIncoming(msg2);
             msg2.Release();
 
-            // now deliver packet 1 — sorter._id advanced to 3, Push(1) fails
+            // now deliver packet 1 — the sorter has advanced past DeliveryId(2), so Push(1) is rejected
             var msg1 = msg1batch[0];
             msg1.AddRef();
             inner.ProcessIncoming(msg1);
@@ -222,7 +216,7 @@ namespace Pontifex.Delivery.Tests
         [Test]
         public void AfterGap_SorterStillDeliversLaterMessages()
         {
-            // Push failure (id < _id) fires FailedToSort but does NOT kill the sorter.
+            // A rejected push fires FailedToSort but does NOT kill the sorter.
             // Future messages with higher IDs are still accepted and delivered.
             var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var sorted = new DeliverySortingManager(inner);
@@ -244,7 +238,7 @@ namespace Pontifex.Delivery.Tests
             inner.ProcessIncoming(msg2);
             msg2.Release();
 
-            // deliver packet 1 — Push(1) fails because 1 < _id(3), fires FailedToSort
+            // deliver packet 1 — Push(1) is rejected because the sorter has advanced past DeliveryId(2)
             var msg1 = msg1batch[0];
             msg1.AddRef();
             inner.ProcessIncoming(msg1);

@@ -5,23 +5,17 @@ using Actuarius.Memory;
 using Pontifex.Delivery;
 using Pontifex.Utils;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class DeliveryManagerTests
+    public sealed class DeliveryManagerTests
     {
         private const int MaxMsgSize = 100;
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
         private static ICollectablePool CPool => Memory.CollectablePool;
         private static IDeliveryAttemptScheduler RetryScheduler => new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
-
-        private static IMultiRefByteArray Data(params byte[] bytes)
-        {
-            var buf = Pool.Acquire(bytes.Length);
-            Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
-            return buf;
-        }
 
         private static UnionDataList DataList(params byte[] bytes)
         {
@@ -257,7 +251,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void GarbageBytes_DoesNotCrash()
+        public void ProcessIncoming_GarbageBytes_ReturnsFalse()
         {
             var dm = new DeliveryManager(MaxMsgSize, Pool, CPool);
             bool result = dm.ProcessIncoming(CreateGarbageList());
@@ -273,7 +267,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void EmptyData_Works()
+        public void ScheduleDelivery_EmptyData_RoundTripsEmptyPayload()
         {
             var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
             var receiver = new DeliveryManager(MaxMsgSize, Pool, CPool);

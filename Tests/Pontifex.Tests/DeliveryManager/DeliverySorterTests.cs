@@ -1,9 +1,10 @@
 using Pontifex.Delivery;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class DeliverySorterTests
+    public sealed class DeliverySorterTests
     {
         private DeliverySorter<string> Create() => new DeliverySorter<string>(DeliveryId.Zero);
 
@@ -110,7 +111,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void EmptyAfterAllPops()
+        public void TryPop_WhenEmpty_ReturnsFalse()
         {
             var sorter = Create();
             sorter.Push(new DeliveryId(1), "a");
@@ -119,7 +120,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void GapFill_ThenPopMultiple()
+        public void GapFill_ThenPopsInOrder()
         {
             var sorter = Create();
             sorter.Push(new DeliveryId(1), "a");

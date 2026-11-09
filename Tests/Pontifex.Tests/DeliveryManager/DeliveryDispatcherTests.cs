@@ -5,10 +5,11 @@ using Actuarius.Memory;
 using Pontifex.Delivery;
 using Pontifex.Utils;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class DeliveryDispatcherTests
+    public sealed class DeliveryDispatcherTests
     {
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
@@ -252,11 +253,8 @@ namespace Pontifex.Delivery.Tests
             foreach (var b in sent) b.Release();
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  New wire format target tests
-        //  Target: Dispatcher prepends [bool(true), ushort(seq)]
-        //  then the serializer's elements follow.
-        // ════════════════════════════════════════════════════════════════
+        // Wire-format contract: the dispatcher prepends [bool(true), ushort(wireChunkId)]
+        // to the packed message, and the packed elements follow.
 
         [Test]
         public void NewFormat_DispatchedData_HasDiscriminatorAndWireChunkId()

@@ -1,30 +1,28 @@
 using Pontifex.Delivery;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class RetryDeliverySchedulerTests
+    public sealed class RetryDeliverySchedulerTests
     {
         private static IDeliveryTask MakeTask(int attempt, DateTime scheduleTime)
         {
-            var mock = new MockTask
-            {
-                MockId = new DeliveryInfo(DeliveryId.Zero, 0),
-                MockScheduleTime = scheduleTime,
-                MockDeliveryAttempts = attempt
-            };
-            return mock;
+            return new StubDeliveryTask(new DeliveryInfo(DeliveryId.Zero, 0), scheduleTime, attempt);
         }
 
-        private class MockTask : IDeliveryTask
+        private sealed class StubDeliveryTask : IDeliveryTask
         {
-            public DeliveryInfo MockId;
-            public DateTime MockScheduleTime;
-            public int MockDeliveryAttempts;
+            public StubDeliveryTask(DeliveryInfo id, DateTime scheduleTime, int deliveryAttempts)
+            {
+                Id = id;
+                ScheduleTime = scheduleTime;
+                DeliveryAttempts = deliveryAttempts;
+            }
 
-            public DeliveryInfo Id => MockId;
-            public DateTime ScheduleTime => MockScheduleTime;
-            public int DeliveryAttempts => MockDeliveryAttempts;
+            public DeliveryInfo Id { get; }
+            public DateTime ScheduleTime { get; }
+            public int DeliveryAttempts { get; }
         }
 
         [Test]

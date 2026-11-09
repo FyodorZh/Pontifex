@@ -1,9 +1,12 @@
+using Pontifex.Delivery;
+
 using Actuarius.Memory;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class MessageMergerTests
+    public sealed class MessageMergerTests
     {
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
@@ -51,6 +54,7 @@ namespace Pontifex.Delivery.Tests
             merger.Combine(id, 1, 2, Data(5, 6, 7));
             var result = merger.Combine(id, 0, 2, Data(1, 2));
 
+            Assert.That(result, Is.Not.Null);
             Assert.That(result.Count, Is.EqualTo(5));
 
             var bytes = new byte[5];
@@ -70,8 +74,9 @@ namespace Pontifex.Delivery.Tests
             merger.Combine(id, 0, parts, Data(99, 99));
             var result = merger.Combine(id, 1, parts, Data(3, 4));
 
+            Assert.That(result, Is.Not.Null);
             var bytes = new byte[4];
-            result.CopyTo(bytes, 0, 0, 4);
+            result!.CopyTo(bytes, 0, 0, 4);
             Assert.That(bytes, Is.EqualTo(new byte[] { 1, 2, 3, 4 }));
             result.Release();
         }
@@ -119,13 +124,15 @@ namespace Pontifex.Delivery.Tests
             merger.Combine(new DeliveryId(2), 0, 2, Data(10));
             var r1 = merger.Combine(new DeliveryId(1), 1, 2, Data(2));
             var r2 = merger.Combine(new DeliveryId(2), 1, 2, Data(20));
+            Assert.That(r1, Is.Not.Null);
+            Assert.That(r2, Is.Not.Null);
 
             var b1 = new byte[2];
-            r1.CopyTo(b1, 0, 0, 2);
+            r1!.CopyTo(b1, 0, 0, 2);
             Assert.That(b1, Is.EqualTo(new byte[] { 1, 2 }));
 
             var b2 = new byte[2];
-            r2.CopyTo(b2, 0, 0, 2);
+            r2!.CopyTo(b2, 0, 0, 2);
             Assert.That(b2, Is.EqualTo(new byte[] { 10, 20 }));
 
             r1.Release();

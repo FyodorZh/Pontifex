@@ -1,9 +1,12 @@
+using Pontifex.Delivery;
+
 using Actuarius.Memory;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class MessageSplitterTests
+    public sealed class MessageSplitterTests
     {
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
@@ -37,7 +40,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void GetNextChunk_IteratesAllChunks()
+        public void GetNextChunk_IteratesAllChunks_InOrder()
         {
             var splitter = new MessageSplitter(Pool, 3);
             var data = Data(1, 2, 3, 4, 5, 6, 7);

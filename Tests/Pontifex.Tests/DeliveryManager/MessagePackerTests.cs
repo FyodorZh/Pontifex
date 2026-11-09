@@ -5,23 +5,17 @@ using Actuarius.Memory;
 using Pontifex.Delivery;
 using Pontifex.Utils;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class MessagePackerTests
+    public sealed class MessagePackerTests
     {
         private const int MaxMsgSize = 100;
         private const int SafetyMargin = 4;
         private static IMemoryRental Memory => MemoryRental.Shared;
         private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
         private static ICollectablePool CPool => Memory.CollectablePool;
-
-        private static IMultiRefByteArray Data(params byte[] bytes)
-        {
-            var buf = Pool.Acquire(bytes.Length);
-            Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
-            return buf;
-        }
 
         private static UnionDataList DataList(params byte[] bytes)
         {
@@ -163,10 +157,9 @@ namespace Pontifex.Delivery.Tests
             packer.Pack(new DeliveryId(1), data,
                 new ConsumerDelegate<QueuedMessage>(x => { sent.Add(x); return true; }));
 
-            // Each QueuedMessage.Data is the wire message (packetId already prepended).
-            // Element 0 = packetId(ushort), element 1 = type(byte), element 2 = id(ushort),
-            // element 3 = partId(byte) or rpt for single, element 4 = partsNum for multi,
-            // last element = payload(array).
+            // Each QueuedMessage.Data is the packed wire message; the dispatch layer prepends
+            // its own discriminator and wire chunk id later. The payload chunk is the last
+            // element of each packed message.
             int totalPayload = 0;
             foreach (var qm in sent)
             {
