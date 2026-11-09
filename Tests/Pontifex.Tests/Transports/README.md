@@ -8,10 +8,11 @@ transport-level counterpart of the `Endpoints` suite: the same deterministic and
 public-plus-protected-contract approach, applied one layer up.
 
 Currently the suite covers `AnyTransport`, the root that owns the common transport lifecycle,
-`RawTransport`, the raw typed facade over it, the `RawReliableTransport` marker facade, and
-`RawReliableClientTransport<TClientHandler>`, the reliable client connection state machine. Tests
-for the remaining raw reliable and raw unreliable transport families will be added incrementally,
-following the same layout and rules.
+`RawTransport`, the raw typed facade over it, the `RawReliableTransport` marker facade,
+`RawReliableClientTransport<TClientHandler>`, the reliable client connection state machine, and
+`RawReliableServerTransport<TServerHandler>`, the reliable server admission and session registry.
+Tests for the remaining raw reliable and raw unreliable transport families will be added
+incrementally, following the same layout and rules.
 
 > **Conformance controls are explicitly out of scope.**
 > Do not test, arm, inject, assert, or otherwise use anything from the conformance subsystem:
@@ -34,10 +35,15 @@ Transports/
     ├── RawTransportTests.cs           test-set for RawTransport
     └── Reliable/
         ├── Harness/
+        │   ├── ManualPeriodicLogicDriver.cs
         │   ├── RecordingRawReliableClientHandler.cs
+        │   ├── ScriptedSerialActionQueue.cs
         │   ├── TestRawReliableClientTransport.cs
+        │   ├── TestRawReliableServerSession.cs
+        │   ├── TestRawReliableServerTransport.cs
         │   └── TestRawReliableTransport.cs
         ├── RawReliableClientTransportTests.cs
+        ├── RawReliableServerTransportTests.cs
         └── RawReliableTransportTests.cs
 ```
 
@@ -82,12 +88,13 @@ type (an out-of-scope subsystem) introduces no new observable state and does not
 | `RawTransport` | `RawTransportTests` | covered (6 tests) | raw transport contract, message size, constructor forwarding |
 | `RawReliableTransport` | `RawReliableTransportTests` | covered (1 test) | reliable raw transport contract |
 | `RawReliableClientTransport<TClientHandler>` | `RawReliableClientTransportTests` | covered (45 tests) | init, connect state machine, connectivity, endpoint ownership, terminal notifications, handler exception isolation |
+| `RawReliableServerTransport<TServerHandler>` | `RawReliableServerTransportTests` | covered (52 tests) | initialization, carrier hooks, admission gates, session registry, ticker |
 
 Planned families:
 
 | Family | Status |
 |---|---|
-| `Raw/Reliable` client/server/Ack/NoAck transports | client covered; server/Ack/NoAck not started |
+| `Raw/Reliable` client/server/Ack/NoAck transports | client and server covered; Ack/NoAck not started |
 | `Raw/Unreliable` transports | not started |
 
 ### `AnyTransport` contract matrix
@@ -194,6 +201,57 @@ repeated.
 Not covered here: `GetControls`, because its only current contribution is the conformance
 control, which this suite deliberately does not use.
 
+### `RawReliableServerTransport<TServerHandler>` contract matrix
+
+The server transport owns the carrier hooks, the bounded admission gates, the live-session registry,
+and the shared ticker. This test-set covers that delta; the inherited `AnyTransport` lifecycle and
+the `RawTransport`/`RawReliableTransport` facades are not repeated.
+
+- **Constructor / interface**: each numeric limit (`maxConcurrentHandshakes`, `maxActiveSessions`,
+  `tickPeriodMs`) rejects values below 1 with `ArgumentOutOfRangeException` and the matching parameter
+  name. An instance is assignable to `IRawReliableServerTransport<TServerHandler>`,
+  `IRawReliableTransport`, `IRawTransport`, and `ITransport`.
+- **Initialization / start**: `TryMarkInitialized` succeeds once and fails afterwards. `Start` before
+  initialization fails, invalidates the transport, calls neither `StartCarrier` nor the ticker
+  factory, and does not invoke the start callback. After initialization, `Start` calls `StartCarrier`
+  and then creates and starts the ticker. A `false` or throwing `StartCarrier` invalidates the
+  transport and creates no ticker. A second `Start` does nothing. A stop before the first start is a
+  no-op that leaves the transport startable. If `StartCarrier` stops the transport synchronously,
+  `Start` returns `false`, `OnStarted` and the ticker do not run, and the stop callback still fires.
+- **Handshake gate**: `TryBeginHandshake` is `false` before start and after stop or fail. While started
+  it admits exactly `maxConcurrentHandshakes` slots; `EndHandshake` releases one. The gate is
+  independent of the session gate. A bounded parallel test confirms the lock-free counter never
+  exceeds its limit.
+- **Session gate**: `TryReserveSession` follows the same lifecycle and limit rules, with
+  `ReleaseSession` releasing a slot. `ActiveSessions` reflects the current reservations.
+- **Admission**: `TryStartAndRegisterSession` rejects `null`. On the happy path it starts the endpoint,
+  adds it to the registry, and keeps the reserved slot; the endpoint is started on its own queue, so
+  `BeginConnect` runs when that queue drains. When the transport is not alive, the endpoint is started
+  and immediately stopped with a `TextFail` sourced from the transport name, the slot is released
+  directly, and `OnSessionStopped` is **not** called. If the endpoint rejects or throws from `Start`,
+  the slot is released through the endpoint's terminal `Stopped` notification, which may be deferred
+  past the `false` return; `OnSessionStopped` is not called. The same no-hook rule applies when the
+  endpoint stops synchronously during start or the transport begins stopping during start. The slot is
+  released exactly once on every path.
+- **Session termination**: when a registered session stops, its slot is released, it is removed from
+  the registry, and `OnSessionStopped` is invoked once with the same reason. `ActiveSessions` is
+  already decremented inside the hook. A repeated stop does not notify twice, and stopping one session
+  does not affect the others. A throwing `OnSessionStopped` is isolated: the endpoint still stops, the
+  slot is still released, and the transport stays valid.
+- **Transport stop**: `Stop` calls `StopCarrier` with the same reason instance, stops the ticker, then
+  asks every registered session to stop with the transport reason and `tryBeGentle: false`. Sessions
+  already stopped are not stopped again. A null reason is replaced by `Unknown` sourced from the
+  transport name before it reaches the carrier. Stopping before start does not call `StopCarrier` and
+  still allows a later start. `Fail` runs the same stop delta and invalidates the transport.
+- **Ticker**: the ticker is created through the `LogicDriverFactory` seam and started exactly once
+  after a successful carrier start. Each tick calls `PeriodicTick` on every registered session; a
+  stopped session is skipped, a session added after start is picked up, and an exception from one
+  session does not prevent the others from ticking. Ticks after the transport stops are ignored, and
+  no ticker is created when the start fails. The test double supplies a hand-driven
+  `ILogicDriver<IPeriodicLogicDriverCtl>`, so no background thread or real time is involved.
+
+Not covered here: `GetControls`, for the same conformance-control reason as the client test-set.
+
 ## How it works
 
 ### Black-box boundary
@@ -256,6 +314,47 @@ callback, and optionally appends callback names to the shared `EventLog`. `OnRec
 release the delivered buffer; the test owns it (buffers still alive at `Dispose` are released as a
 safety net). `IsConnectedProbe` lets a test observe the transport's connectivity from inside
 `OnDisconnected`/`OnStopped`.
+
+`TestRawReliableServerTransport : RawReliableServerTransport<IRawReliableServerHandler>` is the
+seam for the server transport. It:
+
+- supplies the constructor's trivial `RawReliableConformanceControl` only (never armed, inspected,
+  or asserted) plus the abstract `Type`, `MessageMaxByteSize`, `StartCarrier`, and `StopCarrier`
+  members;
+- lets each test choose the `StartCarrier` result, or make it throw;
+- records `StartCarrierCalls`, `StopCarrierCalls`, `LastStopCarrierReason`, `OnSessionStoppedCalls`,
+  `LastSessionStopped`, and `LastSessionStoppedReason`;
+- records whether `IsStopping` was already set and how many sessions were active inside
+  `StopCarrier` and `OnSessionStopped`;
+- overrides `LogicDriverFactory` to return a `ManualPeriodicLogicDriver`, and exposes the protected
+  admission surface (`TryMarkInitialized`, `TryBeginHandshake`/`EndHandshake`,
+  `TryReserveSession`/`ReleaseSession`, `TryStartAndRegisterSession`, `IsStopping`,
+  `ActiveSessions`, `HasStartBeenAttempted`);
+- shares an `EventLog` with the test-supplied start callback so carrier and ticker ordering can be
+  asserted.
+
+`TestRawReliableServerSession : RawReliableServerEndpoint` is the session double. It:
+
+- drives its lifecycle through a `ScriptedSerialActionQueue` that can run actions inline or on an
+  explicit drain, and can reject or throw from the next scheduling call;
+- completes `BeginConnect` and `BeginDisconnect` automatically by default, with an optional
+  `BeginConnectBehavior` hook for tests that stop the session or the transport during start;
+- exposes `Now` through a controllable clock with a read counter and a configurable exception, so
+  ticker coverage and per-session tick counting stay deterministic;
+- records `BeginConnectCalls`, `BeginDisconnectCalls`, `LastDisconnectReason`, `LastTryBeGentle`, and
+  `OnConnectedCalls`.
+
+`ManualPeriodicLogicDriver : ILogicDriver<IPeriodicLogicDriverCtl>` is the hand-driven ticker driver.
+It calls `LogicStarted` on start, exposes `Tick()` for an explicit tick, calls `LogicStopped` when its
+control is stopped, and records start/stop/finish calls. No thread or timer is involved.
+
+`ScriptedSerialActionQueue : ISerialActionQueue` is the deterministic queue used by the session
+double. It models the production serial queue's one-action-at-a-time and error-routing behavior, and
+adds `RunImmediately`, `RejectNextSchedule`, and `ThrowNextSchedule` for the admission failure paths.
+
+`OnSessionStopped` is intentionally invoked only for sessions that were actually added to the
+registry. A session that stops during admission is reported through the `false` return of
+`TryStartAndRegisterSession` instead, and the carrier owns any cleanup it needs there.
 
 A trivial `RawReliableConformanceControl` is passed only because the production constructor
 requires one. It is never armed, inspected, or asserted.

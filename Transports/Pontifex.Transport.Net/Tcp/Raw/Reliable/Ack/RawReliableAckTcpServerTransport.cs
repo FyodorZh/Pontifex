@@ -350,7 +350,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
             if (result.Status == AckAcceptStatus.Accepted)
             {
-                TryStartReservedSession(result.Endpoint!);
+                TryStartAndRegisterSession(result.Endpoint!);
                 return;
             }
 

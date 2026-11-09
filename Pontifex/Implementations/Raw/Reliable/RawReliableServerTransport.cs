@@ -25,7 +25,7 @@ namespace Pontifex.Raw.Reliable
     /// the session stops or when admission fails.</description></item>
     /// <item><description><b>Other notes</b>: A concrete carrier supplies <see cref="StartCarrier"/> and
     /// <see cref="StopCarrier"/> and creates non-started endpoints that are admitted with
-    /// <see cref="TryStartReservedSession"/>.</description></item>
+    /// <see cref="TryStartAndRegisterSession"/>.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawReliableServerTransport<TServerHandler>
@@ -219,11 +219,14 @@ namespace Pontifex.Raw.Reliable
         /// across <see cref="RawEndpoint.Start"/> or user handler code.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: The caller owns the reserved session slot.
         /// On failure this method releases that slot exactly once, either directly or through the endpoint's
-        /// terminal <see cref="RawEndpoint.Stopped"/> notification. <see cref="RawEndpoint.Start"/> is called
-        /// at most once on the endpoint.</description></item>
+        /// terminal <see cref="RawEndpoint.Stopped"/> notification. The release may be deferred to that
+        /// notification when the endpoint was already started, so a <see langword="false"/> return does not
+        /// always mean the slot is free yet. <see cref="RawEndpoint.Start"/> is called at most once on the
+        /// endpoint. <see cref="OnSessionStopped"/> is invoked only when the endpoint was successfully
+        /// registered.</description></item>
         /// </list>
         /// </remarks>
-        protected bool TryStartReservedSession(RawReliableServerEndpoint session)
+        protected bool TryStartAndRegisterSession(RawReliableServerEndpoint session)
         {
             if (session == null)
             {
@@ -246,9 +249,8 @@ namespace Pontifex.Raw.Reliable
                 return false;
             }
 
-            var entry = new SessionEntry(session);
-            entry.StoppedHandler = reason => OnSessionEnded(entry, reason);
-            session.Stopped += entry.StoppedHandler;
+            var entry = new SessionEntry(this, session);
+            session.Stopped += entry.OnStopped;
 
             bool started;
             try
@@ -293,6 +295,15 @@ namespace Pontifex.Raw.Reliable
         /// </summary>
         /// <param name="session">The stopped endpoint.</param>
         /// <param name="reason">The reason the endpoint stopped.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Invoked only for a session that was added to the transport's
+        /// registry. A session that stops while it is still being admitted is not reported here; in that case
+        /// <see cref="TryStartAndRegisterSession"/> returns <see langword="false"/> and the caller is
+        /// responsible for any carrier-side cleanup. The slot is released before this method is
+        /// invoked.</description></item>
+        /// </list>
+        /// </remarks>
         protected virtual void OnSessionStopped(RawReliableServerEndpoint session, StopReason reason)
         {
         }
@@ -378,6 +389,7 @@ namespace Pontifex.Raw.Reliable
 
         private void OnSessionEnded(SessionEntry entry, StopReason reason)
         {
+            bool registered;
             lock (_sessionsLock)
             {
                 if (entry.Ended)
@@ -386,16 +398,15 @@ namespace Pontifex.Raw.Reliable
                 }
 
                 entry.Ended = true;
-                if (entry.StoppedHandler != null)
-                {
-                    entry.Endpoint.Stopped -= entry.StoppedHandler;
-                }
-
-                _sessions.Remove(entry);
+                entry.Endpoint.Stopped -= entry.OnStopped;
+                registered = _sessions.Remove(entry);
             }
 
             ReleaseSession();
-            OnSessionStopped(entry.Endpoint, reason);
+            if (registered)
+            {
+                OnSessionStopped(entry.Endpoint, reason);
+            }
         }
 
         private void TickSessions()
@@ -476,13 +487,20 @@ namespace Pontifex.Raw.Reliable
 
         private sealed class SessionEntry
         {
+            private readonly RawReliableServerTransport<TServerHandler> _owner;
+
             public readonly RawReliableServerEndpoint Endpoint;
-            public Action<StopReason>? StoppedHandler;
             public bool Ended;
 
-            public SessionEntry(RawReliableServerEndpoint endpoint)
+            public SessionEntry(RawReliableServerTransport<TServerHandler> owner, RawReliableServerEndpoint endpoint)
             {
+                _owner = owner;
                 Endpoint = endpoint;
+            }
+
+            public void OnStopped(StopReason reason)
+            {
+                _owner.OnSessionEnded(this, reason);
             }
         }
 
