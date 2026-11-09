@@ -10,7 +10,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
     internal class DirectServer
     {
         private readonly IEndPoint _serverEp;
-        private readonly Func<UnionDataList, IServerDirectCtl?> _onConnecting;
+        private readonly Func<IEndPoint, UnionDataList, IServerDirectCtl?> _onConnecting;
 
         private readonly Dictionary<IEndPoint, DirectTransport> _connectedClients = new ();
         
@@ -20,7 +20,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
         private bool _stopped;
 
-        public DirectServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl?> onConnecting, IMemoryRental memoryRental)
+        public DirectServer(IEndPoint serverEp, Func<IEndPoint, UnionDataList, IServerDirectCtl?> onConnecting, IMemoryRental memoryRental)
         {
             _serverEp = serverEp;
             _onConnecting = onConnecting;
@@ -60,7 +60,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
                 UnionDataList ackData = _memoryRental.CollectablePool.Acquire<UnionDataList>();
                 clientCtl.GetAckData(ackData);
-                IServerDirectCtl? serverCtl = _onConnecting(ackData);
+                IServerDirectCtl? serverCtl = _onConnecting(clientAddress, ackData);
                 if (serverCtl != null)
                 {
                     transport = new DirectTransport(_serverEp, clientAddress, serverCtl, clientCtl, (clientEp) =>

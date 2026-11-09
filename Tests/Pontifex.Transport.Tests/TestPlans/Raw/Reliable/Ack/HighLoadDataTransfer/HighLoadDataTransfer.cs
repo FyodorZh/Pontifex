@@ -164,7 +164,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                 _memory = memory;
             }
 
-            public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
+            public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
             {
                 using var ackDataDisposer = ackData.AsDisposable();
                 if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) &&

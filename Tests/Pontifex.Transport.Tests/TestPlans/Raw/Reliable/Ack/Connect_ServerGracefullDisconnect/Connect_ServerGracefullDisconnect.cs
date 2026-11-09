@@ -65,7 +65,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
 
         private class ServerAcknowledger : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
         {
-            public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
+            public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
             {
                 using var ackDataDisposer = ackData.AsDisposable();
                 if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) &&

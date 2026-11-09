@@ -34,9 +34,9 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             }
         }
 
-        private IServerDirectCtl? OnConnecting(UnionDataList ackData)
+        private IServerDirectCtl? OnConnecting(IEndPoint remote, UnionDataList ackData)
         {
-            var handler = TryConnectNewClient(ackData);
+            var handler = TryConnectNewClient(remote, ackData);
             if (handler != null)
             {
                 return new Session(handler, Memory);

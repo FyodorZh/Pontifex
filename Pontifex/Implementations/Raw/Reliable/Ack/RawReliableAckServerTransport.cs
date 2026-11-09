@@ -112,7 +112,7 @@ namespace Pontifex.Raw.Reliable.Ack
 
             try
             {
-                return acknowledger.TryAck(ackData.Acquire());
+                return acknowledger.TryAck(remote, ackData.Acquire());
             }
             catch (Exception ex)
             {

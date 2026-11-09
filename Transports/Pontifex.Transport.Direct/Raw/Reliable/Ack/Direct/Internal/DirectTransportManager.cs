@@ -11,7 +11,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
         private readonly IConcurrentMap<IEndPoint, DirectServer> _servers = new SynchronizedConcurrentDictionary<IEndPoint, DirectServer>();
 
-        public DirectServer? StartServer(IEndPoint serverEp, Func<UnionDataList, IServerDirectCtl?> onConnecting, IMemoryRental memoryRental)
+        public DirectServer? StartServer(IEndPoint serverEp, Func<IEndPoint, UnionDataList, IServerDirectCtl?> onConnecting, IMemoryRental memoryRental)
         {
             DirectServer server = new DirectServer(serverEp, onConnecting, memoryRental);
 

@@ -15,7 +15,7 @@ namespace Pontifex.Api
             _instanceFactory = instanceFactory;
         }
         
-        public ServerSideApiInstance<TApi>? TryAck(UnionDataList ackData)
+        public ServerSideApiInstance<TApi>? TryAck(IEndPoint remote, UnionDataList ackData)
         {
             using var disposer = ackData.AsDisposable();
             if (ackData.TryPopFirst(out long apiHash) && apiHash == 777)

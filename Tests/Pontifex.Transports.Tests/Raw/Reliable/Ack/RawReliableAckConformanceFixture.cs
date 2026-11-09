@@ -145,7 +145,7 @@ public abstract class RawReliableAckConformanceFixture : IRawReliableAckConforma
             _logger = logger;
         }
 
-        public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
+        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
         {
             try
             {

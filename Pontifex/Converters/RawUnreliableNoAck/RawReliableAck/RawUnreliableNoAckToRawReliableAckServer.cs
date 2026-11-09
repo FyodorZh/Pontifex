@@ -133,7 +133,7 @@ namespace Pontifex.Converters
                 _remoteEndPoint = remoteEndPoint;
 
                 var ackData = owner.Memory.CollectablePool.Acquire<UnionDataList>();
-                _handler = acknowledger.TryAck(ackData) ?? throw new InvalidOperationException("Acknowledger rejected client");
+                _handler = acknowledger.TryAck(remoteEndPoint, ackData) ?? throw new InvalidOperationException("Acknowledger rejected client");
                 _handler = _handler.Test(text => owner.Log.e(text)).GetSafe(e => owner.Log.wtf(e));
 
                 _dm = new Delivery.DeliveryManager(
