@@ -2,7 +2,7 @@ using System.Net.Sockets;
 
 namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
 {
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class TestSocketAsyncEventArgsTests
     {
         [Test]

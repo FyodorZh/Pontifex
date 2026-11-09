@@ -80,6 +80,7 @@
   configurable exceptions.
 - `RecordingRawReliableClientHandler` and the transport share an event log so callback ordering
   can be asserted without sleeping.
-- The layer reuses `TestRawReliableClientEndpoint` from `Tests/Pontifex.Tests/Endpoints/Harness`
-  for endpoint-attachment tests. Both suites live in the same test assembly; the endpoint double
-  is covered by the `Endpoints` suite.
+- The layer reuses `TestRawReliableClientEndpoint` from
+  `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness` for endpoint-attachment tests.
+  Both suites live in the same test assembly; the endpoint double is covered by the `Endpoints`
+  suite.

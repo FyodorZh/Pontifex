@@ -12,6 +12,7 @@ are no nested layers and no inheritance tree to model.
 Root subject group (tightly coupled by composition):
 
 - `Pontifex.Delivery.DeliveryManager`
+- `Pontifex.Delivery.DeliveryReporter`
 - `Pontifex.Delivery.DeliveryDispatcher`
 - `Pontifex.Delivery.DeliveryInfoSerializer`
 - `Pontifex.Delivery.Deduplicator`
@@ -58,10 +59,11 @@ coverage file.
 
 | Layer | Subject | Directory | Coverage |
 |---|---|---|---|
-| `DeliveryManager` | `Pontifex.Delivery` delivery subsystem (ten concrete types centered on `DeliveryManager`) | `Tests/Pontifex.Tests/DeliveryManager` | [`Coverage.md`](Coverage.md) |
+| `DeliveryManager` | `Pontifex.Delivery` delivery subsystem (eleven concrete types centered on `DeliveryManager`) | `Tests/Pontifex.Tests/DeliveryManager` | [`Coverage.md`](Coverage.md) |
 
-A Test Suit has exactly one layer, placed at the suite root. Groups, if added later, are not
-layers and do not get their own `Coverage.md`.
+A Test Suit has exactly one layer, placed at the suite root. Test files live under `Tests/`.
+Groups, if added later, are `Tests/` subfolders, are not layers, and do not get their own
+`Coverage.md` or `Harness/`.
 
 ## Naming conventions
 
@@ -83,20 +85,22 @@ DeliveryManager/
 ├── Harness/
 │   ├── TrackedFixture.cs
 │   └── TrackedResources.cs
-├── DeduplicatorTests.cs
-├── DeliveryDispatcherTests.cs
-├── DeliveryInfoSerializerTests.cs
-├── DeliveryManagerTests.cs
-├── DeliveryReporterTests.cs
-├── DeliverySorterTests.cs
-├── DeliverySortingManagerTests.cs
-├── MessageMergerTests.cs
-├── MessagePackerTests.cs
-├── MessageSplitterTests.cs
-└── RetryDeliverySchedulerTests.cs
+└── Tests/
+    ├── DeduplicatorTests.cs
+    ├── DeliveryDispatcherTests.cs
+    ├── DeliveryInfoSerializerTests.cs
+    ├── DeliveryManagerTests.cs
+    ├── DeliveryReporterTests.cs
+    ├── DeliverySorterTests.cs
+    ├── DeliverySortingManagerTests.cs
+    ├── MessageMergerTests.cs
+    ├── MessagePackerTests.cs
+    ├── MessageSplitterTests.cs
+    └── RetryDeliverySchedulerTests.cs
 ```
 
-There are currently no groups.
+There are currently no groups under `Tests/`. Any future groups are subfolders of `Tests/` and
+are not layers.
 
 ## Harness layout and sharing
 
@@ -152,12 +156,12 @@ nested layers, or if the subject becomes an inheritance tree, split it into mult
 or convert it to an Abstract Test Suit as required by [Tests/RULES.md](../../RULES.md).
 
 To add coverage for another concrete component of the same subsystem, add a
-`<Subject>Tests.cs` file at the suite root, give it one `public sealed class <Subject>Tests`,
-and place it in the root layer's `Coverage.md`.
+`<Subject>Tests.cs` file under `Tests/` (or a group subfolder of `Tests/`), give it one
+`public sealed class <Subject>Tests`, and place it in the root layer's `Coverage.md`.
 
 ## Adding tests
 
-1. Put the test in the file of the component whose contract it proves.
+1. Put the test in the file of the component whose contract it proves under `Tests/`.
 2. Exercise the public or internal contract only; do not inspect private state or use reflection.
 3. Pass explicit `DateTime` values into scheduling entry points; never sleep or depend on the
    wall clock for a pass/fail decision.

@@ -6,7 +6,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
     /// Calibrated allocation-measurement fixture: positive-delta and empty-loop calibration controls
     /// plus thread-migration rejection.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class AllocationMeasurerTests
     {
 

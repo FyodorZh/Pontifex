@@ -7,7 +7,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
     /// Strict SPSC double: overlapping readers/writers are recorded instead of silently
     /// serialized, while one reader plus one writer stays legal.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class ControllableQueueTests
     {
         [Test]

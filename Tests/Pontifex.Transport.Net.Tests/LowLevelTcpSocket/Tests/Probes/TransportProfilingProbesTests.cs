@@ -13,7 +13,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
     /// overhead reported explicitly where relevant).
     /// </summary>
     [LowLevelTcpSocketSuite]
-    public class TransportProfilingProbes
+    public class TransportProfilingProbesTests
     {
         [Test]
         [Category(TestCategories.Load)]
