@@ -217,8 +217,9 @@
 
 ## Notes
 
-- The suite uses `MemoryRental.Shared` for its byte-array and collectable pools. Every test
-  acquires fresh buffers; pool state is process-wide and is not reset between tests.
+- Every pool-using test creates its own `MemoryRental`, so no byte-array or collectable-pool
+  state is shared between tests. `TrackedFixture` additionally proves that each test returns
+  every resource it rents.
 - Scheduling is always driven with explicit `DateTime` values. No test sleeps or waits on a
   timer, and no test depends on the wall clock for a pass/fail decision.
 - `DeliveryDispatcher` uses a binary priority queue that is not stable for equal keys.

@@ -25,7 +25,7 @@ namespace Pontifex.Tests.Delivery.Harness
         [SetUp]
         public void SetUpTrackedResources()
         {
-            Resources = new TrackedResources(MemoryRental.Shared);
+            Resources = new TrackedResources(new MemoryRental());
             SetUp();
         }
 

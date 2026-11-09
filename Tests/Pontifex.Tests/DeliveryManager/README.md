@@ -102,13 +102,13 @@ There are currently no groups.
 Harness is test-only: stubs, recording doubles, test buffers, and manual drivers. It contains no
 production code and no mocking library is used; doubles are hand-written.
 
-- `Harness/TrackedResources.cs` wraps the shared byte-array and collectable pools and attaches a
+- `Harness/TrackedResources.cs` wraps the per-test byte-array and collectable pools and attaches a
   `MultiRefResourceMonitor` to every rented resource. `TrackedFixture` creates it per test and
   asserts at teardown that every resource was released exactly once.
-- `Harness/TrackedFixture.cs` is the base class for fixtures that use the pools. It exposes
-  `Pool` and `CPool`, lets a test register cleanup actions (`AddCleanup`) and captured messages
-  (`TrackCaptured`), and fails the test if a rented resource is still alive or was released
-  twice.
+- `Harness/TrackedFixture.cs` is the base class for fixtures that use the pools. It creates a
+  fresh `MemoryRental` per test, exposes `Pool` and `CPool`, lets a test register cleanup actions
+  (`AddCleanup`) and captured messages (`TrackCaptured`), and fails the test if a rented resource
+  is still alive or was released twice.
 - Double classes that are used by one fixture stay nested in that fixture (for example
   `RetryDeliverySchedulerTests.StubDeliveryTask`); they use no pools and do not derive from
   `TrackedFixture`.
