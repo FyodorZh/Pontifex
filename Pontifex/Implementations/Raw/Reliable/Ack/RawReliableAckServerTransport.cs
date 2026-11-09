@@ -78,9 +78,15 @@ namespace Pontifex.Raw.Reliable.Ack
                     return false;
                 }
 
-                _initAttempted = true;
                 _acknowledger = acknowledger;
-                return TryMarkInitialized();
+                if (!TryMarkInitialized())
+                {
+                    _acknowledger = null;
+                    return false;
+                }
+
+                _initAttempted = true;
+                return true;
             }
         }
 
@@ -89,15 +95,17 @@ namespace Pontifex.Raw.Reliable.Ack
         /// session handler.
         /// </summary>
         /// <param name="remote">The remote endpoint of the connecting client.</param>
-        /// <param name="ackData">The borrowed acknowledgement request. This method takes a clone and passes
-        /// the clone to the acknowledger; the endpoint retains and releases the original.</param>
-        /// <returns>The session handler created by the acknowledger, or <see langword="null"/> when the client
-        /// is rejected or no acknowledger is configured.</returns>
+        /// <param name="ackData">The borrowed acknowledgement request. This method adds a reference to the
+        /// same list and passes it to the acknowledger; the caller retains its own reference, and mutations
+        /// are visible to the caller.</param>
+        /// <returns>The session handler created by the acknowledger, or <see langword="null"/> when the
+        /// client is rejected, no acknowledger is configured, or the transport is not valid and
+        /// started.</returns>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Called from the carrier's handshake callback, serialized
         /// with other acknowledgements.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: The acknowledged clone is owned by the
+        /// <item><description><b>Preconditions/Postconditions</b>: The added reference is owned by the
         /// acknowledger and must be released by it exactly once, including on an exceptional path. An
         /// exception is logged and treated as a rejection.</description></item>
         /// </list>
@@ -105,14 +113,14 @@ namespace Pontifex.Raw.Reliable.Ack
         protected IRawReliableAckServerHandler? TryAcknowledge(IEndPoint remote, UnionDataList ackData)
         {
             var acknowledger = _acknowledger;
-            if (acknowledger == null)
+            if (acknowledger == null || !IsValid || !IsStarted)
             {
                 return null;
             }
 
             try
             {
-                return acknowledger.TryAck(ackData.Acquire());
+                return acknowledger.TryAck(remote, ackData.Acquire());
             }
             catch (Exception ex)
             {

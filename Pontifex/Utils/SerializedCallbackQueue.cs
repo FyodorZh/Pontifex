@@ -10,7 +10,13 @@ namespace Pontifex.Utils
     /// Callbacks run strictly one at a time, in FIFO order. Post is safe to call
     /// concurrently from any thread.
     /// </summary>
-    public sealed class SerializedCallbackQueue<T> : IDisposable
+    public interface ISerializedCallbackQueue<in T> : IDisposable
+    {
+        bool Post(T state);
+    }
+
+    /// <inheritdoc />
+    public sealed class SerializedCallbackQueue<T> : ISerializedCallbackQueue<T>
     {
         private readonly ConcurrentQueueValve<T> _queue;
         

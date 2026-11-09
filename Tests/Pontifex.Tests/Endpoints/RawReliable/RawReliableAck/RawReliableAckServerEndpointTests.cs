@@ -100,7 +100,7 @@ public sealed class RawReliableAckServerEndpointTests
     }
 
     [Test]
-    public void FillAckResponse_Throws_StopsWithTextFail()
+    public void FillAckResponse_Throws_StopsWithExceptionFail()
     {
         using var handler = new RecordingRawReliableAckServerHandler(Memory, throwOnFillAckResponse: true);
         using var ep = Create(handler);
@@ -110,11 +110,11 @@ public sealed class RawReliableAckServerEndpointTests
         ep.DrainAll();
 
         Assert.That(handler.ConnectedCount, Is.Zero);
-        Assert.That(ep.LastDisconnectReason, Is.TypeOf<TextFail>());
+        Assert.That(ep.LastDisconnectReason, Is.TypeOf<ExceptionFail>());
 
         ep.CompleteDisconnect();
 
-        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
+        Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
     }
 
     [Test]

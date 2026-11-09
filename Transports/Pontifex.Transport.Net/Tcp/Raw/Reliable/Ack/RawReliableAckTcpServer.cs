@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
+using Pontifex.NetSockets;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
@@ -321,7 +322,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 using var ackRequestDisposer = ackRequest.AsDisposable();
                 if (TcpInfo.AckRequest.EqualByContent(ackRequest))
                 {
-                    var handler = TryConnectNewClient(ackData.Acquire());
+                    var handler = TryConnectNewClient(new IpEndPoint(ep), ackData.Acquire());
                     Log.i("ep[Ip={0}]: Acknowledging '{1}' by user logic", remoteName, handler != null ? "Succeeded" : "Failed");
                     return handler;
                 }

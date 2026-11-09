@@ -1,5 +1,4 @@
 using Actuarius.Memory;
-using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack
@@ -11,15 +10,6 @@ namespace Pontifex.Raw.Reliable.Ack
         protected RawReliableAckClientTransport(string typeName, ILogger logger, IMemoryRental memory) 
             : base(typeName, logger, memory, new RawReliableConformanceControl())
         {
-        }
-        
-        protected void ConnectionFinished(RawReliableAckClientEndpoint endPoint, UnionDataList ackResponse)
-        {
-            using var ackResponseDisposer = ackResponse.AsDisposable();
-            ConnectionFinished((handler) =>
-            {
-                handler.OnConnected(endPoint, ackResponse.Acquire());
-            });
         }
     }
 }

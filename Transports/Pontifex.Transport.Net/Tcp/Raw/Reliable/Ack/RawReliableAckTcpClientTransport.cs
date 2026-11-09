@@ -220,7 +220,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
 
                 if (!endpoint.Start())
                 {
-                    CleanupFailedStart(new TextFail(Name, "Failed to start the client endpoint"));
+                    Log.e("Failed to start the client endpoint");
                     return false;
                 }
 
@@ -229,7 +229,6 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                CleanupFailedStart(new ExceptionFail(Name, ex, "Failed to create the client endpoint"));
                 return false;
             }
         }
@@ -245,10 +244,11 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         /// <summary>
         /// Stops the endpoint. A direct transport stop is always a hard stop; a gentle logical disconnect
         /// is requested through <see cref="IRawReliableEndpoint.Disconnect"/> on the connected endpoint.
+        /// The base class detaches the endpoint after this method returns.
         /// </summary>
         protected override void DestroyTransport(StopReason reason)
         {
-            var endpoint = DetachEndpoint();
+            var endpoint = AttachedEndpoint;
             if (endpoint == null)
             {
                 return;
@@ -287,22 +287,5 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 _disconnectTimeout, TimeSpan.FromTicks(ticks));
         }
 
-        private void CleanupFailedStart(StopReason reason)
-        {
-            var endpoint = DetachEndpoint();
-            if (endpoint == null)
-            {
-                return;
-            }
-
-            try
-            {
-                endpoint.Stop(reason, false);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-            }
-        }
     }
 }

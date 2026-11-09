@@ -1,4 +1,5 @@
-﻿using Actuarius.Memory;
+﻿using System;
+using Actuarius.Memory;
 using Pontifex.Utils;
 using Scriba;
 
@@ -131,9 +132,24 @@ namespace Pontifex.Raw.Reliable.Ack
                 {
                     if (_state == State.Connected)
                     {
-                        _handler.OnDisconnected(reason);
+                        try
+                        {
+                            _handler.OnDisconnected(reason);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                        }
                     }
-                    _handler.OnStopped(reason: reason);
+
+                    try
+                    {
+                        _handler.OnStopped(reason: reason);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                    }
                 }
 
                 _state = State.Disconnected;
@@ -143,7 +159,17 @@ namespace Pontifex.Raw.Reliable.Ack
             {
                 _state = State.Disconnected;
                 DestroyTransport(reason);
-                _handler?.OnStopped(reason);
+                if (_handler != null)
+                {
+                    try
+                    {
+                        _handler.OnStopped(reason);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                    }
+                }
             }
         }
 
@@ -170,7 +196,15 @@ namespace Pontifex.Raw.Reliable.Ack
                 if (_state == State.Connecting)
                 {
                     _state = State.Connected;
-                    _handler!.OnConnected(endPoint, ackResponse.Acquire());
+                    try
+                    {
+                        _handler!.OnConnected(endPoint, ackResponse.Acquire());
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                        Stop(new StopReasons.ExceptionFail(Name, ex, "OnConnected failed"));
+                    }
                 }
                 else
                 {

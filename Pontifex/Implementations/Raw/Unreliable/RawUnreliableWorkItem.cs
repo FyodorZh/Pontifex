@@ -1,9 +1,8 @@
-using Actuarius.Memory;
 using Pontifex.Utils;
 
 namespace Pontifex.Raw.Unreliable
 {
-    internal enum RawUnreliableWorkKind
+    public enum RawUnreliableWorkKind
     {
         StartClientEndpoint,
         DeliverClient,
@@ -19,7 +18,7 @@ namespace Pontifex.Raw.Unreliable
     /// arguments. Posting a work item never allocates: the payload is a struct
     /// holding references and the <see cref="UnionDataList"/> message by value.
     /// </summary>
-    internal readonly struct RawUnreliableWorkItem
+    public readonly struct RawUnreliableWorkItem
     {
         public readonly RawUnreliableWorkKind Kind;
         public readonly RawUnreliableEndpoint? Endpoint;

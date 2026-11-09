@@ -204,7 +204,17 @@ namespace Pontifex.Raw
             {
                 if (_currentStage == State.Started)
                 {
-                    _handler.OnReceived(msg);
+                    try
+                    {
+                        _handler.OnReceived(msg);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                        var reason = new ExceptionFail(TransportName, ex, "Handler OnReceived failed");
+                        _stopReason = reason;
+                        FailHard(reason);
+                    }
                 }
                 else
                 {
@@ -255,7 +265,14 @@ namespace Pontifex.Raw
             {
                 if (_currentStage == State.Started)
                 {
-                    _handler.OnStopped(reason);
+                    try
+                    {
+                        _handler.OnStopped(reason);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                    }
                 }
             }
             finally
@@ -600,6 +617,10 @@ namespace Pontifex.Raw
                 try
                 {
                     _handler.OnStopped(_stopReason!);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
                 }
                 finally
                 {

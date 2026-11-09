@@ -30,13 +30,13 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             _wrappedAcknowledger = wrappedAcknowledger;
         }
 
-        public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
+        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
         {
             var wrapper = ConstructWrapper();
             bool isOK = wrapper.CheckAckData(ackData);
             if (isOK)
             {
-                IRawReliableAckServerHandler? coreHandler = _wrappedAcknowledger.TryAck(ackData);
+                IRawReliableAckServerHandler? coreHandler = _wrappedAcknowledger.TryAck(remote, ackData);
                 if (coreHandler != null)
                 {
                     wrapper.Init(coreHandler.Test(_onFail).GetSafe(e => _onFail(e.ToString())));

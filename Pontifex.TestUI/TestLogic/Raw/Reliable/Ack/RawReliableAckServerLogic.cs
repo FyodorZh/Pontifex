@@ -39,7 +39,7 @@ namespace TransportAnalyzer.TestLogic
             evt?.Invoke(handler);
         }
 
-        public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
+        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) && RawReliableAckCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)

@@ -60,7 +60,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
 
         int IRawTransport.MessageMaxByteSize => _core.MessageMaxByteSize;
 
-        public IRawReliableAckServerHandler? TryAck(UnionDataList ackData)
+        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
         {
             if (_userAcknowledger == null)
             {
@@ -68,7 +68,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
                 return null;
             }
             Log.i("UserAcknowledger.TryAck(" + ackData + ")");
-            _userHandler = _userAcknowledger.TryAck(ackData);
+            _userHandler = _userAcknowledger.TryAck(remote, ackData);
             if (_userHandler != null)
             {
                 return this;

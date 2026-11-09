@@ -55,7 +55,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public override int MessageMaxByteSize => _coreTransport.MessageMaxByteSize;
 
-        IRawReliableAckServerHandler? IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>.TryAck(UnionDataList ackData)
+        IRawReliableAckServerHandler? IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>.TryAck(IEndPoint remote, UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ackRequest))
@@ -99,7 +99,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
                 return null;
             }
 
-            IRawReliableAckServerHandler? userHandler = TryConnectNewClient(ackData.Acquire());
+            IRawReliableAckServerHandler? userHandler = TryConnectNewClient(remote, ackData.Acquire());
             if (userHandler != null)
             {
                 ReconnectableServerLogic logic = new ReconnectableServerLogic(userHandler, _disconnectTimeout, Log, Memory);

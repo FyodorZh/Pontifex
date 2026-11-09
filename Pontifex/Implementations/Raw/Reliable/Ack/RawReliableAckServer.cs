@@ -66,7 +66,7 @@ namespace Pontifex.Raw.Reliable.Ack
 
         public abstract int MessageMaxByteSize { get; }
 
-        protected IRawReliableAckServerHandler? TryConnectNewClient(UnionDataList ackData)
+        protected IRawReliableAckServerHandler? TryConnectNewClient(IEndPoint remote, UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (!IsValid)
@@ -84,7 +84,7 @@ namespace Pontifex.Raw.Reliable.Ack
             var acknowledger = _acknowledger;
             if (acknowledger != null)
             {
-                var handler = acknowledger.TryAck(ackData.Acquire());
+                var handler = acknowledger.TryAck(remote, ackData.Acquire());
                 handler = handler?.Test(text => Log.e(text)).GetSafe(e => Log.e(e.ToString()));
                 return handler;
             }
