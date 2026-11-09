@@ -3,27 +3,20 @@ using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 using Pontifex.Utils;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class DeliverySortingManagerTests
+    public sealed class DeliverySortingManagerTests : TrackedFixture
     {
+        private static readonly DateTime T0 = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private const int MaxMsgSize = 100;
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-        private static ICollectablePool CPool => Memory.CollectablePool;
         private static IDeliveryAttemptScheduler Scheduler => new RetryDeliveryScheduler(TimeSpan.FromSeconds(10));
 
-        private static IMultiRefByteArray Data(params byte[] bytes)
-        {
-            var buf = Pool.Acquire(bytes.Length);
-            Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
-            return buf;
-        }
-
-        private static UnionDataList DataList(params byte[] bytes)
+        private UnionDataList DataList(params byte[] bytes)
         {
             var data = CPool.Acquire<UnionDataList>();
             if (bytes.Length > 0)
@@ -37,20 +30,34 @@ namespace Pontifex.Delivery.Tests
             return data;
         }
 
-        private static List<UnionDataList> CaptureAll(DeliveryManager dm, DateTime? now = null)
+        private DeliveryManager NewManager()
+        {
+            var manager = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            AddCleanup(manager.Clear);
+            return manager;
+        }
+
+        private DeliverySortingManager NewSortingManager(DeliveryManager inner)
+        {
+            var sorting = new DeliverySortingManager(inner);
+            AddCleanup(sorting.Clear);
+            return sorting;
+        }
+
+        private List<UnionDataList> CaptureAll(DeliveryManager dm, DateTime? now = null)
         {
             var sent = new List<UnionDataList>();
-            dm.ProcessOutgoing(Scheduler, now ?? DateTime.UtcNow,
-                new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); return true; }));
+            dm.ProcessOutgoing(Scheduler, now ?? T0,
+                new ConsumerDelegate<UnionDataList>(x => { sent.Add(x); TrackCaptured(x); return true; }));
             return sent;
         }
 
         [Test]
         public void AheadIdsBuffered_ReceivedInOrder()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
             sender.ScheduleDelivery(DataList(1), out _);
             sender.ScheduleDelivery(DataList(3), out _);
@@ -65,13 +72,13 @@ namespace Pontifex.Delivery.Tests
                 var bytes = new byte[element.Count];
                 element.CopyTo(bytes, 0, 0, element.Count);
                 received.Add((id, bytes));
+                d.Release();
             };
 
             foreach (var msg in outbound)
             {
                 msg.AddRef();
                 inner.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(received.Count, Is.EqualTo(3));
@@ -81,11 +88,11 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void SingleMessage_PassesThrough()
+        public void SingleMessage_PassesThroughInOrder()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
             sender.ScheduleDelivery(DataList(42), out _);
             var outbound = CaptureAll(sender);
@@ -96,12 +103,12 @@ namespace Pontifex.Delivery.Tests
                 var element = d.Elements[0].Bytes!;
                 received = new byte[element.Count];
                 element.CopyTo(received, 0, 0, element.Count);
+                d.Release();
             };
 
             var msg = outbound[0];
             msg.AddRef();
             inner.ProcessIncoming(msg);
-            msg.Release();
 
             Assert.That(received, Is.Not.Null);
             Assert.That(received![0], Is.EqualTo(42));
@@ -110,9 +117,9 @@ namespace Pontifex.Delivery.Tests
         [Test]
         public void Clear_StopsFurtherProcessing()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
             sender.ScheduleDelivery(DataList(1), out _);
             var outbound = CaptureAll(sender);
@@ -120,13 +127,12 @@ namespace Pontifex.Delivery.Tests
             sorted.Clear();
 
             int receivedCount = 0;
-            sorted.Received += (_, _) => receivedCount++;
+            sorted.Received += (_, d) => { receivedCount++; d.Release(); };
 
             foreach (var msg in outbound)
             {
                 msg.AddRef();
                 inner.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(receivedCount, Is.EqualTo(0));
@@ -135,32 +141,31 @@ namespace Pontifex.Delivery.Tests
         [Test]
         public void DuplicateMessage_NotSentToSorter()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
             sender.ScheduleDelivery(DataList(1), out _);
             var outbound = CaptureAll(sender);
             var msg = outbound[0];
 
             int received = 0;
-            sorted.Received += (_, _) => received++;
+            sorted.Received += (_, d) => { received++; d.Release(); };
 
             msg.AddRef();
             inner.ProcessIncoming(msg);
             msg.AddRef();
             inner.ProcessIncoming(msg);
-            msg.Release();
 
             Assert.That(received, Is.EqualTo(1));
         }
 
         [Test]
-        public void BusyOrder_MultipleBatches()
+        public void BusyOrder_MultipleBatches_ReceivedInOrder()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
             for (ushort i = 1; i <= 10; i++)
                 sender.ScheduleDelivery(DataList((byte)i), out _);
@@ -168,13 +173,12 @@ namespace Pontifex.Delivery.Tests
             Assert.That(outbound, Has.Count.EqualTo(10));
 
             var received = new List<DeliveryId>();
-            sorted.Received += (id, _) => received.Add(id);
+            sorted.Received += (id, d) => { received.Add(id); d.Release(); };
 
             foreach (var msg in outbound)
             {
                 msg.AddRef();
                 inner.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(received.Count, Is.EqualTo(10));
@@ -187,11 +191,11 @@ namespace Pontifex.Delivery.Tests
         {
             // Transport reordering causes non-sequential DeliveryId delivery:
             // packet 2 arrives before packet 1 → sorter advances past DeliveryId(1)
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
-            var t0 = DateTime.UtcNow;
+            var t0 = T0;
 
             sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1
             var msg1batch = CaptureAll(sender, t0);
@@ -208,13 +212,11 @@ namespace Pontifex.Delivery.Tests
             var msg2 = msg2batch[0];
             msg2.AddRef();
             inner.ProcessIncoming(msg2);
-            msg2.Release();
 
-            // now deliver packet 1 — sorter._id advanced to 3, Push(1) fails
+            // now deliver packet 1 — the sorter has advanced past DeliveryId(2), so Push(1) is rejected
             var msg1 = msg1batch[0];
             msg1.AddRef();
             inner.ProcessIncoming(msg1);
-            msg1.Release();
 
             Assert.That(failed, Is.True);
         }
@@ -222,13 +224,13 @@ namespace Pontifex.Delivery.Tests
         [Test]
         public void AfterGap_SorterStillDeliversLaterMessages()
         {
-            // Push failure (id < _id) fires FailedToSort but does NOT kill the sorter.
+            // A rejected push fires FailedToSort but does NOT kill the sorter.
             // Future messages with higher IDs are still accepted and delivered.
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
-            var t0 = DateTime.UtcNow;
+            var t0 = T0;
 
             sender.ScheduleDelivery(DataList(1), out _); // DeliveryId=1
             var msg1batch = CaptureAll(sender, t0);
@@ -242,26 +244,23 @@ namespace Pontifex.Delivery.Tests
             var msg2 = msg2batch[0];
             msg2.AddRef();
             inner.ProcessIncoming(msg2);
-            msg2.Release();
 
-            // deliver packet 1 — Push(1) fails because 1 < _id(3), fires FailedToSort
+            // deliver packet 1 — Push(1) is rejected because the sorter has advanced past DeliveryId(2)
             var msg1 = msg1batch[0];
             msg1.AddRef();
             inner.ProcessIncoming(msg1);
-            msg1.Release();
 
             // sorter is NOT dead — send a new message with higher DeliveryId
             sender.ScheduleDelivery(DataList(3), out _); // DeliveryId=3
             var third = CaptureAll(sender);
 
             int receivedAfterGap = 0;
-            sorted.Received += (_, _) => receivedAfterGap++;
+            sorted.Received += (_, d) => { receivedAfterGap++; d.Release(); };
 
             foreach (var msg in third)
             {
                 msg.AddRef();
                 inner.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(receivedAfterGap, Is.EqualTo(1));
@@ -270,9 +269,9 @@ namespace Pontifex.Delivery.Tests
         [Test]
         public void AfterClear_FailedToSortFiresOnNextMessage()
         {
-            var inner = new DeliveryManager(MaxMsgSize, Pool, CPool);
-            var sorted = new DeliverySortingManager(inner);
-            var sender = new DeliveryManager(MaxMsgSize, Pool, CPool);
+            var inner = NewManager();
+            var sorted = NewSortingManager(inner);
+            var sender = NewManager();
 
             // send two messages so the dedup window has entries
             sender.ScheduleDelivery(DataList(1), out _); // PacketId=1
@@ -283,7 +282,6 @@ namespace Pontifex.Delivery.Tests
             {
                 msg.AddRef();
                 inner.ProcessIncoming(msg);
-                msg.Release();
             }
 
             sorted.Clear();
@@ -298,7 +296,6 @@ namespace Pontifex.Delivery.Tests
             {
                 msg.AddRef();
                 inner.ProcessIncoming(msg);
-                msg.Release();
             }
 
             Assert.That(failed, Is.True);

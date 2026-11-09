@@ -1,17 +1,18 @@
 using Actuarius.Memory;
+using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class MessageSplitterTests
+    public sealed class MessageSplitterTests : TrackedFixture
     {
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-
-        private static IMultiRefByteArray Data(params byte[] bytes)
+        private IMultiRefByteArray Data(params byte[] bytes)
         {
             var buf = Pool.Acquire(bytes.Length);
             Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
+            AddCleanup(buf.Release);
             return buf;
         }
 
@@ -37,7 +38,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void GetNextChunk_IteratesAllChunks()
+        public void GetNextChunk_IteratesAllChunks_InOrder()
         {
             var splitter = new MessageSplitter(Pool, 3);
             var data = Data(1, 2, 3, 4, 5, 6, 7);

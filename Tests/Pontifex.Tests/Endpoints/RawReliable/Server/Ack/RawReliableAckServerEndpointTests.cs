@@ -118,7 +118,7 @@ public sealed class RawReliableAckServerEndpointTests
     }
 
     [Test]
-    public void AckResponse_WhenCannotBeAdmitted_StopsWithTextFail()
+    public void AckRequest_WhenAckResponseCannotBeAdmitted_StopsWithTextFail()
     {
         using var handler = new RecordingRawReliableAckServerHandler(Memory);
         using var ep = Create(handler, capacity: 1);

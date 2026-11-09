@@ -47,8 +47,6 @@ internal sealed class TestRawEndpoint : RawEndpoint, IDisposable
 
     #region Queue control
 
-    public void DrainOne() => _queue!.DrainOne();
-
     public void DrainAll() => _queue!.DrainAll();
 
     #endregion
@@ -102,15 +100,7 @@ internal sealed class TestRawEndpoint : RawEndpoint, IDisposable
 
     #region Exposed protected surface
 
-    public string ExposedTransportName => TransportName;
-
-    public ILogger ExposedLog => Log;
-
-    public IMemoryRental ExposedMemory => Memory;
-
     public bool ExposedCanSendNow(out SendResult result) => CanSendNow(out result);
-
-    public SendResult ExposedScheduleToSend(UnionDataList bufferToSend) => ScheduleToSend(bufferToSend);
 
     public void ExposedProcessInbound(UnionDataList message) => ProcessInboundMessage(message);
 

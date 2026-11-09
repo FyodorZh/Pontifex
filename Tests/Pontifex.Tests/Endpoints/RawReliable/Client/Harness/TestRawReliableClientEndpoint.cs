@@ -3,20 +3,18 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.Raw.Reliable;
-using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Tests.Endpoints;
 
 /// <summary>
-/// Test double for <see cref="RawReliableAckServerEndpoint"/>. It exposes the protected surface, records the
-/// transport hooks, and drives completion explicitly: <see cref="BeginConnect"/> only records the call and
-/// <see cref="BeginDisconnect"/> calls the acknowledgement base implementation (raising the logical
-/// disconnect notification) and then records the call. It also overrides the <see cref="Now"/> seam so the
-/// idle-session watchdog can be advanced deterministically.
+/// Test double for <see cref="RawReliableClientEndpoint"/>. It exposes the protected surface, records the
+/// transport hooks, and drives completion explicitly: <see cref="BeginConnect"/> and
+/// <see cref="BeginDisconnect"/> only record the call; tests complete them through
+/// <see cref="CompleteConnect"/> / <see cref="CompleteDisconnect"/>.
 /// </summary>
-internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEndpoint, IDisposable
+internal sealed class TestRawReliableClientEndpoint : RawReliableClientEndpoint, IDisposable
 {
     // No initializer: the queue is created during the base constructor, before field initializers run.
     private ManualSerialActionQueue? _queue;
@@ -24,14 +22,15 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
 
     private DateTime _now = new(2000, 1, 1);
 
-    public TestRawReliableAckServerEndpoint(
-        IRawReliableAckServerHandler handler,
+    public TestRawReliableClientEndpoint(
+        IRawReliableClientHandler handler,
         IEndPoint? remoteEndPoint = null,
-        string transportName = "TestAckServerTransport",
+        string transportName = "TestClientTransport",
         int messageMaxByteSize = 1024,
         long bufferCapacityBytes = 1024 * 1024,
         IMemoryRental? memory = null,
         ILogger? log = null,
+        TimeSpan? pingPeriod = null,
         TimeSpan? disconnectTimeout = null)
         : base(
             transportName,
@@ -41,7 +40,9 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
             bufferCapacityBytes,
             memory ?? MemoryRental.Shared,
             log ?? new Logger([]),
-            disconnectTimeout ?? TimeSpan.FromSeconds(30))
+            pingPeriod != null || disconnectTimeout != null
+                ? new PingOptions(disconnectTimeout ?? TimeSpan.Zero, pingPeriod ?? TimeSpan.Zero)
+                : (PingOptions?)null)
     {
     }
 
@@ -52,9 +53,12 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
 
     protected override DateTime Now => _now;
 
-    #region Clock control
+    protected override void StartKeepAlive()
+    {
+        // The background loop is suppressed so tests can drive KeepAliveTick deterministically.
+    }
 
-    public void SetNow(DateTime value) => _now = value;
+    #region Clock control
 
     public void AdvanceNow(TimeSpan delta) => _now += delta;
 
@@ -74,19 +78,17 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
 
     #region Queue and lifecycle control
 
-    public void DrainOne() => _queue!.DrainOne();
-
     public void DrainAll() => _queue!.DrainAll();
 
-    public void CompleteConnect(Action? ifFailed = null)
+    private void CompleteConnect(Action? ifFailed = null)
     {
-        ExposedFinishConnect(ifFailed ?? NoOp);
+        FinishConnect(ifFailed ?? NoOp);
         DrainAll();
     }
 
     public void CompleteDisconnect()
     {
-        ExposedFinishDisconnect();
+        FinishDisconnect();
         DrainAll();
     }
 
@@ -97,19 +99,30 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
         CompleteConnect();
     }
 
+    /// <summary>
+    /// Stops the endpoint and completes the disconnect when the endpoint was connected. The
+    /// terminal stopped event is raised by <see cref="CompleteDisconnect"/>.
+    /// </summary>
+    public void StopAndComplete(StopReason reason, bool tryBeGentle)
+    {
+        int disconnectsBefore = BeginDisconnectCalls;
+
+        Stop(reason, tryBeGentle);
+        DrainAll();
+
+        if (BeginDisconnectCalls > disconnectsBefore)
+        {
+            CompleteDisconnect();
+        }
+    }
+
     #endregion
 
     #region Recorded hooks
 
-    public int BeginConnectCalls { get; private set; }
-
     public int BeginDisconnectCalls { get; private set; }
 
     public StopReason? LastDisconnectReason { get; private set; }
-
-    public bool? LastTryBeGentle { get; private set; }
-
-    public int OnConnectedCalls { get; private set; }
 
     /// <summary>
     /// Gets clones of the buffers passed to <see cref="DoSendRaw"/>, in admission order.
@@ -120,42 +133,24 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
 
     #region Exposed protected surface
 
-    public string ExposedTransportName => TransportName;
-
-    public ILogger ExposedLog => Log;
-
-    public IMemoryRental ExposedMemory => Memory;
-
-    public bool ExposedCanSendNow(out SendResult result) => CanSendNow(out result);
-
-    public void ExposedFinishConnect(Action ifFailed) => FinishConnect(ifFailed);
-
-    public void ExposedFinishDisconnect() => FinishDisconnect();
-
     public void ExposedProcessInbound(UnionDataList framedMessage) => ProcessInboundMessage(framedMessage);
 
-    public bool ExposedDispatch(byte rawType, UnionDataList message) => ProcessInboundMessage((MessageType)rawType, message);
-
-    public void ExposedFailHard(StopReason reason) => FailHard(reason);
+    public bool ExposedKeepAliveTick() => KeepAliveTick();
 
     #endregion
 
     protected override void BeginConnect()
     {
-        BeginConnectCalls++;
     }
 
     protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
     {
-        base.BeginDisconnect(reason, tryBeGentle);
         BeginDisconnectCalls++;
         LastDisconnectReason = reason;
-        LastTryBeGentle = tryBeGentle;
     }
 
     protected override void OnConnected()
     {
-        OnConnectedCalls++;
         base.OnConnected();
     }
 

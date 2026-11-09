@@ -58,8 +58,6 @@ internal sealed class TestRawReliableEndpoint : RawReliableEndpoint, IDisposable
 
     #region Queue and lifecycle control
 
-    public void DrainOne() => _queue!.DrainOne();
-
     public void DrainAll() => _queue!.DrainAll();
 
     public void CompleteConnect(Action? ifFailed = null)
@@ -106,12 +104,6 @@ internal sealed class TestRawReliableEndpoint : RawReliableEndpoint, IDisposable
 
     public string ExposedTransportName => TransportName;
 
-    public ILogger ExposedLog => Log;
-
-    public IMemoryRental ExposedMemory => Memory;
-
-    public bool ExposedCanSendNow(out SendResult result) => CanSendNow(out result);
-
     public void ExposedFinishConnect(Action ifFailed) => FinishConnect(ifFailed);
 
     public void ExposedFinishDisconnect() => FinishDisconnect();
@@ -119,8 +111,6 @@ internal sealed class TestRawReliableEndpoint : RawReliableEndpoint, IDisposable
     public void ExposedDisconnectGracefully() => DisconnectGracefully();
 
     public void ExposedProcessInbound(UnionDataList framedMessage) => ProcessInboundMessage(framedMessage);
-
-    public bool ExposedDispatch(byte rawType, UnionDataList message) => ProcessInboundMessage((MessageType)rawType, message);
 
     public void ExposedFailHard(StopReason reason) => FailHard(reason);
 

@@ -43,7 +43,10 @@ namespace Pontifex.Delivery
                 {
                     onReceived(nextId, nextBuffer);
                 }
-                nextBuffer?.Release();
+                else
+                {
+                    nextBuffer?.Release();
+                }
             }
         }
 

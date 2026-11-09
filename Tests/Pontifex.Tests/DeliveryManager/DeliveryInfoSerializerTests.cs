@@ -1,22 +1,21 @@
 using System.Collections.Generic;
 using Actuarius.Memory;
+using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 using Pontifex.Utils;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class DeliveryInfoSerializerTests
+    public sealed class DeliveryInfoSerializerTests : TrackedFixture
     {
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-        private static ICollectablePool CPool => Memory.CollectablePool;
-
-        private static DeliveryInfoSerializer CreateSerializer() => new DeliveryInfoSerializer(CPool);
+        private DeliveryInfoSerializer CreateSerializer() => new DeliveryInfoSerializer(CPool);
 
         // ── CreateDeliveryReport tests ──
 
         [Test]
-        public void CreateDeliveryReport_SingleConfirmation()
+        public void CreateDeliveryReport_SingleConfirmation_WritesCountIdAndChunkId()
         {
             var ser = CreateSerializer();
             var confirmations = new List<DeliveryInfo> { new DeliveryInfo(new DeliveryId(42), 7) };
@@ -29,7 +28,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void CreateDeliveryReport_MultipleConfirmations()
+        public void CreateDeliveryReport_MultipleConfirmations_WritesAllPairs()
         {
             var ser = CreateSerializer();
             var confirmations = new List<DeliveryInfo>
@@ -52,7 +51,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void CreateDeliveryReport_PartialRange()
+        public void CreateDeliveryReport_PartialRange_HonorsStartAndCount()
         {
             var ser = CreateSerializer();
             var confirmations = new List<DeliveryInfo>
@@ -69,7 +68,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void CreateDeliveryReport_ZeroCount()
+        public void CreateDeliveryReport_ZeroCount_WritesCountOnly()
         {
             var ser = CreateSerializer();
             var msg = ser.CreateDeliveryReport(new List<DeliveryInfo>(), 0, 0);
@@ -89,7 +88,6 @@ namespace Pontifex.Delivery.Tests
                 new DeliveryInfo(new DeliveryId(7), 3)
             };
             var msg = ser.CreateDeliveryReport(confirmations, 0, 1);
-            msg.AddRef();
 
             bool loaded = ser.LoadDeliveryReport(msg);
             msg.Release();
@@ -101,7 +99,7 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
-        public void LoadDeliveryReport_MultipleConfirmations()
+        public void LoadDeliveryReport_MultipleConfirmations_PopulatesAll()
         {
             var ser = CreateSerializer();
             var confirmations = new List<DeliveryInfo>
@@ -111,7 +109,6 @@ namespace Pontifex.Delivery.Tests
                 new DeliveryInfo(new DeliveryId(3), 2)
             };
             var msg = ser.CreateDeliveryReport(confirmations, 0, 3);
-            msg.AddRef();
 
             ser.LoadDeliveryReport(msg);
             msg.Release();
@@ -153,6 +150,19 @@ namespace Pontifex.Delivery.Tests
         }
 
         [Test]
+        public void LoadDeliveryReport_TruncatedPair_ReturnsFalse()
+        {
+            var ser = CreateSerializer();
+            var data = CPool.Acquire<UnionDataList>();
+            data.PutLast(new UnionData((ushort)1)); // count
+            data.PutLast(new UnionData((ushort)100)); // id without chunk id
+
+            bool loaded = ser.LoadDeliveryReport(data);
+            data.Release();
+            Assert.That(loaded, Is.False);
+        }
+
+        [Test]
         public void LoadDeliveryReport_CountZero_ReturnsTrueEmptyList()
         {
             var ser = CreateSerializer();
@@ -168,7 +178,7 @@ namespace Pontifex.Delivery.Tests
         // ── Round-trip tests ──
 
         [Test]
-        public void RoundTrip_DeliveryInfo()
+        public void RoundTrip_DeliveryInfo_PreservesIdsAndChunks()
         {
             var ser = CreateSerializer();
             var confirmations = new List<DeliveryInfo>
@@ -177,7 +187,6 @@ namespace Pontifex.Delivery.Tests
                 new DeliveryInfo(new DeliveryId(200), 6)
             };
             var msg = ser.CreateDeliveryReport(confirmations, 0, 2);
-            msg.AddRef();
 
             Assert.That(ser.LoadDeliveryReport(msg), Is.True);
             msg.Release();

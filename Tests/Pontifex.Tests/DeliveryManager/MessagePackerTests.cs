@@ -3,27 +3,19 @@ using System.Collections.Generic;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Delivery;
+using Pontifex.Tests.Delivery.Harness;
 using Pontifex.Utils;
 
-namespace Pontifex.Delivery.Tests
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class MessagePackerTests
+    public sealed class MessagePackerTests : TrackedFixture
     {
         private const int MaxMsgSize = 100;
         private const int SafetyMargin = 4;
-        private static IMemoryRental Memory => MemoryRental.Shared;
-        private static IPool<IMultiRefByteArray, int> Pool => Memory.ByteArraysPool;
-        private static ICollectablePool CPool => Memory.CollectablePool;
 
-        private static IMultiRefByteArray Data(params byte[] bytes)
-        {
-            var buf = Pool.Acquire(bytes.Length);
-            Buffer.BlockCopy(bytes, 0, buf.Array, buf.Offset, bytes.Length);
-            return buf;
-        }
-
-        private static UnionDataList DataList(params byte[] bytes)
+        private UnionDataList DataList(params byte[] bytes)
         {
             var data = CPool.Acquire<UnionDataList>();
             if (bytes.Length > 0)
@@ -37,16 +29,29 @@ namespace Pontifex.Delivery.Tests
             return data;
         }
 
+        private UnionDataList WireList(params UnionData[] elements)
+        {
+            var data = CPool.Acquire<UnionDataList>();
+            foreach (var element in elements)
+            {
+                data.PutLast(element);
+            }
+
+            return data;
+        }
+
         private const int UserSingleOverhead = 6;
         private const int UserMultiOverhead = 10;
 
-        private static MessagePacker CreatePackEnvironment()
+        private MessagePacker CreatePackEnvironment()
         {
             int singleMax = MaxMsgSize - UserSingleOverhead - SafetyMargin;
             int multiMax = MaxMsgSize - UserMultiOverhead - SafetyMargin;
             var splitter = new MessageSplitter(Pool, multiMax);
             var merger = new MessageMerger(Pool);
-            return new MessagePacker(Pool, CPool, splitter, merger, singleMax, multiMax);
+            var packer = new MessagePacker(Pool, CPool, splitter, merger, singleMax, multiMax);
+            AddCleanup(packer.Clear);
+            return packer;
         }
 
         // ── DeliveryMaxByteSize ──
@@ -163,10 +168,9 @@ namespace Pontifex.Delivery.Tests
             packer.Pack(new DeliveryId(1), data,
                 new ConsumerDelegate<QueuedMessage>(x => { sent.Add(x); return true; }));
 
-            // Each QueuedMessage.Data is the wire message (packetId already prepended).
-            // Element 0 = packetId(ushort), element 1 = type(byte), element 2 = id(ushort),
-            // element 3 = partId(byte) or rpt for single, element 4 = partsNum for multi,
-            // last element = payload(array).
+            // Each QueuedMessage.Data is the packed wire message; the dispatch layer prepends
+            // its own discriminator and wire chunk id later. The payload chunk is the last
+            // element of each packed message.
             int totalPayload = 0;
             foreach (var qm in sent)
             {
@@ -213,6 +217,72 @@ namespace Pontifex.Delivery.Tests
             foreach (var qm in sent) qm.Data.Release();
         }
 
+        // ── TryPeekDeliveryInfo ──
+
+        [Test]
+        public void TryPeekDeliveryInfo_SingleChunk_ReturnsIdAndChunkZero()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)1), new UnionData((ushort)42));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out var info);
+            data.Release();
+
+            Assert.That(peeked, Is.True);
+            Assert.That(info.Id, Is.EqualTo(new DeliveryId(42)));
+            Assert.That(info.ChunkId, Is.Zero);
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_MultiChunk_ReturnsIdAndChunkId()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)3), new UnionData((byte)2), new UnionData((ushort)42));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out var info);
+            data.Release();
+
+            Assert.That(peeked, Is.True);
+            Assert.That(info.Id, Is.EqualTo(new DeliveryId(42)));
+            Assert.That(info.ChunkId, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_Empty_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList();
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out _);
+            data.Release();
+
+            Assert.That(peeked, Is.False);
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_SingleMissingId_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)1));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out _);
+            data.Release();
+
+            Assert.That(peeked, Is.False);
+        }
+
+        [Test]
+        public void TryPeekDeliveryInfo_MultiTruncated_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)2), new UnionData((byte)1));
+
+            bool peeked = packer.TryPeekDeliveryInfo(data, out _);
+            data.Release();
+
+            Assert.That(peeked, Is.False);
+        }
+
         // ── Error cases ──
 
         [Test]
@@ -250,11 +320,14 @@ namespace Pontifex.Delivery.Tests
         {
             var packer = CreatePackEnvironment();
             var data = DataList(1, 2, 3);
+            var sent = new List<QueuedMessage>();
 
             var result = packer.Pack(new DeliveryId(1), data,
-                new ConsumerDelegate<QueuedMessage>(_ => true));
+                new ConsumerDelegate<QueuedMessage>(x => { sent.Add(x); return true; }));
 
             Assert.That(result, Is.EqualTo(SendResult.Ok));
+            Assert.That(((IMultiRefResource_Debug)data).RefCount.RefCount, Is.Zero);
+            foreach (var qm in sent) qm.Data.Release();
         }
     }
 }

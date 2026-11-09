@@ -1,7 +1,10 @@
-namespace Pontifex.Delivery.Tests
+using Pontifex.Delivery;
+
+namespace Pontifex.Tests.Delivery
 {
+    [TestFixture]
     [Category("DeliveryManager")]
-    public class DeduplicatorTests
+    public sealed class DeduplicatorTests
     {
         [Test]
         public void FirstId_ReturnsNew()
