@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 using Scriba;
 
 namespace Pontifex.Converters

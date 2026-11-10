@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 
 namespace Pontifex
 {

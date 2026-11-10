@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Pontifex.Factory
+namespace Pontifex.OldFactory
 {
     public class StringElement : BaseElement
     {

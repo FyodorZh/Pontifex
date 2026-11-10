@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-namespace Pontifex.Factory
+namespace Pontifex.OldFactory
 {
     public class DescriptionElement : BaseElement
     {

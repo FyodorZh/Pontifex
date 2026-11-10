@@ -1,5 +1,5 @@
 using Actuarius.Memory;
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 using Scriba;
 
 namespace Pontifex.Tests;

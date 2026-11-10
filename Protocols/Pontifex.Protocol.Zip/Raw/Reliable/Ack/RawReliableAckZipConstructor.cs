@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 using Pontifex.Raw.Reliable.Ack.Protocols;
 using Scriba;
 

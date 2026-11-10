@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 
 namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 {

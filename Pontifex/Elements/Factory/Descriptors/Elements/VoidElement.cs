@@ -1,4 +1,4 @@
-namespace Pontifex.Factory
+namespace Pontifex.OldFactory
 {
     public class VoidElement : BaseElement
     {

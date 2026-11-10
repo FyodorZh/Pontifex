@@ -1,6 +1,6 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 using Pontifex.VirtualDelivery.Netem;
 
 namespace Pontifex.VirtualDelivery

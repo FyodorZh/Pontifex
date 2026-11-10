@@ -4,7 +4,7 @@ using Actuarius.Memory;
 using Pontifex.Converters;
 using Scriba;
 
-namespace Pontifex.Factory
+namespace Pontifex.OldFactory
 {
     public interface ITransportBuilder
     {

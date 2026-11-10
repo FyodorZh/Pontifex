@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 
-namespace Pontifex.Factory
+namespace Pontifex.OldFactory
 {
     public interface IDescriptionUriFactory
     {

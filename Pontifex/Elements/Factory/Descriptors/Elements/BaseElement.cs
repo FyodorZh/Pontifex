@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Pontifex.Factory
+namespace Pontifex.OldFactory
 {
     public abstract class BaseElement : IElement
     {

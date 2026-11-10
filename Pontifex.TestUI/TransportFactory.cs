@@ -8,7 +8,7 @@ using Pontifex.Raw.Reliable.Ack.Reconnectable;
 using Pontifex.Raw.Reliable.Ack.Tcp;
 using Pontifex.Raw.Reliable.Ack.Zip;
 using Pontifex.Converters;
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 
 namespace Pontifex.Test
 {

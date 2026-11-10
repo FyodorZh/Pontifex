@@ -1,4 +1,4 @@
-using Pontifex.Factory;
+using Pontifex.OldFactory;
 
 namespace Pontifex.Tests
 {
