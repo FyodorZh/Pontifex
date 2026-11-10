@@ -109,17 +109,21 @@ punctuation, and ends immediately before the next whitespace, punctuation, or
 On `"`:
 
 1. Record the opening quote offset.
-2. Decode until the matching `"`:
-   - `\"` → `"`.
-   - `\\` → `\`.
-   - Any other backslash sequence → `E_LEX_INVALID_ESCAPE` at the backslash.
-   - A backslash immediately before EOF is treated as an unterminated string:
-     `E_LEX_UNTERMINATED_STRING` at the opening quote.
-   - Raw `CR` or `LF` → `E_LEX_RAW_NEWLINE_IN_STRING` at the newline.
-   - Unpaired surrogate → `E_LEX_INVALID_UNICODE` at the offending code unit.
-   - EOF before the closing quote → `E_LEX_UNTERMINATED_STRING` at the opening
-     quote.
-3. The token's decoded text is the content without the surrounding quotes.
+2. Decode until the matching `"`. At each code unit, apply these rules in order:
+   a. Unpaired surrogate → `E_LEX_INVALID_UNICODE` at that code unit.
+   b. Raw `CR` or `LF` → `E_LEX_RAW_NEWLINE_IN_STRING` at that code unit.
+   c. `"` → end of the token.
+   d. `\`:
+      - If EOF follows, report `E_LEX_UNTERMINATED_STRING` at the opening quote.
+      - If the next code unit is `"` or `\`, consume it and append the decoded
+        character.
+      - Otherwise report `E_LEX_INVALID_ESCAPE` at the backslash. `<sequence>`
+        is the backslash plus the following source code unit, rendered with the
+        escaping rules from §3.4.
+   e. Any other code unit is appended to the decoded value.
+3. EOF before the closing quote → `E_LEX_UNTERMINATED_STRING` at the opening
+   quote.
+4. The token's decoded text is the content without the surrounding quotes.
 
 A `QuotedString` token preserves its raw source slice for diagnostics.
 
@@ -160,10 +164,12 @@ types, or validation results.
 ```text
 SourceSpan        { int Start; int Length; }
 
-AstValue          (abstract)
+AstValue          (abstract)  { SourceSpan Span; }
 AstExpr           : AstValue   { AstTransportCall Call; AstCast? Cast; }
-AstList           : AstValue   { IReadOnlyList<AstExpr> Elements; int OpenOffset; }
-AstStruct         : AstValue   { IReadOnlyList<AstField> Fields; int CloseBraceOffset; }
+AstList           : AstValue   { IReadOnlyList<AstExpr> Elements;
+                                 int OpenOffset; int CloseOffset; }
+AstStruct         : AstValue   { IReadOnlyList<AstField> Fields;
+                                 int OpenOffset; int CloseBraceOffset; }
 AstScalar         : AstValue   { string Value; bool WasQuoted; }
 
 AstTransportCall  { string Scheme; Token SchemeToken;
@@ -188,9 +194,13 @@ AST invariants:
   lists.
 - `AstStruct.Fields` are named; field names are identifier tokens.
 - No AST node contains resolved types, constructors, or validators.
-- Spans cover the source range of the node and are used for semantic errors.
-- Scheme, parameter, and field names are stored as written; normalization happens
-  during resolution.
+- `Span` covers the full source range of the node and is used for semantic
+  errors. Every `AstValue` node carries a span. `AstList` also records the
+  opening and closing bracket offsets; `AstStruct` records the opening brace and
+  the closing brace offsets.
+- Scheme, argument-name, and field-name strings are stored exactly as written;
+  normalization happens during resolution. The corresponding tokens are retained
+  for diagnostics.
 
 ---
 
@@ -227,10 +237,12 @@ ParseExpr():
     if tokens.current is Word equal to "as" (case-insensitive):
         asToken = consume()
         typeToken = ParseTypeName()
-        if tokens.current is Word equal to "as":
+        if tokens.current is Word equal to "as" (case-insensitive):
             error E_SYN_CHAINED_CAST at tokens.current.Offset
-        return AstExpr(call, AstCast(typeToken.Text, typeToken))
-    return AstExpr(call, null)
+        cast = AstCast(typeToken.Text, typeToken,
+                       SpanFrom(call.Span.Start, typeToken.End))
+        return AstExpr(call, cast, SpanFrom(call.Span.Start, typeToken.End))
+    return AstExpr(call, null, call.Span)
 ```
 
 `as` is contextual. A `Word` whose text is `as` but which is not in the position
@@ -248,9 +260,10 @@ ParseTransportCall():
     if tokens.current is not LParen:
         error E_SYN_UNEXPECTED_TOKEN expected "'('" at current.Offset
     consume LParen
-    args, closeParenOffset = ParseArgs()
-    return AstTransportCall(normalize(schemeToken.Text), schemeToken,
-                            args, closeParenOffset)
+    args, closeParen = ParseArgs()
+    return AstTransportCall(schemeToken.Text, schemeToken, args,
+                            closeParen.Offset,
+                            SpanFrom(schemeToken.Start, closeParen.End))
 ```
 
 ### 5.4 Arguments
@@ -263,7 +276,8 @@ ParseArgs():
     seenNamed = false
 
     if tokens.current is RParen:
-        return [], consume().Offset
+        close = consume()
+        return [], close
 
     if tokens.current is not Word
        and not QuotedString
@@ -290,13 +304,14 @@ ParseArgs():
             nameToken = consume()
             consume Equals
             value = ParseValue()
-            args.add(named nameToken.Text, value)
+            args.add(AstArg(nameToken.Text, nameToken, value,
+                            SpanFrom(nameToken.Start, value.Span.End)))
             seenNamed = true
         else:
             if seenNamed:
                 error E_SYN_POSITIONAL_AFTER_NAMED at current.Offset
             value = ParseValue()
-            args.add(positional value)
+            args.add(AstArg(null, null, value, value.Span))
 
         if tokens.current is Comma:
             comma = consume()
@@ -307,7 +322,7 @@ ParseArgs():
 
         if tokens.current is RParen:
             close = consume()
-            return args, close.Offset
+            return args, close
 
         error E_SYN_UNEXPECTED_TOKEN expected "',' or ')'" at current.Offset
 ```
@@ -328,7 +343,8 @@ ParseValue():
     switch tokens.current.Kind:
         QuotedString:
             token = consume()
-            return AstScalar(token.Text, WasQuoted = true)
+            return AstScalar(token.Text, WasQuoted = true,
+                             SpanFrom(token.Start, token.End))
         LBracket:
             return ParseList()
         LBrace:
@@ -337,7 +353,8 @@ ParseValue():
             if tokens.peek(1) is LParen:
                 return ParseExpr()
             token = consume()
-            return AstScalar(token.Text, WasQuoted = false)
+            return AstScalar(token.Text, WasQuoted = false,
+                             SpanFrom(token.Start, token.End))
         default:
             error E_SYN_UNEXPECTED_TOKEN expected "a value" at current.Offset
 ```
@@ -352,7 +369,9 @@ registry.
 ParseList():
     open = consume LBracket
     if tokens.current is RBracket:
-        return AstList([], open.Offset)
+        close = consume()
+        return AstList([], open.Offset, close.Offset,
+                       SpanFrom(open.Start, close.End))
 
     elements = []
     loop:
@@ -372,8 +391,9 @@ ParseList():
             continue
 
         if tokens.current is RBracket:
-            consume()
-            return AstList(elements, open.Offset)
+            close = consume()
+            return AstList(elements, open.Offset, close.Offset,
+                           SpanFrom(open.Start, close.End))
 
         error E_SYN_UNEXPECTED_TOKEN expected "',' or ']'" at current.Offset
 ```
@@ -387,7 +407,9 @@ syntactically.
 ParseStruct():
     open = consume LBrace
     if tokens.current is RBrace:
-        return AstStruct([], open.Offset)
+        close = consume()
+        return AstStruct([], open.Offset, close.Offset,
+                         SpanFrom(open.Start, close.End))
 
     fields = []
     loop:
@@ -402,7 +424,8 @@ ParseStruct():
         consume Equals
 
         value = ParseValue()
-        fields.add(AstField(normalize(nameToken.Text), nameToken, value))
+        fields.add(AstField(nameToken.Text, nameToken, value,
+                            SpanFrom(nameToken.Start, value.Span.End)))
 
         if tokens.current is Comma:
             comma = consume()
@@ -413,7 +436,8 @@ ParseStruct():
 
         if tokens.current is RBrace:
             close = consume()
-            return AstStruct(fields, close.Offset)
+            return AstStruct(fields, open.Offset, close.Offset,
+                             SpanFrom(open.Start, close.End))
 
         error E_SYN_UNEXPECTED_TOKEN expected "',' or '}'" at current.Offset
 ```
@@ -535,6 +559,8 @@ delegate string? ScalarValidator(string value);
   `E_SEM_VALIDATOR_FAILED` with reason `validation failed`.
 - If a validator returns an empty string, the parser treats it as invalid and
   uses the reason `validation failed`.
+- A throwing struct-field validator uses the field form of the message:
+  `field '<name>' of parameter '<param>' is invalid: validation failed`.
 
 ### 6.5 Struct schemas
 
@@ -606,6 +632,7 @@ Rules:
 10. `SuggestedAliases` are not automatically registered. A host MAY pass them (or
     any other aliases) to `RegisterTransport`.
 
+Checks run in the numbered order above, and the first failure is reported.
 Registration errors are listed in §13.4. They occur when the registry is built,
 not while parsing.
 
@@ -633,8 +660,7 @@ ResolveExpr(ast, expected):
     if ast.Cast is null:
         return ResolveTransport(ast.Call, expected)
 
-    target = catalog.Resolve(ast.Cast.TypeName)
-    if target is unknown:
+    if not catalog.TryResolve(ast.Cast.TypeName, out target, out canonicalName):
         error E_SEM_UNKNOWN_TRANSPORT_TYPE at ast.Cast.TypeToken.Offset
 
     if not expected.Contains(target):
@@ -663,16 +689,18 @@ Consequences:
 ```text
 ResolveTransport(call, expected):
     scheme = normalize(call.Scheme)
-    candidates = registry.Canonical(scheme) ∪ registry.Aliases(scheme)
+    allCandidates = registry.Canonical(scheme) ∪ registry.Aliases(scheme)
 
-    if candidates is empty:
+    if allCandidates is empty:
         error E_SEM_UNKNOWN_SCHEME at call.SchemeToken.Offset
 
+    candidates = allCandidates
     if expected != Any:
-        candidates = candidates.Where(c => expected.Contains(c.Type))
+        candidates = allCandidates.Where(c => expected.Contains(c.Type))
         if candidates is empty:
             error E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE
                   at call.SchemeToken.Offset
+                  available = FormatVariants(allCandidates)
 
     canonical = registry.Canonical(scheme)
     if canonical is not null and candidates.Contains(canonical):
@@ -698,8 +726,11 @@ Rules:
   than one is ambiguous.
 - An alias-only scheme with `Any` and one candidate resolves to that candidate.
 - An alias-only scheme with `Any` and multiple candidates is ambiguous.
-- Registration guarantees that no two candidates share the same `Type`, so after
-  filtering by an `Exactly(T)` set at most one candidate remains.
+- `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` reports `available` from `allCandidates`,
+  the set before expected-type filtering.
+- Within one alias group, all candidate types are distinct. A canonical
+  constructor and an alias of the same type may still share a scheme name; the
+  canonical-preference rule above resolves that overlap deterministically.
 
 ### 7.4 Argument binding
 
@@ -711,9 +742,10 @@ if positionalArgs.Count > positionalParams.Count:
     error E_SEM_TOO_MANY_POSITIONAL
           at positionalArgs[positionalParams.Count].Value.Span.Start
 
-bind positionalArgs[i] to positionalParams[i]
-
 bound = dictionary<Param, AstValue>
+
+for i in 0 .. positionalArgs.Count-1:
+    bound[positionalParams[i]] = positionalArgs[i].Value
 
 for each named arg in source order:
     name = normalize(arg.Name)
@@ -722,18 +754,24 @@ for each named arg in source order:
         error E_SEM_UNKNOWN_PARAM at arg.NameToken.Offset
     if bound.Contains(param):
         error E_SEM_DUPLICATE_PARAM at arg.NameToken.Offset
-    bind arg.Value to param
+    bound[param] = arg.Value
 
 for each param in constructor.Params in declaration order:
     if not bound and param.Required:
         error E_SEM_MISSING_REQUIRED_PARAM
               at call.CloseParenOffset
+
+provided = constructor.Params
+    .Where(p => bound.Contains(p))
+    .Select(p => ParamBinding(p, bound[p]))
+    .ToList()
 ```
 
 Named arguments may target positional and named-only parameters. Positional
 arguments fill only parameters with `Positional = true`, in declaration order. A
 named argument that targets a parameter already filled positionally is a
-duplicate.
+duplicate. `provided` is exactly the supplied parameters, in declaration order;
+it is stored as `ResolvedTransport.Provided`.
 
 ### 7.5 Parameter validation
 
@@ -750,7 +788,9 @@ for each param in constructor.Params in declaration order:
             if value is not AstScalar:
                 error E_SEM_EXPECTED_SCALAR at value.Span.Start
                       actual = Shape(value)
-            reason = param.Validate(value.Text)
+            reason = null
+            if param.Validate is not null:
+                reason = param.Validate(value.Text)
             if reason is not null:
                 error E_SEM_VALIDATOR_FAILED at value.Span.Start
                       context = parameter '<param.Name>', reason
@@ -761,9 +801,6 @@ for each param in constructor.Params in declaration order:
                 error E_SEM_EXPECTED_TRANSPORT at value.Span.Start
                       actual = Shape(value)
             resolved = ResolveExpr(value, param.Expected)
-            if not param.Expected.Contains(resolved.Type):
-                error E_SEM_TRANSPORT_TYPE_NOT_ALLOWED at value.Span.Start
-                      actual = resolved.Type, expected = param.Expected
             store TransportValue(resolved)
 
         TransportListParam:
@@ -782,9 +819,6 @@ for each param in constructor.Params in declaration order:
             resolvedElements = []
             for each element in value.Elements in order:
                 resolved = ResolveExpr(element, param.Expected)
-                if not param.Expected.Contains(resolved.Type):
-                    error E_SEM_TRANSPORT_TYPE_NOT_ALLOWED at element.Span.Start
-                          actual = resolved.Type, expected = param.Expected
                 resolvedElements.add(resolved)
 
             if param.Homogeneous and resolvedElements.Count > 1:
@@ -813,26 +847,26 @@ for each param in constructor.Params in declaration order:
 "struct"          for AstStruct
 ```
 
-### 7.6 Expected-type checks for transport parameters
+### 7.6 Expected-type guarantees
 
-`ResolveExpr` already filters candidates by the expected set. The explicit
-`Contains` checks in §7.5 are a defense-in-depth invariant check; in a correct
-implementation they never fire for a plain transport. They can fire only if a
-cast target is outside the set, which `ResolveExpr` rejects earlier with
-`E_SEM_CAST_TYPE_MISMATCH`.
+`ResolveExpr` filters candidates by the expected set and rejects cast targets
+outside that set. Therefore every resolved result passed to a transport
+parameter is guaranteed to be in the parameter's expected set. There is no
+user-visible `E_SEM_*` error for an expected-type mismatch after resolution; a
+violation is an internal invariant failure and MUST be reported as
+`E_CMP_INCONSISTENT_TREE` by the compiler.
 
 ### 7.7 Type names
 
 Type names are resolved through the transport-type catalog:
 
 ```text
-target = catalog.Resolve(typeName)
-if target is unknown:
+if not catalog.TryResolve(typeName, out target, out canonicalName):
     error E_SEM_UNKNOWN_TRANSPORT_TYPE at type token offset
 ```
 
-Type names are case-insensitive. The canonical spelling is the catalog's exact
-spelling and is used by the printer.
+Type names are case-insensitive. The canonical spelling is `canonicalName` and is
+used by the printer.
 
 ### 7.8 Struct resolution
 
@@ -869,7 +903,9 @@ ResolveStruct(astStruct, schema, paramName):
                 if value is not AstScalar:
                     error E_SEM_STRUCT_FIELD_EXPECTED_SCALAR at value.Span.Start
                           field = schemaField.Name, actual = Shape(value)
-                reason = schemaField.Validate(value.Text)
+                reason = null
+                if schemaField.Validate is not null:
+                    reason = schemaField.Validate(value.Text)
                 if reason is not null:
                     error E_SEM_VALIDATOR_FAILED at value.Span.Start
                           context = field '<field>' of parameter '<paramName>'
@@ -893,9 +929,10 @@ struct field is rejected by the scalar/struct shape checks.
 
 - Resolution is pre-order: a transport is resolved before its parameters.
 - Candidate resolution happens before argument binding.
-- Binding errors are reported in this order: too many positional, unknown named
-  (source order), duplicate named (source order), missing required (declaration
-  order, first missing).
+- Binding errors are reported in this order: too many positional; then named
+  arguments in source order, checking the name first (`E_SEM_UNKNOWN_PARAM`) and
+  then whether the target is already bound (`E_SEM_DUPLICATE_PARAM`); then the
+  first missing required parameter in declaration order.
 - Parameter validation follows declaration order.
 - List arity is checked before elements; elements are resolved in order;
   homogeneity is checked after all elements.
@@ -910,14 +947,13 @@ struct field is rejected by the scalar/struct shape checks.
 ## 8. Resolved tree
 
 ```text
-ResolvedExpr           (abstract)
+ResolvedExpr           (abstract) { TransportType Type; }
 ResolvedTransport      : ResolvedExpr
 ResolvedCast           : ResolvedExpr
 
 ResolvedTransport
 {
     ITransportConstructor Constructor;
-    TransportType Type;
     IReadOnlyList<ParamBinding> Provided;   // declaration order
     SourceSpan Span;
 }
@@ -959,6 +995,7 @@ Invariants:
 - `Provided` is ordered by `Constructor.Params` declaration order, not source
   order.
 - `ResolvedTransport.Type == Constructor.Type`.
+- `ResolvedCast.Type == ResolvedCast.Target`.
 - `ResolvedCast.Inner.Type != ResolvedCast.Target` (identity casts are collapsed).
 - `TransportListValue.Elements` satisfies the parameter's `Min`/`Max`; if
   `Homogeneous`, all element types are equal.
@@ -1061,18 +1098,23 @@ type exists. Converter availability is build-time configuration.
 ## 10. Canonical printer
 
 The canonical printer turns a resolved tree into a canonical formula. Its input
-is the resolved tree; it uses the constructor/parameter metadata reachable from
-that tree. It does not depend on the AST, on `IDescription`, or on the compiler.
+is the resolved tree plus the constructor/parameter metadata reachable from that
+tree and the `ITransportTypeCatalog` needed to print cast targets. It does not
+depend on the AST, on `IDescription`, or on the compiler.
 
 If the input tree violates the invariants in §8, the printer throws
 `PrinterException` with an `E_PRN_*` code (§13.5). A correct resolver never
-produces such a tree.
+produces such a tree. Before printing, the printer validates all invariants:
+required parameters, declared and unique provided parameters, value kinds, list
+arity and homogeneity, struct fields, cast targets, and scalar printability.
 
 ### 10.1 Expression
 
 ```text
 PrintExpr(expr):
     if expr is ResolvedCast:
+        if expr.Inner.Type == expr.Target:
+            error E_PRN_INCONSISTENT_TREE detail "identity cast node"
         return PrintTransport(expr.Inner) + " as " +
                catalog.GetCanonicalName(expr.Target)
     if expr is ResolvedTransport:
@@ -1094,12 +1136,14 @@ PrintTransport(t):
 
     for i in 0 .. n-1:
         param = positional[i]
-        parts.add(PrintValue(param, t.Provided[param]))
+        binding = t.Provided.Find(param)
+        parts.add(PrintValue(param, binding.Value))
         emitted.add(param)
 
     for each param in t.Constructor.Params in declaration order:
-        if param is present in t.Provided and param not in emitted:
-            parts.add(param.Name + "=" + PrintValue(param, t.Provided[param]))
+        binding = t.Provided.Find(param)
+        if binding is not null and param not in emitted:
+            parts.add(param.Name + "=" + PrintValue(param, binding.Value))
 
     return t.Constructor.Name + "(" + join(parts, ", ") + ")"
 ```
@@ -1150,6 +1194,8 @@ Empty lists print `[]`; empty structs print `{}`.
 
 ```text
 PrintScalar(text):
+    if text contains CR, LF, or an unpaired surrogate:
+        error E_PRN_INVALID_SCALAR code = offending UTF-16 code unit
     if text == "":
         return '""'
     if text contains any character in WS or DELIM:
@@ -1165,7 +1211,9 @@ PrintScalar(text):
 ```
 
 No other escapes are emitted. Raw `CR` and `LF` cannot occur in a valid resolved
-scalar; if one does, the printer reports `E_PRN_INVALID_SCALAR`.
+scalar; if one does, the printer reports `E_PRN_INVALID_SCALAR` before the
+quoting decision. `U+<code>` is formatted as `U+` followed by exactly four
+uppercase hexadecimal digits of the UTF-16 code unit.
 
 ### 10.5 Canonicalization summary
 
@@ -1198,7 +1246,7 @@ Assume a registry where:
 - `beta`: `value` (String, positional, required), type `TypeB`.
 - `gamma`: `items` (TransportList, positional, required, min 2), type `TypeC`.
 - `structy`: `config` (Struct, positional, required; fields `name` String required,
-  `nested` nested Struct optional), type `TypeA`.
+  `nested` nested Struct optional with field `a` String optional), type `TypeA`.
 
 ```text
 alpha(beta(x))                          # input positional; other params absent
@@ -1206,9 +1254,9 @@ alpha(beta(x), fast)                    # input and mode positional
 alpha(beta(x), timeout=5s)              # input positional; timeout named-only
 alpha(beta(x), fast, timeout=5s)        # input, mode positional; timeout named
 alpha(beta("a, b"), "x=y", timeout=1s)  # quoted scalars
-alpha(beta(x) as TypeB)                 # cast inside an argument
-alpha() as TypeB                        # top-level cast
-gamma([alpha(), alpha()])               # homogeneous list
+alpha(beta(x) as TypeA)                 # cast inside an argument
+alpha(beta(x)) as TypeB                 # top-level cast
+gamma([alpha(beta(x)), alpha(beta(x))]) # homogeneous list
 structy({name=x, nested={a=1}})         # nested struct
 ```
 
@@ -1254,12 +1302,14 @@ raw `CR` or `LF`.
 The following source differences produce the same canonical output and the same
 resolved tree:
 
-- `ALPHA()` and `alpha()`;
-- `alpha( beta() ,  x )` and `alpha(beta(), x)`;
-- `alpha(beta(), mode=x)` and `alpha(beta(), x)`;
-- `alpha(beta(), timeout=1s)` and `alpha(timeout=1s, beta())` (named order);
-- `alpha() as TypeA` and `alpha()` (identity cast collapsed);
-- `alpha(beta())` and any alias of `alpha` that resolves to the same constructor;
+- `ALPHA(beta(x))` and `alpha(beta(x))`;
+- `alpha( beta(x) ,  x )` and `alpha(beta(x), x)`;
+- `alpha(beta(x), mode=x)` and `alpha(beta(x), x)`;
+- `alpha(beta(x), timeout=1s)` and
+  `alpha(input=beta(x), timeout=1s)` (named order);
+- `alpha(beta(x)) as TypeA` and `alpha(beta(x))` (identity cast collapsed);
+- a canonical scheme name and an alias that resolves to the same constructor
+  under the expected type;
 - struct fields in any source order (resolved/canonical order is schema order);
 - a bare scalar and its quoted equivalent when quoting is unnecessary;
 - different whitespace, including CR/LF.
@@ -1292,6 +1342,8 @@ sealed record BuildException(string Code, string Message);
 
 - Token-based errors: offset of the offending token start.
 - EOF errors: offset equal to input length.
+- `E_SYN_EMPTY_INPUT` (including whitespace-only input) is an exception: its
+  offset is always `0`.
 - Missing required parameter: offset of the closing `)` token.
 - Missing required struct field: offset of the closing `}` token.
 - Too many positional arguments: offset of the first extra positional value.
@@ -1348,6 +1400,7 @@ Expected-string contexts:
 
 | Parser point | `<expected>` |
 |---|---|
+| Top level, token cannot start a transport expression | `a transport expression` |
 | Start of a transport call (scheme) | `a transport scheme identifier` |
 | After the scheme | `'('` |
 | First token inside `(` that is not `)` | `a value or ')'` |
@@ -1366,13 +1419,16 @@ Specific syntax errors:
 | Code | Condition | Message template | Offset |
 |---|---|---|---|
 | `E_SYN_EMPTY_INPUT` | Input is empty or whitespace only | `expected a transport expression` | `0` |
-| `E_SYN_TRAILING_COMMA` | Comma immediately before `)`, `]`, or `}` | `trailing comma is not allowed in <context>` | Comma |
+| `E_SYN_TRAILING_COMMA` | Comma immediately following an argument, list element, or struct field, and immediately before the matching `)`, `]`, or `}` | `trailing comma is not allowed in <context>` | Comma |
 | `E_SYN_POSITIONAL_AFTER_NAMED` | Positional argument after a named argument | `positional argument is not allowed after a named argument` | First token of the positional value |
 | `E_SYN_CHAINED_CAST` | Second `as` in one expression | `chained casts are not allowed` | Second `as` |
 | `E_SYN_NESTED_LIST` | `[` as a list element | `nested transport lists are not allowed` | Nested `[` |
 | `E_SYN_TRAILING_INPUT` | Non-EOF token after the top-level expression | `unexpected trailing input` | First extra token |
 
 `<context>` is exactly one of `argument list`, `transport list`, `struct`.
+A comma with no preceding argument, element, or field is not a trailing comma;
+it is reported as `E_SYN_UNEXPECTED_TOKEN` (for example, `alpha(,)` and
+`alpha([,])`).
 
 ### 13.3 Semantic errors
 
@@ -1384,12 +1440,12 @@ Formatting helpers used in messages:
   - `OneOf(...)` → distinct canonical names sorted, joined with ` or `
 - `FormatVariants(candidates)` → entries `name (Type)`, sorted by name then type,
   joined with `, `.
-- `FormatParamExpectation(params)` → if non-empty: `one of: <names>`, where names
-  are parameter names in declaration order, quoted, joined with `, `; if empty:
-  `the scheme has no parameters`.
-- `FormatFieldExpectation(schema)` → if non-empty: `one of: <names>`, where names
-  are field names in schema order, quoted, joined with `, `; if empty:
-  `the struct has no fields`.
+- `FormatParamExpectation(params)` → if non-empty: `one of: <names>`, where the
+  names are parameter names in declaration order, each enclosed in single quotes,
+  joined with `, `; if empty: `the scheme has no parameters`.
+- `FormatFieldExpectation(schema)` → if non-empty: `one of: <names>`, where the
+  names are field names in schema order, each enclosed in single quotes, joined
+  with `, `; if empty: `the struct has no fields`.
 - `FormatKnownSchemes()` → if non-empty: `known schemes: <list>`, where list is
   canonical names sorted and joined with `, `; if empty:
   `no schemes are registered`.
@@ -1415,7 +1471,6 @@ Formatting helpers used in messages:
 | `E_SEM_LIST_MIN` | List count below minimum | `transport list for '<name>' requires at least <min> element(s), got <count>` | List `[` |
 | `E_SEM_LIST_MAX` | List count above maximum | `transport list for '<name>' requires at most <max> element(s), got <count>` | List `[` |
 | `E_SEM_LIST_HOMOGENEITY` | Homogeneous list contains different types | `transport list for '<name>' must contain one transport type; found <types>` | First differing element |
-| `E_SEM_TRANSPORT_TYPE_NOT_ALLOWED` | Resolved type outside expected set | `transport type <actual> is not allowed here; expected <set>` | Expression start |
 | `E_SEM_UNKNOWN_STRUCT_FIELD` | Struct field not in schema | `unknown field '<name>' in struct for parameter '<param>'; <expected>` | Field name token |
 | `E_SEM_DUPLICATE_STRUCT_FIELD` | Struct field specified twice | `field '<name>' is specified more than once` | Duplicate field name token |
 | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` | Required struct field absent | `missing required field '<name>' in struct for parameter '<param>'` | Closing `}` |
@@ -1436,6 +1491,24 @@ For a thrown validator, `<reason>` is exactly `validation failed`.
 `<expected>` is `FormatParamExpectation(params)` for unknown parameters and
 `FormatFieldExpectation(schema)` for unknown struct fields.
 
+Placeholder sources:
+
+| Placeholder | Source |
+|---|---|
+| `<scheme>` | Raw scheme identifier as written in the input, preserving case. |
+| `<name>` in `E_SEM_UNKNOWN_PARAM`, `E_SEM_DUPLICATE_PARAM`, `E_SEM_UNKNOWN_STRUCT_FIELD`, `E_SEM_DUPLICATE_STRUCT_FIELD`, `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR`, `E_SEM_STRUCT_FIELD_EXPECTED_STRUCT`, and `E_SEM_UNKNOWN_TRANSPORT_TYPE` | Raw identifier as written in the input, preserving case. |
+| `<name>` in `E_SEM_MISSING_REQUIRED_PARAM`, `E_SEM_MISSING_REQUIRED_STRUCT_FIELD`, `E_SEM_EXPECTED_SCALAR`, `E_SEM_EXPECTED_TRANSPORT`, `E_SEM_EXPECTED_TRANSPORT_LIST`, `E_SEM_EXPECTED_STRUCT`, `E_SEM_LIST_MIN`, `E_SEM_LIST_MAX`, and `E_SEM_LIST_HOMOGENEITY` | Canonical declared parameter/struct-field name (lowercase). |
+| `<param>` | Canonical declared parameter name (lowercase). |
+| `<target>`, `<actual>`, `<type>`, `<from>`, `<to>`, `<set>`, `<variants>`, `<types>` | Canonical transport-type names and formatted lists. |
+| `<shape>` | One of `scalar`, `transport`, `transport list`, `struct`. |
+
+In `E_SEM_VALIDATOR_FAILED`, `<name>` is the canonical parameter name for a
+parameter validator and the raw field spelling for a struct-field validator.
+
+There is no user-visible semantic error for a resolved transport type outside a
+parameter's expected set: `ResolveExpr` guarantees membership. An internal
+violation is reported as `E_CMP_INCONSISTENT_TREE` by the compiler.
+
 ### 13.4 Registration errors
 
 Registration errors use `RegistrationException` and have no offset.
@@ -1455,6 +1528,8 @@ Registration errors use `RegistrationException` and have no offset.
 | `E_REG_INVALID_TYPE_NAME` | Transport type name is not an identifier | `invalid transport type name '<name>'` |
 | `E_REG_DUPLICATE_TYPE_NAME` | Catalog contains duplicate type name | `transport type name '<name>' is already registered` |
 
+For `E_REG_INVALID_LIST_RANGE`, `<max>` is `unbounded` when `Max` is `null`.
+
 ### 13.5 Printer errors
 
 Printer errors use `PrinterException` and have no offset.
@@ -1472,9 +1547,15 @@ Printer errors use `PrinterException` and have no offset.
 | `E_PRN_STRUCT_FIELD_MISSING` | Required struct field absent | `struct parameter '<name>' of scheme '<scheme>' is missing required field '<field>'` |
 | `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | Struct field value kind mismatch | `field '<field>' of struct parameter '<name>' has value kind <actual>, expected <expected>` |
 | `E_PRN_INVALID_CAST_TARGET` | Cast target not in catalog | `cast target '<type>' is invalid` |
-| `E_PRN_INVALID_SCALAR` | Scalar contains CR/LF or unprintable data | `scalar value contains a character that cannot be printed: U+<code>` |
+| `E_PRN_INVALID_SCALAR` | Scalar contains CR, LF, or an unpaired surrogate | `scalar value contains a character that cannot be printed: U+<code>` |
 
 `<range>` is `<min>..<max>` if `Max` is set, otherwise `at least <min>`.
+
+For `E_PRN_INVALID_SCALAR`, `<code>` is exactly four uppercase hexadecimal digits
+of the UTF-16 code unit, prefixed with `U+`. An identity cast node is an
+inconsistent-tree violation and uses `E_PRN_INCONSISTENT_TREE` with detail
+`identity cast node`. Printer messages use canonical scheme, parameter, field,
+and type names.
 
 ### 13.6 Compiler and build errors
 
@@ -1533,9 +1614,9 @@ Type catalog: `TypeA`, `TypeB`, `TypeC`.
 | `alpha(beta(x), timeout=5s)` | input positional, timeout named |
 | `alpha(beta(x), fast, timeout=5s)` | input + mode positional, timeout named |
 | `outer(alpha(x))` | inner `alpha` resolves to alias `beta` because expected is TypeB |
-| `alpha() as TypeB` | inner TypeA, cast to TypeB |
-| `alpha() as TypeA` | identity cast collapses to `alpha()` |
-| `gamma([alpha(), alpha()])` | homogeneous TypeA list |
+| `alpha(beta(x)) as TypeB` | inner TypeA, cast to TypeB |
+| `alpha(beta(x)) as TypeA` | identity cast collapses to `alpha(beta(x))` |
+| `gamma([alpha(beta(x)), alpha(beta(x))])` | homogeneous TypeA list |
 | `structy({name=x, nested={a=1}})` | nested struct |
 | `beta("a, b")` | quoted scalar with comma |
 | `beta("")` | empty scalar |
@@ -1548,6 +1629,8 @@ Type catalog: `TypeA`, `TypeB`, `TypeC`.
 | `alpha` | `E_SYN_UNEXPECTED_TOKEN` expected `'('` | 5 |
 | `alpha(` | `E_SYN_UNEXPECTED_TOKEN` expected `a value or ')'` | 6 |
 | `alpha(a,)` | `E_SYN_TRAILING_COMMA` | 7 |
+| `alpha(,)` | `E_SYN_UNEXPECTED_TOKEN` expected `a value or ')'` | 6 |
+| `alpha([,])` | `E_SYN_UNEXPECTED_TOKEN` expected `a transport expression` | 7 |
 | `alpha(a b)` | `E_SYN_UNEXPECTED_TOKEN` expected `',' or ')'` | 8 |
 | `alpha(p=1, a)` | `E_SYN_POSITIONAL_AFTER_NAMED` | 11 |
 | `alpha([alpha(), 1])` | `E_SYN_UNEXPECTED_TOKEN` expected `a transport expression` | 16 |
@@ -1564,21 +1647,21 @@ Type catalog: `TypeA`, `TypeB`, `TypeC`.
 | Source | Code |
 |---|---|
 | `nosuch()` | `E_SEM_UNKNOWN_SCHEME` |
-| `alpha(q=1)` | `E_SEM_UNKNOWN_PARAM` |
-| `alpha(beta(), input=beta())` | `E_SEM_DUPLICATE_PARAM` |
-| `alpha(beta(), q=1)` | `E_SEM_UNKNOWN_PARAM` |
+| `alpha()` | `E_SEM_MISSING_REQUIRED_PARAM` |
+| `alpha(beta(x), q=1)` | `E_SEM_UNKNOWN_PARAM` |
+| `alpha(beta(x), input=beta(y))` | `E_SEM_DUPLICATE_PARAM` |
 | `alpha(1)` | `E_SEM_EXPECTED_TRANSPORT` |
-| `beta([alpha()])` | `E_SEM_EXPECTED_SCALAR` |
-| `gamma([alpha()])` | `E_SEM_LIST_MIN` |
-| `gamma([alpha(), beta()])` | `E_SEM_LIST_HOMOGENEITY` |
+| `beta([alpha(beta(x))])` | `E_SEM_EXPECTED_SCALAR` |
+| `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN` |
+| `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY` |
 | `structy({name=x, extra=1})` | `E_SEM_UNKNOWN_STRUCT_FIELD` |
 | `structy({name=x, name=y})` | `E_SEM_DUPLICATE_STRUCT_FIELD` |
 | `structy({})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` |
-| `structy({name=alpha()})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` |
+| `structy({name=alpha(beta(x))})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` |
 | `structy({name={}})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` |
-| `alpha() as TypeZ` | `E_SEM_UNKNOWN_TRANSPORT_TYPE` |
-| `outer(alpha() as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH` |
-| `beta(x) as TypeA` | `E_SEM_CAST_TYPE_MISMATCH` when expected is TypeB |
+| `alpha(beta(x)) as TypeZ` | `E_SEM_UNKNOWN_TRANSPORT_TYPE` |
+| `outer(alpha(beta(x)) as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH` |
+| `outer(beta(x) as TypeA)` | `E_SEM_CAST_TYPE_MISMATCH` |
 | `beta(1)` where `1` is a scalar and `value` is String | valid |
 
 > Some rows depend on registry details; tests must define the full registry
@@ -1592,21 +1675,59 @@ Type catalog: `TypeA`, `TypeB`, `TypeC`.
 | `alpha(input=beta(x), mode=fast)` | `alpha(beta(x), fast)` |
 | `alpha(input=beta(x), timeout=5s)` | `alpha(beta(x), timeout=5s)` |
 | `alpha(input=beta(x), mode=fast, timeout=5s)` | `alpha(beta(x), fast, timeout=5s)` |
-| `alpha(input=beta(x) as TypeB)` | `alpha(beta(x) as TypeB)` |
-| `gamma(items=[alpha(), alpha()])` | `gamma([alpha(), alpha()])` |
+| `alpha(input=beta(x) as TypeA)` | `alpha(beta(x) as TypeA)` |
+| `gamma(items=[alpha(beta(x)), alpha(beta(x))])` | `gamma([alpha(beta(x)), alpha(beta(x))])` |
 | `structy(config={name=x, nested={a=1}})` | `structy({name=x, nested={a=1}})` |
 | `beta(value="a, b")` | `beta("a, b")` |
 | `beta(value="")` | `beta("")` |
 | `beta(value="x=y")` | `beta("x=y")` |
 | `beta(value="plain")` | `beta(plain)` |
-| `alpha(input=alpha(x) as TypeA)` where inner `alpha` is TypeA | `alpha(alpha(x))` (identity cast removed) |
+| `alpha(input=alpha(beta(x)))` | `alpha(alpha(beta(x)))` |
 
-### 14.5 Printer invariant errors
+### 14.5 Lexical errors
 
-Constructing a resolved tree with a missing required parameter, unknown
-parameter, wrong value kind, list arity violation, mixed homogeneous list, unknown
-struct field, missing required struct field, or invalid cast target must produce
-the corresponding `E_PRN_*` error. A correct parser never produces these trees.
+| Source | Code | Offset |
+|---|---|---|
+| `alpha("x)` | `E_LEX_UNTERMINATED_STRING` | 6 |
+| `alpha("x\q")` | `E_LEX_INVALID_ESCAPE` | 8 |
+| `alpha("x<LF>y")` where `<LF>` is a literal U+000A | `E_LEX_RAW_NEWLINE_IN_STRING` | 8 |
+| `alpha("x<U+D800>y")` where `<U+D800>` is a literal unpaired surrogate | `E_LEX_INVALID_UNICODE` | 8 |
+
+### 14.6 Registration errors
+
+| Setup | Code |
+|---|---|
+| Canonical scheme `Alpha` already registered as `alpha` | `E_REG_DUPLICATE_CANONICAL_NAME` |
+| Canonical scheme `1alpha` | `E_REG_INVALID_CANONICAL_NAME` |
+| Parameter name `1input` | `E_REG_INVALID_PARAM_NAME` |
+| Parameters `input` and `INPUT` | `E_REG_DUPLICATE_PARAM_NAME` |
+| Alias name `1alias` | `E_REG_INVALID_ALIAS_NAME` |
+| Alias `shared` registered twice for `TypeA` | `E_REG_DUPLICATE_ALIAS_FOR_TYPE` |
+| `OneOf()` with no types | `E_REG_EMPTY_TYPE_SET` |
+| `TransportListParam` with `Min = -1` | `E_REG_INVALID_LIST_RANGE` |
+| Struct fields `name` and `NAME` | `E_REG_DUPLICATE_STRUCT_FIELD` |
+| Struct field name `1name` | `E_REG_INVALID_STRUCT_FIELD_NAME` |
+| Catalog type name `1Type` | `E_REG_INVALID_TYPE_NAME` |
+| Catalog type name `TypeA` registered twice | `E_REG_DUPLICATE_TYPE_NAME` |
+
+### 14.7 Printer invariant errors
+
+| Tree condition | Code |
+|---|---|
+| Required parameter absent | `E_PRN_MISSING_REQUIRED_PARAM` |
+| Provided parameter not declared | `E_PRN_UNKNOWN_PARAM` |
+| Parameter provided twice | `E_PRN_DUPLICATE_PARAM` |
+| Parameter value kind mismatch | `E_PRN_PARAM_KIND_MISMATCH` |
+| List count outside `Min`/`Max` | `E_PRN_LIST_ARITY` |
+| Homogeneous list has mixed types | `E_PRN_LIST_HOMOGENEITY` |
+| Struct contains undeclared field | `E_PRN_STRUCT_FIELD_UNKNOWN` |
+| Required struct field absent | `E_PRN_STRUCT_FIELD_MISSING` |
+| Struct field value kind mismatch | `E_PRN_STRUCT_FIELD_KIND_MISMATCH` |
+| Cast target not in catalog | `E_PRN_INVALID_CAST_TARGET` |
+| Scalar contains CR/LF or an unpaired surrogate | `E_PRN_INVALID_SCALAR` |
+| Identity cast node | `E_PRN_INCONSISTENT_TREE` |
+
+A correct parser never produces these trees.
 
 ---
 
