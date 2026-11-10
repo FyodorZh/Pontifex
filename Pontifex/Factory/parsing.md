@@ -163,9 +163,10 @@ other control code unit → \uXXXX
 surrogate code unit → \uXXXX
 ```
 
-If the escaped text is longer than 40 UTF-16 code units, truncate it to at most
-40 code units, cutting only on Unicode scalar boundaries. Never cut between the
-two escapes of a surrogate pair; then append `...`.
+If the escaped text is longer than 40 UTF-16 code units, truncate it to the
+longest prefix that is at most 40 code units and ends at an escape-unit
+boundary. Never cut inside `\\`, `\"`, `\r`, `\n`, `\t`, or `\uXXXX`, or between
+the two escapes of a surrogate pair. Append `...`.
 
 Lists of expected tokens or names are joined with ` or ` in the order defined by
 the relevant rule. Sets of names are sorted lexicographically for determinism.
@@ -185,7 +186,7 @@ AstExpr           : AstValue   { AstTransportCall Call; AstCast? Cast; }
 AstList           : AstValue   { IReadOnlyList<AstExpr> Elements;
                                  int OpenOffset; int CloseOffset; }
 AstStruct         : AstValue   { IReadOnlyList<AstField> Fields;
-                                 int OpenOffset; int CloseBraceOffset; }
+                                 int OpenOffset; int CloseOffset; }
 AstScalar         : AstValue   { string Text; bool WasQuoted; }
 
 AstTransportCall  { string Scheme; Token SchemeToken;
@@ -499,7 +500,9 @@ interface ITransportConstructor
 }
 ```
 
-- `Name` MUST be an identifier and is normalized to lowercase.
+- `Name` MUST be an identifier and is normalized to lowercase. The registry
+  stores a normalized metadata view; resolvers and the printer see canonical
+  names, not the caller's original spelling.
 - Canonical `Name` values MUST be unique within a registry.
 - `Params` MAY be empty. Parameter names MUST be identifiers, normalized to
   lowercase, and unique within the constructor.
@@ -633,12 +636,15 @@ The resolver uses a transport-type catalog:
 interface ITransportTypeCatalog
 {
     bool TryResolve(string name, out TransportType type, out string canonicalName);
+    bool TryGetCanonicalName(TransportType type, out string canonicalName);
     string GetCanonicalName(TransportType type);
     IReadOnlyList<TransportType> AllTypes { get; }
 }
 ```
 
 - Lookup is ASCII case-insensitive.
+- `TryGetCanonicalName` returns `false` when the type is absent from the catalog.
+  `GetCanonicalName` MUST only be called for a type present in the catalog.
 - `canonicalName` is the exact spelling printed by the canonical printer.
 - Catalog names MUST be identifiers and MUST be unique case-insensitively.
 - `AllTypes` is the complete set of catalog types in canonical order.
@@ -656,6 +662,9 @@ RegisterTransport(ITransportConstructor constructor,
 
 Rules:
 
+0. Build and validate the type catalog first: names are identifiers and unique
+   case-insensitively (`E_REG_INVALID_TYPE_NAME`, `E_REG_DUPLICATE_TYPE_NAME`).
+   All registry rules below follow catalog validation.
 1. Normalize the canonical name, aliases, parameter names, and all nested
    struct-field names to lowercase.
 2. Validate canonical name, parameter names, and alias names as identifiers.
@@ -665,7 +674,9 @@ Rules:
 6. Validate `TransportListParam`: `Min >= 0`; `Max == null` or `Max >= Min`.
 7. Validate struct schemas recursively: field names are valid identifiers and
    unique within their schema. Field kinds are constrained by the
-   `StringField`/`NestedStructField` metadata types.
+   `StringField`/`NestedStructField` metadata types. Validation visits each
+   distinct `StructSchema` instance once using a visited set; shared or cyclic
+   schema references are permitted and are not revalidated.
 8. Normalize aliases; duplicates within the same registration are ignored. An
    alias equal to the constructor's own canonical name is ignored.
 9. This rule applies only to alias-to-constructor mappings registered for the
@@ -679,7 +690,8 @@ Rules:
 11. Reject a constructor `Type` or any `Expected` member that is absent from the
     type catalog.
 
-Checks run in the numbered order above, and the first failure is reported.
+Checks run in the numbered order above (rule 0 first), and the first failure is
+reported.
 Within rule 2, check the canonical name first, then parameter names in declaration
 order, then alias names in input order. Struct schemas are validated by rule 7:
 visit fields in schema order and validate the name as an identifier before
@@ -724,6 +736,8 @@ ParseAndResolve(input, registry, catalog)     -> ResolvedExpr
 ```
 
 `ParseAndResolve` is exactly `Resolve(Parse(input), registry, catalog)`.
+In the algorithms below, `span(x)` is `x.Span`, and `normalize(s)` is
+`ToLowerInvariant(s)` for identifiers.
 
 ### 7.1 Expected types
 
@@ -812,9 +826,10 @@ Rules:
 - An alias-only scheme with `Any` and multiple candidates is ambiguous.
 - `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` reports `available` from `allCandidates`,
   the set before expected-type filtering.
-- Within one alias group, all candidate types are distinct. A canonical
-  constructor and an alias of the same type may still share a scheme name; the
-  canonical-preference rule above resolves that overlap deterministically.
+- Within one alias group — that is, within `registry.Aliases(scheme)` — all
+  candidate types are distinct (rule 9 of §6.7). The canonical constructor may
+  carry the same `Type` as an alias; canonical preference resolves that overlap
+  deterministically.
 
 ### 7.4 Argument binding
 
@@ -976,7 +991,7 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
         if not bound.Contains(schemaField) and schemaField.Required:
             path = JoinPath(parentPath, schemaField.Name)
             error E_SEM_MISSING_REQUIRED_STRUCT_FIELD
-                  at astStruct.CloseBraceOffset
+                  at astStruct.CloseOffset
                   path = path, parameter = paramName
 
     # 3. Validate provided fields in schema order.
@@ -1131,18 +1146,20 @@ The current builder consumes `IDescription`, a string-keyed bag of `IElement`.
 An implementation MAY provide an adapter with this mapping:
 
 ```text
-CompileExpr(ResolvedExpr e):
+CompileExpr(ResolvedExpr e, ITransportTypeCatalog catalog):
     if e is ResolvedCast:
+        if not catalog.TryGetCanonicalName(e.Target, out canonicalTarget):
+            error E_CMP_INVALID_CAST_TARGET
         return Description {
             "name" = "convert",                 # internal adapter node only
-            "type" = catalog.GetCanonicalName(e.Target),
-            "from" = DescriptionElement(CompileTransport(e.Inner))
+            "type" = canonicalTarget,
+            "from" = DescriptionElement(CompileTransport(e.Inner, catalog))
         }
     if e is ResolvedTransport:
-        return CompileTransport(e)
+        return CompileTransport(e, catalog)
 
-CompileTransport(ResolvedTransport t):
-    if ToLowerInvariant(t.Constructor.Name) == "convert":
+CompileTransport(ResolvedTransport t, ITransportTypeCatalog catalog):
+    if t.Constructor.Name == "convert":
         error E_CMP_RESERVED_SCHEME
     d = Description {
         "name" = t.Constructor.Name,
@@ -1150,17 +1167,18 @@ CompileTransport(ResolvedTransport t):
     }
     for each binding in t.Provided in declaration order:
         d.Add(AdapterKey(binding.Param.Name),
-              CompileValue(binding.Param, binding.Value))
+              CompileValue(binding.Param, binding.Value, catalog))
     return d
 
-CompileValue(param, value):
+CompileValue(param, value, ITransportTypeCatalog catalog):
     ScalarValue            -> StringElement(value.Text)
-    TransportValue         -> DescriptionElement(CompileExpr(value.Expr))
-    TransportListValue     -> ArrayElement(value.Elements.Select(CompileExpr)
-                                                  .Select(DescriptionElement))
-    StructValue            -> DescriptionElement(CompileStruct(value))
+    TransportValue         -> DescriptionElement(CompileExpr(value.Expr, catalog))
+    TransportListValue     -> ArrayElement(value.Elements
+        .Select(e => CompileExpr(e, catalog))
+        .Select(DescriptionElement))
+    StructValue            -> DescriptionElement(CompileStruct(value, catalog))
 
-CompileStruct(value):
+CompileStruct(value, ITransportTypeCatalog catalog):
     d = Description
     for each binding in schema order:
         field = binding.Field
@@ -1168,7 +1186,7 @@ CompileStruct(value):
             d.Add(FieldKey(field.Name), StringElement(binding.Value.Text))
         if binding.Value is NestedStructFieldValue:
             d.Add(FieldKey(field.Name),
-                  DescriptionElement(CompileStruct(binding.Value)))
+                  DescriptionElement(CompileStruct(binding.Value, catalog)))
     return d
 ```
 
@@ -1221,6 +1239,14 @@ homogeneity, struct field membership and schema order, canonical names, cast
 targets, and scalar printability. Generic invariant violations use
 `E_PRN_INCONSISTENT_TREE` with one of the details defined in §13.5.
 
+Validation order is depth-first in print order. For a cast expression, identity
+and cast-target checks precede validation of the inner transport. Within a
+transport: required parameters in declaration order; then
+unknown/duplicate/out-of-order provided parameters; then
+`Type == Constructor.Type`; then each provided parameter in declaration order
+(value kind, expected-set membership, list arity/homogeneity, then struct fields
+in the order unknown → missing → duplicate → kind); then scalar printability.
+
 ### 10.1 Expression
 
 ```text
@@ -1256,19 +1282,19 @@ PrintTransport(t):
     for each param in t.Constructor.Params in declaration order:
         binding = t.Provided.FirstOrDefault(b => b.Param == param)
         if binding is not null and param not in emitted:
-            parts.add(ToLowerInvariant(param.Name) + "=" +
-                      PrintValue(param, binding.Value))
+            parts.add(param.Name + "=" + PrintValue(param, binding.Value))
 
-    return ToLowerInvariant(t.Constructor.Name) + "(" + join(parts, ", ") + ")"
+    return t.Constructor.Name + "(" + join(parts, ", ") + ")"
 ```
 
-The printer lowercases ASCII identifiers when emitting scheme, parameter, and
-field names. This guarantees canonical output even if a constructor object
-exposes mixed case; registration still normalizes and validates the metadata.
+The printer emits names from normalized metadata; it does not repair noncanonical
+names. Registration stores a normalized metadata view used by the resolved tree
+and printer. A noncanonical name in a hand-built tree is an invariant violation.
 
 Consequences:
 
-- The canonical scheme is `Constructor.Name` lowercased. Aliases never appear.
+- The canonical scheme is `Constructor.Name` (already normalized). Aliases never
+  appear.
 - Absent parameters are omitted.
 - The longest provided prefix of positional-capable parameters is printed
   positionally; all other provided parameters are printed named.
@@ -1302,10 +1328,9 @@ PrintStructFields(value):
     for each binding in value.Fields in schema order:
         field = binding.Field
         if binding.Value is StringFieldValue:
-            parts.add(ToLowerInvariant(field.Name) + "=" +
-                      PrintScalar(binding.Value.Text))
+            parts.add(field.Name + "=" + PrintScalar(binding.Value.Text))
         if binding.Value is NestedStructFieldValue:
-            parts.add(ToLowerInvariant(field.Name) + "={" +
+            parts.add(field.Name + "={" +
                       join(PrintStructFields(binding.Value), ", ") + "}")
     return parts
 ```
@@ -1343,7 +1368,8 @@ uppercase hexadecimal digits of the UTF-16 code unit.
 The printer normalizes:
 
 - aliases → canonical scheme names;
-- identifier case → lowercase for schemes, parameters, struct fields;
+- identifier names → normalized lowercase metadata (the printer does not
+  lowercase on the fly);
 - type names → catalog canonical spelling;
 - whitespace and comma spacing;
 - positional/named form → longest provided positional prefix + named remainder;
@@ -1513,7 +1539,7 @@ sealed record BuildException(string Code, string Message);
 | `E_LEX_UNTERMINATED_STRING` | Closing quote not found | `unterminated quoted string` | Opening quote |
 | `E_LEX_INVALID_ESCAPE` | Backslash followed by a code unit other than `"` or `\`; this takes precedence for that code unit | `invalid escape sequence '<sequence>'; only \" and \\ are allowed` | Backslash |
 | `E_LEX_RAW_NEWLINE_IN_STRING` | Raw CR or LF encountered by the decode loop outside a valid escape | `raw newline is not allowed inside a quoted string` | Newline character |
-| `E_LEX_INVALID_UNICODE` | Unpaired surrogate encountered by the decode loop outside a valid escape | `invalid Unicode scalar value` | Offending code unit |
+| `E_LEX_INVALID_UNICODE` | Unpaired UTF-16 surrogate encountered while lexing a `Word` or quoted string, outside a valid escape | `invalid Unicode scalar value` | Offending code unit |
 
 Lexer precedence:
 
@@ -1634,7 +1660,9 @@ For a thrown validator or an empty validator result, `<reason>` is exactly
 `FormatKnownTypes()` for unknown transport types.
 
 `<expected>` is `FormatParamExpectation(params)` for unknown parameters and
-`FormatFieldExpectation(schema)` for unknown struct fields.
+`FormatFieldExpectation(schema)` for unknown struct fields. For a nested unknown
+field, `<expected>` lists the schema at the nesting level where the offending
+field was found; `<param>` remains the top-level parameter name.
 
 `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` formats `available` from `allCandidates`
 before expected-type filtering. `E_SEM_AMBIGUOUS_SCHEME` formats `candidates`
@@ -1723,8 +1751,8 @@ For printer messages:
   Known schema segments are canonical; an unknown leaf uses its stored name.
 - `<detail>` in `E_PRN_INCONSISTENT_TREE` is one of `identity cast node`,
   `expected-type membership violation`, `constructor type mismatch`,
-  `non-canonical name`, `struct field order violation`, or
-  `unspecified invariant violation`.
+  `non-canonical name`, `struct field order violation`,
+  `provided parameter order violation`, or `unspecified invariant violation`.
 - `<type>` is the catalog canonical type name when the type exists. In
   `E_PRN_INVALID_CAST_TARGET`, it is the transport type's `ToString()` value.
 - `<code>` in `E_PRN_INVALID_SCALAR` is exactly four uppercase hexadecimal digits
@@ -1745,6 +1773,7 @@ These are outside the parser/printer contract but complete the boundary.
 | `E_CMP_UNKNOWN_PARAM` | Compiler | `compiler received unknown parameter '<name>'` |
 | `E_CMP_PARAM_KIND_MISMATCH` | Compiler | `compiler expected value kind <expected> for parameter '<name>', got <actual>` |
 | `E_CMP_RESERVED_SCHEME` | Compiler | `scheme 'convert' is reserved by this adapter` |
+| `E_CMP_INVALID_CAST_TARGET` | Compiler | `cast target '<type>' is invalid` |
 | `E_BLD_NO_CONVERSION_PATH` | Builder | `no conversion path from <from> to <to>` |
 | `E_BLD_CONSTRUCTOR_FAILED` | Builder | `transport constructor '<scheme>' failed` |
 
@@ -1753,7 +1782,8 @@ In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are value kinds. In
 `E_PRN_INCONSISTENT_TREE`. Elsewhere in compiler/build messages, `<scheme>` is
 canonical lowercase; `<name>` is canonical except in `E_CMP_UNKNOWN_PARAM`, where
 it is the stored parameter name; `<from>` and `<to>` are catalog canonical type
-names.
+names. In `E_CMP_INVALID_CAST_TARGET`, `<type>` is the transport type's
+`ToString()` value.
 
 ---
 
@@ -1804,6 +1834,8 @@ bag          TypeA; items TransportList positional optional, min 0, expected any
 emptyStruct  TypeA; config Struct positional required; schema has no fields
 single       TypeA; item TransportList positional required, min 1, max 1,
                     expected any
+dual         TypeA; input Transport positional required,
+                    expected OneOf(TypeA, TypeB)
 deep         TypeA
              config Struct positional required
                     outer Struct required
@@ -1860,6 +1892,7 @@ deep         TypeA
 | `alpha(beta(x), input=beta(y))` | `E_SEM_DUPLICATE_PARAM` | 15 |
 | `alpha(beta(x), fast, extra)` | `E_SEM_TOO_MANY_POSITIONAL` | 21 |
 | `alpha(1)` | `E_SEM_EXPECTED_TRANSPORT` | 6 |
+| `gamma(beta(x))` | `E_SEM_EXPECTED_TRANSPORT_LIST` | 6 |
 | `structy(1)` | `E_SEM_EXPECTED_STRUCT` | 8 |
 | `beta([alpha(beta(x))])` | `E_SEM_EXPECTED_SCALAR` | 5 |
 | `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN` | 6 |
@@ -1880,6 +1913,7 @@ deep         TypeA
 | `alpha(beta(x)) as TypeZ` | `E_SEM_UNKNOWN_TRANSPORT_TYPE` | 18 |
 | `outer(alpha(beta(x)) as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH` | 24 |
 | `outer(beta(x) as TypeA)` | `E_SEM_CAST_TYPE_MISMATCH` | 17 |
+| `dual(beta(x) as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH` | 16 |
 | `beta(1)` where `1` is a scalar and `value` is String | valid | — |
 
 Representative exact messages:
@@ -1890,6 +1924,8 @@ Representative exact messages:
 | `alpha(beta(x), fast, extra)` | `E_SEM_TOO_MANY_POSITIONAL: too many positional arguments for scheme 'alpha'; expected at most 2 (offset 21)` |
 | `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN: transport list for 'items' requires at least 2 element(s), got 1 (offset 6)` |
 | `outer(gamma([alpha(beta(x)), alpha(beta(x))]))` | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE: scheme 'gamma' has no variant for expected transport type TypeB; available: gamma (TypeC) (offset 6)` |
+| `shared(x)` | `E_SEM_AMBIGUOUS_SCHEME: scheme 'shared' is ambiguous; candidates: beta (TypeB), gamma (TypeC) (offset 0)` |
+| `dual(beta(x) as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH: cast produces transport type TypeC, but expected TypeA or TypeB (offset 16)` |
 | `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY: transport list for 'items' must contain one transport type; found TypeA, TypeB (offset 23)` |
 | `deep({outer={inner={}}})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD: missing required field 'outer.inner.value' in struct for parameter 'config' (offset 20)` |
 | `structy({name=alpha(beta(x))})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR: field 'name' expects a scalar value, got transport (offset 14)` |
@@ -1970,6 +2006,7 @@ Representative exact messages:
 | Transport value outside the parameter's expected set | `E_PRN_INCONSISTENT_TREE` |
 | `ResolvedTransport.Type != Constructor.Type` | `E_PRN_INCONSISTENT_TREE` |
 | Non-canonical scheme, parameter, or field name | `E_PRN_INCONSISTENT_TREE` |
+| Provided parameters not in declaration order | `E_PRN_INCONSISTENT_TREE` |
 | Struct fields not in schema order | `E_PRN_INCONSISTENT_TREE` |
 | Scalar contains CR/LF or an unpaired surrogate | `E_PRN_INVALID_SCALAR` |
 | Identity cast node | `E_PRN_INCONSISTENT_TREE` |
@@ -1997,6 +2034,10 @@ Representative non-semantic error messages:
 | Missing constructor type `TypeZ` | `E_REG_TYPE_NOT_IN_CATALOG: transport type TypeZ is not present in the type catalog` |
 | Printer tree missing required `input` | `E_PRN_MISSING_REQUIRED_PARAM: resolved transport 'alpha' is missing required parameter 'input'` |
 | Compiler tree with unknown parameter `x` | `E_CMP_UNKNOWN_PARAM: compiler received unknown parameter 'x'` |
+| Compiler tree with duplicate parameter `input` | `E_CMP_DUPLICATE_PARAM: compiler received duplicate parameter 'input'` |
+| Compiler tree with scalar for transport parameter `input` | `E_CMP_PARAM_KIND_MISMATCH: compiler expected value kind transport for parameter 'input', got scalar` |
+| Compiler tree with inconsistent constructor type | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: constructor type mismatch` |
+| Compiler tree with cast target `TypeZ` | `E_CMP_INVALID_CAST_TARGET: cast target 'TypeZ' is invalid` |
 | Compiler tree with scheme `convert` | `E_CMP_RESERVED_SCHEME: scheme 'convert' is reserved by this adapter` |
 | Build cast from `TypeA` to `TypeB` without a path | `E_BLD_NO_CONVERSION_PATH: no conversion path from TypeA to TypeB` |
 | Constructor `alpha` fails | `E_BLD_CONSTRUCTOR_FAILED: transport constructor 'alpha' failed` |
