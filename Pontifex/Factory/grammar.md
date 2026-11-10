@@ -256,14 +256,14 @@ The grammar validates only shape and token structure. The following are
 - scalar validators.
 
 The grammar intentionally permits expressions that are syntactically valid but
-semantically invalid, for example:
+semantically invalid. Examples:
 
-```text
-unknown-scheme()
-alpha(p=1, q=2)          # p or q may not exist
-alpha({p=1})             # syntax valid; schema may reject p
-alpha() as UnknownType   # syntax valid; unknown type is semantic
-```
+| Formula | Why it may be rejected semantically |
+|---|---|
+| `unknown-scheme()` | The scheme may not be registered. |
+| `alpha(p=1, q=2)` | `p` or `q` may not be declared parameters. |
+| `alpha({p=1})` | The struct schema may reject field `p`. |
+| `alpha() as UnknownType` | `UnknownType` may not be a known transport type. |
 
 ## 8. Canonical lexical forms
 
@@ -305,23 +305,23 @@ alpha(a|b)
 
 Syntactically invalid:
 
-```text
-                     # empty input
-alpha                # missing "("
-alpha(               # missing ")" and missing value
-alpha(,              # missing value
-alpha(a,)            # trailing comma
-alpha(a b)           # missing comma
-alpha(p=1, a)        # positional after named
-alpha([beta(), 1])   # list element is not a transport
-alpha([[beta()]])    # nested list
-alpha({p=1,})        # trailing comma
-alpha({p})           # missing "="
-alpha() as           # missing type name
-alpha() as TypeA as TypeB   # chained cast
-[alpha()]            # top-level list
-{alpha()}            # top-level struct
-```
+| Formula | Why it is invalid |
+|---|---|
+| *(empty input)* | No expression. |
+| `alpha` | Missing `(`. |
+| `alpha(` | Missing `)` and missing value. |
+| `alpha(,` | Missing value. |
+| `alpha(a,)` | Trailing comma. |
+| `alpha(a b)` | Missing comma. |
+| `alpha(p=1, a)` | Positional after named. |
+| `alpha([beta(), 1])` | List element is not a transport. |
+| `alpha([[beta()]])` | Nested list. |
+| `alpha({p=1,})` | Trailing comma. |
+| `alpha({p})` | Missing `=`. |
+| `alpha() as` | Missing type name. |
+| `alpha() as TypeA as TypeB` | Chained cast. |
+| `[alpha()]` | Top-level list. |
+| `{alpha()}` | Top-level struct. |
 
 Semantic validity is intentionally not implied by these examples.
 
