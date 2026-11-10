@@ -73,6 +73,19 @@ Word, QuotedString, LParen, RParen, LBracket, RBracket,
 LBrace, RBrace, Comma, Equals, EOF
 ```
 
+```csharp
+sealed class Token
+{
+    TokenKind Kind;
+    string Text;          // decoded text for QuotedString; raw text for Word
+    int Start;            // 0-based UTF-16 offset
+    int End;              // Start + source length
+    int Offset => Start;
+}
+```
+
+For `EOF`, `Start == End == input length`.
+
 Punctuation characters map one-to-one:
 
 ```text
@@ -146,10 +159,12 @@ CR →  \r
 LF →  \n
 HTAB → \t
 other control code unit → \uXXXX
+surrogate code unit → \uXXXX
 ```
 
-If the escaped text is longer than 40 UTF-16 code units, truncate it to the first
-37 code units and append `...`.
+If the escaped text is longer than 40 UTF-16 code units, truncate it to at most
+40 code units, cutting only between complete escape sequences or Unicode scalar
+values, then append `...`.
 
 Lists of expected tokens or names are joined with ` or ` in the order defined by
 the relevant rule. Sets of names are sorted lexicographically for determinism.
@@ -538,12 +553,15 @@ readonly struct TransportTypeSet
     static TransportTypeSet Any;
     static TransportTypeSet Exactly(TransportType type);
     static TransportTypeSet OneOf(params TransportType[] types);
+    bool IsAny { get; }
+    IReadOnlyList<TransportType> Types { get; }   // empty for Any
     bool Contains(TransportType type);
 }
 ```
 
-- `Any` contains every transport type.
-- `Exactly(T)` contains only `T`.
+- `Any` contains every transport type and has `IsAny = true` and an empty `Types`.
+- `Exactly(T)` contains only `T`; `Types` is `[T]`.
+- `OneOf(...)` contains the listed types; `Types` is the normalized list.
 - `OneOf(...)` MUST contain at least one type; duplicates are normalized away.
 - `OneOf()` with zero elements is a registration error.
 
@@ -565,6 +583,18 @@ delegate string? ScalarValidator(string value);
 - A throwing struct-field validator uses the field form of the message:
   `field '<path>' of parameter '<param>' is invalid: validation failed`,
   where `<path>` is the field path defined in §7.8.
+
+Define `InvokeValidator(validator, text)`:
+
+```text
+if validator is null: return null
+try:
+    result = validator(text)
+    if result is null: return null
+    return result is empty ? "validation failed" : result
+catch:
+    return "validation failed"
+```
 
 ### 6.5 Struct schemas
 
@@ -603,12 +633,17 @@ interface ITransportTypeCatalog
 {
     bool TryResolve(string name, out TransportType type, out string canonicalName);
     string GetCanonicalName(TransportType type);
+    IReadOnlyList<TransportType> AllTypes { get; }
 }
 ```
 
 - Lookup is ASCII case-insensitive.
 - `canonicalName` is the exact spelling printed by the canonical printer.
 - Catalog names MUST be identifiers and MUST be unique case-insensitively.
+- `AllTypes` is the complete set of catalog types in canonical order.
+- Every `TransportType` used by a registered constructor or in an
+  `Expected`/`OneOf` set MUST have a canonical name in the catalog. Registration
+  rejects a type that is absent from the catalog.
 - The grammar does not enumerate concrete types; the catalog is configuration.
 
 ### 6.7 Registration
@@ -620,15 +655,16 @@ RegisterTransport(ITransportConstructor constructor,
 
 Rules:
 
-1. Normalize the canonical name and all aliases to lowercase.
-2. Validate canonical name, parameter names, alias names, and struct field names
-   as identifiers.
+1. Normalize the canonical name, aliases, parameter names, and all nested
+   struct-field names to lowercase.
+2. Validate canonical name, parameter names, and alias names as identifiers.
 3. Reject duplicate canonical names.
 4. Reject duplicate parameter names within a constructor.
 5. Normalize `TransportTypeSet` values; reject empty `OneOf`.
 6. Validate `TransportListParam`: `Min >= 0`; `Max == null` or `Max >= Min`.
-7. Validate struct schemas: unique field names, valid identifiers, supported
-   field kinds.
+7. Validate struct schemas recursively: field names are valid identifiers and
+   unique within their schema. Field kinds are constrained by the
+   `StringField`/`NestedStructField` metadata types.
 8. Normalize aliases; duplicates within the same registration are ignored. An
    alias equal to the constructor's own canonical name is ignored.
 9. This rule applies only to alias-to-constructor mappings registered for the
@@ -639,13 +675,15 @@ Rules:
    `Type` by different constructors.
 10. `SuggestedAliases` are not automatically registered. A host MAY pass them (or
     any other aliases) to `RegisterTransport`.
+11. Reject a constructor `Type` or any `Expected` member that is absent from the
+    type catalog.
 
 Checks run in the numbered order above, and the first failure is reported.
 Within rule 2, check the canonical name first, then parameter names in declaration
-order, then alias names in input order, then struct field names recursively in
-schema order. Within rule 7, visit fields in schema order and validate the name
-as an identifier before uniqueness and kind. Registration errors are listed in
-§13.4. They occur when the registry is built, not while parsing.
+order, then alias names in input order. Struct schemas are validated by rule 7:
+visit fields in schema order and validate the name as an identifier before
+uniqueness and kind. Registration errors are listed in §13.4. They occur when
+the registry is built, not while parsing.
 
 ### 6.8 Registry lookup
 
@@ -654,6 +692,7 @@ interface ITransportRegistry
 {
     ITransportConstructor? Canonical(string normalizedScheme);
     IReadOnlyList<ITransportConstructor> Aliases(string normalizedScheme);
+    IReadOnlyList<string> AllSchemeNames { get; }
     void RegisterTransport(...);
 }
 ```
@@ -662,9 +701,11 @@ interface ITransportRegistry
   normalized scheme, or `null`.
 - `Aliases(scheme)` returns all constructors that registered the normalized
   scheme as an alias. The canonical constructor is not part of this result.
-- Both methods require an already-normalized lowercase scheme.
-- `constructor.Params.Find(normalizedName)` is a case-insensitive lookup over
-  normalized parameter names and returns `null` when no parameter matches.
+- `AllSchemeNames` is the sorted union of all canonical and alias names.
+- Both lookup methods require an already-normalized lowercase scheme.
+- `FindByName(list, normalizedName)` performs a case-insensitive lookup over
+  normalized names in `Params`, `StructSchema.Fields`, or equivalent lists and
+  returns `null` when no entry matches.
 
 ---
 
@@ -737,7 +778,7 @@ ResolveTransport(call, expected):
         error E_SEM_UNKNOWN_SCHEME at call.SchemeToken.Offset
 
     candidates = allCandidates
-    if expected != Any:
+    if not expected.IsAny:
         candidates = allCandidates.Where(c => expected.Contains(c.Type))
         if candidates is empty:
             error E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE
@@ -790,7 +831,7 @@ for i in 0 .. positionalArgs.Count-1:
 
 for each named arg in source order:
     name = normalize(arg.Name)
-    param = constructor.Params.Find(name)
+    param = FindByName(constructor.Params, name)
     if param is null:
         error E_SEM_UNKNOWN_PARAM at arg.NameToken.Offset
     if bound.Contains(param):
@@ -829,9 +870,7 @@ for each param in constructor.Params in declaration order:
             if value is not AstScalar:
                 error E_SEM_EXPECTED_SCALAR at value.Span.Start
                       actual = Shape(value)
-            reason = null
-            if param.Validate is not null:
-                reason = param.Validate(value.Text)
+            reason = InvokeValidator(param.Validate, value.Text)
             if reason is not null:
                 error E_SEM_VALIDATOR_FAILED at value.Span.Start
                       context = parameter '<param.Name>', reason
@@ -919,7 +958,7 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
     # 1. Bind source fields in source order.
     for each field in astStruct.Fields in source order:
         name = normalize(field.Name)
-        schemaField = schema.Fields.Find(name)
+        schemaField = FindByName(schema.Fields, name)
         if schemaField is null:
             path = JoinPath(parentPath, field.Name)       # raw leaf
             error E_SEM_UNKNOWN_STRUCT_FIELD at field.NameToken.Offset
@@ -950,9 +989,7 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
                 if value is not AstScalar:
                     error E_SEM_STRUCT_FIELD_EXPECTED_SCALAR at value.Span.Start
                           path = path, actual = Shape(value)
-                reason = null
-                if schemaField.Validate is not null:
-                    reason = schemaField.Validate(value.Text)
+                reason = InvokeValidator(schemaField.Validate, value.Text)
                 if reason is not null:
                     error E_SEM_VALIDATOR_FAILED at value.Span.Start
                           context = field '<path>' of parameter '<paramName>'
@@ -1104,7 +1141,8 @@ CompileTransport(ResolvedTransport t):
         "type" = catalog.GetCanonicalName(t.Type)
     }
     for each binding in t.Provided in declaration order:
-        d.Add(binding.Param.Name, CompileValue(binding.Param, binding.Value))
+        d.Add(AdapterKey(binding.Param.Name),
+              CompileValue(binding.Param, binding.Value))
     return d
 
 CompileValue(param, value):
@@ -1123,17 +1161,21 @@ CompileStruct(value):
     return d
 ```
 
+`AdapterKey(name)` is `param.` + name. The adapter’s consumer must strip that
+prefix.
+
 Notes:
 
 - `convert` exists only inside this adapter. It is not formula syntax and has no
-  scheme registration. A different compiler may represent casts differently or
-  call the builder directly.
+  scheme registration. This adapter reserves the scheme name `convert`; a
+  registry used with this adapter must reject or avoid a constructor with that
+  canonical name. A different compiler may represent casts differently or call
+  the builder directly.
 - Absent parameters are never added.
 - The adapter assumes the resolved tree is valid; duplicate keys, unknown
   parameters, and kind mismatches are compiler invariant errors.
-- The adapter’s `name` and `type` keys are reserved. A parameter literally named
-  `name` or `type` would collide; an implementation of this adapter must prefix
-  parameter keys (for example `param.<Name>`) or reject those names.
+- The adapter’s `name` and `type` keys are reserved. Parameter keys are prefixed
+  with `param.` to avoid collision.
 - `IDescription` is not the parser’s or printer’s model. It is an adapter output.
 
 ### 9.2 Build-time cast conversion
@@ -1146,8 +1188,9 @@ When a builder or compiler builds a `ResolvedCast`:
 3. Otherwise ask the converter graph for a path from `Inner.Type` to `Target`.
 4. If no path exists, report `E_BLD_NO_CONVERSION_PATH`.
 
-The parser MUST NOT validate converter paths. It validates only that the target
-type exists. Converter availability is build-time configuration.
+The parser MUST NOT validate converter paths. It validates that the target type
+exists and is within the expected set. Converter availability is build-time
+configuration.
 
 ---
 
@@ -1252,7 +1295,8 @@ Empty lists print `[]`; empty structs print `{}`.
 ```text
 PrintScalar(text):
     if text contains CR, LF, or an unpaired surrogate:
-        error E_PRN_INVALID_SCALAR code = offending UTF-16 code unit
+        error E_PRN_INVALID_SCALAR
+              code = first offending UTF-16 code unit in text order
     if text == "":
         return '""'
     if text contains any character in WS or DELIM:
@@ -1298,10 +1342,12 @@ The printer preserves:
 
 Assume a registry where:
 
-- `alpha`: `input` (Transport, positional, required), `mode` (String, positional,
-  optional), `timeout` (String, positional = false, optional), type `TypeA`.
+- `alpha`: `input` (Transport, positional, required, expected any), `mode`
+  (String, positional, optional), `timeout` (String, positional = false,
+  optional), type `TypeA`.
 - `beta`: `value` (String, positional, required), type `TypeB`.
-- `gamma`: `items` (TransportList, positional, required, min 2), type `TypeC`.
+- `gamma`: `items` (TransportList, positional, required, min 2, expected any),
+  type `TypeC`.
 - `structy`: `config` (Struct, positional, required; fields `name` String required,
   `nested` nested Struct optional with field `a` String optional), type `TypeA`.
 
@@ -1504,9 +1550,9 @@ it is reported as `E_SYN_UNEXPECTED_TOKEN` (for example, `alpha(,)` and
 Formatting helpers used in messages:
 
 - `FormatTypeSet(set)`:
-  - `Any` → `any transport type`
-  - `Exactly(T)` → `T`
-  - `OneOf(...)` → distinct canonical names sorted, joined with ` or `
+  - if `set.IsAny` → `any transport type`
+  - otherwise → distinct canonical names of `set.Types`, sorted and joined with
+    ` or `
 - `FormatVariants(candidates)` → entries `name (Type)`, where `name` is the
   constructor's canonical `Name` and `Type` is the canonical type name, sorted by
   name then type, joined with `, `.
@@ -1516,12 +1562,12 @@ Formatting helpers used in messages:
 - `FormatFieldExpectation(schema)` → if non-empty: `one of: <names>`, where the
   names are field names in schema order, each enclosed in single quotes, joined
   with `, `; if empty: `the struct has no fields`.
-- `FormatKnownSchemes()` → if non-empty: `known schemes: <list>`, where list is
-  canonical names sorted and joined with `, `; if empty:
-  `no schemes are registered`.
-- `FormatKnownTypes()` → if non-empty: `known types: <list>`, where list is
-  canonical names sorted and joined with `, `; if empty:
-  `no transport types are registered`.
+- `FormatKnownSchemes()` → if `registry.AllSchemeNames` is non-empty:
+  `known schemes: <list>`, where list is all canonical and alias names, sorted
+  and joined with `, `; if empty: `no schemes are registered`.
+- `FormatKnownTypes()` → if `catalog.AllTypes` is non-empty:
+  `known types: <list>`, where list is the canonical names of all catalog types,
+  sorted and joined with `, `; if empty: `no transport types are registered`.
 - `FormatTypes(types)` → distinct canonical names in first-encounter order,
   joined with `, `. For `E_SEM_LIST_HOMOGENEITY`, `<types>` is all distinct
   resolved element types of the list, in element order.
@@ -1549,10 +1595,11 @@ Formatting helpers used in messages:
 | `E_SEM_STRUCT_FIELD_EXPECTED_STRUCT` | Nested struct field received non-struct | `field '<path>' expects a struct, got <shape>` | Value start |
 | `E_SEM_UNKNOWN_TRANSPORT_TYPE` | Cast type not in catalog | `unknown transport type '<name>'; <known>` | Type token |
 | `E_SEM_CAST_TYPE_MISMATCH` | Cast target outside expected set | `cast produces transport type <target>, but expected <set>` | Type token |
-| `E_SEM_VALIDATOR_FAILED` | `Validate` returned non-null or threw | `parameter '<name>' is invalid: <reason>` | Value start |
+| `E_SEM_VALIDATOR_FAILED` | `Validate` returned non-null/empty or threw | `parameter '<name>' is invalid: <reason>` | Value start |
 | `E_SEM_VALIDATOR_FAILED` | Struct field validator failed | `field '<path>' of parameter '<param>' is invalid: <reason>` | Value start |
 
-For a thrown validator, `<reason>` is exactly `validation failed`.
+For a thrown validator or an empty validator result, `<reason>` is exactly
+`validation failed`.
 
 `<shape>` is exactly one of `scalar`, `transport`, `transport list`, `struct`.
 
@@ -1575,7 +1622,7 @@ Placeholder sources:
 | `<name>` in `E_SEM_MISSING_REQUIRED_PARAM`, `E_SEM_EXPECTED_SCALAR`, `E_SEM_EXPECTED_TRANSPORT`, `E_SEM_EXPECTED_TRANSPORT_LIST`, `E_SEM_EXPECTED_STRUCT`, `E_SEM_LIST_MIN`, `E_SEM_LIST_MAX`, and `E_SEM_LIST_HOMOGENEITY` | Canonical declared parameter name (lowercase). |
 | `<path>` in struct-field errors | Dot-separated field path. Segments for known schema fields are canonical lowercase; the final segment of an unknown field is raw input spelling. |
 | `<param>` | Canonical declared parameter name (lowercase). |
-| `<target>`, `<actual>`, `<type>`, `<from>`, `<to>`, `<set>`, `<variants>`, `<types>` | Canonical transport-type names and formatted lists. |
+| `<target>`, `<type>`, `<from>`, `<to>`, `<set>`, `<variants>`, `<types>` | Canonical transport-type names and formatted lists. |
 | `<shape>` | One of `scalar`, `transport`, `transport list`, `struct`. |
 
 In `E_SEM_VALIDATOR_FAILED`, `<name>` is the canonical parameter name for a
@@ -1603,8 +1650,11 @@ Registration errors use `RegistrationException` and have no offset.
 | `E_REG_INVALID_STRUCT_FIELD_NAME` | Struct field name is not an identifier | `invalid struct field name '<name>'` |
 | `E_REG_INVALID_TYPE_NAME` | Transport type name is not an identifier | `invalid transport type name '<name>'` |
 | `E_REG_DUPLICATE_TYPE_NAME` | Catalog contains duplicate type name | `transport type name '<name>' is already registered` |
+| `E_REG_TYPE_NOT_IN_CATALOG` | Constructor type or expected type is absent from the catalog | `transport type <type> is not present in the type catalog` |
 
 For `E_REG_INVALID_LIST_RANGE`, `<max>` is `unbounded` when `Max` is `null`.
+In `E_REG_TYPE_NOT_IN_CATALOG`, `<type>` is the transport type's `ToString()`
+value; in all other messages `<type>` is a catalog canonical name.
 
 ### 13.5 Printer errors
 
@@ -1619,20 +1669,31 @@ Printer errors use `PrinterException` and have no offset.
 | `E_PRN_PARAM_KIND_MISMATCH` | Value kind does not match parameter kind | `parameter '<name>' of scheme '<scheme>' has value kind <actual>, expected <expected>` |
 | `E_PRN_LIST_ARITY` | List count outside `Min`/`Max` | `transport list parameter '<name>' of scheme '<scheme>' has <count> element(s), expected <range>` |
 | `E_PRN_LIST_HOMOGENEITY` | Homogeneous list has mixed types | `transport list parameter '<name>' of scheme '<scheme>' mixes transport types` |
-| `E_PRN_STRUCT_FIELD_UNKNOWN` | Struct contains undeclared field | `struct parameter '<name>' of scheme '<scheme>' contains unknown field '<field>'` |
-| `E_PRN_STRUCT_FIELD_MISSING` | Required struct field absent | `struct parameter '<name>' of scheme '<scheme>' is missing required field '<field>'` |
-| `E_PRN_STRUCT_FIELD_DUPLICATE` | Same struct field appears twice | `struct parameter '<name>' of scheme '<scheme>' contains field '<field>' more than once` |
-| `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | Struct field value kind mismatch | `field '<field>' of struct parameter '<name>' has value kind <actual>, expected <expected>` |
+| `E_PRN_STRUCT_FIELD_UNKNOWN` | Struct contains undeclared field | `struct parameter '<name>' of scheme '<scheme>' contains unknown field '<path>'` |
+| `E_PRN_STRUCT_FIELD_MISSING` | Required struct field absent | `struct parameter '<name>' of scheme '<scheme>' is missing required field '<path>'` |
+| `E_PRN_STRUCT_FIELD_DUPLICATE` | Same struct field appears twice | `struct parameter '<name>' of scheme '<scheme>' contains field '<path>' more than once` |
+| `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | Struct field value kind mismatch | `field '<path>' of struct parameter '<name>' has value kind <actual>, expected <expected>` |
 | `E_PRN_INVALID_CAST_TARGET` | Cast target not in catalog | `cast target '<type>' is invalid` |
 | `E_PRN_INVALID_SCALAR` | Scalar contains CR, LF, or an unpaired surrogate | `scalar value contains a character that cannot be printed: U+<code>` |
 
 `<range>` is `<min>..<max>` if `Max` is set, otherwise `at least <min>`.
 
-For `E_PRN_INVALID_SCALAR`, `<code>` is exactly four uppercase hexadecimal digits
-of the UTF-16 code unit, prefixed with `U+`. An identity cast node is an
-inconsistent-tree violation and uses `E_PRN_INCONSISTENT_TREE` with detail
-`identity cast node`. Printer messages use canonical scheme, parameter, field,
-and type names.
+For printer messages:
+
+- `<actual>` and `<expected>` in kind-mismatch errors are value kinds: `scalar`,
+  `transport`, `transport list`, or `struct`.
+- `<path>` is a dot-separated struct-field path of `StructField.Name` values.
+  Known schema segments are canonical; an unknown leaf uses its stored name.
+- `<detail>` in `E_PRN_INCONSISTENT_TREE` is one of `identity cast node`,
+  `expected-type membership violation`, or `unspecified invariant violation`.
+- `<type>` is the catalog canonical type name when the type exists. In
+  `E_PRN_INVALID_CAST_TARGET`, it is the transport type's `ToString()` value.
+- `<code>` in `E_PRN_INVALID_SCALAR` is exactly four uppercase hexadecimal digits
+  of the first offending UTF-16 code unit in text order, prefixed with `U+`.
+
+An identity cast node is an inconsistent-tree violation and uses
+`E_PRN_INCONSISTENT_TREE` with detail `identity cast node`. Printer messages use
+canonical scheme, parameter, field, and type names.
 
 ### 13.6 Compiler and build errors
 
@@ -1647,6 +1708,10 @@ These are outside the parser/printer contract but complete the boundary.
 | `E_BLD_NO_CONVERSION_PATH` | Builder | `no conversion path from <from> to <to>` |
 | `E_BLD_CONSTRUCTOR_FAILED` | Builder | `transport constructor '<scheme>' failed` |
 
+In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are value kinds. In
+`E_CMP_INCONSISTENT_TREE`, `<detail>` uses the same closed set as
+`E_PRN_INCONSISTENT_TREE`.
+
 ---
 
 ## 14. Conformance examples and test matrix
@@ -1657,7 +1722,7 @@ Registry:
 
 ```text
 alpha   : TypeA
-          input   Transport      positional required
+          input   Transport      positional required, expected any
           mode    String         positional optional
           timeout String         named-only optional
 
@@ -1665,7 +1730,8 @@ beta    : TypeB
           value   String         positional required
 
 gamma   : TypeC
-          items   TransportList  positional required, min 2, max 3, homogeneous
+          items   TransportList  positional required, min 2, max 3,
+                                 homogeneous, expected any
 
 outer   : TypeC
           input   Transport      positional required, expected Exactly(TypeB)
@@ -1687,13 +1753,16 @@ Additional fixtures for the matrix:
 ```text
 shared       alias for beta (TypeB) and gamma (TypeC); no canonical constructor
 validated    TypeB; value String positional required; validator rejects "bad"
-mixed        TypeA; flag String named-only optional; input Transport positional required
+                    with reason "value must not be 'bad'"
+mixed        TypeA; flag String named-only optional;
+                    input Transport positional required, expected any
 opt          TypeA; a String positional optional; b String positional optional
-bag          TypeA; items TransportList positional optional, min 0
+bag          TypeA; items TransportList positional optional, min 0, expected any
 emptyStruct  TypeA; config Struct positional required; schema has no fields
-single       TypeA; item TransportList positional required, min 1, max 1
+single       TypeA; item TransportList positional required, min 1, max 1,
+                    expected any
 deep         TypeA
-             config Struct required
+             config Struct positional required
                     outer Struct required
                           inner Struct required
                                 value String required
@@ -1738,35 +1807,47 @@ deep         TypeA
 
 ### 14.3 Semantic errors
 
-| Source | Code |
+| Source | Code | Offset |
+|---|---|---|
+| `nosuch()` | `E_SEM_UNKNOWN_SCHEME` | 0 |
+| `alpha()` | `E_SEM_MISSING_REQUIRED_PARAM` | 6 |
+| `alpha(beta(x), q=1)` | `E_SEM_UNKNOWN_PARAM` | 15 |
+| `alpha(beta(x), input=beta(y))` | `E_SEM_DUPLICATE_PARAM` | 15 |
+| `alpha(beta(x), fast, extra)` | `E_SEM_TOO_MANY_POSITIONAL` | 21 |
+| `alpha(1)` | `E_SEM_EXPECTED_TRANSPORT` | 6 |
+| `structy(1)` | `E_SEM_EXPECTED_STRUCT` | 8 |
+| `beta([alpha(beta(x))])` | `E_SEM_EXPECTED_SCALAR` | 5 |
+| `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN` | 6 |
+| `gamma([alpha(beta(x)), alpha(beta(x)), alpha(beta(x)), alpha(beta(x))])` | `E_SEM_LIST_MAX` | 6 |
+| `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY` | 23 |
+| `outer(gamma([alpha(beta(x)), alpha(beta(x))]))` | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` | 0 |
+| `shared(x)` | `E_SEM_AMBIGUOUS_SCHEME` | 0 |
+| `validated(bad)` | `E_SEM_VALIDATOR_FAILED` | 10 |
+| `structy({name=x, extra=1})` | `E_SEM_UNKNOWN_STRUCT_FIELD` | 17 |
+| `structy({name=x, nested={unknown=1}})` | `E_SEM_UNKNOWN_STRUCT_FIELD` (path `nested.unknown`) | 25 |
+| `structy({name=x, name=y})` | `E_SEM_DUPLICATE_STRUCT_FIELD` | 17 |
+| `structy({})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` | 9 |
+| `deep({outer={inner={}}})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` (path `outer.inner.value`) | 20 |
+| `structy({name=alpha(beta(x))})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` | 14 |
+| `structy({name={}})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` | 14 |
+| `structy({name=x, nested=1})` | `E_SEM_STRUCT_FIELD_EXPECTED_STRUCT` | 24 |
+| `deep({outer={inner={value=beta(x)}}})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` (path `outer.inner.value`) | 26 |
+| `alpha(beta(x)) as TypeZ` | `E_SEM_UNKNOWN_TRANSPORT_TYPE` | 18 |
+| `outer(alpha(beta(x)) as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH` | 24 |
+| `outer(beta(x) as TypeA)` | `E_SEM_CAST_TYPE_MISMATCH` | 17 |
+| `beta(1)` where `1` is a scalar and `value` is String | valid | — |
+
+Representative exact messages:
+
+| Source | Exact message |
 |---|---|
-| `nosuch()` | `E_SEM_UNKNOWN_SCHEME` |
-| `alpha()` | `E_SEM_MISSING_REQUIRED_PARAM` |
-| `alpha(beta(x), q=1)` | `E_SEM_UNKNOWN_PARAM` |
-| `alpha(beta(x), input=beta(y))` | `E_SEM_DUPLICATE_PARAM` |
-| `alpha(beta(x), fast, extra)` | `E_SEM_TOO_MANY_POSITIONAL` |
-| `alpha(1)` | `E_SEM_EXPECTED_TRANSPORT` |
-| `structy(1)` | `E_SEM_EXPECTED_STRUCT` |
-| `beta([alpha(beta(x))])` | `E_SEM_EXPECTED_SCALAR` |
-| `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN` |
-| `gamma([alpha(beta(x)), alpha(beta(x)), alpha(beta(x)), alpha(beta(x))])` | `E_SEM_LIST_MAX` |
-| `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY` |
-| `outer(gamma([alpha(beta(x)), alpha(beta(x))]))` | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` |
-| `shared(x)` | `E_SEM_AMBIGUOUS_SCHEME` |
-| `validated(bad)` | `E_SEM_VALIDATOR_FAILED` |
-| `structy({name=x, extra=1})` | `E_SEM_UNKNOWN_STRUCT_FIELD` |
-| `structy({name=x, nested={unknown=1}})` | `E_SEM_UNKNOWN_STRUCT_FIELD` (path `nested.unknown`) |
-| `structy({name=x, name=y})` | `E_SEM_DUPLICATE_STRUCT_FIELD` |
-| `structy({})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` |
-| `deep({outer={inner={}}})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` (path `outer.inner.value`) |
-| `structy({name=alpha(beta(x))})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` |
-| `structy({name={}})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` |
-| `structy({name=x, nested=1})` | `E_SEM_STRUCT_FIELD_EXPECTED_STRUCT` |
-| `deep({outer={inner={value=beta(x)}}})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` (path `outer.inner.value`) |
-| `alpha(beta(x)) as TypeZ` | `E_SEM_UNKNOWN_TRANSPORT_TYPE` |
-| `outer(alpha(beta(x)) as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH` |
-| `outer(beta(x) as TypeA)` | `E_SEM_CAST_TYPE_MISMATCH` |
-| `beta(1)` where `1` is a scalar and `value` is String | valid |
+| `alpha()` | `E_SEM_MISSING_REQUIRED_PARAM: missing required parameter 'input' for scheme 'alpha' (offset 6)` |
+| `alpha(beta(x), fast, extra)` | `E_SEM_TOO_MANY_POSITIONAL: too many positional arguments for scheme 'alpha'; expected at most 2 (offset 21)` |
+| `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN: transport list for 'items' requires at least 2 element(s), got 1 (offset 6)` |
+| `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY: transport list for 'items' must contain one transport type; found TypeA, TypeB (offset 23)` |
+| `deep({outer={inner={}}})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD: missing required field 'outer.inner.value' in struct for parameter 'config' (offset 20)` |
+| `structy({name=alpha(beta(x))})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR: field 'name' expects a scalar value, got transport (offset 14)` |
+| `validated(bad)` | `E_SEM_VALIDATOR_FAILED: parameter 'value' is invalid: value must not be 'bad' (offset 10)` |
 
 > Some rows depend on registry details; tests must define the full registry
 > explicitly.
@@ -1818,6 +1899,7 @@ deep         TypeA
 | Struct field name `1name` | `E_REG_INVALID_STRUCT_FIELD_NAME` |
 | Catalog type name `1Type` | `E_REG_INVALID_TYPE_NAME` |
 | Catalog type name `TypeA` registered twice | `E_REG_DUPLICATE_TYPE_NAME` |
+| Constructor type or expected type absent from the catalog | `E_REG_TYPE_NOT_IN_CATALOG` |
 
 ### 14.7 Printer invariant errors
 
