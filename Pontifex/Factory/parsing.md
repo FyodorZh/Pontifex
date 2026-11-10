@@ -95,7 +95,8 @@ Punctuation characters map one-to-one:
 ,  Comma       =  Equals
 ```
 
-Whitespace is skipped and never appears in a token. The whitespace characters
+Whitespace outside quoted strings is skipped and never appears in a `Word` or
+punctuation token; it may appear inside a `QuotedString`. The whitespace characters
 are `SP`, `HTAB`, `CR`, and `LF` (see `grammar.md`).
 
 ### 3.2 Word tokens
@@ -180,6 +181,7 @@ types, or validation results.
 
 ```text
 SourceSpan        { int Start; int Length; int End => Start + Length; }
+SpanFrom(start, end) => SourceSpan { Start = start; Length = end - start }
 
 AstValue          (abstract)  { SourceSpan Span; }
 AstExpr           : AstValue   { AstTransportCall Call; AstCast? Cast; }
@@ -1098,6 +1100,9 @@ Invariants:
   parameters are absent; no defaults are inserted.
 - `Provided` is ordered by `Constructor.Params` declaration order, not source
   order.
+- Each `ParamBinding.Param` is reference-equal to the corresponding element of
+  `Constructor.Params`; each `StructFieldBinding.Field` is reference-equal to a
+  field of the corresponding schema.
 - `ResolvedTransport.Type == Constructor.Type`.
 - `ResolvedCast.Type == ResolvedCast.Target`.
 - `ResolvedCast.Inner.Type != ResolvedCast.Target` (identity casts are collapsed).
@@ -1161,9 +1166,11 @@ CompileExpr(ResolvedExpr e, ITransportTypeCatalog catalog):
 CompileTransport(ResolvedTransport t, ITransportTypeCatalog catalog):
     if t.Constructor.Name == "convert":
         error E_CMP_RESERVED_SCHEME
+    if not catalog.TryGetCanonicalName(t.Type, out canonicalType):
+        error E_CMP_INCONSISTENT_TREE detail "transport type not in catalog"
     d = Description {
         "name" = t.Constructor.Name,
-        "type" = catalog.GetCanonicalName(t.Type)
+        "type" = canonicalType
     }
     for each binding in t.Provided in declaration order:
         d.Add(AdapterKey(binding.Param.Name),
@@ -1239,13 +1246,15 @@ homogeneity, struct field membership and schema order, canonical names, cast
 targets, and scalar printability. Generic invariant violations use
 `E_PRN_INCONSISTENT_TREE` with one of the details defined in §13.5.
 
-Validation order is depth-first in print order. For a cast expression, identity
-and cast-target checks precede validation of the inner transport. Within a
-transport: required parameters in declaration order; then
-unknown/duplicate/out-of-order provided parameters; then
-`Type == Constructor.Type`; then each provided parameter in declaration order
-(value kind, expected-set membership, list arity/homogeneity, then struct fields
-in the order unknown → missing → duplicate → kind); then scalar printability.
+Validation is depth-first over values. For a cast expression, identity and
+cast-target checks precede validation of the inner transport. Within each
+transport, provided values are visited in `Constructor.Params` declaration order,
+independent of print order. The check order is: required parameters in
+declaration order; unknown provided parameter; duplicate provided parameter;
+out-of-order provided parameter; `Type == Constructor.Type`; then each provided
+parameter in declaration order (value kind, expected-set membership, list
+arity/homogeneity, then struct fields in the order unknown → missing → duplicate
+→ order → kind); then scalar printability.
 
 ### 10.1 Expression
 
@@ -1254,8 +1263,9 @@ PrintExpr(expr):
     if expr is ResolvedCast:
         if expr.Inner.Type == expr.Target:
             error E_PRN_INCONSISTENT_TREE detail "identity cast node"
-        return PrintTransport(expr.Inner) + " as " +
-               catalog.GetCanonicalName(expr.Target)
+        if not catalog.TryGetCanonicalName(expr.Target, out canonicalTarget):
+            error E_PRN_INVALID_CAST_TARGET code = expr.Target.ToString()
+        return PrintTransport(expr.Inner) + " as " + canonicalTarget
     if expr is ResolvedTransport:
         return PrintTransport(expr)
 ```
@@ -1290,6 +1300,11 @@ PrintTransport(t):
 The printer emits names from normalized metadata; it does not repair noncanonical
 names. Registration stores a normalized metadata view used by the resolved tree
 and printer. A noncanonical name in a hand-built tree is an invariant violation.
+
+The printer matches `Provided` entries to parameters by reference identity of
+`ParamBinding.Param` (and struct fields by `StructFieldBinding.Field`), not by
+name. A binding whose `Param`/`Field` is not an element of the metadata, even if
+the names match, is `E_PRN_UNKNOWN_PARAM`/`E_PRN_STRUCT_FIELD_UNKNOWN`.
 
 Consequences:
 
@@ -1475,16 +1490,26 @@ resolved tree:
 ### 12.1 Error objects
 
 ```csharp
+abstract record SpecException(string Code, string Message)
+{
+    public override string ToString() => $"{Code}: {Message}";
+}
+
 sealed record ParseError(string Code, string Message, int Offset)
+    : SpecException(Code, Message)
 {
     public override string ToString()
         => $"{Code}: {Message} (offset {Offset})";
 }
 
-sealed record PrinterException(string Code, string Message);
-sealed record CompilerException(string Code, string Message);
-sealed record RegistrationException(string Code, string Message);
-sealed record BuildException(string Code, string Message);
+sealed record PrinterException(string Code, string Message)
+    : SpecException(Code, Message);
+sealed record CompilerException(string Code, string Message)
+    : SpecException(Code, Message);
+sealed record RegistrationException(string Code, string Message)
+    : SpecException(Code, Message);
+sealed record BuildException(string Code, string Message)
+    : SpecException(Code, Message);
 ```
 
 - Parser/lexer/semantic errors use `ParseError` and always include an offset.
@@ -1752,11 +1777,13 @@ For printer messages:
 - `<detail>` in `E_PRN_INCONSISTENT_TREE` is one of `identity cast node`,
   `expected-type membership violation`, `constructor type mismatch`,
   `non-canonical name`, `struct field order violation`,
-  `provided parameter order violation`, or `unspecified invariant violation`.
+  `provided parameter order violation`, `transport type not in catalog`, or
+  `unspecified invariant violation`.
 - `<type>` is the catalog canonical type name when the type exists. In
   `E_PRN_INVALID_CAST_TARGET`, it is the transport type's `ToString()` value.
 - `<code>` in `E_PRN_INVALID_SCALAR` is exactly four uppercase hexadecimal digits
-  of the first offending UTF-16 code unit in text order, prefixed with `U+`.
+  of the first offending UTF-16 code unit in text order. The message template
+  supplies the `U+` prefix.
 
 An identity cast node is an inconsistent-tree violation and uses
 `E_PRN_INCONSISTENT_TREE` with detail `identity cast node`. Printer messages use
@@ -1783,7 +1810,8 @@ In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are value kinds. In
 canonical lowercase; `<name>` is canonical except in `E_CMP_UNKNOWN_PARAM`, where
 it is the stored parameter name; `<from>` and `<to>` are catalog canonical type
 names. In `E_CMP_INVALID_CAST_TARGET`, `<type>` is the transport type's
-`ToString()` value.
+`ToString()` value. Compiler invariant checks, if performed, follow the printer
+validation order defined in §10.
 
 ---
 
@@ -1936,7 +1964,11 @@ Representative exact messages:
 
 ### 14.4 Canonical printer
 
-| Resolved tree | Canonical output |
+The first column is source or tree notation. Source notation is normalized to a
+resolved tree before printing; a resolved tree's `Provided` list is in
+declaration order.
+
+| Source / tree notation | Canonical output |
 |---|---|
 | `alpha(input=beta(x))` | `alpha(beta(x))` |
 | `alpha(input=beta(x), mode=fast)` | `alpha(beta(x), fast)` |
@@ -1950,12 +1982,18 @@ Representative exact messages:
 | `beta(value="")` | `beta("")` |
 | `beta(value="x=y")` | `beta("x=y")` |
 | `beta(value="plain")` | `beta(plain)` |
+| `beta(value="a\"b")` | `beta("a\"b")` |
+| `beta(value="a\\b")` | `beta(a\b)` |
+| `beta(value="a<HTAB>b")` | `beta("a<HTAB>b")` |
+| `beta(value="  x  ")` | `beta("  x  ")` |
 | `alpha(input=alpha(beta(x)))` | `alpha(alpha(beta(x)))` |
 | `mixed(input=beta(x), flag=fast)` | `mixed(beta(x), flag=fast)` |
 | `opt(b=two)` | `opt(b=two)` |
 | `bag(items=[])` | `bag([])` |
 | `emptyStruct(config={})` | `emptyStruct({})` |
 | `single(item=[beta(x)])` | `single([beta(x)])` |
+
+In the `HTAB` row, `<HTAB>` denotes a literal U+0009 character.
 
 ### 14.5 Lexical errors
 
@@ -2033,6 +2071,15 @@ Representative non-semantic error messages:
 | Duplicate canonical `alpha` | `E_REG_DUPLICATE_CANONICAL_NAME: canonical scheme 'alpha' is already registered` |
 | Missing constructor type `TypeZ` | `E_REG_TYPE_NOT_IN_CATALOG: transport type TypeZ is not present in the type catalog` |
 | Printer tree missing required `input` | `E_PRN_MISSING_REQUIRED_PARAM: resolved transport 'alpha' is missing required parameter 'input'` |
+| Printer tree with identity cast | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: identity cast node` |
+| Printer tree with expected-type violation | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: expected-type membership violation` |
+| Printer tree with constructor type mismatch | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: constructor type mismatch` |
+| Printer tree with non-canonical name | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: non-canonical name` |
+| Printer tree with out-of-order Provided | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: provided parameter order violation` |
+| Printer tree with out-of-order struct fields | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: struct field order violation` |
+| Printer scalar containing CR | `E_PRN_INVALID_SCALAR: scalar value contains a character that cannot be printed: U+000D` |
+| Printer tree with cast target `TypeZ` | `E_PRN_INVALID_CAST_TARGET: cast target 'TypeZ' is invalid` |
+| Compiler tree with transport type absent from catalog | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: transport type not in catalog` |
 | Compiler tree with unknown parameter `x` | `E_CMP_UNKNOWN_PARAM: compiler received unknown parameter 'x'` |
 | Compiler tree with duplicate parameter `input` | `E_CMP_DUPLICATE_PARAM: compiler received duplicate parameter 'input'` |
 | Compiler tree with scalar for transport parameter `input` | `E_CMP_PARAM_KIND_MISMATCH: compiler expected value kind transport for parameter 'input', got scalar` |

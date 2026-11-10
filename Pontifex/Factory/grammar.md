@@ -79,7 +79,9 @@ The lexer produces the following tokens:
 | `(` `)` `[` `]` `{` `}` `,` `=` | Single-character punctuation. |
 | `EOF` | End of input. |
 
-Whitespace is skipped between tokens. Whitespace is never part of a token.
+Whitespace outside quoted strings is skipped between tokens. It is never part of
+a `Word` or punctuation token; it is part of a `QuotedString` when it appears
+inside the quotes.
 
 ### 4.1 Word tokens
 
