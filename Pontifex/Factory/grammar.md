@@ -20,9 +20,9 @@ The grammar described here is a small expression language:
 
 ## 2. Input model
 
-- Input is a .NET string that MUST contain only well-formed Unicode scalar
-  values. Unpaired surrogates are not scalar values and are a lexical error
-  (`E_LEX_INVALID_UNICODE` in `parsing.md`).
+- Input is a .NET UTF-16 string. Unpaired surrogates are not Unicode scalar
+  values and are a lexical error (`E_LEX_INVALID_UNICODE` in `parsing.md`),
+  reported at the first offending code unit.
 - The entire input is one expression. Leading and trailing whitespace is allowed.
 - Offsets used in errors are **0-based UTF-16 code-unit offsets** from the first
   character of the input. The offset of the end of input is equal to the input

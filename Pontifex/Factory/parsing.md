@@ -131,8 +131,9 @@ On `"`:
       - If the next code unit is `"` or `\`, consume it and append the decoded
         character.
       - Otherwise report `E_LEX_INVALID_ESCAPE` at the backslash. `<sequence>`
-        is the backslash plus the following source code unit, rendered with the
-        escaping rules from §3.4.
+        is the backslash plus the following Unicode scalar value (a valid
+        surrogate pair counts as one scalar; an unpaired surrogate counts as one
+        code unit), rendered with the escaping rules from §3.4.
    e. Any other code unit is appended to the decoded value.
 3. EOF before the closing quote → `E_LEX_UNTERMINATED_STRING` at the opening
    quote.
@@ -163,8 +164,8 @@ surrogate code unit → \uXXXX
 ```
 
 If the escaped text is longer than 40 UTF-16 code units, truncate it to at most
-40 code units, cutting only between complete escape sequences or Unicode scalar
-values, then append `...`.
+40 code units, cutting only on Unicode scalar boundaries. Never cut between the
+two escapes of a surrogate pair; then append `...`.
 
 Lists of expected tokens or names are joined with ` or ` in the order defined by
 the relevant rule. Sets of names are sorted lexicographically for determinism.
@@ -751,7 +752,8 @@ ResolveExpr(ast, expected):
     inner = ResolveTransport(ast.Call, TransportTypeSet.Any)
 
     if inner.Type == target:
-        return inner                         # identity cast collapses
+        return inner with Span = span(ast)   # identity cast collapses,
+                                             # retaining the full cast span
 
     return ResolvedCast(inner, target, span(ast))
 ```
@@ -994,14 +996,16 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
                     error E_SEM_VALIDATOR_FAILED at value.Span.Start
                           context = field '<path>' of parameter '<paramName>'
                           reason
-                result.add(StringFieldValue(schemaField, value.Text))
+                result.add(StructFieldBinding(
+                    schemaField, StringFieldValue(value.Text)))
 
             NestedStructField:
                 if value is not AstStruct:
                     error E_SEM_STRUCT_FIELD_EXPECTED_STRUCT at value.Span.Start
                           path = path, actual = Shape(value)
                 nested = ResolveStruct(value, schemaField.Schema, paramName, path)
-                result.add(NestedStructFieldValue(schemaField, nested))
+                result.add(StructFieldBinding(
+                    schemaField, NestedStructFieldValue(nested)))
 
     return result
 ```
@@ -1012,6 +1016,8 @@ or list in a struct field is rejected by the scalar/struct shape checks.
 
 ### 7.9 Resolution order and determinism
 
+- For a cast expression, the target type is resolved and checked against the
+  expected set before the inner transport is resolved with `Any`.
 - Resolution is pre-order: a transport is resolved before its parameters.
 - Candidate resolution happens before argument binding.
 - Binding errors are reported in this order: too many positional; then named
@@ -1136,6 +1142,8 @@ CompileExpr(ResolvedExpr e):
         return CompileTransport(e)
 
 CompileTransport(ResolvedTransport t):
+    if ToLowerInvariant(t.Constructor.Name) == "convert":
+        error E_CMP_RESERVED_SCHEME
     d = Description {
         "name" = t.Constructor.Name,
         "type" = catalog.GetCanonicalName(t.Type)
@@ -1154,28 +1162,31 @@ CompileValue(param, value):
 
 CompileStruct(value):
     d = Description
-    for each field binding in schema order:
-        StringFieldValue       -> d.Add(field.Name, StringElement(text))
-        NestedStructFieldValue -> d.Add(field.Name,
-                                        DescriptionElement(CompileStruct(nested)))
+    for each binding in schema order:
+        field = binding.Field
+        if binding.Value is StringFieldValue:
+            d.Add(FieldKey(field.Name), StringElement(binding.Value.Text))
+        if binding.Value is NestedStructFieldValue:
+            d.Add(FieldKey(field.Name),
+                  DescriptionElement(CompileStruct(binding.Value)))
     return d
 ```
 
-`AdapterKey(name)` is `param.` + name. The adapter’s consumer must strip that
-prefix.
+`AdapterKey(name)` is `param.` + name and `FieldKey(name)` is `field.` + name.
+The adapter’s consumer must strip those prefixes.
 
 Notes:
 
 - `convert` exists only inside this adapter. It is not formula syntax and has no
-  scheme registration. This adapter reserves the scheme name `convert`; a
-  registry used with this adapter must reject or avoid a constructor with that
-  canonical name. A different compiler may represent casts differently or call
-  the builder directly.
+  scheme registration. This adapter reserves the scheme name `convert` and
+  reports `E_CMP_RESERVED_SCHEME` if it encounters a transport constructor with
+  that canonical name. A different compiler may represent casts differently or
+  call the builder directly.
 - Absent parameters are never added.
 - The adapter assumes the resolved tree is valid; duplicate keys, unknown
   parameters, and kind mismatches are compiler invariant errors.
 - The adapter’s `name` and `type` keys are reserved. Parameter keys are prefixed
-  with `param.` to avoid collision.
+  with `param.` and struct-field keys with `field.` to avoid collisions.
 - `IDescription` is not the parser’s or printer’s model. It is an adapter output.
 
 ### 9.2 Build-time cast conversion
@@ -1205,8 +1216,10 @@ If the input tree violates the invariants in §8, the printer throws
 `PrinterException` with an `E_PRN_*` code (§13.5). A correct resolver never
 produces such a tree. Before printing, the printer validates all invariants:
 required parameters, declared and unique provided parameters, value kinds,
-expected-type membership, list arity and homogeneity, struct fields, cast
-targets, and scalar printability.
+`Type == Constructor.Type`, expected-type membership, list arity and
+homogeneity, struct field membership and schema order, canonical names, cast
+targets, and scalar printability. Generic invariant violations use
+`E_PRN_INCONSISTENT_TREE` with one of the details defined in §13.5.
 
 ### 10.1 Expression
 
@@ -1243,14 +1256,19 @@ PrintTransport(t):
     for each param in t.Constructor.Params in declaration order:
         binding = t.Provided.FirstOrDefault(b => b.Param == param)
         if binding is not null and param not in emitted:
-            parts.add(param.Name + "=" + PrintValue(param, binding.Value))
+            parts.add(ToLowerInvariant(param.Name) + "=" +
+                      PrintValue(param, binding.Value))
 
-    return t.Constructor.Name + "(" + join(parts, ", ") + ")"
+    return ToLowerInvariant(t.Constructor.Name) + "(" + join(parts, ", ") + ")"
 ```
+
+The printer lowercases ASCII identifiers when emitting scheme, parameter, and
+field names. This guarantees canonical output even if a constructor object
+exposes mixed case; registration still normalizes and validates the metadata.
 
 Consequences:
 
-- The canonical scheme is `Constructor.Name` (lowercase). Aliases never appear.
+- The canonical scheme is `Constructor.Name` lowercased. Aliases never appear.
 - Absent parameters are omitted.
 - The longest provided prefix of positional-capable parameters is printed
   positionally; all other provided parameters are printed named.
@@ -1279,12 +1297,16 @@ Struct fields are printed in schema order:
 
 ```text
 PrintStructFields(value):
+    # Precondition: value.Fields are in schema order and match the schema.
     parts = []
-    for each field binding in value.Fields in schema order:
-        if StringFieldValue:
-            parts.add(field.Name + "=" + PrintScalar(text))
-        if NestedStructFieldValue:
-            parts.add(field.Name + "={" + join(PrintStructFields(nested), ", ") + "}")
+    for each binding in value.Fields in schema order:
+        field = binding.Field
+        if binding.Value is StringFieldValue:
+            parts.add(ToLowerInvariant(field.Name) + "=" +
+                      PrintScalar(binding.Value.Text))
+        if binding.Value is NestedStructFieldValue:
+            parts.add(ToLowerInvariant(field.Name) + "={" +
+                      join(PrintStructFields(binding.Value), ", ") + "}")
     return parts
 ```
 
@@ -1414,9 +1436,9 @@ resolved tree:
 - `alpha(beta(x), timeout=1s)` and
   `alpha(input=beta(x), timeout=1s)` (named order);
 - `alpha(beta(x)) as TypeA` and `alpha(beta(x))` (identity cast collapsed);
-- a canonical scheme name and an alias that resolves to the same constructor
-  under the expected type;
-- struct fields in any source order (resolved/canonical order is schema order);
+- `outer(alpha(x))` and `outer(beta(x))` when the alias resolves to `beta`;
+- `structy({nested={a=1}, name=x})` and
+  `structy({name=x, nested={a=1}})` (schema order is `name`, then `nested`);
 - a bare scalar and its quoted equivalent when quoting is unnecessary;
 - different whitespace, including CR/LF.
 
@@ -1545,6 +1567,11 @@ A comma with no preceding argument, element, or field is not a trailing comma;
 it is reported as `E_SYN_UNEXPECTED_TOKEN` (for example, `alpha(,)` and
 `alpha([,])`).
 
+The `List element` expected-string row applies when the token cannot start a
+transport expression. If the token is a `Word` identifier not followed by `(`,
+`ParseTransportCall` reports the `After the scheme` row (`'('`) at the following
+token. For example, `alpha([alpha])` reports `expected '('` at offset 12.
+
 ### 13.3 Semantic errors
 
 Formatting helpers used in messages:
@@ -1653,8 +1680,15 @@ Registration errors use `RegistrationException` and have no offset.
 | `E_REG_TYPE_NOT_IN_CATALOG` | Constructor type or expected type is absent from the catalog | `transport type <type> is not present in the type catalog` |
 
 For `E_REG_INVALID_LIST_RANGE`, `<max>` is `unbounded` when `Max` is `null`.
-In `E_REG_TYPE_NOT_IN_CATALOG`, `<type>` is the transport type's `ToString()`
-value; in all other messages `<type>` is a catalog canonical name.
+
+Placeholder sources for registration errors:
+
+- `<name>` and `<scheme>` in invalid-name errors use the original supplied
+  spelling, preserving case.
+- `<name>` and `<scheme>` in duplicate errors use canonical lowercase.
+- `<type>` is a catalog canonical type name when the type exists. For
+  `E_REG_TYPE_NOT_IN_CATALOG` and for a duplicate-alias error whose type is
+  absent from the catalog, it is the transport type's `ToString()` value.
 
 ### 13.5 Printer errors
 
@@ -1680,12 +1714,17 @@ Printer errors use `PrinterException` and have no offset.
 
 For printer messages:
 
+- `<scheme>` and known `<path>` segments are canonical lowercase. `<name>` in
+  `E_PRN_UNKNOWN_PARAM` is the stored parameter name; `<name>` elsewhere in
+  printer messages is canonical.
 - `<actual>` and `<expected>` in kind-mismatch errors are value kinds: `scalar`,
   `transport`, `transport list`, or `struct`.
 - `<path>` is a dot-separated struct-field path of `StructField.Name` values.
   Known schema segments are canonical; an unknown leaf uses its stored name.
 - `<detail>` in `E_PRN_INCONSISTENT_TREE` is one of `identity cast node`,
-  `expected-type membership violation`, or `unspecified invariant violation`.
+  `expected-type membership violation`, `constructor type mismatch`,
+  `non-canonical name`, `struct field order violation`, or
+  `unspecified invariant violation`.
 - `<type>` is the catalog canonical type name when the type exists. In
   `E_PRN_INVALID_CAST_TARGET`, it is the transport type's `ToString()` value.
 - `<code>` in `E_PRN_INVALID_SCALAR` is exactly four uppercase hexadecimal digits
@@ -1705,12 +1744,16 @@ These are outside the parser/printer contract but complete the boundary.
 | `E_CMP_DUPLICATE_PARAM` | Compiler | `compiler received duplicate parameter '<name>'` |
 | `E_CMP_UNKNOWN_PARAM` | Compiler | `compiler received unknown parameter '<name>'` |
 | `E_CMP_PARAM_KIND_MISMATCH` | Compiler | `compiler expected value kind <expected> for parameter '<name>', got <actual>` |
+| `E_CMP_RESERVED_SCHEME` | Compiler | `scheme 'convert' is reserved by this adapter` |
 | `E_BLD_NO_CONVERSION_PATH` | Builder | `no conversion path from <from> to <to>` |
 | `E_BLD_CONSTRUCTOR_FAILED` | Builder | `transport constructor '<scheme>' failed` |
 
 In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are value kinds. In
 `E_CMP_INCONSISTENT_TREE`, `<detail>` uses the same closed set as
-`E_PRN_INCONSISTENT_TREE`.
+`E_PRN_INCONSISTENT_TREE`. Elsewhere in compiler/build messages, `<scheme>` is
+canonical lowercase; `<name>` is canonical except in `E_CMP_UNKNOWN_PARAM`, where
+it is the stored parameter name; `<from>` and `<to>` are catalog canonical type
+names.
 
 ---
 
@@ -1789,6 +1832,7 @@ deep         TypeA
 | Source | Code | Offset |
 |---|---|---|
 | `` (empty) | `E_SYN_EMPTY_INPUT` | 0 |
+| *(spaces only)* | `E_SYN_EMPTY_INPUT` | 0 |
 | `alpha` | `E_SYN_UNEXPECTED_TOKEN` expected `'('` | 5 |
 | `alpha(` | `E_SYN_UNEXPECTED_TOKEN` expected `a value or ')'` | 6 |
 | `alpha(a,)` | `E_SYN_TRAILING_COMMA` | 7 |
@@ -1797,6 +1841,7 @@ deep         TypeA
 | `alpha(a b)` | `E_SYN_UNEXPECTED_TOKEN` expected `',' or ')'` | 8 |
 | `alpha(p=1, a)` | `E_SYN_POSITIONAL_AFTER_NAMED` | 11 |
 | `alpha([alpha(), 1])` | `E_SYN_UNEXPECTED_TOKEN` expected `a transport expression` | 16 |
+| `alpha([alpha])` | `E_SYN_UNEXPECTED_TOKEN` expected `'('` | 12 |
 | `alpha([[alpha()]])` | `E_SYN_NESTED_LIST` | 7 |
 | `alpha({p})` | `E_SYN_UNEXPECTED_TOKEN` expected `'='` | 8 |
 | `alpha({p=1,})` | `E_SYN_TRAILING_COMMA` | 10 |
@@ -1820,7 +1865,7 @@ deep         TypeA
 | `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN` | 6 |
 | `gamma([alpha(beta(x)), alpha(beta(x)), alpha(beta(x)), alpha(beta(x))])` | `E_SEM_LIST_MAX` | 6 |
 | `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY` | 23 |
-| `outer(gamma([alpha(beta(x)), alpha(beta(x))]))` | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` | 0 |
+| `outer(gamma([alpha(beta(x)), alpha(beta(x))]))` | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` | 6 |
 | `shared(x)` | `E_SEM_AMBIGUOUS_SCHEME` | 0 |
 | `validated(bad)` | `E_SEM_VALIDATOR_FAILED` | 10 |
 | `structy({name=x, extra=1})` | `E_SEM_UNKNOWN_STRUCT_FIELD` | 17 |
@@ -1844,6 +1889,7 @@ Representative exact messages:
 | `alpha()` | `E_SEM_MISSING_REQUIRED_PARAM: missing required parameter 'input' for scheme 'alpha' (offset 6)` |
 | `alpha(beta(x), fast, extra)` | `E_SEM_TOO_MANY_POSITIONAL: too many positional arguments for scheme 'alpha'; expected at most 2 (offset 21)` |
 | `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN: transport list for 'items' requires at least 2 element(s), got 1 (offset 6)` |
+| `outer(gamma([alpha(beta(x)), alpha(beta(x))]))` | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE: scheme 'gamma' has no variant for expected transport type TypeB; available: gamma (TypeC) (offset 6)` |
 | `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY: transport list for 'items' must contain one transport type; found TypeA, TypeB (offset 23)` |
 | `deep({outer={inner={}}})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD: missing required field 'outer.inner.value' in struct for parameter 'config' (offset 20)` |
 | `structy({name=alpha(beta(x))})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR: field 'name' expects a scalar value, got transport (offset 14)` |
@@ -1859,6 +1905,7 @@ Representative exact messages:
 | `alpha(input=beta(x))` | `alpha(beta(x))` |
 | `alpha(input=beta(x), mode=fast)` | `alpha(beta(x), fast)` |
 | `alpha(input=beta(x), timeout=5s)` | `alpha(beta(x), timeout=5s)` |
+| `alpha(timeout=5s, input=beta(x))` | `alpha(beta(x), timeout=5s)` |
 | `alpha(input=beta(x), mode=fast, timeout=5s)` | `alpha(beta(x), fast, timeout=5s)` |
 | `alpha(input=beta(x) as TypeA)` | `alpha(beta(x) as TypeA)` |
 | `gamma(items=[alpha(beta(x)), alpha(beta(x))])` | `gamma([alpha(beta(x)), alpha(beta(x))])` |
@@ -1881,7 +1928,11 @@ Representative exact messages:
 | `alpha("x)` | `E_LEX_UNTERMINATED_STRING` | 6 |
 | `alpha("x\q")` | `E_LEX_INVALID_ESCAPE` | 8 |
 | `alpha("x<LF>y")` where `<LF>` is a literal U+000A | `E_LEX_RAW_NEWLINE_IN_STRING` | 8 |
+| `alpha("x<CR>y")` where `<CR>` is a literal U+000D | `E_LEX_RAW_NEWLINE_IN_STRING` | 8 |
+| `alpha("x\<CR>y")` where `\<CR>` is a backslash followed by U+000D | `E_LEX_INVALID_ESCAPE` | 8 |
 | `alpha("x<U+D800>y")` where `<U+D800>` is a literal unpaired surrogate | `E_LEX_INVALID_UNICODE` | 8 |
+| `alpha(<U+D800>)` with a literal unpaired surrogate in a bare Word | `E_LEX_INVALID_UNICODE` | 6 |
+| `alpha(1) "unterminated` | `E_LEX_UNTERMINATED_STRING` | 9 |
 
 ### 14.6 Registration errors
 
@@ -1917,10 +1968,38 @@ Representative exact messages:
 | Struct field value kind mismatch | `E_PRN_STRUCT_FIELD_KIND_MISMATCH` |
 | Cast target not in catalog | `E_PRN_INVALID_CAST_TARGET` |
 | Transport value outside the parameter's expected set | `E_PRN_INCONSISTENT_TREE` |
+| `ResolvedTransport.Type != Constructor.Type` | `E_PRN_INCONSISTENT_TREE` |
+| Non-canonical scheme, parameter, or field name | `E_PRN_INCONSISTENT_TREE` |
+| Struct fields not in schema order | `E_PRN_INCONSISTENT_TREE` |
 | Scalar contains CR/LF or an unpaired surrogate | `E_PRN_INVALID_SCALAR` |
 | Identity cast node | `E_PRN_INCONSISTENT_TREE` |
 
 A correct parser never produces these trees.
+
+### 14.8 Additional diagnostic and canonicalization examples
+
+`displayToken` examples:
+
+| Token | Display |
+|---|---|
+| Word `a\b` | `'a\\b'` |
+| Quoted string containing HTAB | `'a\tb'` |
+| Quoted string containing U+1F600 | `'\uD83D\uDE00'` |
+
+A fifty-character `Word` made only of `a` displays as forty `a` characters
+followed by `...`.
+
+Representative non-semantic error messages:
+
+| Source | Exact message |
+|---|---|
+| Duplicate canonical `alpha` | `E_REG_DUPLICATE_CANONICAL_NAME: canonical scheme 'alpha' is already registered` |
+| Missing constructor type `TypeZ` | `E_REG_TYPE_NOT_IN_CATALOG: transport type TypeZ is not present in the type catalog` |
+| Printer tree missing required `input` | `E_PRN_MISSING_REQUIRED_PARAM: resolved transport 'alpha' is missing required parameter 'input'` |
+| Compiler tree with unknown parameter `x` | `E_CMP_UNKNOWN_PARAM: compiler received unknown parameter 'x'` |
+| Compiler tree with scheme `convert` | `E_CMP_RESERVED_SCHEME: scheme 'convert' is reserved by this adapter` |
+| Build cast from `TypeA` to `TypeB` without a path | `E_BLD_NO_CONVERSION_PATH: no conversion path from TypeA to TypeB` |
+| Constructor `alpha` fails | `E_BLD_CONSTRUCTOR_FAILED: transport constructor 'alpha' failed` |
 
 ---
 
