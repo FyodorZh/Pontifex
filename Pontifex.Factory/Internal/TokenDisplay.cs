@@ -1,171 +1,172 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Pontifex.Factory.Internal;
-
-internal static class TokenDisplay
+namespace Pontifex.Factory.Internal
 {
-    public const int MaxEscapedLength = 40;
-    public const string EndOfInput = "<end of input>";
-
-    public static string Word(string text)
+    internal static class TokenDisplay
     {
-        return Quote(EscapeAndTruncate(text));
-    }
+        public const int MaxEscapedLength = 40;
+        public const string EndOfInput = "<end of input>";
 
-    public static string QuotedString(string text)
-    {
-        return Quote(EscapeAndTruncate(text));
-    }
-
-    public static string Punctuation(char punctuation)
-    {
-        return "'" + punctuation + "'";
-    }
-
-    public static string Escape(string text)
-    {
-        if (text is null)
+        public static string Word(string text)
         {
-            return string.Empty;
+            return Quote(EscapeAndTruncate(text));
         }
 
-        var units = EscapeUnits(text);
-        var builder = new StringBuilder();
-        foreach (var unit in units)
+        public static string QuotedString(string text)
         {
-            builder.Append(unit.Text);
+            return Quote(EscapeAndTruncate(text));
         }
 
-        return builder.ToString();
-    }
-
-    public static string EscapeAndTruncate(string text)
-    {
-        var units = EscapeUnits(text);
-
-        var totalLength = 0;
-        foreach (var unit in units)
+        public static string Punctuation(char punctuation)
         {
-            totalLength += unit.Text.Length;
+            return "'" + punctuation + "'";
         }
 
-        if (totalLength <= MaxEscapedLength)
+        public static string Escape(string text)
         {
-            var full = new StringBuilder(totalLength);
+            if (text is null)
+            {
+                return string.Empty;
+            }
+
+            var units = EscapeUnits(text);
+            var builder = new StringBuilder();
             foreach (var unit in units)
             {
-                full.Append(unit.Text);
+                builder.Append(unit.Text);
             }
 
-            return full.ToString();
+            return builder.ToString();
         }
 
-        var boundary = 0;
-        var length = 0;
-        for (var i = 0; i < units.Count; i++)
+        public static string EscapeAndTruncate(string text)
         {
-            if (length + units[i].Text.Length > MaxEscapedLength)
+            var units = EscapeUnits(text);
+
+            var totalLength = 0;
+            foreach (var unit in units)
             {
-                break;
+                totalLength += unit.Text.Length;
             }
 
-            length += units[i].Text.Length;
-            boundary = i + 1;
+            if (totalLength <= MaxEscapedLength)
+            {
+                var full = new StringBuilder(totalLength);
+                foreach (var unit in units)
+                {
+                    full.Append(unit.Text);
+                }
+
+                return full.ToString();
+            }
+
+            var boundary = 0;
+            var length = 0;
+            for (var i = 0; i < units.Count; i++)
+            {
+                if (length + units[i].Text.Length > MaxEscapedLength)
+                {
+                    break;
+                }
+
+                length += units[i].Text.Length;
+                boundary = i + 1;
+            }
+
+            if (boundary > 0
+                && boundary < units.Count
+                && units[boundary - 1].IsHighSurrogate)
+            {
+                boundary--;
+                length -= units[boundary].Text.Length;
+            }
+
+            var truncated = new StringBuilder(length + 3);
+            for (var i = 0; i < boundary; i++)
+            {
+                truncated.Append(units[i].Text);
+            }
+
+            truncated.Append("...");
+            return truncated.ToString();
         }
 
-        if (boundary > 0
-            && boundary < units.Count
-            && units[boundary - 1].IsHighSurrogate)
+        private static string Quote(string escaped)
         {
-            boundary--;
-            length -= units[boundary].Text.Length;
+            return "'" + escaped + "'";
         }
 
-        var truncated = new StringBuilder(length + 3);
-        for (var i = 0; i < boundary; i++)
+        private static List<EscapeUnit> EscapeUnits(string? text)
         {
-            truncated.Append(units[i].Text);
-        }
+            var units = new List<EscapeUnit>();
+            if (string.IsNullOrEmpty(text))
+            {
+                return units;
+            }
 
-        truncated.Append("...");
-        return truncated.ToString();
-    }
+            for (var i = 0; i < text!.Length; i++)
+            {
+                var c = text[i];
 
-    private static string Quote(string escaped)
-    {
-        return "'" + escaped + "'";
-    }
+                if (char.IsHighSurrogate(c)
+                    && i + 1 < text.Length
+                    && char.IsLowSurrogate(text[i + 1]))
+                {
+                    units.Add(new EscapeUnit(UnicodeEscape(c), isHighSurrogate: true));
+                    units.Add(new EscapeUnit(UnicodeEscape(text[i + 1]), isHighSurrogate: false));
+                    i++;
+                    continue;
+                }
 
-    private static List<EscapeUnit> EscapeUnits(string? text)
-    {
-        var units = new List<EscapeUnit>();
-        if (string.IsNullOrEmpty(text))
-        {
+                units.Add(new EscapeUnit(EscapeCodeUnit(c), isHighSurrogate: false));
+            }
+
             return units;
         }
 
-        for (var i = 0; i < text!.Length; i++)
+        private static string EscapeCodeUnit(char c)
         {
-            var c = text[i];
-
-            if (char.IsHighSurrogate(c)
-                && i + 1 < text.Length
-                && char.IsLowSurrogate(text[i + 1]))
+            switch (c)
             {
-                units.Add(new EscapeUnit(UnicodeEscape(c), isHighSurrogate: true));
-                units.Add(new EscapeUnit(UnicodeEscape(text[i + 1]), isHighSurrogate: false));
-                i++;
-                continue;
+                case '\\':
+                    return "\\\\";
+                case '\'':
+                    return "\\'";
+                case '"':
+                    return "\\\"";
+                case '\r':
+                    return "\\r";
+                case '\n':
+                    return "\\n";
+                case '\t':
+                    return "\\t";
             }
 
-            units.Add(new EscapeUnit(EscapeCodeUnit(c), isHighSurrogate: false));
+            if (char.IsControl(c) || char.IsSurrogate(c))
+            {
+                return UnicodeEscape(c);
+            }
+
+            return c.ToString();
         }
 
-        return units;
-    }
-
-    private static string EscapeCodeUnit(char c)
-    {
-        switch (c)
+        private static string UnicodeEscape(char c)
         {
-            case '\\':
-                return "\\\\";
-            case '\'':
-                return "\\'";
-            case '"':
-                return "\\\"";
-            case '\r':
-                return "\\r";
-            case '\n':
-                return "\\n";
-            case '\t':
-                return "\\t";
+            return "\\u" + ((int)c).ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        if (char.IsControl(c) || char.IsSurrogate(c))
+        private readonly struct EscapeUnit
         {
-            return UnicodeEscape(c);
+            public EscapeUnit(string text, bool isHighSurrogate)
+            {
+                Text = text;
+                IsHighSurrogate = isHighSurrogate;
+            }
+
+            public string Text { get; }
+
+            public bool IsHighSurrogate { get; }
         }
-
-        return c.ToString();
-    }
-
-    private static string UnicodeEscape(char c)
-    {
-        return "\\u" + ((int)c).ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    private readonly struct EscapeUnit
-    {
-        public EscapeUnit(string text, bool isHighSurrogate)
-        {
-            Text = text;
-            IsHighSurrogate = isHighSurrogate;
-        }
-
-        public string Text { get; }
-
-        public bool IsHighSurrogate { get; }
     }
 }

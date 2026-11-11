@@ -1,18 +1,19 @@
-namespace Pontifex.Factory;
-
-public enum FactoryPhase
+namespace Pontifex.Factory
 {
-    Lexing,
-    Parsing,
-    Resolution,
-    Registration,
-    Printing,
-    Compilation,
-    Building
-}
+    public enum FactoryPhase
+    {
+        Lexing,
+        Parsing,
+        Resolution,
+        Registration,
+        Printing,
+        Compilation,
+        Building
+    }
 
-public sealed record FactoryError(
-    string Code,
-    string Message,
-    FactoryPhase Phase,
-    SourceSpan? Span);
+    public sealed record FactoryError(
+        string Code,
+        string Message,
+        FactoryPhase Phase,
+        SourceSpan? Span);
+}

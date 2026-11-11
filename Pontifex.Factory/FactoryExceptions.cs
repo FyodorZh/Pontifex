@@ -1,82 +1,83 @@
 using System;
 
-namespace Pontifex.Factory;
-
-public class FactoryException : Exception
+namespace Pontifex.Factory
 {
-    public FactoryException(FactoryError error)
-        : base((error ?? throw new ArgumentNullException(nameof(error))).Message)
+    public class FactoryException : Exception
     {
-        Error = error;
-    }
-
-    public FactoryException(FactoryError error, Exception? innerException)
-        : base((error ?? throw new ArgumentNullException(nameof(error))).Message, innerException)
-    {
-        Error = error;
-    }
-
-    public FactoryError Error { get; }
-
-    protected static FactoryError WithPhase(FactoryError error, FactoryPhase phase)
-    {
-        if (error is null)
+        public FactoryException(FactoryError error)
+            : base((error ?? throw new ArgumentNullException(nameof(error))).Message)
         {
-            throw new ArgumentNullException(nameof(error));
+            Error = error;
         }
 
-        return error with { Phase = phase };
-    }
-}
+        public FactoryException(FactoryError error, Exception? innerException)
+            : base((error ?? throw new ArgumentNullException(nameof(error))).Message, innerException)
+        {
+            Error = error;
+        }
 
-public sealed class RegistrationException : FactoryException
-{
-    public RegistrationException(FactoryError error)
-        : base(WithPhase(error, FactoryPhase.Registration))
-    {
-    }
+        public FactoryError Error { get; }
 
-    public RegistrationException(string code, string message)
-        : base(new FactoryError(code, message, FactoryPhase.Registration, null))
-    {
-    }
-}
+        protected static FactoryError WithPhase(FactoryError error, FactoryPhase phase)
+        {
+            if (error is null)
+            {
+                throw new ArgumentNullException(nameof(error));
+            }
 
-public sealed class PrinterException : FactoryException
-{
-    public PrinterException(FactoryError error)
-        : base(WithPhase(error, FactoryPhase.Printing))
-    {
+            return error with { Phase = phase };
+        }
     }
 
-    public PrinterException(string code, string message)
-        : base(new FactoryError(code, message, FactoryPhase.Printing, null))
+    public sealed class RegistrationException : FactoryException
     {
-    }
-}
+        public RegistrationException(FactoryError error)
+            : base(WithPhase(error, FactoryPhase.Registration))
+        {
+        }
 
-public sealed class CompilerException : FactoryException
-{
-    public CompilerException(FactoryError error)
-        : base(WithPhase(error, FactoryPhase.Compilation))
-    {
-    }
-
-    public CompilerException(string code, string message)
-        : base(new FactoryError(code, message, FactoryPhase.Compilation, null))
-    {
-    }
-}
-
-public sealed class BuildException : FactoryException
-{
-    public BuildException(FactoryError error)
-        : base(WithPhase(error, FactoryPhase.Building))
-    {
+        public RegistrationException(string code, string message)
+            : base(new FactoryError(code, message, FactoryPhase.Registration, null))
+        {
+        }
     }
 
-    public BuildException(string code, string message)
-        : base(new FactoryError(code, message, FactoryPhase.Building, null))
+    public sealed class PrinterException : FactoryException
     {
+        public PrinterException(FactoryError error)
+            : base(WithPhase(error, FactoryPhase.Printing))
+        {
+        }
+
+        public PrinterException(string code, string message)
+            : base(new FactoryError(code, message, FactoryPhase.Printing, null))
+        {
+        }
+    }
+
+    public sealed class CompilerException : FactoryException
+    {
+        public CompilerException(FactoryError error)
+            : base(WithPhase(error, FactoryPhase.Compilation))
+        {
+        }
+
+        public CompilerException(string code, string message)
+            : base(new FactoryError(code, message, FactoryPhase.Compilation, null))
+        {
+        }
+    }
+
+    public sealed class BuildException : FactoryException
+    {
+        public BuildException(FactoryError error)
+            : base(WithPhase(error, FactoryPhase.Building))
+        {
+        }
+
+        public BuildException(string code, string message)
+            : base(new FactoryError(code, message, FactoryPhase.Building, null))
+        {
+        }
     }
 }

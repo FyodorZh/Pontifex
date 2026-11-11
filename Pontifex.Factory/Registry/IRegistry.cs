@@ -1,25 +1,26 @@
 using System.Collections.Generic;
 
-namespace Pontifex.Factory.Registry;
-
-public interface IRegistry
+namespace Pontifex.Factory.Registry
 {
-    ITransportTypeCatalog Types { get; }
+    public interface IRegistry
+    {
+        ITransportTypeCatalog Types { get; }
 
-    IReadOnlyList<TransportConstructorInfo> Constructors { get; }
+        IReadOnlyList<TransportConstructorInfo> Constructors { get; }
 
-    IReadOnlyList<string> AllSchemeNames { get; }
+        IReadOnlyList<string> AllSchemeNames { get; }
 
-    TransportConstructorInfo? FindCanonical(string scheme);
+        TransportConstructorInfo? FindCanonical(string scheme);
 
-    IReadOnlyList<TransportConstructorInfo> FindCandidates(string scheme);
-}
+        IReadOnlyList<TransportConstructorInfo> FindCandidates(string scheme);
+    }
 
-public interface IRegistryBuilder
-{
-    void RegisterType(TransportTypeInfo type);
+    public interface IRegistryBuilder
+    {
+        void RegisterType(TransportTypeInfo type);
 
-    void RegisterTransport(TransportRegistration registration);
+        void RegisterTransport(TransportRegistration registration);
 
-    IRegistry Build();
+        IRegistry Build();
+    }
 }

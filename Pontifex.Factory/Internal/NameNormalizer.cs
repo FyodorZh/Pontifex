@@ -1,73 +1,74 @@
 using System;
 
-namespace Pontifex.Factory.Internal;
-
-internal static class NameNormalizer
+namespace Pontifex.Factory.Internal
 {
-    public static bool IsIdentifier(string? value)
+    internal static class NameNormalizer
     {
-        if (string.IsNullOrEmpty(value))
+        public static bool IsIdentifier(string? value)
         {
-            return false;
-        }
-
-        if (!IsAsciiLetter(value![0]))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < value.Length; i++)
-        {
-            var c = value[i];
-            if (!IsAsciiLetter(c) && !IsAsciiDigit(c) && c != '_' && c != '-')
+            if (string.IsNullOrEmpty(value))
             {
                 return false;
             }
-        }
 
-        return true;
-    }
-
-    public static string Normalize(string value)
-    {
-        if (value is null)
-        {
-            throw new ArgumentNullException(nameof(value));
-        }
-
-        var chars = value.ToCharArray();
-        for (var i = 0; i < chars.Length; i++)
-        {
-            var c = chars[i];
-            if (c >= 'A' && c <= 'Z')
+            if (!IsAsciiLetter(value![0]))
             {
-                chars[i] = (char)(c + ('a' - 'A'));
+                return false;
             }
+
+            for (var i = 1; i < value.Length; i++)
+            {
+                var c = value[i];
+                if (!IsAsciiLetter(c) && !IsAsciiDigit(c) && c != '_' && c != '-')
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
-        return new string(chars);
-    }
+        public static string Normalize(string value)
+        {
+            if (value is null)
+            {
+                throw new ArgumentNullException(nameof(value));
+            }
 
-    public static bool IsAsKeyword(string? value)
-    {
-        return value is not null
-               && value.Length == 2
-               && AsciiLower(value[0]) == 'a'
-               && AsciiLower(value[1]) == 's';
-    }
+            var chars = value.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                var c = chars[i];
+                if (c >= 'A' && c <= 'Z')
+                {
+                    chars[i] = (char)(c + ('a' - 'A'));
+                }
+            }
 
-    private static char AsciiLower(char c)
-    {
-        return c >= 'A' && c <= 'Z' ? (char)(c + ('a' - 'A')) : c;
-    }
+            return new string(chars);
+        }
 
-    private static bool IsAsciiLetter(char c)
-    {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-    }
+        public static bool IsAsKeyword(string? value)
+        {
+            return value is not null
+                   && value.Length == 2
+                   && AsciiLower(value[0]) == 'a'
+                   && AsciiLower(value[1]) == 's';
+        }
 
-    private static bool IsAsciiDigit(char c)
-    {
-        return c >= '0' && c <= '9';
+        private static char AsciiLower(char c)
+        {
+            return c >= 'A' && c <= 'Z' ? (char)(c + ('a' - 'A')) : c;
+        }
+
+        private static bool IsAsciiLetter(char c)
+        {
+            return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+        }
+
+        private static bool IsAsciiDigit(char c)
+        {
+            return c >= '0' && c <= '9';
+        }
     }
 }

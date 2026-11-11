@@ -3,111 +3,112 @@ using System.Collections.Generic;
 using Pontifex.Factory.Registry;
 using Pontifex.Factory.Semantics;
 
-namespace Pontifex.Factory.Canonicalization.Internal;
-
-// One argument in canonical print order. Positional entries carry no name;
-// named entries print as `name=value`.
-internal readonly struct ParamPrintEntry
+namespace Pontifex.Factory.Canonicalization.Internal
 {
-    public ParamPrintEntry(ParamBinding binding, bool isNamed)
+    // One argument in canonical print order. Positional entries carry no name;
+    // named entries print as `name=value`.
+    internal readonly struct ParamPrintEntry
     {
-        Binding = binding;
-        IsNamed = isNamed;
+        public ParamPrintEntry(ParamBinding binding, bool isNamed)
+        {
+            Binding = binding;
+            IsNamed = isNamed;
+        }
+
+        public ParamBinding Binding { get; }
+
+        public bool IsNamed { get; }
     }
 
-    public ParamBinding Binding { get; }
-
-    public bool IsNamed { get; }
-}
-
-// Computes the canonical positional/named arrangement from parsing.md §10.2:
-// the longest provided prefix of positional-capable parameters prints
-// positionally, and every other provided parameter prints named in declaration
-// order. Named-only parameters are always named. Parameters are matched by
-// reference identity.
-internal static class PositionalFormatter
-{
-    public static IReadOnlyList<ParamPrintEntry> Arrange(
-        TransportConstructorInfo constructor,
-        IReadOnlyList<ParamBinding> provided)
+    // Computes the canonical positional/named arrangement from parsing.md §10.2:
+    // the longest provided prefix of positional-capable parameters prints
+    // positionally, and every other provided parameter prints named in declaration
+    // order. Named-only parameters are always named. Parameters are matched by
+    // reference identity.
+    internal static class PositionalFormatter
     {
-        if (constructor is null)
+        public static IReadOnlyList<ParamPrintEntry> Arrange(
+            TransportConstructorInfo constructor,
+            IReadOnlyList<ParamBinding> provided)
         {
-            throw new ArgumentNullException(nameof(constructor));
-        }
-
-        if (provided is null)
-        {
-            throw new ArgumentNullException(nameof(provided));
-        }
-
-        var entries = new List<ParamPrintEntry>(provided.Count);
-        var emitted = new List<Param>(provided.Count);
-
-        for (var i = 0; i < constructor.Params.Count; i++)
-        {
-            var parameter = constructor.Params[i];
-            if (!parameter.Positional)
+            if (constructor is null)
             {
-                continue;
+                throw new ArgumentNullException(nameof(constructor));
             }
 
-            var binding = FindBinding(provided, parameter);
-            if (binding is null)
+            if (provided is null)
             {
-                break;
+                throw new ArgumentNullException(nameof(provided));
             }
 
-            entries.Add(new ParamPrintEntry(binding, isNamed: false));
-            emitted.Add(parameter);
+            var entries = new List<ParamPrintEntry>(provided.Count);
+            var emitted = new List<Param>(provided.Count);
+
+            for (var i = 0; i < constructor.Params.Count; i++)
+            {
+                var parameter = constructor.Params[i];
+                if (!parameter.Positional)
+                {
+                    continue;
+                }
+
+                var binding = FindBinding(provided, parameter);
+                if (binding is null)
+                {
+                    break;
+                }
+
+                entries.Add(new ParamPrintEntry(binding, isNamed: false));
+                emitted.Add(parameter);
+            }
+
+            // Emit every remaining provided parameter named, in declaration order.
+            // This includes a positional parameter skipped because an earlier
+            // positional-capable parameter was absent.
+            for (var i = 0; i < constructor.Params.Count; i++)
+            {
+                var parameter = constructor.Params[i];
+                if (ContainsReference(emitted, parameter))
+                {
+                    continue;
+                }
+
+                var binding = FindBinding(provided, parameter);
+                if (binding is null)
+                {
+                    continue;
+                }
+
+                entries.Add(new ParamPrintEntry(binding, isNamed: true));
+            }
+
+            return entries;
         }
 
-        // Emit every remaining provided parameter named, in declaration order.
-        // This includes a positional parameter skipped because an earlier
-        // positional-capable parameter was absent.
-        for (var i = 0; i < constructor.Params.Count; i++)
+        private static ParamBinding? FindBinding(IReadOnlyList<ParamBinding> provided, Param parameter)
         {
-            var parameter = constructor.Params[i];
-            if (ContainsReference(emitted, parameter))
+            for (var i = 0; i < provided.Count; i++)
             {
-                continue;
+                if (ReferenceEquals(provided[i].Param, parameter))
+                {
+                    return provided[i];
+                }
             }
 
-            var binding = FindBinding(provided, parameter);
-            if (binding is null)
-            {
-                continue;
-            }
-
-            entries.Add(new ParamPrintEntry(binding, isNamed: true));
+            return null;
         }
 
-        return entries;
-    }
-
-    private static ParamBinding? FindBinding(IReadOnlyList<ParamBinding> provided, Param parameter)
-    {
-        for (var i = 0; i < provided.Count; i++)
+        private static bool ContainsReference(IReadOnlyList<Param> parameters, Param parameter)
         {
-            if (ReferenceEquals(provided[i].Param, parameter))
+            for (var i = 0; i < parameters.Count; i++)
             {
-                return provided[i];
+                if (ReferenceEquals(parameters[i], parameter))
+                {
+                    return true;
+                }
             }
+
+            return false;
         }
-
-        return null;
-    }
-
-    private static bool ContainsReference(IReadOnlyList<Param> parameters, Param parameter)
-    {
-        for (var i = 0; i < parameters.Count; i++)
-        {
-            if (ReferenceEquals(parameters[i], parameter))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

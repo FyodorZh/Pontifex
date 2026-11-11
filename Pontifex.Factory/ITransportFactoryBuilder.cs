@@ -1,10 +1,11 @@
 using Pontifex.Factory.Registry;
 
-namespace Pontifex.Factory;
-
-public interface ITransportFactoryBuilder
+namespace Pontifex.Factory
 {
-    IRegistryBuilder Registry { get; }
+    public interface ITransportFactoryBuilder
+    {
+        IRegistryBuilder Registry { get; }
 
-    ITransportFactory Build();
+        ITransportFactory Build();
+    }
 }

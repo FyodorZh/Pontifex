@@ -1,8 +1,9 @@
 using Pontifex.Factory.Semantics;
 
-namespace Pontifex.Factory.Canonicalization;
-
-public interface ICanonicalizer
+namespace Pontifex.Factory.Canonicalization
 {
-    string Canonicalize(ResolvedFormula formula);
+    public interface ICanonicalizer
+    {
+        string Canonicalize(ResolvedFormula formula);
+    }
 }

@@ -1,6 +1,7 @@
-namespace Pontifex.Factory.Parsing;
-
-public interface IParser
+namespace Pontifex.Factory.Parsing
 {
-    FormulaParseResult Parse(string formula);
+    public interface IParser
+    {
+        FormulaParseResult Parse(string formula);
+    }
 }

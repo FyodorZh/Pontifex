@@ -1,18 +1,19 @@
 using System;
 
-namespace Pontifex.Factory.Semantics.Internal;
-
-// Internal control-flow channel for the first semantic error. FormulaResolver is
-// the only public entry point; it converts the abort into a
-// FormulaResolveResult.Error, matching the parser's abort pattern. Semantic
-// components therefore fail without exposing additional public contracts.
-internal sealed class SemanticAbort : Exception
+namespace Pontifex.Factory.Semantics.Internal
 {
-    public SemanticAbort(FactoryError error)
-        : base((error ?? throw new ArgumentNullException(nameof(error))).Message)
+    // Internal control-flow channel for the first semantic error. FormulaResolver is
+    // the only public entry point; it converts the abort into a
+    // FormulaResolveResult.Error, matching the parser's abort pattern. Semantic
+    // components therefore fail without exposing additional public contracts.
+    internal sealed class SemanticAbort : Exception
     {
-        Error = error;
-    }
+        public SemanticAbort(FactoryError error)
+            : base((error ?? throw new ArgumentNullException(nameof(error))).Message)
+        {
+            Error = error;
+        }
 
-    public FactoryError Error { get; }
+        public FactoryError Error { get; }
+    }
 }

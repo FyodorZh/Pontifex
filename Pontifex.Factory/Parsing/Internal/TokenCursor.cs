@@ -1,64 +1,65 @@
 using System.Collections.Generic;
 using Pontifex.Factory.Internal;
 
-namespace Pontifex.Factory.Parsing.Internal;
-
-internal sealed class TokenCursor
+namespace Pontifex.Factory.Parsing.Internal
 {
-    private readonly IReadOnlyList<FormulaToken> _tokens;
-    private int _index;
-
-    public TokenCursor(IReadOnlyList<FormulaToken> tokens)
+    internal sealed class TokenCursor
     {
-        _tokens = tokens;
-        _index = 0;
-    }
+        private readonly IReadOnlyList<FormulaToken> _tokens;
+        private int _index;
 
-    public FormulaToken Current => _tokens[_index];
-
-    public FormulaToken Peek(int distance)
-    {
-        var index = _index + distance;
-        return index < _tokens.Count ? _tokens[index] : _tokens[_tokens.Count - 1];
-    }
-
-    public FormulaToken Consume()
-    {
-        var token = Current;
-        if (_index < _tokens.Count - 1)
+        public TokenCursor(IReadOnlyList<FormulaToken> tokens)
         {
-            _index++;
+            _tokens = tokens;
+            _index = 0;
         }
 
-        return token;
-    }
+        public FormulaToken Current => _tokens[_index];
 
-    public bool Match(FormulaTokenKind kind)
-    {
-        if (Current.Kind != kind)
+        public FormulaToken Peek(int distance)
         {
-            return false;
+            var index = _index + distance;
+            return index < _tokens.Count ? _tokens[index] : _tokens[_tokens.Count - 1];
         }
 
-        Consume();
-        return true;
-    }
-
-    public bool MatchWord(string word)
-    {
-        if (Current.Kind != FormulaTokenKind.Word
-            || !string.Equals(Current.Text, word, System.StringComparison.Ordinal))
+        public FormulaToken Consume()
         {
-            return false;
+            var token = Current;
+            if (_index < _tokens.Count - 1)
+            {
+                _index++;
+            }
+
+            return token;
         }
 
-        Consume();
-        return true;
-    }
+        public bool Match(FormulaTokenKind kind)
+        {
+            if (Current.Kind != kind)
+            {
+                return false;
+            }
 
-    public bool IsCurrentAsKeyword()
-    {
-        return Current.Kind == FormulaTokenKind.Word
-               && NameNormalizer.IsAsKeyword(Current.Text);
+            Consume();
+            return true;
+        }
+
+        public bool MatchWord(string word)
+        {
+            if (Current.Kind != FormulaTokenKind.Word
+                || !string.Equals(Current.Text, word, System.StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            Consume();
+            return true;
+        }
+
+        public bool IsCurrentAsKeyword()
+        {
+            return Current.Kind == FormulaTokenKind.Word
+                   && NameNormalizer.IsAsKeyword(Current.Text);
+        }
     }
 }
