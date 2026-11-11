@@ -30,10 +30,12 @@
 | `TryLex_ForQuotedStringWithEscapes_DecodesQuoteAndBackslash` | `grammar.md` §4.2; `parsing.md` §3.3 | Only `\"` and `\\` decode; surrounding quotes are removed from `Text` but kept in `RawText`. | — |
 | `TryLex_ForQuotedStringWithSurrogatePair_PreservesBothCodeUnits` | `grammar.md` §2 | A valid surrogate pair is a scalar value and spans two code units. | — |
 | `TryLex_ForWordWithSurrogatePair_CountsBothCodeUnitsInSpan` | `grammar.md` §2 | A valid surrogate pair in a bare word is preserved and counted in the span. | — |
-| `TryLex_ForInputEndingInWhitespace_ReportsEndOfInputAtInputLength` | `parsing.md` §3.1 | EOF offset equals the input length even with trailing whitespace. | — |
+| `TryLex_ForInputEndingInWhitespace_ReportsEndOfInputAtInputLength` | `parsing.md` §3.1 | EOF offset equals the input length even with trailing whitespace. | EOF `Text`/`RawText` emptiness is an implementation assumption; see `nonapproved-behaviour.md`. |
 | `TryLex_WithRawLineFeedInsideQuotedString_ReturnsRawNewlineError` | `parsing.md` §3.3, §13.1 | A raw LF inside quotes is `E_LEX_RAW_NEWLINE_IN_STRING` at the newline. | Exact message asserted. |
 | `TryLex_WithRawCarriageReturnInsideQuotedString_ReturnsRawNewlineError` | `parsing.md` §3.3, §13.1 | A raw CR inside quotes is `E_LEX_RAW_NEWLINE_IN_STRING` at the carriage return. | — |
 | `TryLex_WithInvalidEscape_ReturnsInvalidEscapeAtBackslash` | `parsing.md` §3.3, §13.1 | An unsupported backslash sequence is rejected at the backslash with the escaped sequence rendered in the message. | Exact message asserted, including the escaped `\\q` sequence. |
+| `TryLex_WithInvalidEscapeOfSurrogatePair_RendersPairInMessage` | `parsing.md` §3.3, §13.1 | A backslash followed by a valid surrogate pair is one invalid escape and renders both code units in the message. | Exact message asserted. |
+| `TryLex_WithUnpairedSurrogateBeforeRawLineFeed_ReturnsInvalidUnicode` | `parsing.md` §13.1 precedence | An unpaired surrogate is reported before a following raw newline. | — |
 | `TryLex_WithBackslashBeforeLineFeed_ReturnsInvalidEscapeNotRawNewline` | `parsing.md` §13.1 precedence | A backslash consumes the following code unit even when it is CR/LF, so invalid-escape wins over raw-newline. | — |
 | `TryLex_WithBackslashBeforeUnpairedSurrogate_ReturnsInvalidEscapeNotInvalidUnicode` | `parsing.md` §13.1 precedence | A backslash consumes an unpaired surrogate, so invalid-escape wins over invalid-Unicode. | — |
 | `TryLex_WithBackslashAtEndOfInput_ReturnsUnterminatedAtOpeningQuote` | `parsing.md` §3.3, §13.1 | A trailing backslash in a quoted string is unterminated, reported at the opening quote. | — |
@@ -49,6 +51,8 @@
 | `Word_WithControlCode_RendersUnicodeEscape` | `parsing.md` §3.4 | Other control code units render as `\uXXXX`. | — |
 | `Word_WithCarriageReturnAndLineFeed_RendersNamedEscapes` | `parsing.md` §3.4 | CR and LF render as `\r` and `\n`. | — |
 | `Word_WithFiftyCharacters_TruncatesToFortyAndEllipsis` | `parsing.md` §3.4 | Escaped text longer than 40 units truncates to 40 units plus `...`. | The limit applies to escaped text, not to the surrounding quotes. |
+| `Word_WithEscapedTextExactlyFortyCharacters_DoesNotTruncate` | `parsing.md` §3.4 | Escaped text of exactly 40 units is kept without an ellipsis. | — |
+| `QuotedString_WithFiftyCharacters_TruncatesToFortyAndEllipsis` | `parsing.md` §3.4 | Truncation also applies to quoted-string display, not only words. | — |
 | `Word_WithEscapeThatDoesNotFitAfterThirtyNineCharacters_DropsWholeEscape` | `parsing.md` §3.4 | Truncation never cuts an escape sequence. | — |
 | `Word_WithEscapeEndingExactlyAtFortyCharacters_KeepsEscape` | `parsing.md` §3.4 | A two-unit escape ending exactly at offset 40 is kept. | — |
 | `Word_WithSurrogatePairAtTruncationBoundary_DropsWholePair` | `parsing.md` §3.4 | Truncation never separates the two `\uXXXX` escapes of a surrogate pair. | — |
@@ -59,6 +63,7 @@
 | `Parse_ForBareScalarWithAddressLikeText_ProducesUnquotedScalar` | `grammar.md` §3, §4.1 | Bare words with `.` and `:` remain one scalar. | — |
 | `Parse_ForMultipleQuotedScalars_UsesDecodedTextAndQuotedFlag` | `grammar.md` §4.2; AST §4 | Comma, equals, and empty quoted scalars decode correctly and set `WasQuoted`. | — |
 | `Parse_ForNamedArguments_RecordsNamesAndSpans` | `grammar.md` §5; `parsing.md` §5.4 | Named arguments record the raw name spelling and a name span. | Names are not normalized by the parser. |
+| `Parse_ForUppercaseNames_PreservesRawSpelling` | `parsing.md` §4 | Scheme, argument-name, and struct-field-name spelling is preserved exactly by the parser. | Normalization is deferred to resolution. |
 | `Parse_ForPositionalPrefixThenNamedSuffix_PreservesOrderAndForms` | `grammar.md` §5; `parsing.md` §5.4 | A positional prefix may be followed by named arguments; shapes are recorded. | — |
 | `Parse_ForNestedCalls_ProducesNestedTransportExpressions` | `grammar.md` §5–6 | A word followed by `(` is a transport expression, including nested arguments. | — |
 | `Parse_ForTransportList_ProducesExpressionElements` | `grammar.md` §5–6 | Lists contain transport expressions and preserve element order. | — |
@@ -101,6 +106,7 @@ The message column is the exact expected `FactoryError.Message`.
 | `DanglingOpenParenthesis` | `alpha(` | `E_SYN_UNEXPECTED_TOKEN` | 6 | `expected a value or ')', got <end of input>` |
 | `ArgumentTrailingComma` | `alpha(a,)` | `E_SYN_TRAILING_COMMA` | 7 | `trailing comma is not allowed in argument list` |
 | `ArgumentStartsWithComma` | `alpha(,)` | `E_SYN_UNEXPECTED_TOKEN` | 6 | `expected a value or ')', got ','` |
+| `UnterminatedArgumentStartsWithComma` | `alpha(,` | `E_SYN_UNEXPECTED_TOKEN` | 6 | `expected a value or ')', got ','` |
 | `MissingArgumentAfterComma` | `alpha(a,,b)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected a value, got ','` |
 | `ListStartsWithComma` | `alpha([,])` | `E_SYN_UNEXPECTED_TOKEN` | 7 | `expected a transport expression, got ','` |
 | `MissingCommaBetweenArguments` | `alpha(a b)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected ',' or ')', got 'b'` |
@@ -139,7 +145,7 @@ The message column is the exact expected `FactoryError.Message`.
 |---|---|
 | Adversarial nesting depth and stack-exhaustion behaviour. | The grammar defines no implementation limits. The parser is recursive descent; proving behaviour for pathological depth would require an explicit-stack implementation or a stress category, both outside this deterministic contract suite. |
 | Performance, allocation, and large-input behaviour. | The suite proves language semantics, not non-functional characteristics. |
-| Concurrency. | Lexer, cursor, and parser instances are single-use and have no documented shared-state contract. |
+| Concurrency. | Lexer, cursor, and parser instances are not documented for concurrent use; the deterministic corpus reuses one parser sequentially. |
 | Unicode normalization and culture-sensitive comparison. | The grammar explicitly performs no normalization and uses ASCII identifier rules; scalar values are preserved exactly. |
 | Registry, resolution, canonical printing, compilation, and bootstrap. | Separate subsystems and suites. |
 | Public exposure of `FormulaToken` or internal lexer helpers. | `FormulaToken` is a DTO; `FormulaLexer`, `TokenCursor`, `FormulaParser`, `ParsingErrorFactory`, and `TokenDisplay` are internal. Tests reach them through `InternalsVisibleTo`, not through new public API. |
@@ -154,3 +160,5 @@ The message column is the exact expected `FactoryError.Message`.
   zero-length in the current implementation; only the offset is normative.
 - The robustness test uses a fixed corpus and a fixed character alphabet, so its
   generated inputs are deterministic across runs.
+- Test assumptions that are not part of the normative contract are collected in
+  `nonapproved-behaviour.md`.

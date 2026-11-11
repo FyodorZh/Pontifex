@@ -24,27 +24,47 @@ public sealed class SemanticErrorTests
     }
 
     [Test]
-    public void Resolve_ForUnknownScheme_ReportsSortedKnownSchemes()
+    public void Resolve_ForUnknownScheme_ReportsSortedKnownSchemesAndPreservesRawSpelling()
     {
         SemanticsAssertions.ResolveError(
-            SemanticsTestData.AlphaOnlyResolver(),
-            "nosuch(q=1)",
+            SemanticsTestData.Resolver(SemanticsTestData.SortedNamesRegistry()),
+            "NoSuch()",
             "E_SEM_UNKNOWN_SCHEME",
             0,
-            "unknown transport scheme 'nosuch'; known schemes: alpha");
+            "unknown transport scheme 'NoSuch'; known schemes: alpha, mu, zeta");
     }
 
     [Test]
-    public void Resolve_ForAliasOnlySchemeWithNoSurvivingCandidate_ReportsPreFilterAvailableVariants()
+    public void Resolve_ForUnknownSchemeWhenNoSchemesAreRegistered_ReportsEmptyRegistry()
     {
         SemanticsAssertions.ResolveError(
-            SemanticsTestData.StandardResolver(),
-            "shared(x)",
-            SemanticsTestData.Exactly(SemanticsTestData.TypeA),
-            "E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE",
+            SemanticsTestData.Resolver(SemanticsTestData.EmptyRegistry()),
+            "nosuch()",
+            "E_SEM_UNKNOWN_SCHEME",
             0,
-            "scheme 'shared' has no variant for expected transport type TypeA; "
-            + "available: beta (TypeB), gamma (TypeC)");
+            "unknown transport scheme 'nosuch'; no schemes are registered");
+    }
+
+    [Test]
+    public void Resolve_ForUnknownTransportType_ReportsSortedKnownTypes()
+    {
+        SemanticsAssertions.ResolveError(
+            SemanticsTestData.Resolver(SemanticsTestData.SortedTypeCatalogRegistry()),
+            "alpha(beta(x)) as TypeZ",
+            "E_SEM_UNKNOWN_TRANSPORT_TYPE",
+            18,
+            "unknown transport type 'TypeZ'; known types: TypeA, TypeB, TypeC");
+    }
+
+    [Test]
+    public void Resolve_ForUnknownTransportTypeWhenNoTypesAreRegistered_ReportsEmptyCatalog()
+    {
+        SemanticsAssertions.ResolveError(
+            SemanticsTestData.Resolver(SemanticsTestData.EmptyRegistry()),
+            "alpha() as TypeZ",
+            "E_SEM_UNKNOWN_TRANSPORT_TYPE",
+            11,
+            "unknown transport type 'TypeZ'; no transport types are registered");
     }
 
     [Test]
@@ -72,34 +92,15 @@ public sealed class SemanticErrorTests
     [Test]
     public void Resolve_ChecksBindingErrorsBeforeParameterValidation()
     {
-        SemanticsAssertions.ResolveError(
-            SemanticsTestData.StandardResolver(),
-            "alpha(1, q=1)",
-            "E_SEM_UNKNOWN_PARAM",
-            9,
-            "unknown parameter 'q' for scheme 'alpha'; one of: 'input', 'mode', 'timeout'");
-    }
+        var result = SemanticsTestData.StandardResolver().Resolve(
+            SemanticsTestData.Parse("alpha(1, q=1)"),
+            SemanticsTestData.AnySet());
 
-    [Test]
-    public void Resolve_ChecksTooManyPositionalArgumentsBeforeNamedArguments()
-    {
-        SemanticsAssertions.ResolveError(
-            SemanticsTestData.StandardResolver(),
-            "alpha(beta(x), fast, extra, q=1)",
-            "E_SEM_TOO_MANY_POSITIONAL",
-            21,
-            "too many positional arguments for scheme 'alpha'; expected at most 2");
-    }
-
-    [Test]
-    public void Resolve_ChecksUnknownNamedArgumentBeforeDuplicate()
-    {
-        SemanticsAssertions.ResolveError(
-            SemanticsTestData.StandardResolver(),
-            "alpha(beta(x), q=1, input=beta(y))",
-            "E_SEM_UNKNOWN_PARAM",
-            15,
-            "unknown parameter 'q' for scheme 'alpha'; one of: 'input', 'mode', 'timeout'");
+        Assert.That(result.Formula, Is.Null);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Code, Is.EqualTo("E_SEM_UNKNOWN_PARAM"));
+        Assert.That(result.Error.Message, Is.EqualTo(
+            "unknown parameter 'q' for scheme 'alpha'; one of: 'input', 'mode', 'timeout'"));
     }
 
     [Test]
@@ -124,18 +125,6 @@ public sealed class SemanticErrorTests
         Assert.That(first.Formula, Is.Null);
         Assert.That(second.Formula, Is.Null);
         Assert.That(second.Error, Is.EqualTo(first.Error));
-    }
-
-    [Test]
-    public void Resolve_ForSeveralErrors_ReturnsOnlyTheFirstError()
-    {
-        var result = SemanticsTestData.StandardResolver().Resolve(
-            SemanticsTestData.Parse("alpha(1, q=1)"),
-            SemanticsTestData.AnySet());
-
-        Assert.That(result.Formula, Is.Null);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Code, Is.EqualTo("E_SEM_UNKNOWN_PARAM"));
     }
 
     private static IEnumerable<TestCaseData> SemanticErrorCases()

@@ -66,8 +66,10 @@ This is a Test Suit with exactly one layer at the suite root.
 
 - Layer name = subsystem name: `Semantics`.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
-- Test methods = `Method_Scenario_ExpectedResult`, for example
-  `Resolve_ForIdentityCast_CollapsesToInnerTransportWithFullCastSpan`.
+- Test methods = `Method_Scenario_ExpectedResult`. Property, lifecycle, and
+  precedence tests may omit a separate scenario and use
+  `Subject_ExpectedResult` when the subject itself is the scenario, for example
+  `Bind_ChecksTooManyPositionalArgumentsBeforeNamedArguments`.
 - Namespace = `Pontifex.Factory.Tests.Semantics` for every suite test file.
 - Harness types live in `Pontifex.Factory.Tests.Semantics.Harness`.
 - Every fixture carries `[Category("Factory.Semantics")]`.
@@ -106,9 +108,12 @@ root layer's `Coverage.md` covers every test in every group.
 - `SemanticsTestData` — hand-written metadata factories, the standard registry
   fixture from `parsing.md` §14 plus named harness extensions, parsing helpers,
   and resolver construction.
-- `SemanticsAssertions` — centralised success and failure assertions, including
-  exact `FactoryError` code, message, phase `Resolution`, offset, and zero-length
-  span checks.
+- `SemanticsAssertions` — centralised success and failure assertions. Resolver,
+  selector, and binder errors assert the exact `FactoryError` code, message,
+  phase `Resolution`, offset, and zero-length span. Parameter- and struct-
+  validator helpers currently assert code and message; their offset/span
+  coverage comes from the end-to-end semantic error catalogue. The internal
+  `SemanticAbort` channel is recorded in `nonapproved-behaviour.md`.
 
 The standard registry mirrors `parsing.md` §14: `alpha`, `beta`, `gamma`, `outer`,
 `structy`, the `alpha`-as-alias-of-`beta` contract, and the additional fixture
@@ -227,3 +232,6 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 ## Rules
 
 This suite follows [Tests/RULES.md](../../RULES.md).
+
+Known test assumptions that are not part of the normative contract are recorded in
+[nonapproved-behaviour.md](../nonapproved-behaviour.md).

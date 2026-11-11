@@ -60,8 +60,10 @@ This is a Test Suit with exactly one layer at the suite root.
 
 - Layer name = subsystem name: `Canonicalization`.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
-- Test methods = `Method_Scenario_ExpectedResult`, for example
-  `Canonicalize_ForOmittedFirstPositional_PrintsLaterParameterByName`.
+- Test methods = `Method_Scenario_ExpectedResult`. Property, lifecycle, and
+  error-catalogue tests may omit a separate scenario and use
+  `Subject_ExpectedResult` when the subject itself is the scenario, for example
+  `MissingRequiredParam_FormatsTemplate`.
 - Namespace = `Pontifex.Factory.Tests.Canonicalization` for every suite test file.
 - Harness types live in `Pontifex.Factory.Tests.Canonicalization.Harness`.
 - Every fixture carries `[Category("Factory.Canonicalization")]`.
@@ -104,12 +106,11 @@ root layer's `Coverage.md` covers every test in every group.
   resolved-tree equality helper from `parsing.md` §11.1.
 
 The standard registry mirrors `parsing.md` §14 (`alpha`, `beta`, `gamma`,
-`outer`, `structy`, the `alpha`-as-alias-of-`beta` contract) and adds fixture
-schemes that reach canonicalization branches the §14 table does not:
-`mixed` (named-only parameter declared before a positional one), `opt` (two
-optional positionals for prefix gaps), `bag` (empty and unbounded list),
-`emptyStruct` (empty struct schema), `single` (one-element bounded list),
-`dual` (union expected set), and `deep` (three-level nested struct).
+`outer`, `structy`, the `alpha`-as-alias-of-`beta` contract) and adds named
+fixture schemes used by the printer tests: `mixed` (named-only parameter declared
+before a positional one), `opt` (two optional positionals for prefix gaps), `bag`
+(empty and unbounded list), `emptyStruct` (empty struct schema), `single`
+(one-element bounded list), and `deep` (three-level nested struct).
 
 There are no harness self-tests. Harness belongs to the root layer and is
 available to every test in this suite. Sibling suites do not share this harness;
@@ -219,3 +220,6 @@ convert it to an Abstract Test Suite instead of adding a nested layer here.
 ## Rules
 
 This suite follows [Tests/RULES.md](../../RULES.md).
+
+Known test assumptions that are not part of the normative contract are recorded in
+[nonapproved-behaviour.md](../nonapproved-behaviour.md).

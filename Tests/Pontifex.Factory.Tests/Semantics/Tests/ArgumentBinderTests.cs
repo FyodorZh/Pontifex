@@ -64,63 +64,6 @@ public sealed class ArgumentBinderTests
     }
 
     [Test]
-    public void Bind_ForTooManyPositionalArguments_ReportsFirstExtraValue()
-    {
-        var error = SemanticsAssertions.BindError(
-            "alpha(beta(x), fast, extra)",
-            Alpha(),
-            "E_SEM_TOO_MANY_POSITIONAL",
-            21,
-            "too many positional arguments for scheme 'alpha'; expected at most 2");
-
-        Assert.That(error.Span!.Value.Start, Is.EqualTo(21));
-    }
-
-    [Test]
-    public void Bind_ForUnknownNamedArgument_ReportsRawNameAndScheme()
-    {
-        SemanticsAssertions.BindError(
-            "alpha(beta(x), q=1)",
-            Alpha(),
-            "E_SEM_UNKNOWN_PARAM",
-            15,
-            "unknown parameter 'q' for scheme 'alpha'; one of: 'input', 'mode', 'timeout'");
-    }
-
-    [Test]
-    public void Bind_ForUnknownNamedArgument_PreservesRawSpelling()
-    {
-        SemanticsAssertions.BindError(
-            "alpha(beta(x), Q=1)",
-            Alpha(),
-            "E_SEM_UNKNOWN_PARAM",
-            15,
-            "unknown parameter 'Q' for scheme 'alpha'; one of: 'input', 'mode', 'timeout'");
-    }
-
-    [Test]
-    public void Bind_ForUnknownNamedArgumentWhenSchemeHasNoParameters_ReportsEmptyExpectation()
-    {
-        SemanticsAssertions.BindError(
-            "empty(x=1)",
-            Empty(),
-            "E_SEM_UNKNOWN_PARAM",
-            6,
-            "unknown parameter 'x' for scheme 'empty'; the scheme has no parameters");
-    }
-
-    [Test]
-    public void Bind_ForNamedArgumentTargetingPositionallyBoundParameter_ReportsDuplicate()
-    {
-        SemanticsAssertions.BindError(
-            "alpha(beta(x), input=beta(y))",
-            Alpha(),
-            "E_SEM_DUPLICATE_PARAM",
-            15,
-            "parameter 'input' is specified more than once");
-    }
-
-    [Test]
     public void Bind_ForRepeatedNamedArgument_ReportsDuplicateAtSecondName()
     {
         SemanticsAssertions.BindError(
@@ -132,17 +75,6 @@ public sealed class ArgumentBinderTests
     }
 
     [Test]
-    public void Bind_ForMissingRequiredParameter_ReportsClosingParenthesis()
-    {
-        SemanticsAssertions.BindError(
-            "alpha()",
-            Alpha(),
-            "E_SEM_MISSING_REQUIRED_PARAM",
-            6,
-            "missing required parameter 'input' for scheme 'alpha'");
-    }
-
-    [Test]
     public void Bind_ForEmptyArgumentsAndNoRequiredParameters_ReturnsEmptyBindings()
     {
         var bound = SemanticsAssertions.Bind("empty()", Empty());
@@ -151,7 +83,7 @@ public sealed class ArgumentBinderTests
     }
 
     [Test]
-    public void Bind_ChecksUnknownNamedArgumentsBeforeDuplicates()
+    public void Bind_ChecksNamedArgumentsInSourceOrder()
     {
         SemanticsAssertions.BindError(
             "alpha(beta(x), q=1, input=beta(y))",
@@ -170,6 +102,51 @@ public sealed class ArgumentBinderTests
             "E_SEM_TOO_MANY_POSITIONAL",
             21,
             "too many positional arguments for scheme 'alpha'; expected at most 2");
+    }
+
+    [Test]
+    public void Bind_ForMultipleMissingRequiredParameters_ReportsFirstInDeclarationOrder()
+    {
+        var constructor = SemanticsTestData.Constructor(
+            "gamma",
+            SemanticsTestData.TypeA,
+            SemanticsTestData.CreateStringParam("zeta", required: true),
+            SemanticsTestData.CreateStringParam("alpha", required: true));
+
+        SemanticsAssertions.BindError(
+            "gamma()",
+            constructor,
+            "E_SEM_MISSING_REQUIRED_PARAM",
+            6,
+            "missing required parameter 'zeta' for scheme 'gamma'");
+    }
+
+    [Test]
+    public void Bind_ForUnknownNamedArgument_ReportsParametersInDeclarationOrder()
+    {
+        var constructor = SemanticsTestData.Constructor(
+            "gamma",
+            SemanticsTestData.TypeA,
+            SemanticsTestData.CreateStringParam("zeta"),
+            SemanticsTestData.CreateStringParam("alpha"));
+
+        SemanticsAssertions.BindError(
+            "gamma(q=1)",
+            constructor,
+            "E_SEM_UNKNOWN_PARAM",
+            6,
+            "unknown parameter 'q' for scheme 'gamma'; one of: 'zeta', 'alpha'");
+    }
+
+    [Test]
+    public void Bind_ForDuplicateWithUppercaseName_PreservesRawSpelling()
+    {
+        SemanticsAssertions.BindError(
+            "alpha(beta(x), INPUT=beta(y))",
+            Alpha(),
+            "E_SEM_DUPLICATE_PARAM",
+            15,
+            "parameter 'INPUT' is specified more than once");
     }
 
     private static TransportConstructorInfo Alpha()

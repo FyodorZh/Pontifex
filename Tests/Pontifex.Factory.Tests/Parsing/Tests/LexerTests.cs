@@ -208,6 +208,27 @@ public sealed class LexerTests
     }
 
     [Test]
+    public void TryLex_WithInvalidEscapeOfSurrogatePair_RendersPairInMessage()
+    {
+        const string emoji = "\uD83D\uDE00";
+        var error = LexError("alpha(\"x\\" + emoji + "\")");
+
+        Assert.That(error.Code, Is.EqualTo("E_LEX_INVALID_ESCAPE"));
+        Assert.That(error.Message, Is.EqualTo(
+            "invalid escape sequence '\\\\\\uD83D\\uDE00'; only \\\" and \\\\ are allowed"));
+        Assert.That(error.Span!.Value.Start, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void TryLex_WithUnpairedSurrogateBeforeRawLineFeed_ReturnsInvalidUnicode()
+    {
+        var error = LexError("alpha(\"x" + '\uD800' + "\ny\")");
+
+        Assert.That(error.Code, Is.EqualTo("E_LEX_INVALID_UNICODE"));
+        Assert.That(error.Span!.Value.Start, Is.EqualTo(8));
+    }
+
+    [Test]
     public void TryLex_WithBackslashBeforeLineFeed_ReturnsInvalidEscapeNotRawNewline()
     {
         var error = LexError("alpha(\"x\\\ny\")");

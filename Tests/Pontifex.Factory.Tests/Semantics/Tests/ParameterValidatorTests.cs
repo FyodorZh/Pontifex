@@ -30,39 +30,6 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
-    public void Validate_ForStringParameterWithFailingValidator_ReportsValidatorReason()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "validated(bad)",
-            Constructor("validated"),
-            "E_SEM_VALIDATOR_FAILED",
-            "parameter 'value' is invalid: value must not be 'bad'");
-    }
-
-    [Test]
-    public void Validate_ForStringParameterWithEmptyValidatorReason_ReportsValidationFailed()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "validatedEmpty(x)",
-            Constructor("validatedEmpty"),
-            "E_SEM_VALIDATOR_FAILED",
-            "parameter 'value' is invalid: validation failed");
-    }
-
-    [Test]
-    public void Validate_ForStringParameterWithThrowingValidator_ReportsValidationFailed()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "validatedThrow(x)",
-            Constructor("validatedThrow"),
-            "E_SEM_VALIDATOR_FAILED",
-            "parameter 'value' is invalid: validation failed");
-    }
-
-    [Test]
     public void Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar()
     {
         SemanticsAssertions.ValidateParamsError(
@@ -74,17 +41,6 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
-    public void Validate_ForStringParameterReceivingList_ReportsExpectedScalarWithListShape()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "beta([alpha(beta(x))])",
-            Constructor("beta"),
-            "E_SEM_EXPECTED_SCALAR",
-            "parameter 'value' expects a scalar value, got transport list");
-    }
-
-    [Test]
     public void Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape()
     {
         SemanticsAssertions.ValidateParamsError(
@@ -93,17 +49,6 @@ public sealed class ParameterValidatorTests
             Constructor("beta"),
             "E_SEM_EXPECTED_SCALAR",
             "parameter 'value' expects a scalar value, got struct");
-    }
-
-    [Test]
-    public void Validate_ForTransportParameterReceivingScalar_ReportsExpectedTransport()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "alpha(1)",
-            Constructor("alpha"),
-            "E_SEM_EXPECTED_TRANSPORT",
-            "parameter 'input' expects a transport, got scalar");
     }
 
     [Test]
@@ -129,17 +74,6 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
-    public void Validate_ForListParameterReceivingTransport_ReportsExpectedTransportList()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "gamma(beta(x))",
-            Constructor("gamma"),
-            "E_SEM_EXPECTED_TRANSPORT_LIST",
-            "parameter 'items' expects a transport list, got transport");
-    }
-
-    [Test]
     public void Validate_ForListParameterReceivingScalar_ReportsExpectedTransportList()
     {
         SemanticsAssertions.ValidateParamsError(
@@ -148,17 +82,6 @@ public sealed class ParameterValidatorTests
             Constructor("gamma"),
             "E_SEM_EXPECTED_TRANSPORT_LIST",
             "parameter 'items' expects a transport list, got scalar");
-    }
-
-    [Test]
-    public void Validate_ForStructParameterReceivingScalar_ReportsExpectedStruct()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "structy(1)",
-            Constructor("structy"),
-            "E_SEM_EXPECTED_STRUCT",
-            "parameter 'config' expects a struct, got scalar");
     }
 
     [Test]
@@ -173,6 +96,28 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
+    public void Validate_ForListParameterReceivingStruct_ReportsExpectedTransportList()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "gamma({a=1})",
+            Constructor("gamma"),
+            "E_SEM_EXPECTED_TRANSPORT_LIST",
+            "parameter 'items' expects a transport list, got struct");
+    }
+
+    [Test]
+    public void Validate_ForStructParameterReceivingTransport_ReportsExpectedStruct()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "structy(beta(x))",
+            Constructor("structy"),
+            "E_SEM_EXPECTED_STRUCT",
+            "parameter 'config' expects a struct, got transport");
+    }
+
+    [Test]
     public void Validate_ForListBelowMinimum_ReportsMinimumAndCount()
     {
         SemanticsAssertions.ValidateParamsError(
@@ -181,17 +126,6 @@ public sealed class ParameterValidatorTests
             Constructor("gamma"),
             "E_SEM_LIST_MIN",
             "transport list for 'items' requires at least 2 element(s), got 0");
-    }
-
-    [Test]
-    public void Validate_ForListAboveMaximum_ReportsMaximumAndCount()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "gamma([alpha(beta(x)), alpha(beta(x)), alpha(beta(x)), alpha(beta(x))])",
-            Constructor("gamma"),
-            "E_SEM_LIST_MAX",
-            "transport list for 'items' requires at most 3 element(s), got 4");
     }
 
     [Test]
@@ -207,28 +141,6 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
-    public void Validate_ForHomogeneousListWithDifferentTypes_ReportsTypesInElementOrder()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "gamma([beta(y), alpha(beta(x))])",
-            Constructor("gamma"),
-            "E_SEM_LIST_HOMOGENEITY",
-            "transport list for 'items' must contain one transport type; found TypeB, TypeA");
-    }
-
-    [Test]
-    public void Validate_ForHomogeneousListWithFirstElementTypeSecond_ReportsOrderFromFirstElement()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "gamma([alpha(beta(x)), beta(y)])",
-            Constructor("gamma"),
-            "E_SEM_LIST_HOMOGENEITY",
-            "transport list for 'items' must contain one transport type; found TypeA, TypeB");
-    }
-
-    [Test]
     public void Validate_ForListElementsWithExpectedSet_ResolvesElementAgainstParameterExpectedType()
     {
         var provided = Validate("listB([alpha(x)])", Constructor("listB"));
@@ -236,6 +148,17 @@ public sealed class ParameterValidatorTests
 
         Assert.That(((ResolvedTransport)element).Constructor.Name, Is.EqualTo("beta"));
         Assert.That(element.Type, Is.EqualTo(SemanticsTestData.TypeB));
+    }
+
+    [Test]
+    public void Validate_ForHomogeneousListWithThreeTypes_ReportsAllDistinctTypesInElementOrder()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "gamma([alpha(beta(x)), beta(y), gamma([alpha(beta(x)), alpha(beta(x))])])",
+            Constructor("gamma"),
+            "E_SEM_LIST_HOMOGENEITY",
+            "transport list for 'items' must contain one transport type; found TypeA, TypeB, TypeC");
     }
 
     [Test]
@@ -276,7 +199,7 @@ public sealed class ParameterValidatorTests
     {
         SemanticsAssertions.ValidateParamsError(
             Registry(),
-            "alpha(1, 2)",
+            "alpha(1, [beta(x)])",
             Constructor("alpha"),
             "E_SEM_EXPECTED_TRANSPORT",
             "parameter 'input' expects a transport, got scalar");
@@ -287,10 +210,10 @@ public sealed class ParameterValidatorTests
     {
         SemanticsAssertions.ValidateParamsError(
             Registry(),
-            "structy({name=x, extra=1})",
-            Constructor("structy"),
+            "pair({x=1})",
+            Constructor("pair"),
             "E_SEM_UNKNOWN_STRUCT_FIELD",
-            "unknown field 'extra' in struct for parameter 'config'; one of: 'name', 'nested'");
+            "unknown field 'x' in struct for parameter 'config'; one of: 'a', 'b'");
     }
 
     [Test]

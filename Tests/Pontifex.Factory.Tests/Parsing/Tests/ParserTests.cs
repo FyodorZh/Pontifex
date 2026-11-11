@@ -57,6 +57,18 @@ public sealed class ParserTests
     }
 
     [Test]
+    public void Parse_ForUppercaseNames_PreservesRawSpelling()
+    {
+        var formula = Parse("ALPHA(BETA(x), MODE=Fast, CONFIG={Name=one})");
+        var arguments = formula.Root.Call.Arguments;
+
+        Assert.That(formula.Root.Call.Scheme, Is.EqualTo("ALPHA"));
+        Assert.That(arguments.Select(a => a.Name), Is.EqualTo(new string?[] { null, "MODE", "CONFIG" }));
+        Assert.That(((AstExpr)arguments[0].Value).Call.Scheme, Is.EqualTo("BETA"));
+        Assert.That(((AstStruct)arguments[2].Value).Fields.Single().Name, Is.EqualTo("Name"));
+    }
+
+    [Test]
     public void Parse_ForPositionalPrefixThenNamedSuffix_PreservesOrderAndForms()
     {
         var formula = Parse("alpha(1, 2, p=3, q=4)");
@@ -416,6 +428,9 @@ public sealed class ParserTests
 
         yield return SyntaxError("alpha(,)", "E_SYN_UNEXPECTED_TOKEN", 6,
             "expected a value or ')', got ','").SetName("ArgumentStartsWithComma");
+
+        yield return SyntaxError("alpha(,", "E_SYN_UNEXPECTED_TOKEN", 6,
+            "expected a value or ')', got ','").SetName("UnterminatedArgumentStartsWithComma");
 
         yield return SyntaxError("alpha(a,,b)", "E_SYN_UNEXPECTED_TOKEN", 8,
             "expected a value, got ','").SetName("MissingArgumentAfterComma");

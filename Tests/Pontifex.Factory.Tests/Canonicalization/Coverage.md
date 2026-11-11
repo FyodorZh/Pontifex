@@ -34,18 +34,15 @@
 | `Canonicalize_ForNestedStructWithEmptyNestedStruct_PrintsBraces` | `FormulaCanonicalizer` | §10.3 | An empty nested struct prints `name={}`. | — |
 | `Canonicalize_ForNonIdentityCast_PrintsCanonicalTarget` | `FormulaCanonicalizer` | §10.1, §10.5 | A changing cast prints `inner as CanonicalTarget` with single spaces. | — |
 | `Canonicalize_ForCastNestedInAnArgument_PrintsTheCastInsideTheArgument` | `FormulaCanonicalizer` | §10.1, §10.3 | A cast value prints recursively inside an argument. | — |
+| `Canonicalize_ForCastInsideTransportList_PrintsTheCast` | `FormulaCanonicalizer` | §10.1, §10.3 | A cast value prints recursively as a transport-list element. | — |
 | `Canonicalize_ForScalarVariants_UsesMinimalQuoting` | `FormulaCanonicalizer` | §10.4, §10.5 | Printing picks bare, quoted, escaped, empty, and Unicode scalar forms. | Integration-level check of scalar formatting inside transports. |
 | `Canonicalize_ForPrintedOutput_HasNoTrailingWhitespaceOrNewline` | `FormulaCanonicalizer` | §10.1, §10.3 | Output has no prefix, trailing whitespace, or newline. | — |
-| `Canonicalize_ForParsingMdPrinterExamples_ProducesExpectedOutput` | `FormulaCanonicalizer` | §14.4 | All twenty-two canonical printer rows normalize to the documented output through the real parser and resolver. | Parameterized method; one row per §14.4 example. `emptyStruct` prints as `emptystruct` because registration lowercases scheme names. |
+| `Canonicalize_ForParsingMdPrinterExamples_ProducesExpectedOutput` | `FormulaCanonicalizer` | §14.4 | All twenty-two canonical printer rows normalize through the real parser and resolver; all except `emptyStruct` match the table literally. | Parameterized method; one row per §14.4 example. `emptyStruct` prints as `emptystruct` because registration lowercases scheme names. |
 | `Canonicalize_ForEquivalentSources_ProducesTheSameOutputAndTree` | `FormulaCanonicalizer` | §11.1, §11.3 | Case, whitespace, named order, identity casts, aliases, struct order, quoting, and CR/LF variants collapse to one tree and one output. | Parameterized method; nine pairs. |
-| `Canonicalize_ForRepresentativeFormula_IsIdempotentAndPreservesTheTree` | `FormulaCanonicalizer` | §11.1, §11.2 | Parse-resolve-canonicalize-parse-resolve-canonicalize is stable and structurally equal to the first tree. | Cross-subsystem round trip; twenty-three sources. Output is checked for raw CR/LF. |
-| `Canonicalize_ForRepresentativeFormula_ProducesExpectedOutput` | `FormulaCanonicalizer` | §10.5, §11.2 | Representative formulas print the expected canonical text. | Parameterized method; nine sources. |
+| `Canonicalize_ForRepresentativeFormula_IsIdempotentAndPreservesTheTree` | `FormulaCanonicalizer` | §11.1, §11.2 | Parse-resolve-canonicalize-parse-resolve-canonicalize is stable and structurally equal to the first tree. | Cross-subsystem round trip; twenty-two sources. Output is checked for raw CR/LF. |
+| `Canonicalize_ForTopLevelNonIdentityCast_ProducesExpectedOutput` | `FormulaCanonicalizer` | §10.1, §10.5, §11.2 | A source-level non-identity cast prints its canonical scheme and target. | — |
 | `Canonicalize_ForCrLfAndTabWhitespace_ProducesNoRawNewlines` | `FormulaCanonicalizer` | §10.1, §10.4 | CR/LF and tab whitespace outside scalars are removed and never emitted. | — |
-| `Canonicalize_ForAliasInExpectedTypeContext_UsesTheCanonicalScheme` | `FormulaCanonicalizer` | §10.5, §11.3 | An alias selected by an expected type prints its canonical scheme name. | — |
-| `Canonicalize_ForIdentityCastAroundACanonicalScheme_RemovesTheCast` | `FormulaCanonicalizer` | §7.2, §10.5, §11.3 | An identity cast is absent from the tree and from canonical output. | — |
 | `Canonicalize_ForCaseInsensitiveCastType_UsesCatalogCanonicalSpelling` | `FormulaCanonicalizer` | §6.6, §10.1 | A case-insensitive cast type prints the catalog's canonical spelling. | — |
-| `Canonicalize_ForQuotedScalarsThatNeedNoQuotes_RemovesTheQuotes` | `FormulaCanonicalizer` | §10.4, §11.3 | A quoted source scalar that is safe bare loses its quotes. | — |
-| `Canonicalize_ForQuotedScalarsThatNeedQuotes_PreservesTheText` | `FormulaCanonicalizer` | §10.4, §11.3 | A quoted scalar with a comma keeps its text and quotes after a round trip. | — |
 | `Canonicalize_ForDeepNestedStruct_RoundTripsInSchemaOrder` | `FormulaCanonicalizer` | §10.3, §11.1, §11.2 | A three-level nested struct prints and round-trips in schema order. | — |
 | `Canonicalize_ForListOrder_PreservesTheOriginalElementOrderAcrossRoundTrip` | `FormulaCanonicalizer` | §10.3, §11.1 | A list's element order is preserved across canonicalization and re-resolution. | — |
 
@@ -69,9 +66,7 @@
 | `Format_ForEmptyText_ReturnsQuotedEmptyString` | `ScalarFormatter` | §10.4 | Empty text prints `""`. | — |
 | `Format_ForSafeBareText_ReturnsTextUnchanged` | `ScalarFormatter` | §10.4 | Plain text, addresses, symbols, Unicode, and a surrogate pair print bare. | Parameterized method; eight texts. |
 | `Format_ForWhitespaceOrDelimiter_QuotesText` | `ScalarFormatter` | §10.4 | Every delimiter and both quoting whitespace characters trigger quoting. | Parameterized method; tab and space included. |
-| `Format_ForTextWithComma_QuotesAndPreservesText` | `ScalarFormatter` | §10.4 | A comma forces quotes and is preserved. | — |
-| `Format_ForTextWithEquals_QuotesAndPreservesText` | `ScalarFormatter` | §10.4 | An equals sign forces quotes and is preserved. | — |
-| `Format_ForTextWithBraces_QuotesAndPreservesText` | `ScalarFormatter` | §10.4 | Braces force quotes and are preserved. | — |
+| `Format_ForTextWithDelimiters_QuotesAndPreservesText` | `ScalarFormatter` | §10.4 | Multi-character texts containing commas, equals, or braces are quoted without altering the text. | Parameterized method. |
 | `Format_ForTextWithDoubleQuote_EscapesOnlyTheQuote` | `ScalarFormatter` | §10.4 | A double quote is escaped as `\"`. | — |
 | `Format_ForTextWithBackslashAndWhitespace_EscapesOnlyTheBackslash` | `ScalarFormatter` | §10.4 | A backslash is escaped as `\\` only inside a quoted scalar. | — |
 | `Format_ForTextWithBothEscapes_EscapesBackslashBeforeQuote` | `ScalarFormatter` | §10.4 | Escaping is applied per code unit without ambiguity. | — |
@@ -84,27 +79,33 @@
 | `Format_ForUnpairedLowSurrogate_ThrowsInvalidScalarWithUDC00` | `ScalarFormatter` | §10.4, §13.5 | An unpaired low surrogate is rejected with its code unit. | — |
 | `Format_ForSurrogatePair_PreservesBarePair` | `ScalarFormatter` | §10.4 | A valid surrogate pair is a Unicode scalar and prints bare. | — |
 | `Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr` | `ScalarFormatter` | §10.4 | CR earlier in the text wins over a later surrogate. | — |
-| `EnsurePrintable_ForTextWithCr_ThrowsPhasePrintingWithoutSpan` | `ScalarFormatter` | §12.1, §13.5 | The validator's printability check uses `PrinterException` phase `Printing` with no span. | — |
 
 ### PrinterInvariantValidator
 
 | Test | Subject | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|---|
 | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam` | `PrinterInvariantValidator` | §10, §13.5 | A missing required parameter reports `E_PRN_MISSING_REQUIRED_PARAM`. | — |
+| `Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder` | `PrinterInvariantValidator` | §10, §13.5 | Multiple missing required parameters report the first in declaration order. | — |
 | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam` | `PrinterInvariantValidator` | §10, §13.5 | A provided parameter absent from metadata reports `E_PRN_UNKNOWN_PARAM`. | — |
 | `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference` | `PrinterInvariantValidator` | §10.2, §13.5 | A structurally equal but recreated parameter is unknown; matching is by reference. | — |
 | `Validate_WhenParameterIsProvidedTwice_ReportsDuplicateParam` | `PrinterInvariantValidator` | §10, §13.5 | A repeated parameter reference reports `E_PRN_DUPLICATE_PARAM`. | — |
 | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10, §13.5 | Out-of-order `Provided` reports detail `provided parameter order violation`. | — |
-| `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase scheme reports detail `non-canonical name`. | — |
-| `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase provided parameter name reports `non-canonical name`. | — |
+| `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase scheme reports detail `non-canonical name`. | Precedence over simultaneous kind mismatch is not defined by §10; see `nonapproved-behaviour.md`. |
+| `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase provided parameter name reports `non-canonical name`. | Precedence over simultaneous kind mismatch is not defined by §10; see `nonapproved-behaviour.md`. |
 | `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase provided struct field name reports `non-canonical name`. | — |
 | `Validate_WhenStringParameterReceivesTransport_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport value for a string parameter reports actual `transport`, expected `scalar`. | — |
+| `Validate_WhenStringParameterReceivesList_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport list for a string parameter reports actual `transport list`, expected `scalar`. | — |
+| `Validate_WhenStringParameterReceivesStruct_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A struct for a string parameter reports actual `struct`, expected `scalar`. | — |
 | `Validate_WhenTransportParameterReceivesScalar_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A scalar for a transport parameter reports actual `scalar`, expected `transport`. | — |
 | `Validate_WhenListParameterReceivesScalar_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A scalar for a list parameter reports expected `transport list`. | — |
+| `Validate_WhenListParameterReceivesTransport_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport for a list parameter reports expected `transport list`. | — |
+| `Validate_WhenListParameterReceivesStruct_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A struct for a list parameter reports expected `transport list`. | — |
 | `Validate_WhenStructParameterReceivesScalar_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A scalar for a struct parameter reports expected `struct`. | — |
+| `Validate_WhenStructParameterReceivesTransport_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport for a struct parameter reports expected `struct`. | — |
+| `Validate_WhenStructParameterReceivesList_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport list for a struct parameter reports expected `struct`. | — |
 | `Validate_WhenListIsBelowMinimum_ReportsListArityRange` | `PrinterInvariantValidator` | §10, §13.5 | A short list reports the closed range `2..3`. | — |
 | `Validate_WhenListIsAboveMaximum_ReportsListArityRange` | `PrinterInvariantValidator` | §10, §13.5 | A long list reports the closed range `2..3`. | — |
-| `Validate_WhenUnboundedListMeetsMinimum_AcceptsIt` | `PrinterInvariantValidator` | §10, §13.5 | A null maximum is unbounded and an empty list is accepted. | — |
+| `Validate_WhenUnboundedListExceedsMinimum_AcceptsLargeList` | `PrinterInvariantValidator` | §10, §13.5 | A null maximum is unbounded; a five-element list is accepted. | — |
 | `Validate_WhenHomogeneousListMixesTypes_ReportsListHomogeneity` | `PrinterInvariantValidator` | §10, §13.5 | Mixed element types in a homogeneous list report `E_PRN_LIST_HOMOGENEITY`. | — |
 | `Validate_WhenTransportValueIsOutsideExpectedSet_ReportsMembershipViolation` | `PrinterInvariantValidator` | §10, §13.5 | A transport outside the parameter expected set reports `expected-type membership violation`. | — |
 | `Validate_WhenListElementIsOutsideExpectedSet_ReportsMembershipViolation` | `PrinterInvariantValidator` | §10, §13.5 | A list element outside the parameter expected set reports membership violation. | — |
@@ -112,6 +113,7 @@
 | `Validate_WhenNestedStructContainsUndeclaredField_ReportsFullPath` | `PrinterInvariantValidator` | §10, §13.5 | A nested unknown field reports the full dot-separated path. | — |
 | `Validate_WhenStructBindingUsesARecreatedField_ReportsUnknownFieldByReference` | `PrinterInvariantValidator` | §10.2, §13.5 | Struct fields are matched by reference identity, not record equality or name. | — |
 | `Validate_WhenRequiredStructFieldIsAbsent_ReportsMissingField` | `PrinterInvariantValidator` | §10, §13.5 | A missing required field reports `E_PRN_STRUCT_FIELD_MISSING`. | — |
+| `Validate_WhenMultipleRequiredStructFieldsAreAbsent_ReportsFirstInSchemaOrder` | `PrinterInvariantValidator` | §10, §13.5 | Multiple missing required fields report the first in schema order. | — |
 | `Validate_WhenNestedRequiredStructFieldIsAbsent_ReportsFullPath` | `PrinterInvariantValidator` | §10, §13.5 | A missing nested required field reports `outer.inner.value`. | — |
 | `Validate_WhenStructFieldAppearsTwice_ReportsDuplicateField` | `PrinterInvariantValidator` | §10, §13.5 | A repeated field reference reports `E_PRN_STRUCT_FIELD_DUPLICATE`. | — |
 | `Validate_WhenStructFieldHasWrongKind_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A nested value for a string field reports actual `struct`, expected `scalar`. | — |
@@ -122,12 +124,15 @@
 | `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup` | `PrinterInvariantValidator` | §10.1, §13.5 | Identity casts report `identity cast node` before the target lookup. | The target is deliberately absent from the catalog. |
 | `Validate_WhenCastInnerIsInvalid_ValidatesInnerAfterCastTarget` | `PrinterInvariantValidator` | §10, §13.5 | A valid cast target is checked before the inner transport's own invariants. | — |
 | `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree` | `PrinterInvariantValidator` | §8, §10, §13.5 | A transport type absent from the catalog reports `transport type not in catalog`. | — |
-| `Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation` | `PrinterInvariantValidator` | §10, §13.5 | A malformed tree with no root reports `unspecified invariant violation`. | Hand-built null root; valid resolvers never produce it. |
+| `Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation` | `PrinterInvariantValidator` | §10, §13.5 | A malformed tree with no root reports `unspecified invariant violation`. | Hand-built null root; valid resolvers never produce it. See `nonapproved-behaviour.md`. |
 | `Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters` | `PrinterInvariantValidator` | §10, §13.5 | Required-parameter checks precede unknown-parameter checks. | — |
-| `Validate_ChecksDuplicateBeforeProvidedParameterOrder` | `PrinterInvariantValidator` | §10, §13.5 | Duplicate checks precede declaration-order checks. | — |
+| `Validate_ChecksDuplicateBeforeProvidedParameterOrder` | `PrinterInvariantValidator` | §10, §13.5 | Duplicate checks precede declaration-order checks. | The provided sequence contains both violations. |
+| `Validate_ChecksUnknownBeforeDuplicate` | `PrinterInvariantValidator` | §10, §13.5 | Unknown-parameter checks precede duplicate checks. | — |
+| `Validate_ChecksProvidedOrderBeforeParameterKinds` | `PrinterInvariantValidator` | §10, §13.5 | Out-of-order `Provided` checks precede per-parameter value-kind checks. | — |
 | `Validate_ChecksUnknownStructFieldBeforeMissingRequiredField` | `PrinterInvariantValidator` | §10, §13.5 | Struct unknown-field checks precede missing-required checks. | — |
 | `Validate_ChecksMissingStructFieldBeforeDuplicateField` | `PrinterInvariantValidator` | §10, §13.5 | Struct missing-required checks precede duplicate-field checks. | — |
 | `Validate_ChecksDuplicateStructFieldBeforeSchemaOrder` | `PrinterInvariantValidator` | §10, §13.5 | Struct duplicate checks precede schema-order checks. | — |
+| `Validate_ChecksStructOrderBeforeFieldKinds` | `PrinterInvariantValidator` | §10, §13.5 | Struct schema-order checks precede field value-kind checks. | — |
 
 ### CanonicalizationErrorFactory
 
@@ -155,19 +160,19 @@ phase `Printing`, and no span.
 
 | Code | Tests |
 |---|---|
-| `E_PRN_INCONSISTENT_TREE` | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree`, `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenTransportValueIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenListElementIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenStructFieldsAreOutOfSchemaOrder_ReportsStructOrderViolation`, `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup`, `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree`, `Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation`, `InconsistentTree_ForKnownDetail_FormatsTemplate` |
-| `E_PRN_MISSING_REQUIRED_PARAM` | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam`, `Validate_WhenCastInnerIsInvalid_ValidatesInnerAfterCastTarget`, `Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters`, `MissingRequiredParam_FormatsTemplate` |
-| `E_PRN_UNKNOWN_PARAM` | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam`, `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference`, `UnknownParam_FormatsTemplate` |
+| `E_PRN_INCONSISTENT_TREE` | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree`, `Validate_ChecksProvidedOrderBeforeParameterKinds`, `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenTransportValueIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenListElementIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenStructFieldsAreOutOfSchemaOrder_ReportsStructOrderViolation`, `Validate_ChecksStructOrderBeforeFieldKinds`, `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup`, `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree`, `Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation`, `InconsistentTree_ForKnownDetail_FormatsTemplate` |
+| `E_PRN_MISSING_REQUIRED_PARAM` | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam`, `Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder`, `Validate_WhenCastInnerIsInvalid_ValidatesInnerAfterCastTarget`, `Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters`, `MissingRequiredParam_FormatsTemplate` |
+| `E_PRN_UNKNOWN_PARAM` | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam`, `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference`, `Validate_ChecksUnknownBeforeDuplicate`, `UnknownParam_FormatsTemplate` |
 | `E_PRN_DUPLICATE_PARAM` | `Validate_WhenParameterIsProvidedTwice_ReportsDuplicateParam`, `Validate_ChecksDuplicateBeforeProvidedParameterOrder`, `DuplicateParam_FormatsTemplate` |
-| `E_PRN_PARAM_KIND_MISMATCH` | `Validate_WhenStringParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenTransportParameterReceivesScalar_ReportsKindMismatch`, `Validate_WhenListParameterReceivesScalar_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesScalar_ReportsKindMismatch`, `ParamKindMismatch_FormatsTemplate` |
-| `E_PRN_LIST_ARITY` | `Validate_WhenListIsBelowMinimum_ReportsListArityRange`, `Validate_WhenListIsAboveMaximum_ReportsListArityRange`, `Validate_WhenUnboundedListMeetsMinimum_AcceptsIt`, `ListArity_WithMaximum_FormatsClosedRange`, `ListArity_WithoutMaximum_FormatsAtLeastRange` |
+| `E_PRN_PARAM_KIND_MISMATCH` | `Validate_WhenStringParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesList_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesStruct_ReportsKindMismatch`, `Validate_WhenTransportParameterReceivesScalar_ReportsKindMismatch`, `Validate_WhenListParameterReceivesScalar_ReportsKindMismatch`, `Validate_WhenListParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenListParameterReceivesStruct_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesScalar_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesList_ReportsKindMismatch`, `ParamKindMismatch_FormatsTemplate` |
+| `E_PRN_LIST_ARITY` | `Validate_WhenListIsBelowMinimum_ReportsListArityRange`, `Validate_WhenListIsAboveMaximum_ReportsListArityRange`, `Validate_WhenUnboundedListExceedsMinimum_AcceptsLargeList`, `ListArity_WithMaximum_FormatsClosedRange`, `ListArity_WithoutMaximum_FormatsAtLeastRange` |
 | `E_PRN_LIST_HOMOGENEITY` | `Validate_WhenHomogeneousListMixesTypes_ReportsListHomogeneity`, `ListHomogeneity_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_UNKNOWN` | `Validate_WhenStructContainsUndeclaredField_ReportsUnknownField`, `Validate_WhenNestedStructContainsUndeclaredField_ReportsFullPath`, `Validate_WhenStructBindingUsesARecreatedField_ReportsUnknownFieldByReference`, `Validate_ChecksUnknownStructFieldBeforeMissingRequiredField`, `StructFieldUnknown_FormatsTemplate` |
-| `E_PRN_STRUCT_FIELD_MISSING` | `Validate_WhenRequiredStructFieldIsAbsent_ReportsMissingField`, `Validate_WhenNestedRequiredStructFieldIsAbsent_ReportsFullPath`, `Validate_ChecksMissingStructFieldBeforeDuplicateField`, `StructFieldMissing_FormatsTemplate` |
+| `E_PRN_STRUCT_FIELD_MISSING` | `Validate_WhenRequiredStructFieldIsAbsent_ReportsMissingField`, `Validate_WhenMultipleRequiredStructFieldsAreAbsent_ReportsFirstInSchemaOrder`, `Validate_WhenNestedRequiredStructFieldIsAbsent_ReportsFullPath`, `Validate_ChecksMissingStructFieldBeforeDuplicateField`, `StructFieldMissing_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_DUPLICATE` | `Validate_WhenStructFieldAppearsTwice_ReportsDuplicateField`, `Validate_ChecksDuplicateStructFieldBeforeSchemaOrder`, `StructFieldDuplicate_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | `Validate_WhenStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenNestedStructFieldHasWrongKind_ReportsKindMismatch`, `StructFieldKindMismatch_FormatsTemplate` |
 | `E_PRN_INVALID_CAST_TARGET` | `Validate_WhenCastTargetIsAbsentFromCatalog_ReportsInvalidCastTarget`, `InvalidCastTarget_UsesTransportTypeToString` |
-| `E_PRN_INVALID_SCALAR` | `Format_ForCarriageReturn_ThrowsInvalidScalarWithU000D`, `Format_ForLineFeed_ThrowsInvalidScalarWithU000A`, `Format_ForBothNewlineKinds_ReportsFirstCodeUnitInTextOrder`, `Format_ForUnpairedHighSurrogate_ThrowsInvalidScalarWithUD800`, `Format_ForUnpairedLowSurrogate_ThrowsInvalidScalarWithUDC00`, `Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr`, `EnsurePrintable_ForTextWithCr_ThrowsPhasePrintingWithoutSpan`, `Validate_WhenStringFieldContainsCarriageReturn_ReportsInvalidScalar`, `InvalidScalar_FormatsFirstOffendingCodeUnitAsFourUppercaseHexDigits` |
+| `E_PRN_INVALID_SCALAR` | `Format_ForCarriageReturn_ThrowsInvalidScalarWithU000D`, `Format_ForLineFeed_ThrowsInvalidScalarWithU000A`, `Format_ForBothNewlineKinds_ReportsFirstCodeUnitInTextOrder`, `Format_ForUnpairedHighSurrogate_ThrowsInvalidScalarWithUD800`, `Format_ForUnpairedLowSurrogate_ThrowsInvalidScalarWithUDC00`, `Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr`, `Validate_WhenStringFieldContainsCarriageReturn_ReportsInvalidScalar`, `InvalidScalar_FormatsFirstOffendingCodeUnitAsFourUppercaseHexDigits` |
 
 ## Planned
 
@@ -181,7 +186,7 @@ phase `Printing`, and no span.
 |---|---|
 | A validator-level `constructor type mismatch` tree. | `ResolvedTransport.Type` is derived from `Constructor.Type` in the current resolved DTO, so the mismatch cannot be constructed through the public DTO contract. The validator keeps the check, and the error template is asserted directly. Changing the DTO is a semantics-layer decision, not a canonicalization change. |
 | `E_PRN_INCONSISTENT_TREE` detail `constructor type mismatch` through `Candidate`/`Print`. | Same DTO limitation as above. |
-| Printing a `ResolvedCast` whose inner is another cast. | The grammar permits at most one cast, so a correct resolver cannot produce a nested cast chain. |
+| Printing a `ResolvedCast` whose inner is another cast. | `ResolvedCast.Inner` is typed `ResolvedTransport`, so a nested cast chain cannot be represented by the DTO. |
 | Expected-type membership as a user-visible semantic error. | `parsing.md` §7.6 defines this as a printer/compiler invariant; the printer reports it as `E_PRN_INCONSISTENT_TREE`. |
 | Converter-path validation during cast printing. | Build-time concern (`E_BLD_NO_CONVERSION_PATH`); the printer must not validate converter availability. |
 | Default-value synthesis for absent optional parameters. | The metadata model defines no defaults; only provided parameters print. |
@@ -211,3 +216,5 @@ phase `Printing`, and no span.
 - Registration lowercases scheme names. The §14 name `emptyStruct` is therefore
   printed as `emptystruct`; the expected output reflects the normalized metadata
   view required by `parsing.md` §6.1 and §10.2.
+- Test assumptions that are not part of the normative contract are collected in
+  `nonapproved-behaviour.md`.

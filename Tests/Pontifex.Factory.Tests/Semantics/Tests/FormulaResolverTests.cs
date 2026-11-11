@@ -169,7 +169,7 @@ public sealed class FormulaResolverTests
     [Test]
     public void Resolve_ForHomogeneousList_ResolvesElementsInOrder()
     {
-        var root = ResolveTransport("gamma([alpha(beta(x)), alpha(beta(x))])");
+        var root = ResolveTransport("gamma([alpha(beta(x)), alpha(beta(y))])");
         var elements = SemanticsAssertions.ProvidedList(root, "items");
 
         Assert.That(elements, Has.Count.EqualTo(2));
@@ -177,6 +177,22 @@ public sealed class FormulaResolverTests
             elements.Select(e => SemanticsAssertions.AsTransport(e).Constructor.Name),
             Is.EqualTo(new[] { "alpha", "alpha" }));
         Assert.That(elements.All(e => e.Type == SemanticsTestData.TypeA), Is.True);
+        Assert.That(elements[0].Span, Is.EqualTo(new SourceSpan(7, 14)));
+        Assert.That(elements[1].Span, Is.EqualTo(new SourceSpan(23, 14)));
+        Assert.That(
+            SemanticsAssertions.ProvidedScalar(
+                SemanticsAssertions.ProvidedTransport(
+                    SemanticsAssertions.AsTransport(elements[0]),
+                    "input"),
+                "value").Text,
+            Is.EqualTo("x"));
+        Assert.That(
+            SemanticsAssertions.ProvidedScalar(
+                SemanticsAssertions.ProvidedTransport(
+                    SemanticsAssertions.AsTransport(elements[1]),
+                    "input"),
+                "value").Text,
+            Is.EqualTo("y"));
     }
 
     [Test]
@@ -389,6 +405,44 @@ public sealed class FormulaResolverTests
         var value = (TransportValue)SemanticsAssertions.Provided(root, "input").Value;
 
         Assert.That(parameter.Expected.Contains(value.Expr.Type), Is.True);
+    }
+
+    [Test]
+    public void Resolve_ForCastInsideTransportList_ResolvesInnerWithAny()
+    {
+        var root = ResolveTransport("listB([alpha(beta(x)) as TypeB])");
+        var element = SemanticsAssertions.AsCast(
+            SemanticsAssertions.ProvidedList(root, "items").Single());
+
+        Assert.That(element.Target, Is.EqualTo(SemanticsTestData.TypeB));
+        Assert.That(element.Inner.Constructor.Name, Is.EqualTo("alpha"));
+        Assert.That(element.Inner.Type, Is.EqualTo(SemanticsTestData.TypeA));
+    }
+
+    [Test]
+    public void Resolve_ForCyclicStructSchema_ResolvesFiniteNestedStruct()
+    {
+        var fields = new StructField[1];
+        var schema = new StructSchema(fields);
+        fields[0] = new NestedStructField("self", false, schema);
+
+        var builder = SemanticsTestData.NewBuilder();
+        SemanticsTestData.Register(
+            builder,
+            "cyclic",
+            SemanticsTestData.TypeA,
+            System.Array.Empty<string>(),
+            SemanticsTestData.CreateStructParam("config", schema, required: true, positional: true));
+
+        var formula = SemanticsAssertions.ResolveSucceeds(
+            SemanticsTestData.Resolver(builder.Build()),
+            "cyclic({self={}})");
+        var root = SemanticsAssertions.AsTransport(formula.Root);
+        var config = SemanticsAssertions.ProvidedStruct(root, "config");
+
+        Assert.That(config.Fields, Has.Count.EqualTo(1));
+        Assert.That(config.Fields[0].Field.Name, Is.EqualTo("self"));
+        Assert.That(((NestedStructFieldValue)config.Fields[0].Value).Fields, Is.Empty);
     }
 
     private static ResolvedFormula Resolve(string source)

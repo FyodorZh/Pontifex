@@ -56,8 +56,10 @@ This is a Test Suit with exactly one layer at the suite root.
 
 - Layer name = subsystem name: `Parsing`.
 - Test file = `<Component>Tests.cs`; fixture class = `<Component>Tests`.
-- Test methods = `MethodName_Scenario_ExpectedResult`, for example
-  `Parse_ForChainedCast_ReturnsChainedCastError`.
+- Test methods = `MethodName_Scenario_ExpectedResult`. Property, lifecycle, and
+  diagnostic-helper tests may omit a separate scenario and use
+  `Subject_ExpectedResult` when the subject itself is the scenario, for example
+  `EndOfInput_IsTheDocumentedMarker`.
 - Namespace = `Pontifex.Factory.Tests.Parsing` for every file in the suite.
 - Every fixture carries `[Category("Factory.Parsing")]`.
 
@@ -155,3 +157,6 @@ The lexer and parser are tested without a registry, catalog, or transport type.
 ## Rules
 
 This suite follows [Tests/RULES.md](../../RULES.md).
+
+Known test assumptions that are not part of the normative contract are recorded in
+[nonapproved-behaviour.md](../nonapproved-behaviour.md).

@@ -48,22 +48,12 @@ public sealed class ScalarFormatterTests
         Assert.That(ScalarFormatter.Format(text), Is.EqualTo(expected));
     }
 
-    [Test]
-    public void Format_ForTextWithComma_QuotesAndPreservesText()
+    [TestCase("a, b")]
+    [TestCase("x=y")]
+    [TestCase("{name=x}")]
+    public void Format_ForTextWithDelimiters_QuotesAndPreservesText(string text)
     {
-        Assert.That(ScalarFormatter.Format("a, b"), Is.EqualTo("\"a, b\""));
-    }
-
-    [Test]
-    public void Format_ForTextWithEquals_QuotesAndPreservesText()
-    {
-        Assert.That(ScalarFormatter.Format("x=y"), Is.EqualTo("\"x=y\""));
-    }
-
-    [Test]
-    public void Format_ForTextWithBraces_QuotesAndPreservesText()
-    {
-        Assert.That(ScalarFormatter.Format("{name=x}"), Is.EqualTo("\"{name=x}\""));
+        Assert.That(ScalarFormatter.Format(text), Is.EqualTo("\"" + text + "\""));
     }
 
     [Test]
@@ -139,19 +129,6 @@ public sealed class ScalarFormatterTests
     public void Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr()
     {
         AssertInvalidScalar("a\r\uD800", "U+000D");
-    }
-
-    [Test]
-    public void EnsurePrintable_ForTextWithCr_ThrowsPhasePrintingWithoutSpan()
-    {
-        var exception = Assert.Throws<PrinterException>(
-            () => ScalarFormatter.EnsurePrintable("a\rb"));
-
-        Assert.That(exception, Is.Not.Null);
-        CanonicalizationAssertions.AssertError(
-            exception!.Error,
-            "E_PRN_INVALID_SCALAR",
-            "scalar value contains a character that cannot be printed: U+000D");
     }
 
     private static void AssertInvalidScalar(string text, string codeUnit)

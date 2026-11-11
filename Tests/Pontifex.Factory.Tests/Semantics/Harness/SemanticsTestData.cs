@@ -38,16 +38,10 @@ internal static class SemanticsTestData
         _ => string.Empty;
 
     private static readonly IRegistry Standard = NewStandardBuilder().Build();
-    private static readonly IRegistry AlphaOnly = NewAlphaOnlyBuilder().Build();
 
     public static IRegistry StandardRegistry()
     {
         return Standard;
-    }
-
-    public static IRegistry AlphaOnlyRegistry()
-    {
-        return AlphaOnly;
     }
 
     public static FormulaResolver StandardResolver()
@@ -55,9 +49,31 @@ internal static class SemanticsTestData
         return new FormulaResolver(Standard);
     }
 
-    public static FormulaResolver AlphaOnlyResolver()
+    public static FormulaResolver Resolver(IRegistry registry)
     {
-        return new FormulaResolver(AlphaOnly);
+        return new FormulaResolver(registry);
+    }
+
+    public static IRegistry EmptyRegistry()
+    {
+        return new TransportRegistryBuilder().Build();
+    }
+
+    public static IRegistry SortedNamesRegistry()
+    {
+        var builder = NewBuilder();
+        Register(builder, "zeta", TypeA, new[] { "mu" });
+        Register(builder, "alpha", TypeB, Array.Empty<string>());
+        return builder.Build();
+    }
+
+    public static IRegistry SortedTypeCatalogRegistry()
+    {
+        var builder = new TransportRegistryBuilder();
+        builder.RegisterType(new TransportTypeInfo(TypeC, "TypeC"));
+        builder.RegisterType(new TransportTypeInfo(TypeA, "TypeA"));
+        builder.RegisterType(new TransportTypeInfo(TypeB, "TypeB"));
+        return builder.Build();
     }
 
     // Registry lookup takes an already-normalized lowercase scheme; tests may
@@ -175,18 +191,6 @@ internal static class SemanticsTestData
         builder.RegisterType(new TransportTypeInfo(TypeA, "TypeA"));
         builder.RegisterType(new TransportTypeInfo(TypeB, "TypeB"));
         builder.RegisterType(new TransportTypeInfo(TypeC, "TypeC"));
-        return builder;
-    }
-
-    public static TransportRegistryBuilder NewAlphaOnlyBuilder()
-    {
-        var builder = NewBuilder();
-        Register(
-            builder,
-            "alpha",
-            TypeA,
-            Array.Empty<string>(),
-            CreateTransportParam("input", AnySet(), required: true, positional: true));
         return builder;
     }
 

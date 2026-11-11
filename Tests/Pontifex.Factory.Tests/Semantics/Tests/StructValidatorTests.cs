@@ -20,26 +20,6 @@ public sealed class StructValidatorTests
     }
 
     [Test]
-    public void Validate_ForUnknownField_ReportsRawLeafPathAndSchemaExpectation()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{name=x, extra=1}",
-            StructySchema(),
-            "E_SEM_UNKNOWN_STRUCT_FIELD",
-            "unknown field 'extra' in struct for parameter 'config'; one of: 'name', 'nested'");
-    }
-
-    [Test]
-    public void Validate_ForUnknownNestedField_ReportsFullPathAndNestedExpectation()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{name=x, nested={unknown=1}}",
-            StructySchema(),
-            "E_SEM_UNKNOWN_STRUCT_FIELD",
-            "unknown field 'nested.unknown' in struct for parameter 'config'; one of: 'a'");
-    }
-
-    [Test]
     public void Validate_ForUnknownField_PreservesRawLeafSpelling()
     {
         SemanticsAssertions.ValidateStructError(
@@ -47,16 +27,6 @@ public sealed class StructValidatorTests
             StructySchema(),
             "E_SEM_UNKNOWN_STRUCT_FIELD",
             "unknown field 'nested.UNKNOWN' in struct for parameter 'config'; one of: 'a'");
-    }
-
-    [Test]
-    public void Validate_ForDuplicateField_ReportsCanonicalPath()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{name=x, NAME=y}",
-            StructySchema(),
-            "E_SEM_DUPLICATE_STRUCT_FIELD",
-            "field 'name' is specified more than once");
     }
 
     [Test]
@@ -70,36 +40,6 @@ public sealed class StructValidatorTests
     }
 
     [Test]
-    public void Validate_ForMissingRequiredField_ReportsPathAndParameter()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{}",
-            StructySchema(),
-            "E_SEM_MISSING_REQUIRED_STRUCT_FIELD",
-            "missing required field 'name' in struct for parameter 'config'");
-    }
-
-    [Test]
-    public void Validate_ForMissingNestedRequiredField_ReportsFullPath()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{outer={inner={}}}",
-            DeepSchema(),
-            "E_SEM_MISSING_REQUIRED_STRUCT_FIELD",
-            "missing required field 'outer.inner.value' in struct for parameter 'config'");
-    }
-
-    [Test]
-    public void Validate_ChecksMissingRequiredFieldsBeforeProvidedFieldKinds()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{a=alpha(beta(x))}",
-            PairSchema(),
-            "E_SEM_MISSING_REQUIRED_STRUCT_FIELD",
-            "missing required field 'b' in struct for parameter 'config'");
-    }
-
-    [Test]
     public void Validate_ReportsUnknownFieldBeforeMissingRequiredField()
     {
         SemanticsAssertions.ValidateStructError(
@@ -110,73 +50,71 @@ public sealed class StructValidatorTests
     }
 
     [Test]
-    public void Validate_ForStringFieldReceivingTransport_ReportsExpectedScalar()
+    public void Validate_ReportsBindingErrorsInSourceOrder()
     {
         SemanticsAssertions.ValidateStructError(
-            "{name=alpha(beta(x))}",
+            "{extra=1, name=x, NAME=y}",
             StructySchema(),
-            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
-            "field 'name' expects a scalar value, got transport");
+            "E_SEM_UNKNOWN_STRUCT_FIELD",
+            "unknown field 'extra' in struct for parameter 'config'; one of: 'name', 'nested'");
     }
 
     [Test]
-    public void Validate_ForStringFieldReceivingStruct_ReportsExpectedScalar()
+    public void Validate_ReportsFieldValueErrorsInSchemaOrder()
     {
+        var schema = SemanticsTestData.Schema(
+            SemanticsTestData.CreateStringField("zeta"),
+            SemanticsTestData.CreateStringField("alpha"));
+
         SemanticsAssertions.ValidateStructError(
-            "{name={}}",
-            StructySchema(),
+            "{alpha=beta(x), zeta=beta(y)}",
+            schema,
             "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
-            "field 'name' expects a scalar value, got struct");
+            "field 'zeta' expects a scalar value, got transport");
     }
 
     [Test]
-    public void Validate_ForNestedStructFieldReceivingScalar_ReportsExpectedStruct()
+    public void Validate_ForUnknownField_ReportsSchemaFieldOrder()
+    {
+        var schema = SemanticsTestData.Schema(
+            SemanticsTestData.CreateStringField("zeta"),
+            SemanticsTestData.CreateStringField("alpha"));
+
+        SemanticsAssertions.ValidateStructError(
+            "{unknown=1}",
+            schema,
+            "E_SEM_UNKNOWN_STRUCT_FIELD",
+            "unknown field 'unknown' in struct for parameter 'config'; one of: 'zeta', 'alpha'");
+    }
+
+    [Test]
+    public void Validate_ForStringFieldReceivingList_ReportsExpectedScalarWithListShape()
     {
         SemanticsAssertions.ValidateStructError(
-            "{name=x, nested=1}",
+            "{name=[beta()]}",
+            StructySchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            "field 'name' expects a scalar value, got transport list");
+    }
+
+    [Test]
+    public void Validate_ForNestedStructFieldReceivingTransport_ReportsExpectedStruct()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{name=x, nested=beta(x)}",
             StructySchema(),
             "E_SEM_STRUCT_FIELD_EXPECTED_STRUCT",
-            "field 'nested' expects a struct, got scalar");
+            "field 'nested' expects a struct, got transport");
     }
 
     [Test]
-    public void Validate_ForNestedStringFieldReceivingTransport_ReportsFullPath()
+    public void Validate_ForNestedStructFieldReceivingList_ReportsExpectedStruct()
     {
         SemanticsAssertions.ValidateStructError(
-            "{outer={inner={value=beta(x)}}}",
-            DeepSchema(),
-            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
-            "field 'outer.inner.value' expects a scalar value, got transport");
-    }
-
-    [Test]
-    public void Validate_ForFieldValidatorFailure_ReportsFieldPathAndParameter()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{name=bad}",
-            FieldValidatedSchema(),
-            "E_SEM_VALIDATOR_FAILED",
-            "field 'name' of parameter 'config' is invalid: field must not be 'bad'");
-    }
-
-    [Test]
-    public void Validate_ForThrowingFieldValidator_ReportsValidationFailed()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{name=ok, strict=x}",
-            FieldValidatedSchema(),
-            "E_SEM_VALIDATOR_FAILED",
-            "field 'strict' of parameter 'config' is invalid: validation failed");
-    }
-
-    [Test]
-    public void Validate_ForEmptyFieldValidatorReason_ReportsValidationFailed()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{name=ok, nested={a=x}}",
-            FieldValidatedSchema(),
-            "E_SEM_VALIDATOR_FAILED",
-            "field 'nested.a' of parameter 'config' is invalid: validation failed");
+            "{name=x, nested=[beta()]}",
+            StructySchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_STRUCT",
+            "field 'nested' expects a struct, got transport list");
     }
 
     [Test]
@@ -185,16 +123,6 @@ public sealed class StructValidatorTests
         var fields = SemanticsAssertions.ValidateStruct("{}", EmptySchema());
 
         Assert.That(fields, Is.Empty);
-    }
-
-    [Test]
-    public void Validate_ForEmptySchemaWithProvidedField_ReportsNoFieldsExpectation()
-    {
-        SemanticsAssertions.ValidateStructError(
-            "{x=1}",
-            EmptySchema(),
-            "E_SEM_UNKNOWN_STRUCT_FIELD",
-            "unknown field 'x' in struct for parameter 'config'; the struct has no fields");
     }
 
     [Test]
@@ -255,11 +183,6 @@ public sealed class StructValidatorTests
     private static StructSchema EmptySchema()
     {
         return SchemaOf("emptyStruct");
-    }
-
-    private static StructSchema FieldValidatedSchema()
-    {
-        return SchemaOf("fieldValidated");
     }
 
     private static StructSchema SchemaOf(string scheme)

@@ -194,6 +194,54 @@ public sealed class PrinterInvariantValidatorTests
     }
 
     [Test]
+    public void Validate_WhenStringParameterReceivesList_ReportsKindMismatch()
+    {
+        var constructor = AlphaConstructor();
+        var input = Param(constructor, "input");
+        var timeout = Param(constructor, "timeout");
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    input,
+                    CanonicalizationTestData.TransportValue(
+                        EmptyTransport("beta", CanonicalizationTestData.TypeB))),
+                CanonicalizationTestData.Bind(
+                    timeout,
+                    CanonicalizationTestData.List())));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'timeout' of scheme 'alpha' has value kind transport list, expected scalar");
+    }
+
+    [Test]
+    public void Validate_WhenStringParameterReceivesStruct_ReportsKindMismatch()
+    {
+        var constructor = AlphaConstructor();
+        var input = Param(constructor, "input");
+        var timeout = Param(constructor, "timeout");
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    input,
+                    CanonicalizationTestData.TransportValue(
+                        EmptyTransport("beta", CanonicalizationTestData.TypeB))),
+                CanonicalizationTestData.Bind(
+                    timeout,
+                    CanonicalizationTestData.Struct())));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'timeout' of scheme 'alpha' has value kind struct, expected scalar");
+    }
+
+    [Test]
     public void Validate_WhenTransportParameterReceivesScalar_ReportsKindMismatch()
     {
         var constructor = AlphaConstructor();
@@ -296,7 +344,7 @@ public sealed class PrinterInvariantValidatorTests
     }
 
     [Test]
-    public void Validate_WhenUnboundedListMeetsMinimum_AcceptsIt()
+    public void Validate_WhenUnboundedListExceedsMinimum_AcceptsLargeList()
     {
         var items = CanonicalizationTestData.ListParam(
             "items",
@@ -307,17 +355,22 @@ public sealed class PrinterInvariantValidatorTests
             "bag",
             CanonicalizationTestData.TypeA,
             items);
+        var element = EmptyTransport("beta", CanonicalizationTestData.TypeB);
 
         var formula = CanonicalizationTestData.Formula(
             CanonicalizationTestData.Transport(
                 constructor,
-                CanonicalizationTestData.Bind(items, CanonicalizationTestData.List())));
+                CanonicalizationTestData.Bind(
+                    items,
+                    CanonicalizationTestData.List(element, element, element, element, element))));
 
         var output = CanonicalizationAssertions.CanonicalizeSucceeds(
             CanonicalizationTestData.Canonicalizer(),
             formula);
 
-        Assert.That(output, Is.EqualTo("bag([])"));
+        Assert.That(
+            output,
+            Is.EqualTo("bag([beta(), beta(), beta(), beta(), beta()])"));
     }
 
     [Test]
@@ -723,21 +776,21 @@ public sealed class PrinterInvariantValidatorTests
     [Test]
     public void Validate_ChecksDuplicateBeforeProvidedParameterOrder()
     {
-        var constructor = AlphaConstructor();
-        var input = Param(constructor, "input");
-        var mode = Param(constructor, "mode");
+        var constructor = CanonicalizationTestData.Canonical("opt");
+        var a = Param(constructor, "a");
+        var b = Param(constructor, "b");
 
         var formula = CanonicalizationTestData.Formula(
             CanonicalizationTestData.Transport(
                 constructor,
-                CanonicalizationTestData.Bind(input, CanonicalizationTestData.Scalar("x")),
-                CanonicalizationTestData.Bind(mode, CanonicalizationTestData.Scalar("m")),
-                CanonicalizationTestData.Bind(mode, CanonicalizationTestData.Scalar("n"))));
+                CanonicalizationTestData.Bind(b, CanonicalizationTestData.Scalar("b")),
+                CanonicalizationTestData.Bind(a, CanonicalizationTestData.Scalar("x")),
+                CanonicalizationTestData.Bind(a, CanonicalizationTestData.Scalar("y"))));
 
         AssertPrinterError(
             formula,
             "E_PRN_DUPLICATE_PARAM",
-            "resolved transport 'alpha' contains parameter 'mode' more than once");
+            "resolved transport 'opt' contains parameter 'a' more than once");
     }
 
     [Test]
@@ -821,6 +874,223 @@ public sealed class PrinterInvariantValidatorTests
             formula,
             "E_PRN_STRUCT_FIELD_DUPLICATE",
             "struct parameter 'config' of scheme 'structy' contains field 'name' more than once");
+    }
+
+    [Test]
+    public void Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder()
+    {
+        var constructor = CanonicalizationTestData.Constructor(
+            "requiredpair",
+            CanonicalizationTestData.TypeA,
+            CanonicalizationTestData.TransportParam(
+                "zeta",
+                CanonicalizationTestData.AnySet(),
+                required: true,
+                positional: true),
+            CanonicalizationTestData.TransportParam(
+                "alpha",
+                CanonicalizationTestData.AnySet(),
+                required: true,
+                positional: true));
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(constructor));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_MISSING_REQUIRED_PARAM",
+            "resolved transport 'requiredpair' is missing required parameter 'zeta'");
+    }
+
+    [Test]
+    public void Validate_WhenMultipleRequiredStructFieldsAreAbsent_ReportsFirstInSchemaOrder()
+    {
+        var a = CanonicalizationTestData.StringField("a", required: true);
+        var b = CanonicalizationTestData.StringField("b", required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(a, b),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "pair",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(config, CanonicalizationTestData.Struct())));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_STRUCT_FIELD_MISSING",
+            "struct parameter 'config' of scheme 'pair' is missing required field 'a'");
+    }
+
+    [Test]
+    public void Validate_ChecksUnknownBeforeDuplicate()
+    {
+        var constructor = AlphaConstructor();
+        var input = Param(constructor, "input");
+        var unknown = CanonicalizationTestData.TransportParam(
+            "ghost",
+            CanonicalizationTestData.AnySet());
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(input, CanonicalizationTestData.Scalar("x")),
+                CanonicalizationTestData.Bind(input, CanonicalizationTestData.Scalar("y")),
+                CanonicalizationTestData.Bind(unknown, CanonicalizationTestData.Scalar("z"))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_UNKNOWN_PARAM",
+            "resolved transport 'alpha' contains unknown parameter 'ghost'");
+    }
+
+    [Test]
+    public void Validate_ChecksProvidedOrderBeforeParameterKinds()
+    {
+        var constructor = AlphaConstructor();
+        var input = Param(constructor, "input");
+        var timeout = Param(constructor, "timeout");
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(timeout, CanonicalizationTestData.Scalar("t")),
+                CanonicalizationTestData.Bind(input, CanonicalizationTestData.Scalar("x"))));
+
+        AssertInconsistent(formula, "provided parameter order violation");
+    }
+
+    [Test]
+    public void Validate_WhenListParameterReceivesTransport_ReportsKindMismatch()
+    {
+        var items = CanonicalizationTestData.ListParam(
+            "items",
+            CanonicalizationTestData.AnySet(),
+            min: 0,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "bag",
+            CanonicalizationTestData.TypeA,
+            items);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    items,
+                    CanonicalizationTestData.TransportValue(
+                        EmptyTransport("beta", CanonicalizationTestData.TypeB)))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'items' of scheme 'bag' has value kind transport, expected transport list");
+    }
+
+    [Test]
+    public void Validate_WhenListParameterReceivesStruct_ReportsKindMismatch()
+    {
+        var items = CanonicalizationTestData.ListParam(
+            "items",
+            CanonicalizationTestData.AnySet(),
+            min: 0,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "bag",
+            CanonicalizationTestData.TypeA,
+            items);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    items,
+                    CanonicalizationTestData.Struct())));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'items' of scheme 'bag' has value kind struct, expected transport list");
+    }
+
+    [Test]
+    public void Validate_WhenStructParameterReceivesTransport_ReportsKindMismatch()
+    {
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "emptystruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.TransportValue(
+                        EmptyTransport("beta", CanonicalizationTestData.TypeB)))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'config' of scheme 'emptystruct' has value kind transport, expected struct");
+    }
+
+    [Test]
+    public void Validate_WhenStructParameterReceivesList_ReportsKindMismatch()
+    {
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "emptystruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.List())));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'config' of scheme 'emptystruct' has value kind transport list, expected struct");
+    }
+
+    [Test]
+    public void Validate_ChecksStructOrderBeforeFieldKinds()
+    {
+        var constructor = StructyConstructor(out var config, out var name, out var nested);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            nested,
+                            CanonicalizationTestData.NestedValue()),
+                        CanonicalizationTestData.Field(
+                            name,
+                            CanonicalizationTestData.NestedValue())))));
+
+        AssertInconsistent(formula, "struct field order violation");
     }
 
     private static void AssertInconsistent(ResolvedFormula formula, string detail)

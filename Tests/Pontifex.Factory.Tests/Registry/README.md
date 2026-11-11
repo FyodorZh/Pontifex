@@ -56,8 +56,10 @@ This is a Test Suit with exactly one layer at the suite root.
 
 - Layer name = subsystem name: `Registry`.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
-- Test methods = `MethodName_Scenario_ExpectedResult`, for example
-  `RegisterTransport_WithSameAliasForSameType_ThrowsDuplicateAliasForType`.
+- Test methods = `MethodName_Scenario_ExpectedResult`. Property, lifecycle, and
+  error-catalogue tests may omit a separate scenario and use
+  `Subject_ExpectedResult` when the subject itself is the scenario, for example
+  `Types_ExposesTheCatalog`.
 - Namespace = `Pontifex.Factory.Tests.Registry` for every suite test file.
 - Harness types live in `Pontifex.Factory.Tests.Registry.Harness`.
 - Every fixture carries `[Category("Factory.Registry")]`.
@@ -72,7 +74,6 @@ Registry/
 │   ├── RegistryAssertions.cs
 │   └── RegistryTestData.cs
 └── Tests/
-    ├── RegistrationErrorTests.cs
     ├── TransportRegistryBuilderTests.cs
     ├── TransportRegistryTests.cs
     └── TransportTypeCatalogTests.cs
@@ -158,15 +159,17 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 - `FindCandidates` returns the canonical constructor first, then alias
   candidates sorted by canonical scheme name. It deliberately does not filter by
   expected type or apply canonical preference; semantics owns that.
-- Aliases are registration-time policy. `SuggestedAliases` are normalized but
-  never registered automatically.
+- Aliases are registration-time policy. `SuggestedAliases` are hints and are never
+  registered automatically. Normalization of the stored `SuggestedAliases` values
+  is recorded in `nonapproved-behaviour.md`.
 - Registration after `Build` throws `RegistrationException` with
   `E_REG_BUILDER_SEALED`. This lifecycle code is defined by `parsing.md` §6.7
   rule 12 and catalogued in §13.4; it has no source offset and phase
   `Registration`.
 - `GetCanonicalName` for a type absent from the catalog throws
-  `InvalidOperationException`. The interface contract permits calling it only for
-  catalog types; `TryGetCanonicalName` is the total lookup.
+  `InvalidOperationException` in the current implementation. `parsing.md` §6.6
+  only permits calling it for catalog types; the exception type is recorded in
+  `nonapproved-behaviour.md`.
 
 ## Out of scope
 
@@ -187,3 +190,6 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 ## Rules
 
 This suite follows [Tests/RULES.md](../../RULES.md).
+
+Known test assumptions that are not part of the normative contract are recorded in
+[nonapproved-behaviour.md](../nonapproved-behaviour.md).

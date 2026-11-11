@@ -30,16 +30,6 @@ internal static class CanonicalizationTestData
 
     private static readonly IRegistry Standard = NewStandardBuilder().Build();
 
-    public static IRegistry StandardRegistry()
-    {
-        return Standard;
-    }
-
-    public static ITransportTypeCatalog StandardCatalog()
-    {
-        return Standard.Types;
-    }
-
     public static TransportConstructorInfo Canonical(string name)
     {
         return Standard.FindCanonical(NameNormalizer.Normalize(name))
@@ -51,11 +41,6 @@ internal static class CanonicalizationTestData
         return new FormulaCanonicalizer(Standard.Types);
     }
 
-    public static FormulaResolver Resolver()
-    {
-        return new FormulaResolver(Standard);
-    }
-
     public static TransportTypeSet AnySet()
     {
         return AnySetValue;
@@ -64,11 +49,6 @@ internal static class CanonicalizationTestData
     public static TransportTypeSet Exactly(TransportType type)
     {
         return new TransportTypeSet(TransportTypeSetKind.Exactly, new[] { type });
-    }
-
-    public static TransportTypeSet OneOf(params TransportType[] types)
-    {
-        return new TransportTypeSet(TransportTypeSetKind.OneOf, types);
     }
 
     public static TransportConstructorInfo Constructor(
@@ -331,17 +311,6 @@ internal static class CanonicalizationTestData
             TypeA,
             Array.Empty<string>(),
             ListParam("item", AnySetValue, min: 1, max: 1, required: true, positional: true));
-
-        Register(
-            builder,
-            "dual",
-            TypeA,
-            Array.Empty<string>(),
-            TransportParam(
-                "input",
-                OneOf(TypeA, TypeB),
-                required: true,
-                positional: true));
 
         Register(
             builder,

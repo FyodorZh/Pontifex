@@ -178,6 +178,18 @@ public sealed class TransportTypeCatalogTests
     }
 
     [Test]
+    public void RegisterType_AfterBuild_WithInvalidName_ThrowsBuilderSealed()
+    {
+        var builder = RegistryTestData.NewBuilder(RegistryTestData.TypeAInfo());
+        builder.Build();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterType(RegistryTestData.TypeInfo(RegistryTestData.TypeB, "1Type")),
+            "E_REG_BUILDER_SEALED",
+            "registry builder has already been built");
+    }
+
+    [Test]
     public void RegisterType_AfterBuild_ThrowsBuilderSealed()
     {
         var builder = RegistryTestData.NewBuilder(RegistryTestData.TypeAInfo());

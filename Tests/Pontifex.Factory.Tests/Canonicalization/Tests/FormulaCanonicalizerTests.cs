@@ -90,16 +90,15 @@ public sealed class FormulaCanonicalizerTests
     {
         var constructor = CanonicalizationTestData.Canonical("bag");
         var items = Param(constructor, "items");
-        var beta = BetaTransport();
 
         var output = Print(CanonicalizationTestData.Formula(
             CanonicalizationTestData.Transport(
                 constructor,
                 CanonicalizationTestData.Bind(
                     items,
-                    CanonicalizationTestData.List(beta, BetaTransport())))));
+                    CanonicalizationTestData.List(BetaTransport("one"), BetaTransport("two"))))));
 
-        Assert.That(output, Is.EqualTo("bag([beta(x), beta(x)])"));
+        Assert.That(output, Is.EqualTo("bag([beta(one), beta(two)])"));
     }
 
     [Test]
@@ -210,6 +209,33 @@ public sealed class FormulaCanonicalizerTests
     }
 
     [Test]
+    public void Canonicalize_ForCastInsideTransportList_PrintsTheCast()
+    {
+        var items = CanonicalizationTestData.ListParam(
+            "items",
+            CanonicalizationTestData.Exactly(CanonicalizationTestData.TypeA),
+            min: 0,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "listb",
+            CanonicalizationTestData.TypeC,
+            items);
+        var cast = new ResolvedCast(
+            BetaTransport(),
+            CanonicalizationTestData.TypeA,
+            new SourceSpan(0, 0));
+
+        var output = Print(CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    items,
+                    CanonicalizationTestData.List(cast)))));
+
+        Assert.That(output, Is.EqualTo("listb([beta(x) as TypeA])"));
+    }
+
+    [Test]
     public void Canonicalize_ForScalarVariants_UsesMinimalQuoting()
     {
         var constructor = CanonicalizationTestData.Canonical("beta");
@@ -242,10 +268,6 @@ public sealed class FormulaCanonicalizerTests
         var output = Print(CanonicalizationTestData.Formula(BetaTransport()));
 
         Assert.That(output, Is.EqualTo("beta(x)"));
-        Assert.That(output, Does.Not.EndWith(" "));
-        Assert.That(output, Does.Not.EndWith("\t"));
-        Assert.That(output, Does.Not.EndWith("\r"));
-        Assert.That(output, Does.Not.EndWith("\n"));
     }
 
     #endregion
@@ -360,12 +382,12 @@ public sealed class FormulaCanonicalizerTests
         CanonicalizationAssertions.AssertTreesEqual(firstTree, secondTree);
     }
 
-    [TestCaseSource(nameof(RoundTripExpectedOutputs))]
-    public void Canonicalize_ForRepresentativeFormula_ProducesExpectedOutput(
-        string source,
-        string expected)
+    [Test]
+    public void Canonicalize_ForTopLevelNonIdentityCast_ProducesExpectedOutput()
     {
-        Assert.That(CanonicalizationTestData.Canonicalize(source), Is.EqualTo(expected));
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("alpha(beta(x)) as TypeB"),
+            Is.EqualTo("alpha(beta(x)) as TypeB"));
     }
 
     [Test]
@@ -379,46 +401,11 @@ public sealed class FormulaCanonicalizerTests
     }
 
     [Test]
-    public void Canonicalize_ForAliasInExpectedTypeContext_UsesTheCanonicalScheme()
-    {
-        var output = CanonicalizationTestData.Canonicalize("outer(alpha(x))");
-
-        Assert.That(output, Is.EqualTo("outer(beta(x))"));
-    }
-
-    [Test]
-    public void Canonicalize_ForIdentityCastAroundACanonicalScheme_RemovesTheCast()
-    {
-        var output = CanonicalizationTestData.Canonicalize("alpha(beta(x)) as TypeA");
-
-        Assert.That(output, Is.EqualTo("alpha(beta(x))"));
-    }
-
-    [Test]
     public void Canonicalize_ForCaseInsensitiveCastType_UsesCatalogCanonicalSpelling()
     {
         var output = CanonicalizationTestData.Canonicalize("alpha(beta(x)) as typeb");
 
         Assert.That(output, Is.EqualTo("alpha(beta(x)) as TypeB"));
-    }
-
-    [Test]
-    public void Canonicalize_ForQuotedScalarsThatNeedNoQuotes_RemovesTheQuotes()
-    {
-        var output = CanonicalizationTestData.Canonicalize(
-            "beta(\"plain\")");
-
-        Assert.That(output, Is.EqualTo("beta(plain)"));
-    }
-
-    [Test]
-    public void Canonicalize_ForQuotedScalarsThatNeedQuotes_PreservesTheText()
-    {
-        var output = CanonicalizationTestData.Canonicalize(
-            "beta(\"a, b\")");
-
-        Assert.That(output, Is.EqualTo("beta(\"a, b\")"));
-        Assert.That(CanonicalizationTestData.Resolve(output).Root, Is.InstanceOf<ResolvedTransport>());
     }
 
     [Test]
@@ -463,7 +450,6 @@ public sealed class FormulaCanonicalizerTests
                      "alpha(beta(x) as TypeA)",
                      "gamma([alpha(beta(x)), alpha(beta(x))])",
                      "structy({name=x, nested={a=1}})",
-                     "deep({outer={inner={value=v}}})",
                      "beta(\"a, b\")",
                      "beta(\"\")",
                      "beta(\"x=y\")",
@@ -484,19 +470,6 @@ public sealed class FormulaCanonicalizerTests
         }
     }
 
-    private static System.Collections.Generic.IEnumerable<TestCaseData> RoundTripExpectedOutputs()
-    {
-        yield return Case("alpha(beta(x), fast, timeout=5s)", "alpha(beta(x), fast, timeout=5s)");
-        yield return Case("alpha(beta(x)) as TypeB", "alpha(beta(x)) as TypeB");
-        yield return Case("alpha(beta(x)) as TypeA", "alpha(beta(x))");
-        yield return Case("structy({nested={a=1}, name=x})", "structy({name=x, nested={a=1}})");
-        yield return Case("outer(alpha(x))", "outer(beta(x))");
-        yield return Case("beta(\"\")", "beta(\"\")");
-        yield return Case("bag(items=[])", "bag([])");
-        yield return Case("emptyStruct(config={})", "emptystruct({})");
-        yield return Case("single(item=[beta(x)])", "single([beta(x)])");
-    }
-
     #endregion
 
     private static string Print(ResolvedFormula formula)
@@ -513,13 +486,13 @@ public sealed class FormulaCanonicalizerTests
                 CanonicalizationTestData.Bind(value, CanonicalizationTestData.Scalar(text))));
     }
 
-    private static ResolvedTransport BetaTransport()
+    private static ResolvedTransport BetaTransport(string text = "x")
     {
         var constructor = CanonicalizationTestData.Canonical("beta");
         var value = Param(constructor, "value");
         return CanonicalizationTestData.Transport(
             constructor,
-            CanonicalizationTestData.Bind(value, CanonicalizationTestData.Scalar("x")));
+            CanonicalizationTestData.Bind(value, CanonicalizationTestData.Scalar(text)));
     }
 
     private static Param Param(TransportConstructorInfo constructor, string name)

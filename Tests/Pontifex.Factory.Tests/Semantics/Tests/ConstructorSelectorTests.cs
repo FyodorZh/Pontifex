@@ -129,32 +129,6 @@ public sealed class ConstructorSelectorTests
     }
 
     [Test]
-    public void Select_ForUnknownScheme_ReportsSortedKnownSchemeNames()
-    {
-        var selector = new ConstructorSelector(SemanticsTestData.AlphaOnlyRegistry());
-
-        SemanticsAssertions.SelectError(
-            selector,
-            "nosuch",
-            SemanticsTestData.AnySet(),
-            "E_SEM_UNKNOWN_SCHEME",
-            "unknown transport scheme 'nosuch'; known schemes: alpha");
-    }
-
-    [Test]
-    public void Select_ForUnknownScheme_PreservesRawSchemeSpelling()
-    {
-        var selector = new ConstructorSelector(SemanticsTestData.AlphaOnlyRegistry());
-
-        SemanticsAssertions.SelectError(
-            selector,
-            "NoSuch",
-            SemanticsTestData.AnySet(),
-            "E_SEM_UNKNOWN_SCHEME",
-            "unknown transport scheme 'NoSuch'; known schemes: alpha");
-    }
-
-    [Test]
     public void Select_WhenNoCandidateSurvivesExpectedFilter_ReportsPreFilterAvailableVariants()
     {
         var selector = new ConstructorSelector(SemanticsTestData.StandardRegistry());

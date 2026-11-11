@@ -707,6 +707,54 @@ public sealed class TransportRegistryBuilderTests
     }
 
     [Test]
+    public void RegisterTransport_WithTwoInvalidParameterNames_ReportsFirstInDeclarationOrder()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStringParam("1first"),
+                RegistryTestData.CreateStringParam("2second"))),
+            "E_REG_INVALID_PARAM_NAME",
+            "invalid parameter name '1first'");
+    }
+
+    [Test]
+    public void RegisterTransport_WithTwoInvalidAliases_ReportsFirstInInputOrder()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                new[] { "1first", "2second" })),
+            "E_REG_INVALID_ALIAS_NAME",
+            "invalid alias name '1first'");
+    }
+
+    [Test]
+    public void RegisterTransport_WithTwoInvalidStructFieldNames_ReportsFirstInSchemaOrder()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+        var schema = RegistryTestData.Schema(
+            RegistryTestData.CreateStringField("1first"),
+            RegistryTestData.CreateStringField("2second"));
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam("config", schema))),
+            "E_REG_INVALID_STRUCT_FIELD_NAME",
+            "invalid struct field name '1first'");
+    }
+
+    [Test]
     public void RegisterTransport_AfterBuild_ThrowsBuilderSealed()
     {
         var builder = RegistryTestData.NewStandardBuilder();

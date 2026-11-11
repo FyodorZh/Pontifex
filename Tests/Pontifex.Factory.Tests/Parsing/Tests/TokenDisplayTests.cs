@@ -43,6 +43,24 @@ public sealed class TokenDisplayTests
     }
 
     [Test]
+    public void Word_WithEscapedTextExactlyFortyCharacters_DoesNotTruncate()
+    {
+        var text = new string('a', 40);
+
+        Assert.That(TokenDisplay.Word(text), Is.EqualTo("'" + text + "'"));
+    }
+
+    [Test]
+    public void QuotedString_WithFiftyCharacters_TruncatesToFortyAndEllipsis()
+    {
+        var text = new string('a', 50);
+
+        Assert.That(
+            TokenDisplay.QuotedString(text),
+            Is.EqualTo("'" + new string('a', 40) + "...'"));
+    }
+
+    [Test]
     public void Word_WithFiftyCharacters_TruncatesToFortyAndEllipsis()
     {
         var text = new string('a', 50);
