@@ -691,9 +691,13 @@ Rules:
     any other aliases) to `RegisterTransport`.
 11. Reject a constructor `Type` or any `Expected` member that is absent from the
     type catalog.
+12. Registration after `Build()` is forbidden. `RegisterType` and
+    `RegisterTransport` throw `RegistrationException` with
+    `E_REG_BUILDER_SEALED`; a built registry is immutable.
 
 Checks run in the numbered order above (rule 0 first), and the first failure is
-reported.
+reported. Rule 12 is a lifecycle guard, not a validation rule: it is evaluated
+before rule 0 on every registration call.
 Within rule 2, check the canonical name first, then parameter names in declaration
 order, then alias names in input order. Struct schemas are validated by rule 7:
 visit fields in schema order and validate the name as an identifier before
@@ -1731,6 +1735,7 @@ Registration errors use `RegistrationException` and have no offset.
 | `E_REG_INVALID_TYPE_NAME` | Transport type name is not an identifier | `invalid transport type name '<name>'` |
 | `E_REG_DUPLICATE_TYPE_NAME` | Catalog contains duplicate type name | `transport type name '<name>' is already registered` |
 | `E_REG_TYPE_NOT_IN_CATALOG` | Constructor type or expected type is absent from the catalog | `transport type <type> is not present in the type catalog` |
+| `E_REG_BUILDER_SEALED` | Builder has already been built | `registry builder has already been built` |
 
 For `E_REG_INVALID_LIST_RANGE`, `<max>` is `unbounded` when `Max` is `null`.
 
@@ -2025,6 +2030,7 @@ In the `HTAB` row, `<HTAB>` denotes a literal U+0009 character.
 | Catalog type name `1Type` | `E_REG_INVALID_TYPE_NAME` |
 | Catalog type name `TypeA` registered twice | `E_REG_DUPLICATE_TYPE_NAME` |
 | Constructor type or expected type absent from the catalog | `E_REG_TYPE_NOT_IN_CATALOG` |
+| Register after `Build` | `E_REG_BUILDER_SEALED` |
 
 ### 14.7 Printer invariant errors
 

@@ -666,8 +666,8 @@ No public classes in `Pontifex.Factory.Registry`.
 - Mutable during setup only.
 - `RegisterType` and `RegisterTransport` validate and normalize.
 - `Build()` validates global invariants and returns an immutable registry.
-- Registration after `Build()` throws `RegistrationException` with a
-  registration error.
+- Registration after `Build()` throws `RegistrationException` with
+  `E_REG_BUILDER_SEALED` (see `parsing.md` §6.7 rule 12 and §13.4).
 - `SuggestedAliases` are not automatically registered; `TransportRegistration`
   aliases are.
 
@@ -722,6 +722,8 @@ Implement the numbered order from `parsing.md` §6.7 exactly:
 9. Enforce alias-to-type rules as described in §8.2.
 10. Leave `SuggestedAliases` unregistered unless supplied as aliases.
 11. Reject constructor or expected types absent from the catalog.
+12. Reject registration after `Build()` with `E_REG_BUILDER_SEALED`; this
+    lifecycle guard is evaluated before rule 0.
 
 The first failure is reported.
 
@@ -761,7 +763,8 @@ Registration rules follow `parsing.md` §6.7 rule 9 exactly:
 - `FindCandidates` content and order;
 - `AllSchemeNames` content and order;
 - immutability after `Build`;
-- registration after build;
+- registration after build (`E_REG_BUILDER_SEALED` for `RegisterType` and
+  `RegisterTransport`);
 - registration validation order;
 - all `E_REG_*` messages.
 
