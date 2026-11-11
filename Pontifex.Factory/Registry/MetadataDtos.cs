@@ -13,7 +13,28 @@ public enum TransportTypeSetKind
 
 public sealed record TransportTypeSet(
     TransportTypeSetKind Kind,
-    IReadOnlyList<TransportType> Types);
+    IReadOnlyList<TransportType> Types)
+{
+    public bool IsAny => Kind == TransportTypeSetKind.Any;
+
+    public bool Contains(TransportType type)
+    {
+        if (IsAny)
+        {
+            return true;
+        }
+
+        for (var i = 0; i < Types.Count; i++)
+        {
+            if (Types[i] == type)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
 
 public delegate string? ScalarValidator(string value);
 

@@ -12,18 +12,26 @@ public sealed record FormulaResolveResult(
 public sealed record ResolvedFormula(
     ResolvedExpr Root);
 
-public abstract record ResolvedExpr(SourceSpan Span);
+public abstract record ResolvedExpr(SourceSpan Span)
+{
+    public abstract TransportType Type { get; }
+}
 
 public sealed record ResolvedTransport(
     TransportConstructorInfo Constructor,
-    TransportType Type,
     IReadOnlyList<ParamBinding> Provided,
-    SourceSpan Span) : ResolvedExpr(Span);
+    SourceSpan Span) : ResolvedExpr(Span)
+{
+    public override TransportType Type => Constructor.Type;
+}
 
 public sealed record ResolvedCast(
     ResolvedTransport Inner,
     TransportType Target,
-    SourceSpan Span) : ResolvedExpr(Span);
+    SourceSpan Span) : ResolvedExpr(Span)
+{
+    public override TransportType Type => Target;
+}
 
 public sealed record ParamBinding(
     Param Param,

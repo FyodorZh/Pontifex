@@ -8,6 +8,8 @@ public interface IRegistry
 
     IReadOnlyList<TransportConstructorInfo> Constructors { get; }
 
+    IReadOnlyList<string> AllSchemeNames { get; }
+
     TransportConstructorInfo? FindCanonical(string scheme);
 
     IReadOnlyList<TransportConstructorInfo> FindCandidates(string scheme);

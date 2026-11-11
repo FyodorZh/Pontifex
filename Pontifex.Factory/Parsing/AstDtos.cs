@@ -18,6 +18,7 @@ public sealed record AstTransportCall(
     string Scheme,
     SourceSpan SchemeSpan,
     IReadOnlyList<AstArgument> Arguments,
+    int CloseParenOffset,
     SourceSpan Span);
 
 public sealed record AstArgument(
@@ -38,10 +39,14 @@ public sealed record AstScalar(
 
 public sealed record AstList(
     IReadOnlyList<AstExpr> Elements,
+    int OpenOffset,
+    int CloseOffset,
     SourceSpan Span) : AstValue(Span);
 
 public sealed record AstStruct(
     IReadOnlyList<AstStructField> Fields,
+    int OpenOffset,
+    int CloseOffset,
     SourceSpan Span) : AstValue(Span);
 
 public sealed record AstStructField(
