@@ -207,6 +207,7 @@ Pontifex.Factory/
   FactoryError.cs
   ITransportFactory.cs
   ITransportFactoryBuilder.cs
+  TransportFactoryBootstrap.cs
   IsExternalInit.cs
 
   Parsing/
@@ -1182,6 +1183,17 @@ Pontifex.Factory.ITransportFactory
 Pontifex.Factory.ITransportFactoryBuilder
 ```
 
+The bootstrap also exposes a single public creation seam, because every
+implementation type is internal:
+
+```text
+Pontifex.Factory.TransportFactoryBootstrap.CreateBuilder() -> ITransportFactoryBuilder
+```
+
+`CreateBuilder` returns interfaces only. It is the only public way to obtain a
+builder; callers never see `TransportFactoryBuilder`, `TransportFactory`, or
+`FactoryComponentFactory`.
+
 Add the root exception hierarchy:
 
 ```text
@@ -1204,12 +1216,16 @@ The bootstrap is the only public place where concrete wiring lives.
   - freezes registry;
   - creates parser, resolver, canonicalizer;
   - returns `TransportFactory`;
-  - fails if called twice or if registry is invalid.
+  - is idempotent: repeated calls return the same `ITransportFactory`
+    instance (matching `TransportRegistryBuilder.Build`);
+  - fails if the registry is invalid. Registration errors surface during
+    `RegisterType`/`RegisterTransport`, before `Build`.
 
 **`TransportFactory`**
 
 - Implements `ITransportFactory`.
-- Holds `IParser`, `IRegistry`, `IResolver`, `ICanonicalizer`.
+- Holds `IParser`, `IResolver`, `ICanonicalizer`; the frozen registry is owned
+  by the resolver and the canonicalizer.
 - `Resolve(string, expected)`:
   1. parse;
   2. on error return parse result;
@@ -1222,8 +1238,9 @@ The bootstrap is the only public place where concrete wiring lives.
 - `Compile<T>(string, ICompiler<T>, expected)`:
   1. parse + resolve;
   2. on parse/resolve error throw `FactoryException`;
-  3. compile resolved formula; compiler invariant failures are
-     `CompilerException`.
+  3. call the caller-supplied compiler. `ICompiler<T>` is opaque, so exceptions
+     it raises propagate unchanged; a compiler that detects its own invariant
+     failure may throw `CompilerException`.
 - `FactoryError` phase must identify the failing stage.
 - No hidden static state.
 
@@ -1248,14 +1265,22 @@ The bootstrap is the only public place where concrete wiring lives.
 
 ### 12.4 Bootstrap tests
 
+- the public `CreateBuilder` seam returns a working builder;
 - builder creates a working factory;
+- two builders are independent (no hidden static registry);
 - parser/resolver/canonicalizer wiring;
 - parse errors pass through `Resolve`;
 - resolve errors pass through `Canonicalize`/`Compile`;
-- canonicalization errors wrapped as `PrinterException` with phase `Printing`;
-- compilation errors with phase `Compilation`;
-- `Build` twice behavior;
-- no component mutation after build;
+- null expected type means `Any`;
+- null formula is reported as empty input (`nonapproved-behaviour.md` §6.1);
+- canonicalization errors wrapped as `PrinterException` with phase `Printing`
+  (unreachable through the facade with a correct resolver; covered at the
+  canonicalizer layer);
+- compilation errors with phase `Compilation` (compiler-raised exceptions
+  propagate unchanged);
+- null compiler argument guard;
+- `Build` twice returns the same factory;
+- registry is sealed after build;
 - facade does not expose `IDescription`.
 
 ### 12.5 Acceptance criteria
@@ -1419,7 +1444,8 @@ Aim for:
 
 ### Milestone 6 — Bootstrap
 
-- Implement `TransportFactoryBuilder`, `TransportFactory`, wiring.
+- Implement `TransportFactoryBuilder`, `TransportFactory`, `FactoryComponentFactory`,
+  and the public `TransportFactoryBootstrap.CreateBuilder` seam.
 - Add facade tests.
 - Build/test passes.
 
@@ -1452,6 +1478,11 @@ Aim for:
 - No implementation limits are introduced.
 - No `transport://`, comments, aliases in canonical output, default synthesis,
   schema overload, or converter tie-breaking exists.
+- All subsystems remain independently usable; the public creation seam is the
+  only way to obtain a builder, and all bootstrap implementation types are
+  internal.
+- `ITransportFactory.Resolve` returns result DTOs; `Canonicalize` and `Compile`
+  throw `FactoryException` with the failing stage's phase.
 - `dotnet build` and `dotnet test` pass with zero warnings/errors.
 - Test suites follow `Tests/RULES.md`.
 

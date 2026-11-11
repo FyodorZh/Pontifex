@@ -210,3 +210,30 @@ reference until its entries are explicitly promoted.
   interfaces.
 - **Recommendation:** add interface-level tests if the public entry points are to
   be verified; none are implemented yet.
+
+## 6. Bootstrap
+
+### 6.1 Null formula
+
+- **Test:** `Bootstrap/Tests/TransportFactoryTests.cs` —
+  `Resolve_WithNullFormula_ReturnsEmptyInputError`.
+- **Pinned behaviour:** `ITransportFactory.Resolve(null)` returns
+  `E_SYN_EMPTY_INPUT` with phase `Parsing` instead of throwing
+  `ArgumentNullException`.
+- **Contract status:** `ITransportFactory` declares `string formula`; the
+  contract does not define null input. `FormulaLexer.TryLex` maps null to empty
+  input, so the behaviour is inherited from the lexer.
+- **Recommendation:** document “null is treated as empty input”, or add an
+  argument guard at the facade and update the test.
+
+### 6.2 Null compiler
+
+- **Test:** `Bootstrap/Tests/TransportFactoryTests.cs` —
+  `Compile_WithNullCompiler_ThrowsArgumentNullException`.
+- **Pinned behaviour:** `ITransportFactory.Compile` throws
+  `ArgumentNullException` for a null compiler before parsing.
+- **Contract status:** `implementation-plan.md` §12 defines the compiler as
+  caller-supplied but does not state argument-guard order.
+- **Recommendation:** document the guard, or leave it as a conventional
+  argument check.
+
