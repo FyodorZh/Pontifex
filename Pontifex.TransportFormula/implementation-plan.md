@@ -13,7 +13,9 @@ Target assemblies:
   printer, generic compiler boundary, and formula error types.
 - `Pontifex.Factory` — direct transport compiler, runtime constructor registry,
   bootstrap, and public facade.
-- `Tests/Pontifex.Factory.Tests` — conformance and component test suites.
+- `Tests/Pontifex.TransportFormula.Tests` — parsing, registry, semantics, and
+  canonicalization suites.
+- `Tests/Pontifex.Factory.Tests` — bootstrap and compilation suites.
 
 After the Step 1 project split, the formula sources and this plan live in
 `Pontifex.TransportFormula` and the runtime facade lives in `Pontifex.Factory`.
@@ -318,7 +320,7 @@ Tests/Pontifex.Factory.Tests/
   Bootstrap/
 ```
 
-Target layout (Steps 1-3 implemented; Step 4 bootstrap wiring pending):
+Target layout (current):
 
 ```text
 Pontifex/
@@ -384,11 +386,13 @@ Pontifex.Factory/              runtime factory assembly
     FactoryComponentFactory.cs
     CoreRegistrationAdapter.cs
 
-Tests/Pontifex.Factory.Tests/
+Tests/Pontifex.TransportFormula.Tests/
   Parsing/
   Registry/
   Semantics/
   Canonicalization/
+
+Tests/Pontifex.Factory.Tests/
   Bootstrap/
   Compilation/                  created with its first test file
 ```
@@ -1773,12 +1777,13 @@ phase, and message for compiler/build errors.
 
 ### 14.1 Test project structure
 
-The test project is not bare: `Parsing`, `Registry`, `Semantics`,
-`Canonicalization`, `Compilation`, and `Bootstrap` suites exist. Before adding
-tests, follow `Tests/RULES.md`. The target layout is one suite per subsystem:
+The test projects are split by assembly. `Parsing`, `Registry`, `Semantics`, and
+`Canonicalization` live in `Tests/Pontifex.TransportFormula.Tests`; `Compilation`
+and `Bootstrap` live in `Tests/Pontifex.Factory.Tests`. Before adding tests,
+follow `Tests/RULES.md`. The target layout is one suite per subsystem:
 
 ```text
-Tests/Pontifex.Factory.Tests/
+Tests/Pontifex.TransportFormula.Tests/
   Parsing/
     README.md
     Coverage.md
@@ -1795,6 +1800,8 @@ Tests/Pontifex.Factory.Tests/
     README.md
     Coverage.md
     Tests/
+
+Tests/Pontifex.Factory.Tests/
   Compilation/
     README.md
     Coverage.md

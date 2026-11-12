@@ -12,7 +12,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.1 Null catalog lookup
 
-- **Test:** `Registry/Tests/TransportTypeCatalogTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportTypeCatalogTests.cs` —
   `TryResolve_WithNullName_ReturnsFalseAndNoEntry`.
 - **Pinned behaviour:** `TryResolve(null, ...)` returns `false` and no entry.
 - **Contract status:** `parsing.md` §6.6 declares `TryResolve(string name, ...)`
@@ -22,7 +22,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.2 Missing-type accessor exception
 
-- **Test:** `Registry/Tests/TransportTypeCatalogTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportTypeCatalogTests.cs` —
   `GetCanonicalName_ForUnknownType_ThrowsInvalidOperationException`.
 - **Pinned behaviour:** `GetCanonicalName` throws `InvalidOperationException` when
   the type is absent from the catalog.
@@ -33,7 +33,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.3 Catalog order is registration order
 
-- **Test:** `Registry/Tests/TransportTypeCatalogTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportTypeCatalogTests.cs` —
   `RegisterType_WithMultipleTypes_PreservesRegistrationOrderInTypesAndAllTypes`.
 - **Pinned behaviour:** `Types` and `AllTypes` follow registration order.
 - **Contract status:** `parsing.md` §6.6 says only “canonical order”; that term is
@@ -42,7 +42,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.4 Repeated `Build` returns the same instance
 
-- **Test:** `Registry/Tests/TransportRegistryTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportRegistryTests.cs` —
   `Build_Repeated_ReturnsTheSameImmutableRegistry`.
 - **Pinned behaviour:** `Build()` returns the same object on every call.
 - **Contract status:** `implementation-plan.md` §8.2 only requires an immutable
@@ -51,7 +51,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.5 Concrete read-only collection shapes
 
-- **Test:** `Registry/Tests/TransportRegistryTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportRegistryTests.cs` —
   `Build_ExposesReadOnlyCollectionViews`.
 - **Pinned behaviour:** collection views implement `IList<T>` and throw
   `NotSupportedException` from `Clear`; `StructSchema.Fields` is not an
@@ -64,7 +64,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.6 Empty `Exactly` type set
 
-- **Test:** `Registry/Tests/TransportRegistryBuilderTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportRegistryBuilderTests.cs` —
   `RegisterTransport_WithEmptyExactlyTypeSet_ThrowsEmptyTypeSet`.
 - **Pinned behaviour:** `new TransportTypeSet(Exactly, empty)` is rejected with
   `E_REG_EMPTY_TYPE_SET`.
@@ -75,7 +75,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.7 Shared and cyclic schema identity
 
-- **Tests:** `Registry/Tests/TransportRegistryBuilderTests.cs` —
+- **Tests:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportRegistryBuilderTests.cs` —
   `RegisterTransport_WithSharedStructSchema_NormalizesItOnceAndSharesTheInstance`,
   `RegisterTransport_WithCyclicStructSchema_CompletesAndNormalizesTheCycle`.
 - **Pinned behaviour:** normalization preserves the same `StructSchema` instance
@@ -89,7 +89,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.8 `SuggestedAliases` are lowercased
 
-- **Test:** `Registry/Tests/TransportRegistryBuilderTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportRegistryBuilderTests.cs` —
   `RegisterTransport_NormalizesSuggestedAliasesButDoesNotRegisterThem`.
 - **Pinned behaviour:** `SuggestedAliases` are stored lowercase.
 - **Contract status:** `parsing.md` §6.7 rule 1 says to normalize “aliases”;
@@ -99,7 +99,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.9 Constructor type is checked before expected types
 
-- **Test:** `Registry/Tests/TransportRegistryBuilderTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportRegistryBuilderTests.cs` —
   `RegisterTransport_WithConstructorAndExpectedTypesAbsent_ReportsConstructorTypeFirst`.
 - **Pinned behaviour:** within rule 11, the constructor type is reported before an
   absent expected member.
@@ -108,7 +108,7 @@ reference until its entries are explicitly promoted.
 
 ### 1.10 Lifecycle guard before catalog name validation
 
-- **Test:** `Registry/Tests/TransportTypeCatalogTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Registry/Tests/TransportTypeCatalogTests.cs` —
   `RegisterType_AfterBuild_WithInvalidName_ThrowsBuilderSealed`.
 - **Pinned behaviour:** on a sealed builder, `E_REG_BUILDER_SEALED` wins over an
   invalid catalog type name.
@@ -121,7 +121,7 @@ reference until its entries are explicitly promoted.
 
 ### 2.1 EOF token text
 
-- **Test:** `Parsing/Tests/LexerTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Parsing/Tests/LexerTests.cs` —
   `TryLex_ForInputEndingInWhitespace_ReportsEndOfInputAtInputLength`.
 - **Pinned behaviour:** `EOF.Text` and `EOF.RawText` are empty.
 - **Contract status:** `parsing.md` §3.1 only defines `Start == End == input
@@ -130,7 +130,7 @@ reference until its entries are explicitly promoted.
 
 ### 2.2 Sequential parser reuse
 
-- **Test:** `Parsing/Tests/ParserTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Parsing/Tests/ParserTests.cs` —
   `Parse_ForDeterministicCorpus_NeverThrowsAndReturnsExactlyOneOutcome`.
 - **Pinned behaviour:** one `FormulaParser` instance is reused sequentially for
   the corpus.
@@ -142,7 +142,7 @@ reference until its entries are explicitly promoted.
 
 ### 3.1 Internal `SemanticAbort` channel
 
-- **Tests:** `Semantics/Tests/ArgumentBinderTests.cs`,
+- **Tests:** `../Pontifex.TransportFormula.Tests/Semantics/Tests/ArgumentBinderTests.cs`,
   `ConstructorSelectorTests.cs`, `ParameterValidatorTests.cs`,
   `StructValidatorTests.cs` via `SemanticsAssertions.CatchSemantic`.
 - **Pinned behaviour:** component failures throw `SemanticAbort` and expose the
@@ -155,7 +155,7 @@ reference until its entries are explicitly promoted.
 
 ### 3.2 Cyclic struct schema resolution
 
-- **Test:** `Semantics/Tests/FormulaResolverTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Semantics/Tests/FormulaResolverTests.cs` —
   `Resolve_ForCyclicStructSchema_ResolvesFiniteNestedStruct`.
 - **Pinned behaviour:** a finite source against a cyclic optional schema resolves.
 - **Contract status:** `parsing.md` §7.8 implies this, but the suite previously
@@ -168,7 +168,7 @@ reference until its entries are explicitly promoted.
 
 ### 4.1 Null root
 
-- **Test:** `Canonicalization/Tests/PrinterInvariantValidatorTests.cs` —
+- **Test:** `../Pontifex.TransportFormula.Tests/Canonicalization/Tests/PrinterInvariantValidatorTests.cs` —
   `Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation`.
 - **Pinned behaviour:** `new ResolvedFormula(null!)` reports
   `E_PRN_INCONSISTENT_TREE` detail `unspecified invariant violation`.
@@ -178,7 +178,7 @@ reference until its entries are explicitly promoted.
 
 ### 4.2 Non-canonical name versus value-kind precedence
 
-- **Tests:** `Canonicalization/Tests/PrinterInvariantValidatorTests.cs` —
+- **Tests:** `../Pontifex.TransportFormula.Tests/Canonicalization/Tests/PrinterInvariantValidatorTests.cs` —
   `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree`,
   `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree`.
 - **Pinned behaviour:** the non-canonical name error wins over a simultaneous

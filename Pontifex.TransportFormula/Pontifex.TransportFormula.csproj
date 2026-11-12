@@ -16,5 +16,6 @@
          component factory constructs the internal formula implementations. -->
     <InternalsVisibleTo Include="Pontifex.Factory" />
     <InternalsVisibleTo Include="Pontifex.Factory.Tests" />
+    <InternalsVisibleTo Include="Pontifex.TransportFormula.Tests" />
   </ItemGroup>
 </Project>
