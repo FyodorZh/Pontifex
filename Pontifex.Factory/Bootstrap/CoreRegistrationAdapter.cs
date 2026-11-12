@@ -69,6 +69,18 @@ namespace Pontifex.Factory.Bootstrap
                         stringParameter.Required,
                         stringParameter.Positional,
                         AdaptValidator(stringParameter.Validate));
+                case Core.IntegerParameter integerParameter:
+                    return new Formula.IntegerParam(
+                        name,
+                        integerParameter.Required,
+                        integerParameter.Positional,
+                        AdaptIntegerType(integerParameter.Type));
+                case Core.DecimalParameter decimalParameter:
+                    return new Formula.DecimalParam(
+                        name,
+                        decimalParameter.Required,
+                        decimalParameter.Positional,
+                        AdaptDecimalType(decimalParameter.Type));
                 case Core.NestedTransportParameter transportParameter:
                     return new Formula.TransportParam(
                         name,
@@ -171,6 +183,16 @@ namespace Pontifex.Factory.Bootstrap
                         name,
                         stringField.Required,
                         AdaptValidator(stringField.Validate));
+                case Core.IntegerField integerField:
+                    return new Formula.IntegerField(
+                        name,
+                        integerField.Required,
+                        AdaptIntegerType(integerField.Type));
+                case Core.DecimalField decimalField:
+                    return new Formula.DecimalField(
+                        name,
+                        decimalField.Required,
+                        AdaptDecimalType(decimalField.Type));
                 case Core.NestedStructField nestedField:
                     return new Formula.NestedStructField(
                         name,
@@ -214,6 +236,30 @@ namespace Pontifex.Factory.Bootstrap
             return validate is null
                 ? null
                 : new Formula.ScalarValidator(value => validate(value));
+        }
+
+        private static Formula.IntegerType AdaptIntegerType(Core.IntegerType type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentException(
+                    "An integer type cannot be null.",
+                    "registration");
+            }
+
+            return new Formula.IntegerType(type.Min, type.Max);
+        }
+
+        private static Formula.DecimalType AdaptDecimalType(Core.DecimalType type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentException(
+                    "A decimal type cannot be null.",
+                    "registration");
+            }
+
+            return new Formula.DecimalType(type.Min, type.Max);
         }
     }
 }

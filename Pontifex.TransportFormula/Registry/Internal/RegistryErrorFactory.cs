@@ -1,3 +1,6 @@
+using System.Globalization;
+using Pontifex.TransportFormula.Internal;
+
 namespace Pontifex.TransportFormula.Registry.Internal
 {
     // Owns the exact E_REG_* message templates from parsing.md §13.4.
@@ -60,6 +63,21 @@ namespace Pontifex.TransportFormula.Registry.Internal
                 "invalid transport list range: min " + min + ", max " + FormatMax(max));
         }
 
+        public static RegistrationException InvalidIntegerRange(long min, long max)
+        {
+            return Create(
+                "E_REG_INVALID_INTEGER_RANGE",
+                "invalid integer range: min " + FormatLong(min) + ", max " + FormatLong(max));
+        }
+
+        public static RegistrationException InvalidDecimalRange(decimal min, decimal max)
+        {
+            return Create(
+                "E_REG_INVALID_DECIMAL_RANGE",
+                "invalid decimal range: min " + DecimalText.Format(min)
+                + ", max " + DecimalText.Format(max));
+        }
+
         public static RegistrationException DuplicateStructField(string name)
         {
             return Create(
@@ -107,6 +125,11 @@ namespace Pontifex.TransportFormula.Registry.Internal
         private static string FormatMax(int? max)
         {
             return max.HasValue ? max.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "unbounded";
+        }
+
+        private static string FormatLong(long value)
+        {
+            return value.ToString(CultureInfo.InvariantCulture);
         }
 
         private static RegistrationException Create(string code, string message)

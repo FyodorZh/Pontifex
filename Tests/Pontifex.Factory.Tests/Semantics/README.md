@@ -132,7 +132,10 @@ branches the §14 table does not reach:
 - `pair` — two required struct fields, for missing-before-kind ordering;
 - `listB` — a transport list with a non-`Any` expected element type;
 - `fieldValidated`, `validatedEmpty`, `validatedThrow` — empty-reason and throwing
-  scalar validators for parameters and struct fields.
+  scalar validators for parameters and struct fields;
+- `numbers` — integer and decimal parameters with narrow ranges;
+- `numberStruct` — integer and decimal struct fields, including a nested integer
+  field.
 
 There are no harness self-tests. Harness belongs to the root layer and is
 available to every test in this suite. Sibling suites do not share this harness;

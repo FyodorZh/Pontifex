@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Pontifex;
+using Pontifex.TransportFormula.Internal;
 using Pontifex.TransportFormula.Parsing;
 using Pontifex.TransportFormula.Registry;
 
@@ -62,6 +64,52 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                         }
 
                         provided.Add(new ParamBinding(stringParam, new StringValue(scalar.Text)));
+                        break;
+                    }
+
+                    case IntegerParam integerParam:
+                    {
+                        if (value is not AstScalar scalar)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ExpectedScalar(
+                                integerParam.Name,
+                                Shape(value),
+                                value.Span.Start));
+                        }
+
+                        var reason = ParseInteger(scalar.Text, integerParam.Type, out var parsed);
+                        if (reason is not null)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ValidatorFailedParam(
+                                integerParam.Name,
+                                reason,
+                                value.Span.Start));
+                        }
+
+                        provided.Add(new ParamBinding(integerParam, new IntegerValue(parsed)));
+                        break;
+                    }
+
+                    case DecimalParam decimalParam:
+                    {
+                        if (value is not AstScalar scalar)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ExpectedScalar(
+                                decimalParam.Name,
+                                Shape(value),
+                                value.Span.Start));
+                        }
+
+                        var reason = ParseDecimal(scalar.Text, decimalParam.Type, out var parsed);
+                        if (reason is not null)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ValidatorFailedParam(
+                                decimalParam.Name,
+                                reason,
+                                value.Span.Start));
+                        }
+
+                        provided.Add(new ParamBinding(decimalParam, new DecimalValue(parsed)));
                         break;
                     }
 
@@ -151,6 +199,50 @@ namespace Pontifex.TransportFormula.Semantics.Internal
             {
                 return SemanticErrorFactory.ValidationFailedReason;
             }
+        }
+
+        // Parses a signed 64-bit integer with no whitespace, decimal point, or
+        // exponent, then checks the inclusive range. A non-parse is a parse
+        // failure; only a parsed value outside the range is an out-of-range
+        // failure.
+        public static string? ParseInteger(string text, IntegerType type, out long value)
+        {
+            if (!long.TryParse(
+                    text,
+                    NumberStyles.AllowLeadingSign,
+                    CultureInfo.InvariantCulture,
+                    out value))
+            {
+                return "expected an integer";
+            }
+
+            if (value < type.Min || value > type.Max)
+            {
+                return "out of range ["
+                    + type.Min.ToString(CultureInfo.InvariantCulture) + ", "
+                    + type.Max.ToString(CultureInfo.InvariantCulture) + "]";
+            }
+
+            return null;
+        }
+
+        // Parses an exactly representable decimal, then checks the inclusive
+        // range. Overflow, underflow, and precision loss are parse failures.
+        public static string? ParseDecimal(string text, DecimalType type, out decimal value)
+        {
+            if (!DecimalText.TryParse(text, out value))
+            {
+                return "expected a decimal";
+            }
+
+            if (value < type.Min || value > type.Max)
+            {
+                return "out of range ["
+                    + DecimalText.Format(type.Min) + ", "
+                    + DecimalText.Format(type.Max) + "]";
+            }
+
+            return null;
         }
 
         public static string Shape(AstValue value)

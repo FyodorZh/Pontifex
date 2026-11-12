@@ -205,6 +205,135 @@ namespace Pontifex.Factory.Tests.Bootstrap
         }
 
         [Test]
+        public void RegisterTransport_WithCoreRegistration_MapsIntegerAndDecimalParameterMetadata()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+            builder.RegisterTransport(
+                BootstrapTestData.CoreRegistration(
+                    "alpha",
+                    BootstrapTestData.TypeA,
+                    _ => new FakeTransport(BootstrapTestData.TypeA),
+                    parameters: new Core.TransportParameter[]
+                    {
+                        BootstrapTestData.CoreIntegerParameter(
+                            "Count",
+                            -5,
+                            5,
+                            required: true,
+                            positional: true),
+                        BootstrapTestData.CoreDecimalParameter(
+                            "Ratio",
+                            -1.5m,
+                            1.5m,
+                            positional: true)
+                    }));
+
+            var factory = builder.Build();
+            var result = factory.Resolve("alpha(3, 1.25)");
+
+            Assert.That(result.Error, Is.Null);
+            var resolved = (ResolvedTransport)result.Formula!.Root;
+            Assert.That(
+                ((IntegerValue)resolved.Provided[0].Value).Value,
+                Is.EqualTo(3L));
+            Assert.That(
+                ((DecimalValue)resolved.Provided[1].Value).Value,
+                Is.EqualTo(1.25m));
+        }
+
+        [Test]
+        public void RegisterTransport_WithCoreRegistration_MapsIntegerAndDecimalFieldMetadata()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+            builder.RegisterTransport(
+                BootstrapTestData.CoreRegistration(
+                    "alpha",
+                    BootstrapTestData.TypeA,
+                    _ => new FakeTransport(BootstrapTestData.TypeA),
+                    parameters: new Core.TransportParameter[]
+                    {
+                        new Core.StructParameter(
+                            "config",
+                            required: true,
+                            positional: true,
+                            new Core.StructSchema(new Core.StructField[]
+                            {
+                                BootstrapTestData.CoreIntegerField(
+                                    "Count",
+                                    0,
+                                    10,
+                                    required: true),
+                                BootstrapTestData.CoreDecimalField(
+                                    "Ratio",
+                                    -1.5m,
+                                    1.5m)
+                            }))
+                    }));
+
+            var factory = builder.Build();
+            var result = factory.Resolve("alpha({count=3, ratio=1.25})");
+
+            Assert.That(result.Error, Is.Null);
+            var resolved = (ResolvedTransport)result.Formula!.Root;
+            var config = (StructValue)resolved.Provided[0].Value;
+            Assert.That(((IntegerValue)config.Fields[0].Value).Value, Is.EqualTo(3L));
+            Assert.That(((DecimalValue)config.Fields[1].Value).Value, Is.EqualTo(1.25m));
+        }
+
+        [Test]
+        public void RegisterTransport_WithUnsortedCoreIntegerRange_ThrowsInvalidIntegerRange()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+
+            var exception = Assert.Throws<RegistrationException>(
+                () => builder.RegisterTransport(
+                    BootstrapTestData.CoreRegistration(
+                        "alpha",
+                        BootstrapTestData.TypeA,
+                        _ => new FakeTransport(BootstrapTestData.TypeA),
+                        parameters: new Core.TransportParameter[]
+                        {
+                            BootstrapTestData.CoreIntegerParameter("count", 5, 1)
+                        })));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_INVALID_INTEGER_RANGE"));
+            Assert.That(
+                exception.Error.Message,
+                Is.EqualTo("invalid integer range: min 5, max 1"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
+        }
+
+        [Test]
+        public void RegisterTransport_WithUnsortedCoreDecimalFieldRange_ThrowsInvalidDecimalRange()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+
+            var exception = Assert.Throws<RegistrationException>(
+                () => builder.RegisterTransport(
+                    BootstrapTestData.CoreRegistration(
+                        "alpha",
+                        BootstrapTestData.TypeA,
+                        _ => new FakeTransport(BootstrapTestData.TypeA),
+                        parameters: new Core.TransportParameter[]
+                        {
+                            new Core.StructParameter(
+                                "config",
+                                required: true,
+                                positional: true,
+                                new Core.StructSchema(new Core.StructField[]
+                                {
+                                    BootstrapTestData.CoreDecimalField("ratio", 2.5m, 1.5m)
+                                }))
+                        })));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_INVALID_DECIMAL_RANGE"));
+            Assert.That(
+                exception.Error.Message,
+                Is.EqualTo("invalid decimal range: min 2.5, max 1.5"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
+        }
+
+        [Test]
         public void RegisterTransport_WithDuplicateCanonicalScheme_ThrowsRegistrationException()
         {
             var builder = BootstrapTestData.NewBuilder();

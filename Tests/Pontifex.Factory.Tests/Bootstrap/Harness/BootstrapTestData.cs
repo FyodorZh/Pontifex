@@ -62,6 +62,52 @@ namespace Pontifex.Factory.Tests.Bootstrap.Harness
             return new TransportTypeSet(TransportTypeSetKind.Exactly, new[] { type });
         }
 
+        public static Core.TransportParameter CoreIntegerParameter(
+            string name,
+            long min,
+            long max,
+            bool required = false,
+            bool positional = false)
+        {
+            return new Core.IntegerParameter(
+                name,
+                required,
+                positional,
+                new Core.IntegerType(min, max));
+        }
+
+        public static Core.TransportParameter CoreDecimalParameter(
+            string name,
+            decimal min,
+            decimal max,
+            bool required = false,
+            bool positional = false)
+        {
+            return new Core.DecimalParameter(
+                name,
+                required,
+                positional,
+                new Core.DecimalType(min, max));
+        }
+
+        public static Core.StructField CoreIntegerField(
+            string name,
+            long min,
+            long max,
+            bool required = false)
+        {
+            return new Core.IntegerField(name, required, new Core.IntegerType(min, max));
+        }
+
+        public static Core.StructField CoreDecimalField(
+            string name,
+            decimal min,
+            decimal max,
+            bool required = false)
+        {
+            return new Core.DecimalField(name, required, new Core.DecimalType(min, max));
+        }
+
         // Core registration helper: the name and metadata deliberately pass
         // through unchanged so tests can assert the facade's normalization.
         public static Core.TransportRegistration CoreRegistration(

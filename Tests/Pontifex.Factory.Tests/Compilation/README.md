@@ -92,9 +92,10 @@ folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
 `Harness/` contains hand-written doubles and builders only:
 
 - `CompilationTestData` — builders for formula metadata
-  (`StringParam`, `TransportParam`, `TransportListParam`, `StructParam`,
-  `Schema`, `StringField`, `NestedStructField`), core registration metadata,
-  resolved trees, and compiler/registry construction.
+  (`StringParam`, `IntegerParam`, `DecimalParam`, `TransportParam`,
+  `TransportListParam`, `StructParam`, `Schema`, `StringField`, `IntegerField`,
+  `DecimalField`, `NestedStructField`), core registration metadata, resolved
+  trees, and compiler/registry construction.
 - `FakeTransport` — minimal `ITransport` with settable type and name. It never
   performs real I/O and is never started by the suite.
 - `RecordingRegistration` — `ITransportRegistration` that records each

@@ -15,6 +15,8 @@ namespace Pontifex.Factory.Compilation.Internal
     internal sealed class TransportBuildContext : ITransportBuildContext
     {
         private const string StringKind = "string";
+        private const string IntegerKind = "integer";
+        private const string DecimalKind = "decimal";
         private const string TransportKind = "transport";
         private const string TransportListKind = "transport list";
         private const string StructKind = "struct";
@@ -58,6 +60,42 @@ namespace Pontifex.Factory.Compilation.Internal
             }
 
             throw ParameterKindMismatch(binding, StringKind);
+        }
+
+        public bool TryGetInt64(string parameterName, out long value)
+        {
+            var binding = FindBinding(parameterName);
+            if (binding is null)
+            {
+                value = 0;
+                return false;
+            }
+
+            if (binding.Value is IntegerValue integerValue)
+            {
+                value = integerValue.Value;
+                return true;
+            }
+
+            throw ParameterKindMismatch(binding, IntegerKind);
+        }
+
+        public bool TryGetDecimal(string parameterName, out decimal value)
+        {
+            var binding = FindBinding(parameterName);
+            if (binding is null)
+            {
+                value = 0m;
+                return false;
+            }
+
+            if (binding.Value is DecimalValue decimalValue)
+            {
+                value = decimalValue.Value;
+                return true;
+            }
+
+            throw ParameterKindMismatch(binding, DecimalKind);
         }
 
         public bool TryGetTransport(
@@ -174,6 +212,10 @@ namespace Pontifex.Factory.Compilation.Internal
             {
                 case StringValue _:
                     return StringKind;
+                case IntegerValue _:
+                    return IntegerKind;
+                case DecimalValue _:
+                    return DecimalKind;
                 case ResolvedExpr _:
                     return TransportKind;
                 case TransportListValue _:
@@ -193,9 +235,9 @@ namespace Pontifex.Factory.Compilation.Internal
                 + "unspecified invariant violation");
         }
 
-        // A resolved struct contains only string fields and nested structs. The
-        // resolver guarantees matching kinds, so a mismatch is a tree invariant
-        // violation rather than a user error.
+        // A resolved struct contains only string, integer, decimal, and nested
+        // struct fields. The resolver guarantees matching kinds, so a mismatch is
+        // a tree invariant violation rather than a user error.
         private sealed class TransportStructValue : ITransportStructValue
         {
             private readonly IReadOnlyList<StructFieldBinding> _fields;
@@ -221,6 +263,42 @@ namespace Pontifex.Factory.Compilation.Internal
                 if (binding.Value is StringValue field)
                 {
                     value = field.Text;
+                    return true;
+                }
+
+                throw InconsistentTree();
+            }
+
+            public bool TryGetInt64(string fieldName, out long value)
+            {
+                var binding = FindField(fieldName);
+                if (binding is null)
+                {
+                    value = 0;
+                    return false;
+                }
+
+                if (binding.Value is IntegerValue field)
+                {
+                    value = field.Value;
+                    return true;
+                }
+
+                throw InconsistentTree();
+            }
+
+            public bool TryGetDecimal(string fieldName, out decimal value)
+            {
+                var binding = FindField(fieldName);
+                if (binding is null)
+                {
+                    value = 0m;
+                    return false;
+                }
+
+                if (binding.Value is DecimalValue field)
+                {
+                    value = field.Value;
                     return true;
                 }
 

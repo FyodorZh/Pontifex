@@ -310,6 +310,13 @@ public sealed class FormulaCanonicalizerTests
         yield return Case("bag(items=[])", "bag([])");
         yield return Case("emptyStruct(config={})", "emptystruct({})");
         yield return Case("single(item=[beta(x)])", "single([beta(x)])");
+        yield return Case("numbers(count=5, ratio=1.50)", "numbers(5, 1.5)");
+        yield return Case("numbers(count=+5, ratio=-0.0)", "numbers(5, 0)");
+        yield return Case("wide(value=1e3)", "wide(1000)");
+        yield return Case("wide(value=1e-28)", "wide(0.0000000000000000000000000001)");
+        yield return Case(
+            "numberStruct(config={count=5, ratio=1.50})",
+            "numberstruct({count=5, ratio=1.5})");
     }
 
     #endregion
@@ -438,6 +445,72 @@ public sealed class FormulaCanonicalizerTests
         CanonicalizationAssertions.AssertTreesEqual(firstTree, secondTree);
     }
 
+    [Test]
+    public void Canonicalize_ForIntegerAndDecimalParameters_PrintsCanonicalScalars()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("numeric(10, 1.50)"),
+            Is.EqualTo("numeric(10, 1.5)"));
+    }
+
+    [Test]
+    public void Canonicalize_ForPositiveSignedInteger_PrintsUnsignedCanonicalText()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("numeric(+5, 0)"),
+            Is.EqualTo("numeric(5, 0)"));
+    }
+
+    [Test]
+    public void Canonicalize_ForExponentInput_PrintsPlainInteger()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("wide(1e3)"),
+            Is.EqualTo("wide(1000)"));
+    }
+
+    [Test]
+    public void Canonicalize_ForSmallestScaleDecimal_PrintsPlainForm()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("wide(1e-28)"),
+            Is.EqualTo("wide(0.0000000000000000000000000001)"));
+    }
+
+    [Test]
+    public void Canonicalize_ForDecimalMinAndMax_PrintsPlainForm()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("wide(-79228162514264337593543950335)"),
+            Is.EqualTo("wide(-79228162514264337593543950335)"));
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("wide(79228162514264337593543950335)"),
+            Is.EqualTo("wide(79228162514264337593543950335)"));
+    }
+
+    [Test]
+    public void Canonicalize_ForNegativeZeroAndTrailingZeros_NormalizesTheText()
+    {
+        Assert.That(CanonicalizationTestData.Canonicalize("wide(-0)"), Is.EqualTo("wide(0)"));
+        Assert.That(CanonicalizationTestData.Canonicalize("wide(-0.0)"), Is.EqualTo("wide(0)"));
+        Assert.That(CanonicalizationTestData.Canonicalize("wide(1.000)"), Is.EqualTo("wide(1)"));
+    }
+
+    [Test]
+    public void Canonicalize_ForQuotedNumericScalar_PrintsCanonicalNumber()
+    {
+        Assert.That(CanonicalizationTestData.Canonicalize("wide(\"1e3\")"), Is.EqualTo("wide(1000)"));
+        Assert.That(CanonicalizationTestData.Canonicalize("wide(\"1.50\")"), Is.EqualTo("wide(1.5)"));
+    }
+
+    [Test]
+    public void Canonicalize_ForIntegerAndDecimalStructFields_PrintsCanonicalScalars()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("numericStruct({count=5, ratio=1.50})"),
+            Is.EqualTo("numericstruct({count=5, ratio=1.5})"));
+    }
+
     private static System.Collections.Generic.IEnumerable<TestCaseData> RoundTripSources()
     {
         foreach (var source in new[]
@@ -463,7 +536,14 @@ public sealed class FormulaCanonicalizerTests
                      "emptyStruct(config={})",
                      "single(item=[beta(x)])",
                      "outer(alpha(x))",
-                     "ALPHA( BETA(x) , FAST )"
+                     "ALPHA( BETA(x) , FAST )",
+                     "numeric(10, 1.5)",
+                     "numericStruct({count=5, ratio=1.5})",
+                     "wide(1e3)",
+                     "wide(1e-28)",
+                     "wide(1.50)",
+                     "wide(-0.0)",
+                     "wide(79228162514264337593543950335)"
                  })
         {
             yield return new TestCaseData(source).SetName("RoundTrip_" + source);

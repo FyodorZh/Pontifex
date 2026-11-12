@@ -531,6 +531,19 @@ sealed class StringParam : Param
     ScalarValidator? Validate;
 }
 
+sealed class IntegerParam : Param
+{
+    IntegerType Type;     // inclusive Min/Max; long bounds
+}
+
+sealed class DecimalParam : Param
+{
+    DecimalType Type;     // inclusive Min/Max; decimal bounds
+}
+
+// IntegerType { long Min; long Max; }
+// DecimalType { decimal Min; decimal Max; }
+
 sealed class TransportParam : Param
 {
     TransportTypeSet Expected;
@@ -555,6 +568,22 @@ constructor receives no value for it; the constructor applies its own defaults
 later. The parser never synthesizes values.
 
 `Required` and `Positional` are independent.
+
+Integer parameters use `Int64` only. There is no `UInt64` scalar kind. A scalar
+literal for an integer parameter MUST parse as a signed 64-bit integer with
+`NumberStyles.AllowLeadingSign` in the invariant culture; otherwise the value is
+a parse failure. A successfully parsed value outside `IntegerType.Min`/`Max` is
+an out-of-range failure.
+
+A decimal parameter accepts a sign, decimal point, and exponent. Parsing is
+exact: the literal MUST be exactly representable as a `System.Decimal`, including
+its 96-bit coefficient and 0..28 scale. Overflow, underflow, and precision loss
+are parse failures, not out-of-range values. A successfully parsed value outside
+`DecimalType.Min`/`Max` is an out-of-range failure. Canonical decimal output
+never uses exponent notation, trims trailing zeros, and normalizes negative zero
+to `0`. Consequently `1.50` and `1.5` compare equal and both print as `1.5`.
+Quoted numeric scalars are accepted; the decoded text is parsed identically.
+Leading or trailing whitespace inside numeric text is not accepted.
 
 ### 6.3 Type sets
 
@@ -594,6 +623,10 @@ delegate string? ScalarValidator(string value);
 - A throwing struct-field validator uses the field form of the message:
   `field '<path>' of parameter '<param>' is invalid: validation failed`,
   where `<path>` is the field path defined in §7.8.
+- Integer and decimal parse and range failures reuse `E_SEM_VALIDATOR_FAILED`
+  with reasons `expected an integer`, `expected a decimal`, and
+  `out of range [<min>, <max>]`; they do not use a `ScalarValidator`.
+- Decimal range bounds use the canonical decimal text defined in §6.2.
 
 Define `InvokeValidator(validator, text)`:
 
@@ -626,6 +659,16 @@ sealed class StringField : StructField
     ScalarValidator? Validate;
 }
 
+sealed class IntegerField : StructField
+{
+    IntegerType Type;
+}
+
+sealed class DecimalField : StructField
+{
+    DecimalType Type;
+}
+
 sealed class NestedStructField : StructField
 {
     StructSchema Schema;
@@ -633,7 +676,8 @@ sealed class NestedStructField : StructField
 ```
 
 Struct fields are named-only. There are no positional fields, no defaults, and no
-transport or list fields.
+transport or list fields. Integer and decimal fields use the same exact parsing
+and range rules as parameters.
 
 ### 6.6 Type catalog
 
@@ -677,13 +721,18 @@ Rules:
 2. Validate canonical name, parameter names, and alias names as identifiers.
 3. Reject duplicate canonical names.
 4. Reject duplicate parameter names within a constructor.
-5. Normalize `TransportTypeSet` values; reject empty `OneOf`.
+5. Normalize all `TransportTypeSet` values in declaration order; reject empty
+   `OneOf`. Then validate `IntegerParam`/`DecimalParam` ranges in declaration
+   order: `Min <= Max` (`E_REG_INVALID_INTEGER_RANGE`,
+   `E_REG_INVALID_DECIMAL_RANGE`).
 6. Validate `TransportListParam`: `Min >= 0`; `Max == null` or `Max >= Min`.
 7. Validate struct schemas recursively: field names are valid identifiers and
    unique within their schema. Field kinds are constrained by the
-   `StringField`/`NestedStructField` metadata types. Validation visits each
-   distinct `StructSchema` instance once using a visited set; shared or cyclic
-   schema references are permitted and are not revalidated.
+   `StringField`/`IntegerField`/`DecimalField`/`NestedStructField` metadata types.
+   For each field, after its name, uniqueness, and kind, validate an integer or
+   decimal field range in schema order, then recurse into a nested schema.
+   Validation visits each distinct `StructSchema` instance once using a visited
+   set; shared or cyclic schema references are permitted and are not revalidated.
 8. Normalize aliases; duplicates within the same registration are ignored. An
    alias equal to the constructor's own canonical name is ignored.
 9. This rule applies only to alias-to-constructor mappings registered for the
@@ -757,7 +806,15 @@ interface ITransportRegistration
 - `Create` is invoked only by the direct compiler (§9). The formula parser,
   resolver, and printer never call it.
 - `TransportParameter` and its subclasses mirror `Param`; `TransportTypeSet`,
-  `StructSchema`, and `ScalarValidator` mirror their formula counterparts.
+  `StructSchema`, `ScalarValidator`, `IntegerType`, and `DecimalType` mirror
+  their formula counterparts. Core `IntegerType`/`DecimalType`,
+  `IntegerParameter`/`DecimalParameter`, and `IntegerField`/`DecimalField`
+  accept unsorted bounds and do not throw; the formula registry owns range
+  validation.
+- `ITransportBuildContext` exposes `TryGetString`, `TryGetInt64`,
+  `TryGetDecimal`, `TryGetTransport`, `TryGetTransportList`, and `TryGetStruct`.
+  `ITransportStructValue` exposes `TryGetString`, `TryGetInt64`,
+  `TryGetDecimal`, and `TryGetStruct`.
 - A transport package implementing this contract depends only on `Pontifex`.
 
 The runtime adapter in `Pontifex.Factory` converts the core DTOs to the formula
@@ -938,6 +995,34 @@ for each param in constructor.Params in declaration order:
                       context = parameter '<param.Name>', reason
             store StringValue(value.Text)
 
+        IntegerParam:
+            if value is not AstScalar:
+                error E_SEM_EXPECTED_SCALAR at value.Span.Start
+                      actual = Shape(value)
+            if not TryParseInt64(value.Text, invariant, AllowLeadingSign):
+                error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                      context = parameter '<param.Name>',
+                      reason = "expected an integer"
+            if parsed < param.Type.Min or parsed > param.Type.Max:
+                error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                      context = parameter '<param.Name>',
+                      reason = "out of range [<min>, <max>]"
+            store IntegerValue(parsed)
+
+        DecimalParam:
+            if value is not AstScalar:
+                error E_SEM_EXPECTED_SCALAR at value.Span.Start
+                      actual = Shape(value)
+            if not TryParseExactDecimal(value.Text):
+                error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                      context = parameter '<param.Name>',
+                      reason = "expected a decimal"
+            if parsed < param.Type.Min or parsed > param.Type.Max:
+                error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                      context = parameter '<param.Name>',
+                      reason = "out of range [<min>, <max>]"
+            store DecimalValue(parsed)
+
         TransportParam:
             if value is not AstExpr:
                 error E_SEM_EXPECTED_TRANSPORT at value.Span.Start
@@ -1059,6 +1144,36 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
                 result.add(StructFieldBinding(
                     schemaField, StringValue(value.Text)))
 
+            IntegerField:
+                if value is not AstScalar:
+                    error E_SEM_STRUCT_FIELD_EXPECTED_SCALAR at value.Span.Start
+                          path = path, actual = Shape(value)
+                parse exactly as an integer; on parse failure:
+                    error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                          context = field '<path>' of parameter '<paramName>'
+                          reason = "expected an integer"
+                on range failure:
+                    error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                          context = field '<path>' of parameter '<paramName>'
+                          reason = "out of range [<min>, <max>]"
+                result.add(StructFieldBinding(
+                    schemaField, IntegerValue(parsed)))
+
+            DecimalField:
+                if value is not AstScalar:
+                    error E_SEM_STRUCT_FIELD_EXPECTED_SCALAR at value.Span.Start
+                          path = path, actual = Shape(value)
+                parse exactly as a decimal; on parse failure:
+                    error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                          context = field '<path>' of parameter '<paramName>'
+                          reason = "expected a decimal"
+                on range failure:
+                    error E_SEM_VALIDATOR_FAILED at value.Span.Start
+                          context = field '<path>' of parameter '<paramName>'
+                          reason = "out of range [<min>, <max>]"
+                result.add(StructFieldBinding(
+                    schemaField, DecimalValue(parsed)))
+
             NestedStructField:
                 if value is not AstStruct:
                     error E_SEM_STRUCT_FIELD_EXPECTED_STRUCT at value.Span.Start
@@ -1071,8 +1186,9 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
 ```
 
 `JoinPath(parentPath, name)` joins the segments with `.`; an empty parent path
-yields `name`. Struct values contain only strings and nested structs. A transport
-or list in a struct field is rejected by the scalar/struct shape checks.
+yields `name`. Struct values contain only strings, integers, decimals, and nested
+structs. A transport or list in a struct field is rejected by the
+scalar/struct shape checks.
 
 ### 7.9 Resolution order and determinism
 
@@ -1118,6 +1234,8 @@ ParamBinding
 
 ScalarValue                 (abstract) : DataValue
 StringValue                 : ScalarValue { string Text; }
+IntegerValue                : ScalarValue { long Value; }
+DecimalValue                : ScalarValue { decimal Value; }
 StructValue                 : DataValue { IReadOnlyList<StructFieldBinding> Fields; }
 TransportListValue          : ResolvedValue { IReadOnlyList<ResolvedExpr> Elements; }
 
@@ -1151,6 +1269,9 @@ Invariants:
 - `StructValue.Fields` are in schema order and contain exactly the provided
   fields, each at most once. Required fields are present. Field value kinds match
   the schema.
+- An `IntegerValue` lies within its `IntegerType` range; a `DecimalValue` lies
+  within its `DecimalType` range. Decimal equality is numeric: `1.50m` and
+  `1.5m` are equal.
 - All names are canonical: scheme names lowercase, parameter names lowercase,
   struct field names lowercase, type names canonical.
 - Every `ResolvedExpr`, including every list element and cast inner node, carries
@@ -1218,6 +1339,8 @@ interface ITransportBuildContext
     IMemoryRental Memory { get; }
 
     bool TryGetString(string parameterName, out string value);
+    bool TryGetInt64(string parameterName, out long value);
+    bool TryGetDecimal(string parameterName, out decimal value);
     bool TryGetTransport(string parameterName, out NestedTransportFactory factory);
     bool TryGetTransportList(
         string parameterName,
@@ -1228,6 +1351,8 @@ interface ITransportBuildContext
 interface ITransportStructValue
 {
     bool TryGetString(string fieldName, out string value);
+    bool TryGetInt64(string fieldName, out long value);
+    bool TryGetDecimal(string fieldName, out decimal value);
     bool TryGetStruct(string fieldName, out ITransportStructValue value);
 }
 ```
@@ -1243,7 +1368,10 @@ Rules:
   reconnect-style transports.
 - `TryGetTransportList` preserves element order and returns one factory per
   element.
-- Struct values contain only strings and nested structs.
+- A `TryGet*` accessor for the wrong parameter kind reports
+  `E_CMP_PARAM_KIND_MISMATCH` with the resolved kinds. A struct-field accessor
+  for the wrong field kind reports `E_CMP_INCONSISTENT_TREE`.
+- Struct values contain only strings, integers, decimals, and nested structs.
 - The transport constructor owns every nested transport it creates. If creation
   fails after some nested transports were created, the constructor must stop or
   discard them before rethrowing.
@@ -1378,9 +1506,9 @@ If the input tree violates the invariants in §8, the printer throws
 `PrinterException` with an `E_PRN_*` code (§13.5). A correct resolver never
 produces such a tree. Before printing, the printer validates all invariants:
 required parameters, declared and unique provided parameters, value kinds,
-`Type == Constructor.Type`, expected-type membership, list arity and
-homogeneity, struct field membership and schema order, canonical names, cast
-targets, and scalar printability. Generic invariant violations use
+integer/decimal ranges, `Type == Constructor.Type`, expected-type membership,
+list arity and homogeneity, struct field membership and schema order, canonical
+names, cast targets, and string printability. Generic invariant violations use
 `E_PRN_INCONSISTENT_TREE` with one of the details defined in §13.5.
 
 Validation is depth-first over values. For a cast expression, identity and
@@ -1389,9 +1517,9 @@ transport, provided values are visited in `Constructor.Params` declaration order
 independent of print order. The check order is: required parameters in
 declaration order; unknown provided parameter; duplicate provided parameter;
 out-of-order provided parameter; `Type == Constructor.Type`; then each provided
-parameter in declaration order (value kind, expected-set membership, list
-arity/homogeneity, then struct fields in the order unknown → missing → duplicate
-→ order → kind); then scalar printability.
+parameter in declaration order (value kind, integer/decimal range, expected-set
+membership, list arity/homogeneity, then struct fields in the order unknown →
+missing → duplicate → order → kind → range); then string printability.
 
 ### 10.1 Expression
 
@@ -1466,6 +1594,8 @@ Consequences:
 ```text
 PrintValue(param, value):
     StringValue        -> PrintScalar(value.Text)
+    IntegerValue       -> PrintInteger(value.Value)
+    DecimalValue       -> PrintDecimal(value.Value)
     ResolvedExpr       -> PrintExpr(value)
     TransportListValue -> "[" + join(value.Elements.Select(PrintExpr), ", ") + "]"
     StructValue        -> "{" + join(PrintStructFields(value), ", ") + "}"
@@ -1481,6 +1611,10 @@ PrintStructFields(value):
         field = binding.Field
         if binding.Value is StringValue:
             parts.add(field.Name + "=" + PrintScalar(binding.Value.Text))
+        if binding.Value is IntegerValue:
+            parts.add(field.Name + "=" + PrintInteger(binding.Value.Value))
+        if binding.Value is DecimalValue:
+            parts.add(field.Name + "=" + PrintDecimal(binding.Value.Value))
         if binding.Value is StructValue:
             parts.add(field.Name + "={" +
                       join(PrintStructFields(binding.Value), ", ") + "}")
@@ -1488,6 +1622,14 @@ PrintStructFields(value):
 ```
 
 Empty lists print `[]`; empty structs print `{}`.
+
+`PrintInteger(value)` is the invariant signed decimal text of the `Int64` with no
+leading `+`, no leading zeros (except `0`), and no exponent.
+
+`PrintDecimal(value)` is the canonical decimal text: no exponent notation,
+trailing zeros are trimmed, and negative zero prints as `0`. For example,
+`1.50m` prints as `1.5`, `1e3` prints as `1000`, and `1e-28` prints as
+`0.0000000000000000000000000001`.
 
 ### 10.4 Scalars
 
@@ -1527,6 +1669,10 @@ The printer normalizes:
 - positional/named form → longest provided positional prefix + named remainder;
 - named argument order → declaration order after the positional prefix;
 - struct field order → schema order;
+- integer scalar text → invariant signed decimal without a leading `+` or
+  redundant leading zeros;
+- decimal scalar text → canonical plain form (no exponent, trailing zeros
+  trimmed, negative zero normalized);
 - quoting → minimal safe form;
 - identity casts → absent (they never exist in a resolved tree).
 
@@ -1578,6 +1724,8 @@ Two resolved trees are equal iff:
 - struct fields are equal; field order is compared in schema order;
 - cast nodes have equal inner trees and equal target types;
 - string value text is identical (ordinal comparison);
+- integer values are equal;
+- decimal values are numerically equal (`1.50m` equals `1.5m`);
 - absent parameters are absent in both trees.
 
 Equality ignores spans, original aliases, source case, original quoting, and the
@@ -1805,7 +1953,7 @@ Formatting helpers used in messages:
 | `E_SEM_DUPLICATE_PARAM` | Parameter bound twice | `parameter '<name>' is specified more than once` | Duplicate parameter name token |
 | `E_SEM_MISSING_REQUIRED_PARAM` | Required parameter not bound | `missing required parameter '<name>' for scheme '<scheme>'` | Closing `)` |
 | `E_SEM_TOO_MANY_POSITIONAL` | More positional args than positional params | `too many positional arguments for scheme '<scheme>'; expected at most <n>` | First extra positional value |
-| `E_SEM_EXPECTED_SCALAR` | String parameter received non-scalar | `parameter '<name>' expects a scalar value, got <shape>` | Value start |
+| `E_SEM_EXPECTED_SCALAR` | Scalar parameter received non-scalar | `parameter '<name>' expects a scalar value, got <shape>` | Value start |
 | `E_SEM_EXPECTED_TRANSPORT` | Transport parameter received non-expression | `parameter '<name>' expects a transport, got <shape>` | Value start |
 | `E_SEM_EXPECTED_TRANSPORT_LIST` | Transport-list parameter received non-list | `parameter '<name>' expects a transport list, got <shape>` | Value start |
 | `E_SEM_EXPECTED_STRUCT` | Struct parameter received non-struct | `parameter '<name>' expects a struct, got <shape>` | Value start |
@@ -1815,15 +1963,26 @@ Formatting helpers used in messages:
 | `E_SEM_UNKNOWN_STRUCT_FIELD` | Struct field not in schema | `unknown field '<path>' in struct for parameter '<param>'; <expected>` | Field name token |
 | `E_SEM_DUPLICATE_STRUCT_FIELD` | Struct field specified twice | `field '<path>' is specified more than once` | Duplicate field name token |
 | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` | Required struct field absent | `missing required field '<path>' in struct for parameter '<param>'` | Closing `}` |
-| `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` | String field received non-scalar | `field '<path>' expects a scalar value, got <shape>` | Value start |
+| `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` | Scalar field received non-scalar | `field '<path>' expects a scalar value, got <shape>` | Value start |
 | `E_SEM_STRUCT_FIELD_EXPECTED_STRUCT` | Nested struct field received non-struct | `field '<path>' expects a struct, got <shape>` | Value start |
 | `E_SEM_UNKNOWN_TRANSPORT_TYPE` | Cast type not in catalog | `unknown transport type '<name>'; <known>` | Type token |
 | `E_SEM_CAST_TYPE_MISMATCH` | Cast target outside expected set | `cast produces transport type <target>, but expected <set>` | Type token |
 | `E_SEM_VALIDATOR_FAILED` | `Validate` returned non-null/empty or threw | `parameter '<name>' is invalid: <reason>` | Value start |
 | `E_SEM_VALIDATOR_FAILED` | Struct field validator failed | `field '<path>' of parameter '<param>' is invalid: <reason>` | Value start |
+| `E_SEM_VALIDATOR_FAILED` | Integer parameter parse or range failure | `parameter '<name>' is invalid: <reason>` | Value start |
+| `E_SEM_VALIDATOR_FAILED` | Decimal parameter parse or range failure | `parameter '<name>' is invalid: <reason>` | Value start |
+| `E_SEM_VALIDATOR_FAILED` | Integer struct-field parse or range failure | `field '<path>' of parameter '<param>' is invalid: <reason>` | Value start |
+| `E_SEM_VALIDATOR_FAILED` | Decimal struct-field parse or range failure | `field '<path>' of parameter '<param>' is invalid: <reason>` | Value start |
 
 For a thrown validator or an empty validator result, `<reason>` is exactly
 `validation failed`.
+
+For integer parameters and fields, `<reason>` is `expected an integer` for a
+parse failure or `out of range [<min>, <max>]` when a successfully parsed value
+is outside the declared inclusive range. For decimal parameters and fields,
+`<reason>` is `expected a decimal` for a parse failure (including overflow,
+underflow, and precision loss) or `out of range [<min>, <max>]`. Range bounds use
+invariant integer text and canonical decimal text respectively.
 
 `<shape>` is exactly one of `scalar`, `transport`, `transport list`, `struct`.
 
@@ -1872,6 +2031,8 @@ Registration errors use `RegistrationException` and have no offset.
 | `E_REG_DUPLICATE_ALIAS_FOR_TYPE` | Same alias name already registered for the same type by a different constructor | `alias '<name>' for transport type <type> is already registered` |
 | `E_REG_EMPTY_TYPE_SET` | `OneOf` has no types | `transport type set must contain at least one type` |
 | `E_REG_INVALID_LIST_RANGE` | `Min < 0`, or `Max < Min` | `invalid transport list range: min <min>, max <max>` |
+| `E_REG_INVALID_INTEGER_RANGE` | Integer parameter, field, or array element type `Min > Max` | `invalid integer range: min <min>, max <max>` |
+| `E_REG_INVALID_DECIMAL_RANGE` | Decimal parameter, field, or array element type `Min > Max` | `invalid decimal range: min <min>, max <max>` |
 | `E_REG_DUPLICATE_STRUCT_FIELD` | Duplicate struct field name | `struct field '<name>' is declared more than once` |
 | `E_REG_INVALID_STRUCT_FIELD_NAME` | Struct field name is not an identifier | `invalid struct field name '<name>'` |
 | `E_REG_INVALID_TYPE_NAME` | Transport type name is not an identifier | `invalid transport type name '<name>'` |
@@ -1880,6 +2041,15 @@ Registration errors use `RegistrationException` and have no offset.
 | `E_REG_BUILDER_SEALED` | Builder has already been built | `registry builder has already been built` |
 
 For `E_REG_INVALID_LIST_RANGE`, `<max>` is `unbounded` when `Max` is `null`.
+Integer and decimal range bounds use invariant integer text and canonical decimal
+text respectively.
+
+Registration validation order for scalar ranges: rule 5 normalizes every type set
+for all parameters first, then checks integer and decimal parameter ranges in
+declaration order. Rule 6 then checks transport-list ranges. Consequently a later
+scalar parameter range error precedes an earlier transport-list range error.
+Rule 7 checks struct fields in schema order: field name, duplicate, kind, field
+range, then nested schema recursion.
 
 Placeholder sources for registration errors:
 
@@ -1907,6 +2077,7 @@ Printer errors use `PrinterException` and have no offset.
 | `E_PRN_STRUCT_FIELD_MISSING` | Required struct field absent | `struct parameter '<name>' of scheme '<scheme>' is missing required field '<path>'` |
 | `E_PRN_STRUCT_FIELD_DUPLICATE` | Same struct field appears twice | `struct parameter '<name>' of scheme '<scheme>' contains field '<path>' more than once` |
 | `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | Struct field value kind mismatch | `field '<path>' of struct parameter '<name>' has value kind <actual>, expected <expected>` |
+| `E_PRN_VALUE_OUT_OF_RANGE` | Resolved integer or decimal outside its declared range | `resolved value for '<path>' is out of range: <value>` |
 | `E_PRN_INVALID_CAST_TARGET` | Cast target not in catalog | `cast target '<type>' is invalid` |
 | `E_PRN_INVALID_SCALAR` | Scalar contains CR, LF, or an unpaired surrogate | `scalar value contains a character that cannot be printed: U+<code>` |
 
@@ -1918,7 +2089,10 @@ For printer messages:
   `E_PRN_UNKNOWN_PARAM` is the stored parameter name; `<name>` elsewhere in
   printer messages is canonical.
 - `<actual>` and `<expected>` in kind-mismatch errors are resolved value kinds:
-  `string`, `transport`, `transport list`, or `struct`.
+  `string`, `integer`, `decimal`, `transport`, `transport list`, or `struct`.
+- `<path>` for `E_PRN_VALUE_OUT_OF_RANGE` is the canonical parameter name for a
+  parameter or the dot-separated field path for a struct field. `<value>` is
+  invariant integer text or canonical decimal text.
 - `<path>` is a dot-separated struct-field path of `StructField.Name` values.
   Known schema segments are canonical; an unknown leaf uses its stored name.
 - `<detail>` in `E_PRN_INCONSISTENT_TREE` is one of `identity cast node`,
@@ -1957,7 +2131,8 @@ binding layer is adopted. The former adapter-only codes
 compiler catalogue; `E_PRN_INVALID_CAST_TARGET` remains a printer error.
 
 In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are resolved value
-kinds. In
+kinds: `string`, `integer`, `decimal`, `transport`, `transport list`, or
+`struct`. In
 `E_CMP_INCONSISTENT_TREE`, `<detail>` uses the same closed set as
 `E_PRN_INCONSISTENT_TREE`. Elsewhere in compiler/build messages, `<scheme>` is
 canonical lowercase; `<name>` is canonical except in `E_CMP_UNKNOWN_PARAM`, where
@@ -2023,6 +2198,18 @@ deep         TypeA
                     outer Struct required
                           inner Struct required
                                 value String required
+numbers      TypeA
+             count Integer positional optional, range [-10, 10]
+             ratio Decimal positional optional, range [-1.5, 1.5]
+numberStruct TypeA
+             config Struct positional required
+                    count Integer required, range [0, 10]
+                    ratio Decimal optional, range [-1.5, 1.5]
+                    nested Struct optional
+                           value Integer range [-1, 1]
+wide         TypeA
+             value Decimal positional required,
+                    range [decimal.MinValue, decimal.MaxValue]
 ```
 
 ### 14.1 Valid parses
@@ -2040,6 +2227,9 @@ deep         TypeA
 | `structy({name=x, nested={a=1}})` | nested struct |
 | `beta("a, b")` | quoted scalar with comma |
 | `beta("")` | empty scalar |
+| `numbers(5, 1.50)` | integer 5 and decimal 1.5 |
+| `numbers(-10, -1.5)` | inclusive integer and decimal lower bounds |
+| `wide(1e-28)` | exact decimal at the smallest representable scale |
 
 ### 14.2 Syntax errors
 
@@ -2097,6 +2287,11 @@ deep         TypeA
 | `outer(beta(x) as TypeA)` | `E_SEM_CAST_TYPE_MISMATCH` | 17 |
 | `dual(beta(x) as TypeC)` | `E_SEM_CAST_TYPE_MISMATCH` | 16 |
 | `beta(1)` where `1` is a scalar and `value` is String | valid | — |
+| `numbers(11)` | `E_SEM_VALIDATOR_FAILED` (count out of range) | 8 |
+| `numbers(1.5)` | `E_SEM_VALIDATOR_FAILED` (count not an integer) | 8 |
+| `numbers(0, 1e-29)` | `E_SEM_VALIDATOR_FAILED` (ratio not exactly representable) | 11 |
+| `numberStruct({count=x})` | `E_SEM_VALIDATOR_FAILED` (count not an integer) | 20 |
+| `numberStruct({count=1, nested={value=2}})` | `E_SEM_VALIDATOR_FAILED` (path `nested.value`) | 37 |
 
 Representative exact messages:
 
@@ -2112,6 +2307,10 @@ Representative exact messages:
 | `deep({outer={inner={}}})` | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD: missing required field 'outer.inner.value' in struct for parameter 'config' (offset 20)` |
 | `structy({name=alpha(beta(x))})` | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR: field 'name' expects a scalar value, got transport (offset 14)` |
 | `validated(bad)` | `E_SEM_VALIDATOR_FAILED: parameter 'value' is invalid: value must not be 'bad' (offset 10)` |
+| `numbers(11)` | `E_SEM_VALIDATOR_FAILED: parameter 'count' is invalid: out of range [-10, 10] (offset 8)` |
+| `numbers(1.5)` | `E_SEM_VALIDATOR_FAILED: parameter 'count' is invalid: expected an integer (offset 8)` |
+| `numbers(0, 1e-29)` | `E_SEM_VALIDATOR_FAILED: parameter 'ratio' is invalid: expected a decimal (offset 11)` |
+| `numberStruct({count=x})` | `E_SEM_VALIDATOR_FAILED: field 'count' of parameter 'config' is invalid: expected an integer (offset 20)` |
 
 > Some rows depend on registry details; tests must define the full registry
 > explicitly.
@@ -2146,6 +2345,11 @@ declaration order.
 | `bag(items=[])` | `bag([])` |
 | `emptyStruct(config={})` | `emptyStruct({})` |
 | `single(item=[beta(x)])` | `single([beta(x)])` |
+| `numbers(count=5, ratio=1.50)` | `numbers(5, 1.5)` |
+| `numbers(count=+5, ratio=-0.0)` | `numbers(5, 0)` |
+| `wide(value=1e3)` | `wide(1000)` |
+| `wide(value=1e-28)` | `wide(0.0000000000000000000000000001)` |
+| `numberStruct(config={count=5, ratio=1.50})` | `numberstruct({count=5, ratio=1.5})` |
 
 In the `HTAB` row, `<HTAB>` denotes a literal U+0009 character.
 
@@ -2174,6 +2378,8 @@ In the `HTAB` row, `<HTAB>` denotes a literal U+0009 character.
 | Alias `shared` registered twice for `TypeA` | `E_REG_DUPLICATE_ALIAS_FOR_TYPE` |
 | `OneOf()` with no types | `E_REG_EMPTY_TYPE_SET` |
 | `TransportListParam` with `Min = -1` | `E_REG_INVALID_LIST_RANGE` |
+| `IntegerParam` or `IntegerField` with `Min > Max` | `E_REG_INVALID_INTEGER_RANGE` |
+| `DecimalParam` or `DecimalField` with `Min > Max` | `E_REG_INVALID_DECIMAL_RANGE` |
 | Struct fields `name` and `NAME` | `E_REG_DUPLICATE_STRUCT_FIELD` |
 | Struct field name `1name` | `E_REG_INVALID_STRUCT_FIELD_NAME` |
 | Catalog type name `1Type` | `E_REG_INVALID_TYPE_NAME` |
@@ -2195,6 +2401,7 @@ In the `HTAB` row, `<HTAB>` denotes a literal U+0009 character.
 | Required struct field absent | `E_PRN_STRUCT_FIELD_MISSING` |
 | Struct field appears twice | `E_PRN_STRUCT_FIELD_DUPLICATE` |
 | Struct field value kind mismatch | `E_PRN_STRUCT_FIELD_KIND_MISMATCH` |
+| Integer or decimal resolved value outside its declared range | `E_PRN_VALUE_OUT_OF_RANGE` |
 | Cast target not in catalog | `E_PRN_INVALID_CAST_TARGET` |
 | Transport value outside the parameter's expected set | `E_PRN_INCONSISTENT_TREE` |
 | `ResolvedTransport.Type != Constructor.Type` | `E_PRN_INCONSISTENT_TREE` |
@@ -2233,6 +2440,8 @@ Representative non-semantic error messages:
 | Printer tree with out-of-order Provided | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: provided parameter order violation` |
 | Printer tree with out-of-order struct fields | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: struct field order violation` |
 | Printer scalar containing CR | `E_PRN_INVALID_SCALAR: scalar value contains a character that cannot be printed: U+000D` |
+| Printer tree with an out-of-range integer | `E_PRN_VALUE_OUT_OF_RANGE: resolved value for 'count' is out of range: 11` |
+| Printer tree with an out-of-range decimal field | `E_PRN_VALUE_OUT_OF_RANGE: resolved value for 'config.ratio' is out of range: 1.6` |
 | Printer tree with cast target `TypeZ` | `E_PRN_INVALID_CAST_TARGET: cast target 'TypeZ' is invalid` |
 | Compiler tree with null root | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: unspecified invariant violation` |
 | Compiler tree with unknown parameter `x` | `E_CMP_UNKNOWN_PARAM: compiler received unknown parameter 'x'` |

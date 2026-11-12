@@ -41,6 +41,8 @@
 | `Resolve_ForNestedStruct_ResolvesFieldsInSchemaOrder` | `FormulaResolver` | §7.8, §14.1 | Struct fields are resolved and returned in schema order with nested struct values. | — |
 | `Resolve_ForStructSchemaOrderDifferentFromSourceOrder_OrdersFieldsBySchema` | `FormulaResolver` | §7.8, §8 | Source field order does not affect the resolved field order. | — |
 | `Resolve_ForDeepNestedStruct_ProducesNestedFieldValues` | `FormulaResolver` | §7.8 | Three-level nested structs produce nested `StructFieldBinding` values. | — |
+| `Resolve_ForIntegerAndDecimalParameters_ProducesTypedValues` | `FormulaResolver` | §7.5, §8 | Parameter validation yields typed integer and decimal resolved values. | — |
+| `Resolve_ForIntegerAndDecimalStructFields_ProducesTypedValues` | `FormulaResolver` | §7.8, §8 | Struct validation yields typed integer and decimal field values. | — |
 | `Resolve_ForEmptyList_ProducesEmptyElementList` | `FormulaResolver` | §7.5 | An empty list is a valid `TransportListValue` when the range allows it. | Harness `bag` has `Min = 0`. |
 | `Resolve_ForEmptyStruct_ProducesEmptyFieldList` | `FormulaResolver` | §7.8 | An empty struct against an empty schema yields no field bindings. | — |
 | `Resolve_ForCyclicStructSchema_ResolvesFiniteNestedStruct` | `FormulaResolver` | §7.8 | A finite source against a cyclic optional schema terminates and resolves the provided nesting. | The cyclic schema is built through a mutable array; see `nonapproved-behaviour.md`. |
@@ -102,6 +104,25 @@
 | `Validate_ForStructParameterWithValidFields_ProducesStructValue` | `ParameterValidator` | §7.5 | A valid struct parameter produces `StructValue`. | — |
 | `Validate_ForTransportParameter_ProducesResolvedExpressionValue` | `ParameterValidator` | §7.5 | A transport parameter stores its resolved `ResolvedExpr` directly. | — |
 | `Validate_SkipsUnboundOptionalParameters` | `ParameterValidator` | §7.5 | Only bound parameters are visited and produced. | — |
+| `Validate_ForIntegerAndDecimalParameters_ProducesTypedValues` | `ParameterValidator` | §6.2, §7.5 | Integer and decimal parameters produce `IntegerValue` and `DecimalValue`. | — |
+| `Validate_ForIntegerAndDecimalBoundaries_AcceptsInclusiveLimits` | `ParameterValidator` | §6.2, §7.5 | Both range bounds are inclusive. | — |
+| `Validate_ForIntegerAboveRange_ReportsIntegerOutOfRange` | `ParameterValidator` | §7.5, §13.3 | A parsed integer above `Max` reports the exact range reason. | — |
+| `Validate_ForIntegerBelowRange_ReportsIntegerOutOfRange` | `ParameterValidator` | §7.5, §13.3 | A parsed integer below `Min` reports the exact range reason. | — |
+| `Validate_ForDecimalAboveRange_ReportsDecimalOutOfRange` | `ParameterValidator` | §7.5, §13.3 | A parsed decimal above `Max` reports the exact canonical range reason. | — |
+| `Validate_ForNonIntegerText_ReportsExpectedInteger` | `ParameterValidator` | §7.5, §13.3 | Non-integer text is a parse failure, not an out-of-range value. | — |
+| `Validate_ForIntegerOverflow_ReportsExpectedInteger` | `ParameterValidator` | §7.5, §13.3 | An integer literal outside `Int64` is a parse failure. | — |
+| `Validate_ForQuotedInteger_AcceptsIt` | `ParameterValidator` | §7.5 | Quoted numeric text is parsed like bare numeric text. | — |
+| `Validate_ForIntegerWithLeadingWhitespace_ReportsExpectedInteger` | `ParameterValidator` | §7.5, §13.3 | Numeric text with leading whitespace is rejected. | — |
+| `Validate_ForDecimalWithTrailingWhitespace_ReportsExpectedDecimal` | `ParameterValidator` | §7.5, §13.3 | Numeric text with trailing whitespace is rejected. | — |
+| `Validate_ForRepresentableDecimalForm_ProducesDecimalValue` | `ParameterValidator` | §6.2, §7.5 | Signs, decimal points, and exponents parse exactly to decimal values. | Parameterized six forms. |
+| `Validate_ForQuotedDecimal_AcceptsIt` | `ParameterValidator` | §7.5 | Quoted exponent text is parsed exactly. | — |
+| `Validate_ForExactlyRepresentableDecimalBoundary_AcceptsIt` | `ParameterValidator` | §6.2, §7.5 | `1e-28`, the 96-bit coefficient boundary, and decimal min/max are accepted. | Parameterized boundary cases. |
+| `Validate_ForInexactDecimal_ReportsExpectedDecimal` | `ParameterValidator` | §6.2, §7.5, §13.3 | Overflow, underflow, and precision loss are parse failures. | Parameterized underflow/rounding cases. |
+| `Validate_ForZeroWithAnyExponent_AcceptsZero` | `ParameterValidator` | §6.2, §7.5 | Zero with any exponent normalizes to zero. | — |
+| `Validate_ForIntegerParameterReceivingTransport_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | An integer parameter receiving a transport reports the scalar shape error. | — |
+| `Validate_ForIntegerParameterReceivingList_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | An integer parameter receiving a list reports the scalar shape error. | — |
+| `Validate_ForDecimalParameterReceivingTransport_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | A decimal parameter receiving a transport reports the scalar shape error. | — |
+| `Validate_ForDecimalParameterReceivingList_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | A decimal parameter receiving a list reports the scalar shape error. | — |
 | `Validate_ForProvidedFields_ReturnsBindingsInSchemaOrder` | `StructValidator` | §7.8 | Provided struct fields are returned in schema order. | — |
 | `Validate_ForUnknownField_PreservesRawLeafSpelling` | `StructValidator` | §13.3 | Unknown path leaves keep raw input spelling. | — |
 | `Validate_ForDuplicateNestedField_ReportsFullPath` | `StructValidator` | §7.8, §13.3 | Duplicate detection applies recursively and reports the full path. | — |
@@ -115,9 +136,18 @@
 | `Validate_ForEmptySchemaWithNoFields_AcceptsEmptyStruct` | `StructValidator` | §7.8 | An empty schema accepts an empty struct. | — |
 | `Validate_ForNestedStruct_ProducesStructValue` | `StructValidator` | §7.8 | Nested structs produce `StructValue` recursively. | — |
 | `Validate_ForStringField_ProducesValueAssignableToDataValue` | `StructValidator` | §7.8, §8 | A struct-field value is a `DataValue`; a string field is a `StringValue`. | Compile-time assignment pins the `StructFieldBinding.Value` type. |
+| `Validate_ForIntegerAndDecimalFields_ProducesTypedValues` | `StructValidator` | §6.5, §7.8 | Integer and decimal fields produce `IntegerValue` and `DecimalValue`; `1.50` decodes to `1.5`. | — |
+| `Validate_ForOutOfRangeNestedIntegerField_ReportsFullPath` | `StructValidator` | §7.8, §13.3 | A nested integer range failure reports the dot-separated field path with an index-free segment. | — |
+| `Validate_ForNonIntegerField_ReportsExpectedInteger` | `StructValidator` | §7.8, §13.3 | Non-integer field text is a parse failure. | — |
+| `Validate_ForOutOfRangeDecimalField_ReportsOutOfRange` | `StructValidator` | §7.8, §13.3 | A parsed decimal outside its field range reports the exact canonical range. | — |
+| `Validate_ForNonDecimalField_ReportsExpectedDecimal` | `StructValidator` | §7.8, §13.3 | Non-decimal field text is a parse failure. | — |
+| `Validate_ForInexactDecimalField_ReportsExpectedDecimal` | `StructValidator` | §6.2, §7.8 | Decimal underflow in a field is a parse failure. | — |
+| `Validate_ForExactSmallestScaleDecimalField_AcceptsIt` | `StructValidator` | §6.2, §7.8 | A decimal field accepts the smallest representable scale. | — |
+| `Validate_ForIntegerFieldReceivingTransport_ReportsExpectedScalar` | `StructValidator` | §7.8, §13.3 | An integer field keeps the existing scalar shape error for transports. | — |
+| `Validate_ForDecimalFieldReceivingTransport_ReportsExpectedScalar` | `StructValidator` | §7.8, §13.3 | A decimal field keeps the existing scalar shape error for transports. | — |
 | `Validate_BindsFieldsToSchemaFieldInstances` | `StructValidator` | §8 | Struct field bindings are reference-equal to schema fields. | Reference identity, not structural equality. |
 | `Validate_ForCaseInsensitiveFieldName_UsesCanonicalSchemaField` | `StructValidator` | §7.8, §8 | Field lookup is case-insensitive and stores the canonical schema field. | — |
-| `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` | `SemanticErrorFactory` | §13.3, §14.3 | Parameterized catalogue of semantic errors with exact code, offset, and message. | Forty cases cover the §14.3 matrix and most `E_SEM_*` templates; `E_SEM_UNKNOWN_SCHEME` has dedicated tests. |
+| `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` | `SemanticErrorFactory` | §13.3, §14.3 | Parameterized catalogue of semantic errors with exact code, offset, and message. | Cases cover the §14.3 matrix, including integer/decimal parse and range failures; `E_SEM_UNKNOWN_SCHEME` has dedicated tests. |
 | `Resolve_ForUnknownScheme_ReportsSortedKnownSchemesAndPreservesRawSpelling` | `SemanticErrorFactory` | §13.3 | Known schemes are sorted and the raw scheme spelling is preserved. | Three-scheme registry. |
 | `Resolve_ForUnknownSchemeWhenNoSchemesAreRegistered_ReportsEmptyRegistry` | `SemanticErrorFactory` | §13.3 | The empty known-schemes branch is formatted. | — |
 | `Resolve_ForUnknownTransportType_ReportsSortedKnownTypes` | `SemanticErrorFactory` | §13.3 | Known types are sorted, independent of catalog registration order. | Catalog registered C, A, B. |
@@ -142,7 +172,7 @@ phase `Resolution`, offset, and zero-length span.
 | `E_SEM_DUPLICATE_PARAM` | `Bind_ForRepeatedNamedArgument_ReportsDuplicateAtSecondName`, `Bind_ForDuplicateWithUppercaseName_PreservesRawSpelling`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`DuplicateParameter`) |
 | `E_SEM_MISSING_REQUIRED_PARAM` | `Bind_ForMultipleMissingRequiredParameters_ReportsFirstInDeclarationOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`MissingRequiredParameter`, `MissingRequiredParameterPreservesRawSchemeSpelling`) |
 | `E_SEM_TOO_MANY_POSITIONAL` | `Bind_ChecksTooManyPositionalArgumentsBeforeNamedArguments`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`TooManyPositionalArguments`) |
-| `E_SEM_EXPECTED_SCALAR` | `Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedScalar`) |
+| `E_SEM_EXPECTED_SCALAR` | `Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape`, `Validate_ForIntegerParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForIntegerParameterReceivingList_ReportsExpectedScalar`, `Validate_ForDecimalParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForDecimalParameterReceivingList_ReportsExpectedScalar`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedScalar`, `IntegerParameterExpectedScalar`, `DecimalParameterExpectedScalar`) |
 | `E_SEM_EXPECTED_TRANSPORT` | `Validate_ForTransportParameterReceivingList_ReportsExpectedTransport`, `Validate_ForTransportParameterReceivingStruct_ReportsExpectedTransport`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedTransport`) |
 | `E_SEM_EXPECTED_TRANSPORT_LIST` | `Validate_ForListParameterReceivingScalar_ReportsExpectedTransportList`, `Validate_ForListParameterReceivingStruct_ReportsExpectedTransportList`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedTransportList`) |
 | `E_SEM_EXPECTED_STRUCT` | `Validate_ForStructParameterReceivingList_ReportsExpectedStruct`, `Validate_ForStructParameterReceivingTransport_ReportsExpectedStruct`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedStruct`) |
@@ -152,11 +182,11 @@ phase `Resolution`, offset, and zero-length span.
 | `E_SEM_UNKNOWN_STRUCT_FIELD` | `Validate_ForUnknownField_PreservesRawLeafSpelling`, `Validate_ForUnknownField_ReportsSchemaFieldOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`UnknownStructField`, `UnknownNestedStructField`, `UnknownStructFieldWhenSchemaHasNoFields`) |
 | `E_SEM_DUPLICATE_STRUCT_FIELD` | `Validate_ForDuplicateNestedField_ReportsFullPath`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`DuplicateStructField`) |
 | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`MissingRequiredStructField`, `MissingRequiredNestedStructField`, `MissingRequiredFieldCheckedBeforeFieldKinds`) |
-| `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` | `Validate_ForStringFieldReceivingList_ReportsExpectedScalarWithListShape`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`StructFieldExpectedScalarFromTransport`, `StructFieldExpectedScalarFromStruct`, `NestedStructFieldExpectedScalar`) |
+| `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` | `Validate_ForStringFieldReceivingList_ReportsExpectedScalarWithListShape`, `Validate_ForIntegerFieldReceivingTransport_ReportsExpectedScalar`, `Validate_ForDecimalFieldReceivingTransport_ReportsExpectedScalar`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`StructFieldExpectedScalarFromTransport`, `StructFieldExpectedScalarFromStruct`, `NestedStructFieldExpectedScalar`, `NumericStructFieldExpectedScalar`) |
 | `E_SEM_STRUCT_FIELD_EXPECTED_STRUCT` | `Validate_ForNestedStructFieldReceivingTransport_ReportsExpectedStruct`, `Validate_ForNestedStructFieldReceivingList_ReportsExpectedStruct`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`StructFieldExpectedStruct`) |
 | `E_SEM_UNKNOWN_TRANSPORT_TYPE` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`UnknownTransportType`, `UnknownTransportTypePreservesRawSpelling`), `Resolve_ForUnknownTransportType_ReportsSortedKnownTypes`, `Resolve_ForUnknownTransportTypeWhenNoTypesAreRegistered_ReportsEmptyCatalog`, `Resolve_ChecksUnknownCastTargetBeforeExpectedMismatch` |
 | `E_SEM_CAST_TYPE_MISMATCH` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`CastTypeMismatch`, `CastTypeMismatchUnderExactly`, `CastTypeMismatchUnderOneOf`), `Resolve_ChecksCastExpectedMismatchBeforeResolvingInnerTransport` |
-| `E_SEM_VALIDATOR_FAILED` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ParameterValidatorFailed`, `ParameterValidatorThrew`, `ParameterValidatorReturnedEmptyReason`, `StructFieldValidatorFailed`, `StructFieldValidatorThrew`, `NestedStructFieldValidatorReturnedEmptyReason`) |
+| `E_SEM_VALIDATOR_FAILED` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ParameterValidatorFailed`, `ParameterValidatorThrew`, `ParameterValidatorReturnedEmptyReason`, `IntegerParameterOutOfRange`, `IntegerParameterParseFailure`, `DecimalParameterUnderflow`, `NumericStructFieldParseFailure`, `NumericStructFieldOutOfRange`, `StructFieldValidatorFailed`, `StructFieldValidatorThrew`, `NestedStructFieldValidatorReturnedEmptyReason`) |
 
 ## Planned
 

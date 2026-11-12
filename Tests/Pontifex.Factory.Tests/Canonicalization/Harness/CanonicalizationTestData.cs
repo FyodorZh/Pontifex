@@ -15,8 +15,8 @@ namespace Pontifex.Factory.Tests.Canonicalization.Harness;
 // Hand-written metadata, resolved-tree, parsing, and canonicalizer construction
 // helpers for the canonicalization suite. The standard registry mirrors the
 // parsing.md §14 registry plus the fixture schemes needed for quoting, empty
-// containers, positional-prefix gaps, named-only interleaving, and nested
-// structs. No mocking library is used.
+// containers, positional-prefix gaps, named-only interleaving, nested structs,
+// and numeric scalar forms. No mocking library is used.
 internal static class CanonicalizationTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliableAck;
@@ -69,6 +69,26 @@ internal static class CanonicalizationTestData
         return new StringParam(name, required, positional, validate);
     }
 
+    public static Param IntegerParam(
+        string name,
+        long min,
+        long max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new IntegerParam(name, required, positional, new IntegerType(min, max));
+    }
+
+    public static Param DecimalParam(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new DecimalParam(name, required, positional, new DecimalType(min, max));
+    }
+
     public static Param TransportParam(
         string name,
         TransportTypeSet expected,
@@ -119,6 +139,24 @@ internal static class CanonicalizationTestData
         return new StringField(name, required, validate);
     }
 
+    public static StructField IntegerField(
+        string name,
+        long min,
+        long max,
+        bool required = false)
+    {
+        return new IntegerField(name, required, new IntegerType(min, max));
+    }
+
+    public static StructField DecimalField(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false)
+    {
+        return new DecimalField(name, required, new DecimalType(min, max));
+    }
+
     public static StructField NestedField(
         string name,
         StructSchema schema,
@@ -147,6 +185,16 @@ internal static class CanonicalizationTestData
     public static StringValue Scalar(string text)
     {
         return new StringValue(text);
+    }
+
+    public static IntegerValue Integer(long value)
+    {
+        return new IntegerValue(value);
+    }
+
+    public static DecimalValue Decimal(decimal value)
+    {
+        return new DecimalValue(value);
     }
 
     // A transport parameter value stores the resolved expression directly.
@@ -328,6 +376,60 @@ internal static class CanonicalizationTestData
                         Schema(StringField("value", required: true)),
                         required: true)),
                     required: true)),
+                required: true,
+                positional: true));
+
+        Register(
+            builder,
+            "numeric",
+            TypeA,
+            Array.Empty<string>(),
+            IntegerParam("count", 0, 10, positional: true),
+            DecimalParam("ratio", -1.5m, 1.5m, positional: true));
+
+        Register(
+            builder,
+            "numericStruct",
+            TypeA,
+            Array.Empty<string>(),
+            StructParam(
+                "config",
+                Schema(
+                    IntegerField("count", 0, 10, required: true),
+                    DecimalField("ratio", -1.5m, 1.5m)),
+                required: true,
+                positional: true));
+
+        Register(
+            builder,
+            "wide",
+            TypeA,
+            Array.Empty<string>(),
+            DecimalParam(
+                "value",
+                decimal.MinValue,
+                decimal.MaxValue,
+                required: true,
+                positional: true));
+
+        Register(
+            builder,
+            "numbers",
+            TypeA,
+            Array.Empty<string>(),
+            IntegerParam("count", -10, 10, positional: true),
+            DecimalParam("ratio", -1.5m, 1.5m, positional: true));
+
+        Register(
+            builder,
+            "numberStruct",
+            TypeA,
+            Array.Empty<string>(),
+            StructParam(
+                "config",
+                Schema(
+                    IntegerField("count", 0, 10, required: true),
+                    DecimalField("ratio", -1.5m, 1.5m)),
                 required: true,
                 positional: true));
 

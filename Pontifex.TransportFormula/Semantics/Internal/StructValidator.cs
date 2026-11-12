@@ -112,6 +112,64 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                         break;
                     }
 
+                    case IntegerField integerField:
+                    {
+                        if (value is not AstScalar scalar)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.StructFieldExpectedScalar(
+                                path,
+                                ParameterValidator.Shape(value),
+                                value.Span.Start));
+                        }
+
+                        var reason = ParameterValidator.ParseInteger(
+                            scalar.Text,
+                            integerField.Type,
+                            out var parsed);
+                        if (reason is not null)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ValidatorFailedField(
+                                path,
+                                paramName,
+                                reason,
+                                value.Span.Start));
+                        }
+
+                        result.Add(new StructFieldBinding(
+                            integerField,
+                            new IntegerValue(parsed)));
+                        break;
+                    }
+
+                    case DecimalField decimalField:
+                    {
+                        if (value is not AstScalar scalar)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.StructFieldExpectedScalar(
+                                path,
+                                ParameterValidator.Shape(value),
+                                value.Span.Start));
+                        }
+
+                        var reason = ParameterValidator.ParseDecimal(
+                            scalar.Text,
+                            decimalField.Type,
+                            out var parsed);
+                        if (reason is not null)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ValidatorFailedField(
+                                path,
+                                paramName,
+                                reason,
+                                value.Span.Start));
+                        }
+
+                        result.Add(new StructFieldBinding(
+                            decimalField,
+                            new DecimalValue(parsed)));
+                        break;
+                    }
+
                     case NestedStructField nestedField:
                     {
                         if (value is not AstStruct nestedStruct)

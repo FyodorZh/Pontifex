@@ -96,6 +96,26 @@ internal static class RegistryTestData
         return new StringParam(name, required, positional, validate);
     }
 
+    public static Param CreateIntegerParam(
+        string name,
+        long min,
+        long max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new IntegerParam(name, required, positional, new IntegerType(min, max));
+    }
+
+    public static Param CreateDecimalParam(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new DecimalParam(name, required, positional, new DecimalType(min, max));
+    }
+
     public static Param CreateTransportParam(
         string name,
         TransportTypeSet expected,
@@ -144,6 +164,24 @@ internal static class RegistryTestData
         ScalarValidator? validate = null)
     {
         return new StringField(name, required, validate);
+    }
+
+    public static StructField CreateIntegerField(
+        string name,
+        long min,
+        long max,
+        bool required = false)
+    {
+        return new IntegerField(name, required, new IntegerType(min, max));
+    }
+
+    public static StructField CreateDecimalField(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false)
+    {
+        return new DecimalField(name, required, new DecimalType(min, max));
     }
 
     public static StructField CreateNestedField(

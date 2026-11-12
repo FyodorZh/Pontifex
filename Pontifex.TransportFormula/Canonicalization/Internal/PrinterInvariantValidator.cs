@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Pontifex;
 using Pontifex.TransportFormula.Internal;
 using Pontifex.TransportFormula.Registry;
@@ -188,6 +189,50 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                     }
 
                     ScalarFormatter.EnsurePrintable(stringValue.Text);
+                    return;
+                }
+
+                case IntegerParam integerParam:
+                {
+                    if (value is not IntegerValue integerValue)
+                    {
+                        throw CanonicalizationErrorFactory.ParamKindMismatch(
+                            parameter.Name,
+                            constructor.Name,
+                            ValueKind(value),
+                            "integer");
+                    }
+
+                    if (integerValue.Value < integerParam.Type.Min
+                        || integerValue.Value > integerParam.Type.Max)
+                    {
+                        throw CanonicalizationErrorFactory.ValueOutOfRange(
+                            parameter.Name,
+                            integerValue.Value.ToString(CultureInfo.InvariantCulture));
+                    }
+
+                    return;
+                }
+
+                case DecimalParam decimalParam:
+                {
+                    if (value is not DecimalValue decimalValue)
+                    {
+                        throw CanonicalizationErrorFactory.ParamKindMismatch(
+                            parameter.Name,
+                            constructor.Name,
+                            ValueKind(value),
+                            "decimal");
+                    }
+
+                    if (decimalValue.Value < decimalParam.Type.Min
+                        || decimalValue.Value > decimalParam.Type.Max)
+                    {
+                        throw CanonicalizationErrorFactory.ValueOutOfRange(
+                            parameter.Name,
+                            DecimalText.Format(decimalValue.Value));
+                    }
+
                     return;
                 }
 
@@ -398,6 +443,50 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                         break;
                     }
 
+                    case IntegerField integerField:
+                    {
+                        if (binding.Value is not IntegerValue integerValue)
+                        {
+                            throw CanonicalizationErrorFactory.StructFieldKindMismatch(
+                                path,
+                                parameterName,
+                                ValueKind(binding.Value),
+                                "integer");
+                        }
+
+                        if (integerValue.Value < integerField.Type.Min
+                            || integerValue.Value > integerField.Type.Max)
+                        {
+                            throw CanonicalizationErrorFactory.ValueOutOfRange(
+                                path,
+                                integerValue.Value.ToString(CultureInfo.InvariantCulture));
+                        }
+
+                        break;
+                    }
+
+                    case DecimalField decimalField:
+                    {
+                        if (binding.Value is not DecimalValue decimalValue)
+                        {
+                            throw CanonicalizationErrorFactory.StructFieldKindMismatch(
+                                path,
+                                parameterName,
+                                ValueKind(binding.Value),
+                                "decimal");
+                        }
+
+                        if (decimalValue.Value < decimalField.Type.Min
+                            || decimalValue.Value > decimalField.Type.Max)
+                        {
+                            throw CanonicalizationErrorFactory.ValueOutOfRange(
+                                path,
+                                DecimalText.Format(decimalValue.Value));
+                        }
+
+                        break;
+                    }
+
                     case NestedStructField nestedField:
                     {
                         if (binding.Value is not StructValue nestedValue)
@@ -448,6 +537,8 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
             return value switch
             {
                 StringValue => "string",
+                IntegerValue => "integer",
+                DecimalValue => "decimal",
                 StructValue => "struct",
                 TransportListValue => "transport list",
                 ResolvedExpr => "transport",

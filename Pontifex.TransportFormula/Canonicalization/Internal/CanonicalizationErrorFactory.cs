@@ -57,6 +57,13 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                 + ", expected " + expected);
         }
 
+        public static PrinterException ValueOutOfRange(string path, string value)
+        {
+            return new PrinterException(
+                "E_PRN_VALUE_OUT_OF_RANGE",
+                "resolved value for '" + path + "' is out of range: " + value);
+        }
+
         public static PrinterException ListArity(
             string name,
             string scheme,

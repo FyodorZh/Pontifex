@@ -16,6 +16,7 @@ internal types that form one subsystem:
 - `FormulaCanonicalizer` (implements `ICanonicalizer`)
 - `PositionalFormatter`
 - `ScalarFormatter`
+- `DecimalText`
 - `PrinterInvariantValidator`
 - `CanonicalizationErrorFactory`
 
@@ -48,6 +49,7 @@ Paths below reflect the split layout: formula sources live under
   [FormulaCanonicalizer.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/FormulaCanonicalizer.cs),
   [PositionalFormatter.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/PositionalFormatter.cs),
   [ScalarFormatter.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/ScalarFormatter.cs),
+  [DecimalText.cs](../../../Pontifex.TransportFormula/Internal/DecimalText.cs),
   [PrinterInvariantValidator.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/PrinterInvariantValidator.cs),
   [CanonicalizationErrorFactory.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/CanonicalizationErrorFactory.cs).
 
@@ -82,6 +84,7 @@ Canonicalization/
 │   └── CanonicalizationTestData.cs
 └── Tests/
     ├── CanonicalizationErrorFactoryTests.cs
+    ├── DecimalTextTests.cs
     ├── FormulaCanonicalizerTests.cs
     ├── PositionalFormatterTests.cs
     ├── PrinterInvariantValidatorTests.cs
@@ -113,7 +116,10 @@ The standard registry mirrors `parsing.md` §14 (`alpha`, `beta`, `gamma`,
 fixture schemes used by the printer tests: `mixed` (named-only parameter declared
 before a positional one), `opt` (two optional positionals for prefix gaps), `bag`
 (empty and unbounded list), `emptyStruct` (empty struct schema), `single`
-(one-element bounded list), and `deep` (three-level nested struct).
+(one-element bounded list), `deep` (three-level nested struct), `numeric`
+(integer and decimal parameters), `numericStruct` (integer and decimal struct
+fields), `wide` (full-range decimal), `numbers` (§14 numeric parameters), and
+`numberStruct` (§14 numeric struct fields).
 
 There are no harness self-tests. Harness belongs to the root layer and is
 available to every test in this suite. Sibling suites do not share this harness;
@@ -192,6 +198,9 @@ convert it to an Abstract Test Suite instead of adding a nested layer here.
 - Scalars are quoted only when empty or when they contain whitespace or a
   delimiter. Only `\` and `"` are escaped. CR, LF, and unpaired surrogates are
   rejected with the first offending UTF-16 code unit as `U+XXXX`.
+- Integers print as invariant decimal text. Decimals parse exactly and print in
+  plain canonical form: no exponent notation, trailing zeros trimmed, and
+  negative zero normalized to `0`.
 - Scheme names are lowercased by registration. The §14 fixture name
   `emptyStruct` therefore prints as `emptystruct`, and the §14 printer table is
   applied through the real registry with that normalization.

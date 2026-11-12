@@ -66,6 +66,34 @@ internal static class CompilationTestData
         return new Formula.StringParam(name, required, positional, validate);
     }
 
+    public static Formula.Param IntegerParam(
+        string name,
+        long min,
+        long max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new Formula.IntegerParam(
+            name,
+            required,
+            positional,
+            new Formula.IntegerType(min, max));
+    }
+
+    public static Formula.Param DecimalParam(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new Formula.DecimalParam(
+            name,
+            required,
+            positional,
+            new Formula.DecimalType(min, max));
+    }
+
     public static Formula.Param TransportParam(
         string name,
         Formula.TransportTypeSet expected,
@@ -116,6 +144,24 @@ internal static class CompilationTestData
         return new Formula.StringField(name, required, validate);
     }
 
+    public static Formula.StructField IntegerField(
+        string name,
+        long min,
+        long max,
+        bool required = false)
+    {
+        return new Formula.IntegerField(name, required, new Formula.IntegerType(min, max));
+    }
+
+    public static Formula.StructField DecimalField(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false)
+    {
+        return new Formula.DecimalField(name, required, new Formula.DecimalType(min, max));
+    }
+
     public static Formula.StructField NestedStructField(
         string name,
         Formula.StructSchema schema,
@@ -140,6 +186,34 @@ internal static class CompilationTestData
         Core.ScalarValidator? validate = null)
     {
         return new Core.StringParameter(name, required, positional, validate);
+    }
+
+    public static Core.TransportParameter CoreIntegerParameter(
+        string name,
+        long min,
+        long max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new Core.IntegerParameter(
+            name,
+            required,
+            positional,
+            new Core.IntegerType(min, max));
+    }
+
+    public static Core.TransportParameter CoreDecimalParameter(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new Core.DecimalParameter(
+            name,
+            required,
+            positional,
+            new Core.DecimalType(min, max));
     }
 
     public static Core.TransportParameter CoreNestedTransportParameter(
@@ -197,6 +271,16 @@ internal static class CompilationTestData
         return new ParamBinding(param, new StringValue(text));
     }
 
+    public static ParamBinding Integer(Formula.Param param, long value)
+    {
+        return new ParamBinding(param, new IntegerValue(value));
+    }
+
+    public static ParamBinding Decimal(Formula.Param param, decimal value)
+    {
+        return new ParamBinding(param, new DecimalValue(value));
+    }
+
     public static ParamBinding Nested(Formula.Param param, ResolvedExpr expr)
     {
         // A transport parameter stores the resolved expression directly.
@@ -216,6 +300,16 @@ internal static class CompilationTestData
     public static StructFieldBinding Text(Formula.StructField field, string text)
     {
         return new StructFieldBinding(field, new StringValue(text));
+    }
+
+    public static StructFieldBinding IntegerText(Formula.StructField field, long value)
+    {
+        return new StructFieldBinding(field, new IntegerValue(value));
+    }
+
+    public static StructFieldBinding DecimalText(Formula.StructField field, decimal value)
+    {
+        return new StructFieldBinding(field, new DecimalValue(value));
     }
 
     public static StructFieldBinding NestedStruct(

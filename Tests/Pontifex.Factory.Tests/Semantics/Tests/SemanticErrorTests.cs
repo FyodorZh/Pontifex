@@ -257,6 +257,62 @@ public sealed class SemanticErrorTests
             "parameter 'value' is invalid: validation failed");
 
         yield return Case(
+            "IntegerParameterExpectedScalar",
+            "numbers(beta())",
+            "E_SEM_EXPECTED_SCALAR",
+            8,
+            "parameter 'count' expects a scalar value, got transport");
+
+        yield return Case(
+            "DecimalParameterExpectedScalar",
+            "numbers(0, beta())",
+            "E_SEM_EXPECTED_SCALAR",
+            11,
+            "parameter 'ratio' expects a scalar value, got transport");
+
+        yield return Case(
+            "IntegerParameterOutOfRange",
+            "numbers(11)",
+            "E_SEM_VALIDATOR_FAILED",
+            8,
+            "parameter 'count' is invalid: out of range [-10, 10]");
+
+        yield return Case(
+            "IntegerParameterParseFailure",
+            "numbers(1.5)",
+            "E_SEM_VALIDATOR_FAILED",
+            8,
+            "parameter 'count' is invalid: expected an integer");
+
+        yield return Case(
+            "DecimalParameterUnderflow",
+            "numbers(0, 1e-29)",
+            "E_SEM_VALIDATOR_FAILED",
+            11,
+            "parameter 'ratio' is invalid: expected a decimal");
+
+        yield return Case(
+            "NumericStructFieldParseFailure",
+            "numberStruct({count=x})",
+            "E_SEM_VALIDATOR_FAILED",
+            20,
+            "field 'count' of parameter 'config' is invalid: expected an integer");
+
+        yield return Case(
+            "NumericStructFieldOutOfRange",
+            "numberStruct({count=1, nested={value=2}})",
+            "E_SEM_VALIDATOR_FAILED",
+            37,
+            "field 'nested.value' of parameter 'config' is invalid: out of range [-1, 1]");
+
+        yield return Case(
+            "NumericStructFieldExpectedScalar",
+            "numberStruct({count=beta()})",
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            20,
+            "field 'count' expects a scalar value, got transport");
+
+        yield return Case(
             "UnknownStructField",
             "structy({name=x, extra=1})",
             "E_SEM_UNKNOWN_STRUCT_FIELD",

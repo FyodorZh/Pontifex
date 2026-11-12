@@ -175,6 +175,104 @@ public sealed class StructValidatorTests
         Assert.That(ReferenceEquals(fields[0].Field, schema.Fields[0]), Is.True);
     }
 
+    [Test]
+    public void Validate_ForIntegerAndDecimalFields_ProducesTypedValues()
+    {
+        var fields = SemanticsAssertions.ValidateStruct(
+            "{count=5, ratio=1.50}",
+            NumberStructSchema());
+
+        Assert.That(fields[0].Value, Is.InstanceOf<IntegerValue>());
+        Assert.That(((IntegerValue)fields[0].Value).Value, Is.EqualTo(5L));
+        Assert.That(fields[1].Value, Is.InstanceOf<DecimalValue>());
+        Assert.That(((DecimalValue)fields[1].Value).Value, Is.EqualTo(1.5m));
+    }
+
+    [Test]
+    public void Validate_ForOutOfRangeNestedIntegerField_ReportsFullPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=1, nested={value=2}}",
+            NumberStructSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'nested.value' of parameter 'config' is invalid: out of range [-1, 1]");
+    }
+
+    [Test]
+    public void Validate_ForNonIntegerField_ReportsExpectedInteger()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=x}",
+            NumberStructSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'count' of parameter 'config' is invalid: expected an integer");
+    }
+
+    [Test]
+    public void Validate_ForOutOfRangeDecimalField_ReportsOutOfRange()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=1, ratio=2}",
+            NumberStructSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'ratio' of parameter 'config' is invalid: out of range [-1.5, 1.5]");
+    }
+
+    [Test]
+    public void Validate_ForNonDecimalField_ReportsExpectedDecimal()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=1, ratio=x}",
+            NumberStructSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'ratio' of parameter 'config' is invalid: expected a decimal");
+    }
+
+    [Test]
+    public void Validate_ForInexactDecimalField_ReportsExpectedDecimal()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=1, ratio=1e-29}",
+            NumberStructSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'ratio' of parameter 'config' is invalid: expected a decimal");
+    }
+
+    [Test]
+    public void Validate_ForExactSmallestScaleDecimalField_AcceptsIt()
+    {
+        var fields = SemanticsAssertions.ValidateStruct(
+            "{count=1, ratio=1e-28}",
+            NumberStructSchema());
+
+        Assert.That(((DecimalValue)fields[1].Value).Value, Is.EqualTo(0.0000000000000000000000000001m));
+    }
+
+    [Test]
+    public void Validate_ForIntegerFieldReceivingTransport_ReportsExpectedScalar()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=beta()}",
+            NumberStructSchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            "field 'count' expects a scalar value, got transport");
+    }
+
+    [Test]
+    public void Validate_ForDecimalFieldReceivingTransport_ReportsExpectedScalar()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=1, ratio=beta()}",
+            NumberStructSchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            "field 'ratio' expects a scalar value, got transport");
+    }
+
+    private static StructSchema NumberStructSchema()
+    {
+        return SchemaOf("numberStruct");
+    }
+
     private static StructSchema StructySchema()
     {
         return SchemaOf("structy");

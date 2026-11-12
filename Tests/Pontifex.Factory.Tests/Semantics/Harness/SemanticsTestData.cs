@@ -127,6 +127,26 @@ internal static class SemanticsTestData
         return new StringParam(name, required, positional, validate);
     }
 
+    public static Param CreateIntegerParam(
+        string name,
+        long min,
+        long max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new IntegerParam(name, required, positional, new IntegerType(min, max));
+    }
+
+    public static Param CreateDecimalParam(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false,
+        bool positional = false)
+    {
+        return new DecimalParam(name, required, positional, new DecimalType(min, max));
+    }
+
     public static Param CreateTransportParam(
         string name,
         TransportTypeSet expected,
@@ -175,6 +195,24 @@ internal static class SemanticsTestData
         ScalarValidator? validate = null)
     {
         return new StringField(name, required, validate);
+    }
+
+    public static StructField CreateIntegerField(
+        string name,
+        long min,
+        long max,
+        bool required = false)
+    {
+        return new IntegerField(name, required, new IntegerType(min, max));
+    }
+
+    public static StructField CreateDecimalField(
+        string name,
+        decimal min,
+        decimal max,
+        bool required = false)
+    {
+        return new DecimalField(name, required, new DecimalType(min, max));
     }
 
     public static StructField CreateNestedField(
@@ -416,6 +454,33 @@ internal static class SemanticsTestData
                 required: true,
                 positional: true,
                 validate: ThrowingValidator));
+
+        // Harness extension: integer and decimal parameters with narrow ranges.
+        Register(
+            builder,
+            "numbers",
+            TypeA,
+            Array.Empty<string>(),
+            CreateIntegerParam("count", -10, 10, positional: true),
+            CreateDecimalParam("ratio", -1.5m, 1.5m, positional: true));
+
+        // Harness extension: integer and decimal struct fields with narrow
+        // ranges and a nested path.
+        Register(
+            builder,
+            "numberStruct",
+            TypeA,
+            Array.Empty<string>(),
+            CreateStructParam(
+                "config",
+                Schema(
+                    CreateIntegerField("count", 0, 10, required: true),
+                    CreateDecimalField("ratio", -1.5m, 1.5m),
+                    CreateNestedField(
+                        "nested",
+                        Schema(CreateIntegerField("value", -1, 1)))),
+                required: true,
+                positional: true));
 
         return builder;
     }

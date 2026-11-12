@@ -216,6 +216,24 @@ internal static class SemanticsAssertions
         return (StringValue)binding.Value;
     }
 
+    public static IntegerValue ProvidedInteger(
+        ResolvedTransport transport,
+        string parameterName)
+    {
+        var binding = Provided(transport, parameterName);
+        Assert.That(binding.Value, Is.InstanceOf<IntegerValue>());
+        return (IntegerValue)binding.Value;
+    }
+
+    public static DecimalValue ProvidedDecimal(
+        ResolvedTransport transport,
+        string parameterName)
+    {
+        var binding = Provided(transport, parameterName);
+        Assert.That(binding.Value, Is.InstanceOf<DecimalValue>());
+        return (DecimalValue)binding.Value;
+    }
+
     public static void AssertError(
         FactoryError? error,
         string code,

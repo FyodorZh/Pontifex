@@ -24,6 +24,12 @@ namespace Pontifex.TransportFormula.Semantics
     public sealed record StringValue(
         string Text) : ScalarValue;
 
+    public sealed record IntegerValue(
+        long Value) : ScalarValue;
+
+    public sealed record DecimalValue(
+        decimal Value) : ScalarValue;
+
     public sealed record StructValue(
         IReadOnlyList<StructFieldBinding> Fields) : DataValue;
 

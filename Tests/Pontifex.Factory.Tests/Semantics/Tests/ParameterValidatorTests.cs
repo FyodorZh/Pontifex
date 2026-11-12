@@ -243,9 +243,261 @@ public sealed class ParameterValidatorTests
         Assert.That(provided.Select(p => p.Param.Name), Is.EqualTo(new[] { "input" }));
     }
 
+    [Test]
+    public void Validate_ForIntegerParameterReceivingTransport_ReportsExpectedScalar()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(beta(x))",
+            Constructor("numbers"),
+            "E_SEM_EXPECTED_SCALAR",
+            "parameter 'count' expects a scalar value, got transport");
+    }
+
+    [Test]
+    public void Validate_ForIntegerParameterReceivingList_ReportsExpectedScalar()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers([beta(x)])",
+            Constructor("numbers"),
+            "E_SEM_EXPECTED_SCALAR",
+            "parameter 'count' expects a scalar value, got transport list");
+    }
+
+    [Test]
+    public void Validate_ForDecimalParameterReceivingTransport_ReportsExpectedScalar()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(0, beta(x))",
+            Constructor("numbers"),
+            "E_SEM_EXPECTED_SCALAR",
+            "parameter 'ratio' expects a scalar value, got transport");
+    }
+
+    [Test]
+    public void Validate_ForDecimalParameterReceivingList_ReportsExpectedScalar()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(0, [beta(x)])",
+            Constructor("numbers"),
+            "E_SEM_EXPECTED_SCALAR",
+            "parameter 'ratio' expects a scalar value, got transport list");
+    }
+
+    [Test]
+    public void Validate_ForIntegerAndDecimalParameters_ProducesTypedValues()
+    {
+        var provided = Validate("numbers(5, 1.25)", Constructor("numbers"));
+
+        Assert.That(provided, Has.Count.EqualTo(2));
+        Assert.That(provided[0].Value, Is.InstanceOf<IntegerValue>());
+        Assert.That(((IntegerValue)provided[0].Value).Value, Is.EqualTo(5L));
+        Assert.That(provided[1].Value, Is.InstanceOf<DecimalValue>());
+        Assert.That(((DecimalValue)provided[1].Value).Value, Is.EqualTo(1.25m));
+    }
+
+    [Test]
+    public void Validate_ForIntegerAndDecimalBoundaries_AcceptsInclusiveLimits()
+    {
+        var provided = Validate("numbers(-10, -1.5)", Constructor("numbers"));
+
+        Assert.That(((IntegerValue)provided[0].Value).Value, Is.EqualTo(-10L));
+        Assert.That(((DecimalValue)provided[1].Value).Value, Is.EqualTo(-1.5m));
+    }
+
+    [Test]
+    public void Validate_ForIntegerAboveRange_ReportsIntegerOutOfRange()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(11)",
+            Constructor("numbers"),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'count' is invalid: out of range [-10, 10]");
+    }
+
+    [Test]
+    public void Validate_ForIntegerBelowRange_ReportsIntegerOutOfRange()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(-11)",
+            Constructor("numbers"),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'count' is invalid: out of range [-10, 10]");
+    }
+
+    [Test]
+    public void Validate_ForDecimalAboveRange_ReportsDecimalOutOfRange()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(0, 1.6)",
+            Constructor("numbers"),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'ratio' is invalid: out of range [-1.5, 1.5]");
+    }
+
+    [Test]
+    public void Validate_ForNonIntegerText_ReportsExpectedInteger()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(1.5)",
+            Constructor("numbers"),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'count' is invalid: expected an integer");
+    }
+
+    [Test]
+    public void Validate_ForIntegerOverflow_ReportsExpectedInteger()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(9223372036854775808)",
+            Constructor("numbers"),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'count' is invalid: expected an integer");
+    }
+
+    [Test]
+    public void Validate_ForQuotedInteger_AcceptsIt()
+    {
+        var provided = Validate("numbers(\"5\")", Constructor("numbers"));
+
+        Assert.That(((IntegerValue)provided[0].Value).Value, Is.EqualTo(5L));
+    }
+
+    [Test]
+    public void Validate_ForIntegerWithLeadingWhitespace_ReportsExpectedInteger()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(\" 5\")",
+            Constructor("numbers"),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'count' is invalid: expected an integer");
+    }
+
+    [Test]
+    public void Validate_ForDecimalWithTrailingWhitespace_ReportsExpectedDecimal()
+    {
+        var registry = FullRangeRegistry();
+
+        SemanticsAssertions.ValidateParamsError(
+            registry,
+            "full(\"1 \")",
+            FullRangeConstructor(registry),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'value' is invalid: expected a decimal");
+    }
+
+    [TestCase("1e3", "1000")]
+    [TestCase(".5", "0.5")]
+    [TestCase("1.", "1")]
+    [TestCase("+1", "1")]
+    [TestCase("-0", "0")]
+    [TestCase("1.0e-28", "0.0000000000000000000000000001")]
+    public void Validate_ForRepresentableDecimalForm_ProducesDecimalValue(string text, string expected)
+    {
+        var registry = FullRangeRegistry();
+        var provided = SemanticsAssertions.ValidateParams(
+            registry,
+            "full(" + text + ")",
+            FullRangeConstructor(registry));
+
+        Assert.That(
+            ((DecimalValue)provided[0].Value).Value,
+            Is.EqualTo(decimal.Parse(expected, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    [Test]
+    public void Validate_ForQuotedDecimal_AcceptsIt()
+    {
+        var registry = FullRangeRegistry();
+        var provided = SemanticsAssertions.ValidateParams(
+            registry,
+            "full(\"1e3\")",
+            FullRangeConstructor(registry));
+
+        Assert.That(((DecimalValue)provided[0].Value).Value, Is.EqualTo(1000m));
+    }
+
+    [TestCase("1e-28")]
+    [TestCase("7922816251426433759354395033.5")]
+    [TestCase("79228162514264337593543950335")]
+    [TestCase("-79228162514264337593543950335")]
+    public void Validate_ForExactlyRepresentableDecimalBoundary_AcceptsIt(string text)
+    {
+        var registry = FullRangeRegistry();
+        var provided = SemanticsAssertions.ValidateParams(
+            registry,
+            "full(" + text + ")",
+            FullRangeConstructor(registry));
+
+        Assert.That(provided[0].Value, Is.InstanceOf<DecimalValue>());
+    }
+
+    [TestCase("1e29")]
+    [TestCase("1e-29")]
+    [TestCase("-1e-29")]
+    [TestCase("5e-29")]
+    [TestCase("6e-29")]
+    [TestCase("0.00000000000000000000000000001")]
+    [TestCase("0.12345678901234567890123456789")]
+    public void Validate_ForInexactDecimal_ReportsExpectedDecimal(string text)
+    {
+        var registry = FullRangeRegistry();
+
+        SemanticsAssertions.ValidateParamsError(
+            registry,
+            "full(" + text + ")",
+            FullRangeConstructor(registry),
+            "E_SEM_VALIDATOR_FAILED",
+            "parameter 'value' is invalid: expected a decimal");
+    }
+
+    [TestCase("0e-29")]
+    [TestCase("0e29")]
+    public void Validate_ForZeroWithAnyExponent_AcceptsZero(string text)
+    {
+        var registry = FullRangeRegistry();
+        var provided = SemanticsAssertions.ValidateParams(
+            registry,
+            "full(" + text + ")",
+            FullRangeConstructor(registry));
+
+        Assert.That(((DecimalValue)provided[0].Value).Value, Is.EqualTo(0m));
+    }
+
     private static IRegistry Registry()
     {
         return SemanticsTestData.StandardRegistry();
+    }
+
+    private static IRegistry FullRangeRegistry()
+    {
+        var builder = SemanticsTestData.NewBuilder();
+        SemanticsTestData.Register(
+            builder,
+            "full",
+            SemanticsTestData.TypeA,
+            System.Array.Empty<string>(),
+            SemanticsTestData.CreateDecimalParam(
+                "value",
+                decimal.MinValue,
+                decimal.MaxValue,
+                required: true,
+                positional: true));
+        return builder.Build();
+    }
+
+    private static TransportConstructorInfo FullRangeConstructor(IRegistry registry)
+    {
+        return registry.FindCanonical("full")!;
     }
 
     private static TransportConstructorInfo Constructor(string name)

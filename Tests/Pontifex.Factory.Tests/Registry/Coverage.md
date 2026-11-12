@@ -47,6 +47,13 @@
 | `RegisterTransport_WithNegativeMinimum_ThrowsInvalidListRangeWithUnboundedMaximum` | §6.7 rule 6, §13.4 | Negative `Min` is rejected and an absent `Max` renders as `unbounded`. | Exact message asserted. |
 | `RegisterTransport_WithMaximumBelowMinimum_ThrowsInvalidListRange` | §6.7 rule 6, §13.4 | `Max < Min` is rejected with both numeric bounds. | Exact message asserted. |
 | `RegisterTransport_WithZeroMinimumAndUnboundedMaximum_Registers` | §6.7 rule 6 | `Min = 0` and `Max = null` are valid and preserved. | — |
+| `RegisterTransport_NormalizesIntegerAndDecimalMetadataInDeclarationOrder` | §6.2, §6.5, §6.7 rule 5 | Integer and decimal parameters and fields keep their names, order, and ranges. | — |
+| `RegisterTransport_WithInvertedIntegerParameterRange_ThrowsInvalidIntegerRange` | §6.2, §6.7 rule 5, §13.4 | `Min > Max` for an integer parameter is rejected with both bounds. | Exact message asserted. |
+| `RegisterTransport_WithInvertedDecimalParameterRange_FormatsCanonicalBounds` | §6.2, §6.7 rule 5, §13.4 | Decimal bounds use canonical decimal text. | Exact message asserted for `2.50`/`1.50`. |
+| `RegisterTransport_WithInvertedIntegerFieldRange_ThrowsInvalidIntegerRange` | §6.5, §6.7 rule 7, §13.4 | Integer field ranges are validated in schema order. | Exact message asserted. |
+| `RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange` | §6.5, §6.7 rule 7, §13.4 | Decimal field ranges are validated in schema order. | Exact message asserted. |
+| `RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst` | §6.7 rules 5, 7 | Parameter scalar ranges are validated before struct schemas. | Cross-pass order. |
+| `RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst` | §6.7 rules 5-6 | A full scalar-range pass precedes the transport-list-range pass. | Later scalar error wins over an earlier list error. |
 | `RegisterTransport_WithInvalidStructFieldName_ThrowsInvalidStructFieldName` | §6.5, §6.7 rule 7, §13.4 | Illegal struct-field names are rejected and the message preserves caller spelling. | Parameterized: `1name`, `na me`, empty. |
 | `RegisterTransport_WithInvalidNestedStructFieldName_ThrowsInvalidStructFieldName` | §6.7 rule 7 | Struct validation recurses into nested schemas. | — |
 | `RegisterTransport_WithTwoInvalidStructFieldNames_ReportsFirstInSchemaOrder` | §6.7 rule 7, §13.4 | Struct field names are validated in schema order. | First-failure order asserted. |
@@ -109,6 +116,8 @@ phase `Registration`, and no span.
 | `E_REG_DUPLICATE_ALIAS_FOR_TYPE` | `RegisterTransport_WithSameAliasForSameType_ThrowsDuplicateAliasForType` |
 | `E_REG_EMPTY_TYPE_SET` | `RegisterTransport_WithEmptyOneOfTypeSet_ThrowsEmptyTypeSet` |
 | `E_REG_INVALID_LIST_RANGE` | `RegisterTransport_WithNegativeMinimum_ThrowsInvalidListRangeWithUnboundedMaximum`, `RegisterTransport_WithMaximumBelowMinimum_ThrowsInvalidListRange` |
+| `E_REG_INVALID_INTEGER_RANGE` | `RegisterTransport_WithInvertedIntegerParameterRange_ThrowsInvalidIntegerRange`, `RegisterTransport_WithInvertedIntegerFieldRange_ThrowsInvalidIntegerRange`, `RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst`, `RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst` |
+| `E_REG_INVALID_DECIMAL_RANGE` | `RegisterTransport_WithInvertedDecimalParameterRange_FormatsCanonicalBounds`, `RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange` |
 | `E_REG_DUPLICATE_STRUCT_FIELD` | `RegisterTransport_WithDuplicateStructFieldsDifferentCase_ThrowsDuplicateStructField` |
 | `E_REG_INVALID_STRUCT_FIELD_NAME` | `RegisterTransport_WithInvalidStructFieldName_ThrowsInvalidStructFieldName` |
 | `E_REG_INVALID_TYPE_NAME` | `RegisterType_WithInvalidName_ThrowsInvalidTypeName` |

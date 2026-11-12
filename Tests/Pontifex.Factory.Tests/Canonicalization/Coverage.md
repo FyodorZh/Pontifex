@@ -2,7 +2,7 @@
 
 - **Layer:** Canonicalization (root layer)
 - **Subject:** Transport Formula canonicalization subsystem group:
-  `FormulaCanonicalizer`, `PositionalFormatter`, `ScalarFormatter`,
+  `FormulaCanonicalizer`, `PositionalFormatter`, `ScalarFormatter`, `DecimalText`,
   `PrinterInvariantValidator`, and `CanonicalizationErrorFactory`.
 - **Directory:** `Tests/Pontifex.Factory.Tests/Canonicalization`
 - **Inheritance parent:** — (root, Test Suit)
@@ -37,9 +37,17 @@
 | `Canonicalize_ForCastInsideTransportList_PrintsTheCast` | `FormulaCanonicalizer` | §10.1, §10.3 | A cast value prints recursively as a transport-list element. | — |
 | `Canonicalize_ForScalarVariants_UsesMinimalQuoting` | `FormulaCanonicalizer` | §10.4, §10.5 | Printing picks bare, quoted, escaped, empty, and Unicode scalar forms. | Integration-level check of scalar formatting inside transports. |
 | `Canonicalize_ForPrintedOutput_HasNoTrailingWhitespaceOrNewline` | `FormulaCanonicalizer` | §10.1, §10.3 | Output has no prefix, trailing whitespace, or newline. | — |
-| `Canonicalize_ForParsingMdPrinterExamples_ProducesExpectedOutput` | `FormulaCanonicalizer` | §14.4 | All twenty-two canonical printer rows normalize through the real parser and resolver; all except `emptyStruct` match the table literally. | Parameterized method; one row per §14.4 example. `emptyStruct` prints as `emptystruct` because registration lowercases scheme names. |
+| `Canonicalize_ForParsingMdPrinterExamples_ProducesExpectedOutput` | `FormulaCanonicalizer` | §14.4 | All twenty-seven canonical printer rows normalize through the real parser and resolver; all except `emptyStruct` match the table literally. | Parameterized method; one row per §14.4 example. `emptyStruct` prints as `emptystruct` because registration lowercases scheme names. |
 | `Canonicalize_ForEquivalentSources_ProducesTheSameOutputAndTree` | `FormulaCanonicalizer` | §11.1, §11.3 | Case, whitespace, named order, identity casts, aliases, struct order, quoting, and CR/LF variants collapse to one tree and one output. | Parameterized method; nine pairs. |
-| `Canonicalize_ForRepresentativeFormula_IsIdempotentAndPreservesTheTree` | `FormulaCanonicalizer` | §11.1, §11.2 | Parse-resolve-canonicalize-parse-resolve-canonicalize is stable and structurally equal to the first tree. | Cross-subsystem round trip; twenty-two sources. Output is checked for raw CR/LF. |
+| `Canonicalize_ForRepresentativeFormula_IsIdempotentAndPreservesTheTree` | `FormulaCanonicalizer` | §11.1, §11.2 | Parse-resolve-canonicalize-parse-resolve-canonicalize is stable and structurally equal to the first tree. | Cross-subsystem round trip; twenty-nine sources. Output is checked for raw CR/LF. |
+| `Canonicalize_ForIntegerAndDecimalParameters_PrintsCanonicalScalars` | `FormulaCanonicalizer` | §10.3, §10.5 | Integer parameters print bare and decimal parameters print with trailing zeros trimmed. | — |
+| `Canonicalize_ForPositiveSignedInteger_PrintsUnsignedCanonicalText` | `FormulaCanonicalizer` | §10.3 | A leading `+` is not printed for integers. | — |
+| `Canonicalize_ForExponentInput_PrintsPlainInteger` | `FormulaCanonicalizer` | §10.3 | Exponent input is canonicalized to plain integer text. | — |
+| `Canonicalize_ForSmallestScaleDecimal_PrintsPlainForm` | `FormulaCanonicalizer` | §10.3 | The smallest representable decimal prints without exponent notation. | — |
+| `Canonicalize_ForDecimalMinAndMax_PrintsPlainForm` | `FormulaCanonicalizer` | §10.3 | Decimal minimum and maximum print in plain form. | — |
+| `Canonicalize_ForNegativeZeroAndTrailingZeros_NormalizesTheText` | `FormulaCanonicalizer` | §10.3, §10.5 | Negative zero prints as `0` and trailing zeros are trimmed. | — |
+| `Canonicalize_ForQuotedNumericScalar_PrintsCanonicalNumber` | `FormulaCanonicalizer` | §10.3, §10.5 | Quoting is removed when the canonical number is safe. | — |
+| `Canonicalize_ForIntegerAndDecimalStructFields_PrintsCanonicalScalars` | `FormulaCanonicalizer` | §10.3 | Numeric struct fields print canonically inside schema-ordered structs. | — |
 | `Canonicalize_ForTopLevelNonIdentityCast_ProducesExpectedOutput` | `FormulaCanonicalizer` | §10.1, §10.5, §11.2 | A source-level non-identity cast prints its canonical scheme and target. | — |
 | `Canonicalize_ForCrLfAndTabWhitespace_ProducesNoRawNewlines` | `FormulaCanonicalizer` | §10.1, §10.4 | CR/LF and tab whitespace outside scalars are removed and never emitted. | — |
 | `Canonicalize_ForCaseInsensitiveCastType_UsesCatalogCanonicalSpelling` | `FormulaCanonicalizer` | §6.6, §10.1 | A case-insensitive cast type prints the catalog's canonical spelling. | — |
@@ -80,6 +88,25 @@
 | `Format_ForSurrogatePair_PreservesBarePair` | `ScalarFormatter` | §10.4 | A valid surrogate pair is a Unicode scalar and prints bare. | — |
 | `Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr` | `ScalarFormatter` | §10.4 | CR earlier in the text wins over a later surrogate. | — |
 
+### DecimalText
+
+| Test | Subject | Contract clause / behaviour | What it proves | Non-extractable notes |
+|---|---|---|---|---|
+| `TryParse_ForExactLiteral_SucceedsWithValue` | `DecimalText` | §6.2 | Signs, decimal points, and exponents parse to exact decimal values. | Parameterized twelve literals. |
+| `TryParse_ForDecimalMinValue_Succeeds` | `DecimalText` | §6.2 | The decimal minimum is exactly representable. | — |
+| `TryParse_ForDecimalMaxValue_Succeeds` | `DecimalText` | §6.2 | The decimal maximum is exactly representable. | — |
+| `TryParse_ForLargestScaleCoefficient_Succeeds` | `DecimalText` | §6.2 | A coefficient at the 96-bit bound with scale 1 is accepted. | — |
+| `TryParse_ForTrailingZeroThatReducesToMaximumCoefficient_Succeeds` | `DecimalText` | §6.2 | Trailing-zero reduction runs before the coefficient and scale checks. | — |
+| `TryParse_ForSmallestScale_Succeeds` | `DecimalText` | §6.2 | `1e-28` is representable. | — |
+| `TryParse_ForTrailingZeroAtSmallestScale_Succeeds` | `DecimalText` | §6.2 | `1.0e-28` reduces to the smallest representable scale. | — |
+| `TryParse_ForZeroWithAnyExponent_SucceedsAsZero` | `DecimalText` | §6.2 | Zero with any exponent normalizes to zero. | — |
+| `TryParse_ForInexactOrOutOfRangeLiteral_Fails` | `DecimalText` | §6.2 | Overflow, underflow, precision loss, and coefficient overflow fail. | Parameterized edge cases. |
+| `TryParse_ForNonNumericOrMalformedText_Fails` | `DecimalText` | §6.2 | Whitespace, malformed exponents, separators, and junk fail. | Parameterized including null and empty. |
+| `Format_ForRepresentableValue_ReturnsCanonicalPlainText` | `DecimalText` | §10.3 | Trailing zeros are trimmed, negative zero becomes `0`, and output never uses an exponent. | Parameterized canonical forms. |
+| `Format_ForDecimalMinValue_ReturnsPlainText` | `DecimalText` | §10.3 | The decimal minimum prints in plain form. | — |
+| `Format_ForDecimalMaxValue_ReturnsPlainText` | `DecimalText` | §10.3 | The decimal maximum prints in plain form. | — |
+| `Format_AfterExactParse_RoundTripsThroughParse` | `DecimalText` | §6.2, §10.3 | Canonical decimal text parses back to the same value and formats identically. | Parameterized. |
+
 ### PrinterInvariantValidator
 
 | Test | Subject | Contract clause / behaviour | What it proves | Non-extractable notes |
@@ -101,6 +128,20 @@
 | `Validate_WhenListParameterReceivesTransport_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport for a list parameter reports expected `transport list`. | — |
 | `Validate_WhenListParameterReceivesStruct_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A struct for a list parameter reports expected `transport list`. | — |
 | `Validate_WhenStructParameterReceivesString_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A string value for a struct parameter reports expected `struct`. | — |
+| `Validate_WhenStringParameterReceivesInteger_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | An integer value for a string parameter reports actual `integer`, expected `string`. | — |
+| `Validate_WhenStringParameterReceivesDecimal_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A decimal value for a string parameter reports actual `decimal`, expected `string`. | — |
+| `Validate_WhenIntegerParameterReceivesString_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A string value for an integer parameter reports actual `string`, expected `integer`. | — |
+| `Validate_WhenIntegerParameterReceivesDecimal_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A decimal value for an integer parameter reports actual `decimal`, expected `integer`. | — |
+| `Validate_WhenDecimalParameterReceivesString_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A string value for a decimal parameter reports actual `string`, expected `decimal`. | — |
+| `Validate_WhenDecimalParameterReceivesInteger_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | An integer value for a decimal parameter reports actual `integer`, expected `decimal`. | — |
+| `Validate_WhenIntegerParameterValueIsOutOfRange_ReportsValueOutOfRange` | `PrinterInvariantValidator` | §10, §13.5 | An out-of-range integer parameter reports `E_PRN_VALUE_OUT_OF_RANGE` with invariant text. | — |
+| `Validate_WhenDecimalParameterValueIsOutOfRange_ReportsCanonicalValue` | `PrinterInvariantValidator` | §10, §13.5 | An out-of-range decimal parameter reports canonical decimal text. | — |
+| `Validate_WhenIntegerFieldHasWrongKind_ReportsStructFieldKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A decimal value for an integer field reports expected `integer`. | — |
+| `Validate_WhenStringFieldReceivesInteger_ReportsStructFieldKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | An integer value for a string field reports expected `string`. | — |
+| `Validate_WhenDecimalFieldReceivesString_ReportsStructFieldKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A string value for a decimal field reports expected `decimal`. | — |
+| `Validate_WhenDecimalFieldValueIsOutOfRange_ReportsFullPath` | `PrinterInvariantValidator` | §10, §13.5 | An out-of-range decimal field reports its canonical value. | — |
+| `Validate_WhenIntegerParameterHasWrongKindAndOutOfRange_ReportsKindMismatchFirst` | `PrinterInvariantValidator` | §10, §13.5 | Kind is validated before range for a numeric parameter. | — |
+| `Validate_WhenNestedIntegerFieldValueIsOutOfRange_ReportsFullPath` | `PrinterInvariantValidator` | §10, §13.5 | A nested out-of-range field reports its full dot-separated path. | — |
 | `Validate_WhenStructParameterReceivesTransport_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport for a struct parameter reports expected `struct`. | — |
 | `Validate_WhenStructParameterReceivesList_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport list for a struct parameter reports expected `struct`. | — |
 | `Validate_WhenListIsBelowMinimum_ReportsListArityRange` | `PrinterInvariantValidator` | §10, §13.5 | A short list reports the closed range `2..3`. | — |
@@ -143,6 +184,7 @@
 | `UnknownParam_FormatsTemplate` | `CanonicalizationErrorFactory` | §13.5 | Exact `E_PRN_UNKNOWN_PARAM` message. | — |
 | `DuplicateParam_FormatsTemplate` | `CanonicalizationErrorFactory` | §13.5 | Exact `E_PRN_DUPLICATE_PARAM` message. | — |
 | `ParamKindMismatch_FormatsTemplate` | `CanonicalizationErrorFactory` | §13.5 | Exact `E_PRN_PARAM_KIND_MISMATCH` message. | — |
+| `ValueOutOfRange_FormatsTemplate` | `CanonicalizationErrorFactory` | §13.5 | Exact `E_PRN_VALUE_OUT_OF_RANGE` message. | — |
 | `ListArity_WithMaximum_FormatsClosedRange` | `CanonicalizationErrorFactory` | §13.5 | `<range>` is `min..max` when `Max` is set. | — |
 | `ListArity_WithoutMaximum_FormatsAtLeastRange` | `CanonicalizationErrorFactory` | §13.5 | `<range>` is `at least <min>` when `Max` is null. | — |
 | `ListHomogeneity_FormatsTemplate` | `CanonicalizationErrorFactory` | §13.5 | Exact `E_PRN_LIST_HOMOGENEITY` message. | — |
@@ -164,13 +206,14 @@ phase `Printing`, and no span.
 | `E_PRN_MISSING_REQUIRED_PARAM` | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam`, `Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder`, `Validate_WhenCastInnerIsInvalid_ValidatesInnerAfterCastTarget`, `Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters`, `MissingRequiredParam_FormatsTemplate` |
 | `E_PRN_UNKNOWN_PARAM` | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam`, `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference`, `Validate_ChecksUnknownBeforeDuplicate`, `UnknownParam_FormatsTemplate` |
 | `E_PRN_DUPLICATE_PARAM` | `Validate_WhenParameterIsProvidedTwice_ReportsDuplicateParam`, `Validate_ChecksDuplicateBeforeProvidedParameterOrder`, `DuplicateParam_FormatsTemplate` |
-| `E_PRN_PARAM_KIND_MISMATCH` | `Validate_WhenStringParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesList_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesStruct_ReportsKindMismatch`, `Validate_WhenTransportParameterReceivesString_ReportsKindMismatch`, `Validate_WhenListParameterReceivesString_ReportsKindMismatch`, `Validate_WhenListParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenListParameterReceivesStruct_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesString_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesList_ReportsKindMismatch`, `ParamKindMismatch_FormatsTemplate` |
+| `E_PRN_PARAM_KIND_MISMATCH` | `Validate_WhenStringParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesList_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesStruct_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesInteger_ReportsKindMismatch`, `Validate_WhenStringParameterReceivesDecimal_ReportsKindMismatch`, `Validate_WhenTransportParameterReceivesString_ReportsKindMismatch`, `Validate_WhenIntegerParameterReceivesString_ReportsKindMismatch`, `Validate_WhenIntegerParameterReceivesDecimal_ReportsKindMismatch`, `Validate_WhenDecimalParameterReceivesString_ReportsKindMismatch`, `Validate_WhenDecimalParameterReceivesInteger_ReportsKindMismatch`, `Validate_WhenListParameterReceivesString_ReportsKindMismatch`, `Validate_WhenListParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenListParameterReceivesStruct_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesString_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesTransport_ReportsKindMismatch`, `Validate_WhenStructParameterReceivesList_ReportsKindMismatch`, `ParamKindMismatch_FormatsTemplate` |
+| `E_PRN_VALUE_OUT_OF_RANGE` | `Validate_WhenIntegerParameterValueIsOutOfRange_ReportsValueOutOfRange`, `Validate_WhenDecimalParameterValueIsOutOfRange_ReportsCanonicalValue`, `Validate_WhenDecimalFieldValueIsOutOfRange_ReportsFullPath`, `Validate_WhenNestedIntegerFieldValueIsOutOfRange_ReportsFullPath`, `ValueOutOfRange_FormatsTemplate` |
 | `E_PRN_LIST_ARITY` | `Validate_WhenListIsBelowMinimum_ReportsListArityRange`, `Validate_WhenListIsAboveMaximum_ReportsListArityRange`, `Validate_WhenUnboundedListExceedsMinimum_AcceptsLargeList`, `ListArity_WithMaximum_FormatsClosedRange`, `ListArity_WithoutMaximum_FormatsAtLeastRange` |
 | `E_PRN_LIST_HOMOGENEITY` | `Validate_WhenHomogeneousListMixesTypes_ReportsListHomogeneity`, `ListHomogeneity_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_UNKNOWN` | `Validate_WhenStructContainsUndeclaredField_ReportsUnknownField`, `Validate_WhenNestedStructContainsUndeclaredField_ReportsFullPath`, `Validate_WhenStructBindingUsesARecreatedField_ReportsUnknownFieldByReference`, `Validate_ChecksUnknownStructFieldBeforeMissingRequiredField`, `StructFieldUnknown_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_MISSING` | `Validate_WhenRequiredStructFieldIsAbsent_ReportsMissingField`, `Validate_WhenMultipleRequiredStructFieldsAreAbsent_ReportsFirstInSchemaOrder`, `Validate_WhenNestedRequiredStructFieldIsAbsent_ReportsFullPath`, `Validate_ChecksMissingStructFieldBeforeDuplicateField`, `StructFieldMissing_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_DUPLICATE` | `Validate_WhenStructFieldAppearsTwice_ReportsDuplicateField`, `Validate_ChecksDuplicateStructFieldBeforeSchemaOrder`, `StructFieldDuplicate_FormatsTemplate` |
-| `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | `Validate_WhenStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenNestedStructFieldHasWrongKind_ReportsKindMismatch`, `StructFieldKindMismatch_FormatsTemplate` |
+| `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | `Validate_WhenStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenNestedStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenIntegerFieldHasWrongKind_ReportsStructFieldKindMismatch`, `Validate_WhenStringFieldReceivesInteger_ReportsStructFieldKindMismatch`, `Validate_WhenDecimalFieldReceivesString_ReportsStructFieldKindMismatch`, `StructFieldKindMismatch_FormatsTemplate` |
 | `E_PRN_INVALID_CAST_TARGET` | `Validate_WhenCastTargetIsAbsentFromCatalog_ReportsInvalidCastTarget`, `InvalidCastTarget_UsesTransportTypeToString` |
 | `E_PRN_INVALID_SCALAR` | `Format_ForCarriageReturn_ThrowsInvalidScalarWithU000D`, `Format_ForLineFeed_ThrowsInvalidScalarWithU000A`, `Format_ForBothNewlineKinds_ReportsFirstCodeUnitInTextOrder`, `Format_ForUnpairedHighSurrogate_ThrowsInvalidScalarWithUD800`, `Format_ForUnpairedLowSurrogate_ThrowsInvalidScalarWithUDC00`, `Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr`, `Validate_WhenStringFieldContainsCarriageReturn_ReportsInvalidScalar`, `InvalidScalar_FormatsFirstOffendingCodeUnitAsFourUppercaseHexDigits` |
 

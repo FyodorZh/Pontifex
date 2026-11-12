@@ -246,6 +246,147 @@ public sealed class TransportRegistryBuilderTests
     }
 
     [Test]
+    public void RegisterTransport_NormalizesIntegerAndDecimalMetadataInDeclarationOrder()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+        builder.RegisterTransport(RegistryTestData.Registration(
+            "ALPHA",
+            RegistryTestData.TypeA,
+            Array.Empty<string>(),
+            RegistryTestData.CreateIntegerParam("COUNT", -5, 5, positional: true),
+            RegistryTestData.CreateDecimalParam("Ratio", -1.5m, 1.5m),
+            RegistryTestData.CreateStructParam(
+                "Config",
+                RegistryTestData.Schema(
+                    RegistryTestData.CreateIntegerField("Count", 0, 10, required: true),
+                    RegistryTestData.CreateDecimalField("Ratio", -2.5m, 2.5m)))));
+
+        var parameters = builder.Build().FindCanonical("alpha")!.Params;
+
+        Assert.That(
+            parameters.Select(p => p.Name),
+            Is.EqualTo(new[] { "count", "ratio", "config" }));
+
+        var integer = (IntegerParam)parameters[0];
+        Assert.That(integer.Type.Min, Is.EqualTo(-5L));
+        Assert.That(integer.Type.Max, Is.EqualTo(5L));
+
+        var decimalParameter = (DecimalParam)parameters[1];
+        Assert.That(decimalParameter.Type.Min, Is.EqualTo(-1.5m));
+        Assert.That(decimalParameter.Type.Max, Is.EqualTo(1.5m));
+
+        var schema = ((StructParam)parameters[2]).Schema;
+        Assert.That(schema.Fields.Select(f => f.Name), Is.EqualTo(new[] { "count", "ratio" }));
+        Assert.That(((IntegerField)schema.Fields[0]).Type.Min, Is.EqualTo(0L));
+        Assert.That(((IntegerField)schema.Fields[0]).Type.Max, Is.EqualTo(10L));
+        Assert.That(((DecimalField)schema.Fields[1]).Type.Min, Is.EqualTo(-2.5m));
+        Assert.That(((DecimalField)schema.Fields[1]).Type.Max, Is.EqualTo(2.5m));
+    }
+
+    [Test]
+    public void RegisterTransport_WithInvertedIntegerParameterRange_ThrowsInvalidIntegerRange()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateIntegerParam("count", 5, 1))),
+            "E_REG_INVALID_INTEGER_RANGE",
+            "invalid integer range: min 5, max 1");
+    }
+
+    [Test]
+    public void RegisterTransport_WithInvertedDecimalParameterRange_FormatsCanonicalBounds()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateDecimalParam("ratio", 2.50m, 1.50m))),
+            "E_REG_INVALID_DECIMAL_RANGE",
+            "invalid decimal range: min 2.5, max 1.5");
+    }
+
+    [Test]
+    public void RegisterTransport_WithInvertedIntegerFieldRange_ThrowsInvalidIntegerRange()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(
+                        RegistryTestData.CreateIntegerField("count", 2, 1))))),
+            "E_REG_INVALID_INTEGER_RANGE",
+            "invalid integer range: min 2, max 1");
+    }
+
+    [Test]
+    public void RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(
+                        RegistryTestData.CreateDecimalField("ratio", 2, 1))))),
+            "E_REG_INVALID_DECIMAL_RANGE",
+            "invalid decimal range: min 2, max 1");
+    }
+
+    [Test]
+    public void RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateIntegerParam("count", 5, 1),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(RegistryTestData.CreateStringField("1field"))))),
+            "E_REG_INVALID_INTEGER_RANGE",
+            "invalid integer range: min 5, max 1");
+    }
+
+    [Test]
+    public void RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateListParam(
+                    "items",
+                    RegistryTestData.AnySet(),
+                    min: -1),
+                RegistryTestData.CreateIntegerParam("count", 5, 1))),
+            "E_REG_INVALID_INTEGER_RANGE",
+            "invalid integer range: min 5, max 1");
+    }
+
+    [Test]
     public void RegisterTransport_WithZeroMinimumAndUnboundedMaximum_Registers()
     {
         var builder = RegistryTestData.NewStandardBuilder();

@@ -64,6 +64,40 @@ namespace Pontifex.Factory.Registration
     }
 
     /// <summary>
+    /// A signed 64-bit integer field with an inclusive range.
+    /// </summary>
+    public sealed class IntegerField : StructField
+    {
+        public IntegerField(
+            string name,
+            bool required,
+            IntegerType type)
+            : base(name, required)
+        {
+            Type = type ?? throw new ArgumentNullException(nameof(type));
+        }
+
+        public IntegerType Type { get; }
+    }
+
+    /// <summary>
+    /// A decimal field with an inclusive range.
+    /// </summary>
+    public sealed class DecimalField : StructField
+    {
+        public DecimalField(
+            string name,
+            bool required,
+            DecimalType type)
+            : base(name, required)
+        {
+            Type = type ?? throw new ArgumentNullException(nameof(type));
+        }
+
+        public DecimalType Type { get; }
+    }
+
+    /// <summary>
     /// A field whose value is another struct.
     /// </summary>
     public sealed class NestedStructField : StructField

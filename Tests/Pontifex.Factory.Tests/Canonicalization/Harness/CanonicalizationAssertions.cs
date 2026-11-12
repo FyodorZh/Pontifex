@@ -131,6 +131,26 @@ internal static class CanonicalizationAssertions
                 return;
             }
 
+            case IntegerValue expectedInteger:
+            {
+                Assert.That(actual, Is.InstanceOf<IntegerValue>(), path + ": expected an integer");
+                Assert.That(
+                    ((IntegerValue)actual).Value,
+                    Is.EqualTo(expectedInteger.Value),
+                    path + ".value");
+                return;
+            }
+
+            case DecimalValue expectedDecimal:
+            {
+                Assert.That(actual, Is.InstanceOf<DecimalValue>(), path + ": expected a decimal");
+                Assert.That(
+                    ((DecimalValue)actual).Value,
+                    Is.EqualTo(expectedDecimal.Value),
+                    path + ".value");
+                return;
+            }
+
             case ResolvedExpr expectedExpression:
             {
                 Assert.That(
@@ -213,6 +233,28 @@ internal static class CanonicalizationAssertions
                         ((StringValue)actualField.Value).Text,
                         Is.EqualTo(expectedString.Text),
                         fieldPath + ".text");
+                    break;
+
+                case IntegerValue expectedInteger:
+                    Assert.That(
+                        actualField.Value,
+                        Is.InstanceOf<IntegerValue>(),
+                        fieldPath + ": expected an integer field");
+                    Assert.That(
+                        ((IntegerValue)actualField.Value).Value,
+                        Is.EqualTo(expectedInteger.Value),
+                        fieldPath + ".value");
+                    break;
+
+                case DecimalValue expectedDecimal:
+                    Assert.That(
+                        actualField.Value,
+                        Is.InstanceOf<DecimalValue>(),
+                        fieldPath + ": expected a decimal field");
+                    Assert.That(
+                        ((DecimalValue)actualField.Value).Value,
+                        Is.EqualTo(expectedDecimal.Value),
+                        fieldPath + ".value");
                     break;
 
                 case StructValue expectedNested:

@@ -97,8 +97,8 @@ namespace Pontifex.TransportFormula.Registry.Internal
         }
 
         // Rules 4-7, in order: duplicate parameter names, type-set normalization,
-        // list ranges, then recursive struct-schema validation. Returns the
-        // normalized parameter metadata snapshot.
+        // scalar parameter ranges, list ranges, then recursive struct-schema
+        // validation. Returns the normalized parameter metadata snapshot.
         public static IReadOnlyList<Param> NormalizeParameters(
             string canonicalSchemeName,
             IReadOnlyList<Param>? parameters)
@@ -128,6 +128,22 @@ namespace Pontifex.TransportFormula.Registry.Internal
                         break;
                     case TransportListParam listParam:
                         typeSets[i] = NormalizeTypeSet(listParam.Expected);
+                        break;
+                }
+            }
+
+            // Rule 5 (continued): scalar parameter ranges, declaration order. A
+            // full range pass follows the full type-set pass so a later scalar
+            // range error precedes an earlier transport-list range error.
+            for (var i = 0; i < count; i++)
+            {
+                switch (source[i])
+                {
+                    case IntegerParam integerParam:
+                        ValidateIntegerRange(integerParam.Type);
+                        break;
+                    case DecimalParam decimalParam:
+                        ValidateDecimalRange(decimalParam.Type);
                         break;
                 }
             }
@@ -166,6 +182,20 @@ namespace Pontifex.TransportFormula.Registry.Internal
                             stringParam.Required,
                             stringParam.Positional,
                             stringParam.Validate));
+                        break;
+                    case IntegerParam integerParam:
+                        result.Add(new IntegerParam(
+                            name,
+                            integerParam.Required,
+                            integerParam.Positional,
+                            integerParam.Type));
+                        break;
+                    case DecimalParam decimalParam:
+                        result.Add(new DecimalParam(
+                            name,
+                            decimalParam.Required,
+                            decimalParam.Positional,
+                            decimalParam.Type));
                         break;
                     case TransportParam transportParam:
                         result.Add(new TransportParam(
@@ -284,6 +314,32 @@ namespace Pontifex.TransportFormula.Registry.Internal
             }
         }
 
+        private static void ValidateIntegerRange(IntegerType type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentNullException(nameof(type));
+            }
+
+            if (type.Min > type.Max)
+            {
+                throw RegistryErrorFactory.InvalidIntegerRange(type.Min, type.Max);
+            }
+        }
+
+        private static void ValidateDecimalRange(DecimalType type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentNullException(nameof(type));
+            }
+
+            if (type.Min > type.Max)
+            {
+                throw RegistryErrorFactory.InvalidDecimalRange(type.Min, type.Max);
+            }
+        }
+
         private static StructSchema NormalizeStructSchema(
             StructSchema schema,
             Dictionary<StructSchema, StructSchema> normalizedSchemas)
@@ -317,6 +373,14 @@ namespace Pontifex.TransportFormula.Registry.Internal
                 {
                     case StringField stringField:
                         fields.Add(new StringField(name, stringField.Required, stringField.Validate));
+                        break;
+                    case IntegerField integerField:
+                        ValidateIntegerRange(integerField.Type);
+                        fields.Add(new IntegerField(name, integerField.Required, integerField.Type));
+                        break;
+                    case DecimalField decimalField:
+                        ValidateDecimalRange(decimalField.Type);
+                        fields.Add(new DecimalField(name, decimalField.Required, decimalField.Type));
                         break;
                     case NestedStructField nestedField:
                         fields.Add(new NestedStructField(

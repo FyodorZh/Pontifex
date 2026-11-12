@@ -1093,6 +1093,357 @@ public sealed class PrinterInvariantValidatorTests
         AssertInconsistent(formula, "struct field order violation");
     }
 
+    [Test]
+    public void Validate_WhenStringParameterReceivesInteger_ReportsKindMismatch()
+    {
+        var constructor = AlphaConstructor();
+        var input = Param(constructor, "input");
+        var timeout = Param(constructor, "timeout");
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    input,
+                    CanonicalizationTestData.Expression(EmptyTransport("beta", CanonicalizationTestData.TypeB))),
+                CanonicalizationTestData.Bind(timeout, CanonicalizationTestData.Integer(5))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'timeout' of scheme 'alpha' has value kind integer, expected string");
+    }
+
+    [Test]
+    public void Validate_WhenStringParameterReceivesDecimal_ReportsKindMismatch()
+    {
+        var constructor = AlphaConstructor();
+        var input = Param(constructor, "input");
+        var timeout = Param(constructor, "timeout");
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    input,
+                    CanonicalizationTestData.Expression(EmptyTransport("beta", CanonicalizationTestData.TypeB))),
+                CanonicalizationTestData.Bind(timeout, CanonicalizationTestData.Decimal(1.5m))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'timeout' of scheme 'alpha' has value kind decimal, expected string");
+    }
+
+    [Test]
+    public void Validate_WhenIntegerParameterReceivesString_ReportsKindMismatch()
+    {
+        var count = CanonicalizationTestData.IntegerParam(
+            "count",
+            0,
+            10,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor("numeric", CanonicalizationTestData.TypeA, count);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(count, CanonicalizationTestData.Scalar("x"))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'count' of scheme 'numeric' has value kind string, expected integer");
+    }
+
+    [Test]
+    public void Validate_WhenIntegerParameterReceivesDecimal_ReportsKindMismatch()
+    {
+        var count = CanonicalizationTestData.IntegerParam(
+            "count",
+            0,
+            10,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor("numeric", CanonicalizationTestData.TypeA, count);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(count, CanonicalizationTestData.Decimal(1.5m))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'count' of scheme 'numeric' has value kind decimal, expected integer");
+    }
+
+    [Test]
+    public void Validate_WhenDecimalParameterReceivesString_ReportsKindMismatch()
+    {
+        var ratio = CanonicalizationTestData.DecimalParam(
+            "ratio",
+            -1.5m,
+            1.5m,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor("numeric", CanonicalizationTestData.TypeA, ratio);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(ratio, CanonicalizationTestData.Scalar("x"))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'ratio' of scheme 'numeric' has value kind string, expected decimal");
+    }
+
+    [Test]
+    public void Validate_WhenDecimalParameterReceivesInteger_ReportsKindMismatch()
+    {
+        var ratio = CanonicalizationTestData.DecimalParam(
+            "ratio",
+            -1.5m,
+            1.5m,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor("numeric", CanonicalizationTestData.TypeA, ratio);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(ratio, CanonicalizationTestData.Integer(1))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'ratio' of scheme 'numeric' has value kind integer, expected decimal");
+    }
+
+    [Test]
+    public void Validate_WhenIntegerParameterValueIsOutOfRange_ReportsValueOutOfRange()
+    {
+        var count = CanonicalizationTestData.IntegerParam(
+            "count",
+            0,
+            10,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor("numeric", CanonicalizationTestData.TypeA, count);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(count, CanonicalizationTestData.Integer(11))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'count' is out of range: 11");
+    }
+
+    [Test]
+    public void Validate_WhenDecimalParameterValueIsOutOfRange_ReportsCanonicalValue()
+    {
+        var ratio = CanonicalizationTestData.DecimalParam(
+            "ratio",
+            -1.5m,
+            1.5m,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor("numeric", CanonicalizationTestData.TypeA, ratio);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(ratio, CanonicalizationTestData.Decimal(1.60m))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'ratio' is out of range: 1.6");
+    }
+
+    [Test]
+    public void Validate_WhenIntegerFieldHasWrongKind_ReportsStructFieldKindMismatch()
+    {
+        var count = CanonicalizationTestData.IntegerField("count", 0, 10, required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(count),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "numericstruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(count, CanonicalizationTestData.Decimal(1.5m))))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
+            "field 'count' of struct parameter 'config' has value kind decimal, expected integer");
+    }
+
+    [Test]
+    public void Validate_WhenStringFieldReceivesInteger_ReportsStructFieldKindMismatch()
+    {
+        var name = CanonicalizationTestData.StringField("name", required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(name),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "typedstruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            name,
+                            CanonicalizationTestData.Integer(5))))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
+            "field 'name' of struct parameter 'config' has value kind integer, expected string");
+    }
+
+    [Test]
+    public void Validate_WhenDecimalFieldReceivesString_ReportsStructFieldKindMismatch()
+    {
+        var ratio = CanonicalizationTestData.DecimalField("ratio", -1.5m, 1.5m, required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(ratio),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "typedstruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            ratio,
+                            CanonicalizationTestData.Scalar("x"))))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
+            "field 'ratio' of struct parameter 'config' has value kind string, expected decimal");
+    }
+
+    [Test]
+    public void Validate_WhenDecimalFieldValueIsOutOfRange_ReportsFullPath()
+    {
+        var ratio = CanonicalizationTestData.DecimalField("ratio", -1.5m, 1.5m, required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(ratio),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "numericstruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            ratio,
+                            CanonicalizationTestData.Decimal(1.60m))))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'ratio' is out of range: 1.6");
+    }
+
+    [Test]
+    public void Validate_WhenIntegerParameterHasWrongKindAndOutOfRange_ReportsKindMismatchFirst()
+    {
+        var count = CanonicalizationTestData.IntegerParam(
+            "count",
+            0,
+            10,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor("numeric", CanonicalizationTestData.TypeA, count);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(count, CanonicalizationTestData.Decimal(11m))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_PARAM_KIND_MISMATCH",
+            "parameter 'count' of scheme 'numeric' has value kind decimal, expected integer");
+    }
+
+    [Test]
+    public void Validate_WhenNestedIntegerFieldValueIsOutOfRange_ReportsFullPath()
+    {
+        var value = CanonicalizationTestData.IntegerField("value", -1, 1, required: true);
+        var nested = CanonicalizationTestData.NestedField(
+            "nested",
+            CanonicalizationTestData.Schema(value),
+            required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(nested),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "numericstruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            nested,
+                            CanonicalizationTestData.NestedValue(
+                                CanonicalizationTestData.Field(
+                                    value,
+                                    CanonicalizationTestData.Integer(2))))))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'nested.value' is out of range: 2");
+    }
+
     private static void AssertInconsistent(ResolvedFormula formula, string detail)
     {
         AssertPrinterError(

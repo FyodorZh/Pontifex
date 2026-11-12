@@ -47,6 +47,42 @@ namespace Pontifex.Factory.Registration
     }
 
     /// <summary>
+    /// A signed 64-bit integer parameter with an inclusive range.
+    /// </summary>
+    public sealed class IntegerParameter : TransportParameter
+    {
+        public IntegerParameter(
+            string name,
+            bool required,
+            bool positional,
+            IntegerType type)
+            : base(name, required, positional)
+        {
+            Type = type ?? throw new ArgumentNullException(nameof(type));
+        }
+
+        public IntegerType Type { get; }
+    }
+
+    /// <summary>
+    /// A decimal parameter with an inclusive range.
+    /// </summary>
+    public sealed class DecimalParameter : TransportParameter
+    {
+        public DecimalParameter(
+            string name,
+            bool required,
+            bool positional,
+            DecimalType type)
+            : base(name, required, positional)
+        {
+            Type = type ?? throw new ArgumentNullException(nameof(type));
+        }
+
+        public DecimalType Type { get; }
+    }
+
+    /// <summary>
     /// A parameter whose value is another transport expression.
     /// </summary>
     public sealed class NestedTransportParameter : TransportParameter

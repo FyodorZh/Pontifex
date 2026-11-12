@@ -446,6 +446,33 @@ public sealed class FormulaResolverTests
         Assert.That(((StructValue)config.Fields[0].Value).Fields, Is.Empty);
     }
 
+    [Test]
+    public void Resolve_ForIntegerAndDecimalParameters_ProducesTypedValues()
+    {
+        var root = ResolveTransport("numbers(5, 1.50)");
+
+        Assert.That(
+            SemanticsAssertions.ProvidedInteger(root, "count").Value,
+            Is.EqualTo(5L));
+        Assert.That(
+            SemanticsAssertions.ProvidedDecimal(root, "ratio").Value,
+            Is.EqualTo(1.5m));
+    }
+
+    [Test]
+    public void Resolve_ForIntegerAndDecimalStructFields_ProducesTypedValues()
+    {
+        var root = ResolveTransport("numberStruct({count=5, ratio=1.50})");
+        var config = SemanticsAssertions.ProvidedStruct(root, "config");
+
+        Assert.That(
+            ((IntegerValue)config.Fields[0].Value).Value,
+            Is.EqualTo(5L));
+        Assert.That(
+            ((DecimalValue)config.Fields[1].Value).Value,
+            Is.EqualTo(1.5m));
+    }
+
     private static ResolvedFormula Resolve(string source)
     {
         return SemanticsAssertions.ResolveSucceeds(

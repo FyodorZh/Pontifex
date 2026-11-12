@@ -255,7 +255,11 @@ The grammar validates only shape and token structure. The following are
 - expected transport types and type sets;
 - transport list minimum/maximum sizes and homogeneity;
 - struct field names, requiredness, and field kinds;
-- scalar validators.
+- scalar validators;
+- whether an integer scalar parses as a signed 64-bit integer and lies within its
+  declared range;
+- whether a decimal scalar is exactly representable and lies within its declared
+  range.
 
 The grammar intentionally permits expressions that are syntactically valid but
 semantically invalid. Examples:
@@ -280,7 +284,11 @@ expression:
   lowercase;
 - writes type names in the canonical spelling defined by the transport-type
   catalog;
-- preserves scalar values exactly;
+- preserves string scalar values exactly;
+- writes integers as invariant signed decimal text with no leading `+` and no
+  leading zeros (except `0`) and no exponent;
+- writes decimals in canonical plain form: no exponent notation, trailing zeros
+  trimmed, and negative zero as `0`;
 - quotes a scalar only when required by the lexical rules;
 - contains no raw `CR` or `LF`.
 

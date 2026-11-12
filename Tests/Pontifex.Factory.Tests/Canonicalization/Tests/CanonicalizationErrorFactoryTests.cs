@@ -76,6 +76,17 @@ public sealed class CanonicalizationErrorFactoryTests
     }
 
     [Test]
+    public void ValueOutOfRange_FormatsTemplate()
+    {
+        var exception = CanonicalizationErrorFactory.ValueOutOfRange("config.values[2]", "1.6");
+
+        CanonicalizationAssertions.AssertError(
+            exception.Error,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'config.values[2]' is out of range: 1.6");
+    }
+
+    [Test]
     public void ListArity_WithMaximum_FormatsClosedRange()
     {
         var exception = CanonicalizationErrorFactory.ListArity("items", "gamma", 4, 2, 3);

@@ -121,14 +121,18 @@ These decisions are already reflected in `grammar.md` and `parsing.md`.
 - An alias may map to multiple constructors only if their types differ.
 - Canonical preference applies after expected-type filtering.
 - Type sets are `Any`, `Exactly`, and `OneOf`.
-- Struct schemas contain only string fields and nested struct fields.
+- Struct schemas contain only string fields, integer fields, decimal fields, and
+  nested struct fields.
+- Integer and decimal ranges are validated by the formula registry, not by core
+  DTO constructors, so `E_REG_INVALID_INTEGER_RANGE` and
+  `E_REG_INVALID_DECIMAL_RANGE` are reachable through `CoreRegistrationAdapter`.
 
 ### Semantics
 
-- Resolved values have two branches: `DataValue` is pure data (strings, structs,
-  and later integers, decimals, and arrays); `ResolvedExpr` is the
-  expression-value branch. Transport parameters store `ResolvedExpr` directly;
-  struct fields store `DataValue`.
+- Resolved values have two branches: `DataValue` is pure data (strings, integers,
+  decimals, structs, and later arrays); `ResolvedExpr` is the expression-value
+  branch. Transport parameters store `ResolvedExpr` directly; struct fields store
+  `DataValue`.
 - The top-level expected type set is `Any`.
 - A cast resolves its inner transport with `Any`; its output type is the cast
   target.
@@ -742,8 +746,11 @@ DTOs:
 
 - `TransportTypeSet`, `TransportTypeSetKind`
 - `ScalarValidator`
-- `Param`, `StringParam`, `TransportParam`, `TransportListParam`, `StructParam`
-- `StructSchema`, `StructField`, `StringField`, `NestedStructField`
+- `IntegerType`, `DecimalType`
+- `Param`, `StringParam`, `IntegerParam`, `DecimalParam`, `TransportParam`,
+  `TransportListParam`, `StructParam`
+- `StructSchema`, `StructField`, `StringField`, `IntegerField`, `DecimalField`,
+  `NestedStructField`
 - `TransportTypeInfo`
 - `TransportConstructorInfo`
 - `TransportRegistration`
@@ -799,12 +806,14 @@ No public classes in `Pontifex.TransportFormula.Registry`.
 - Parameter list validation:
   - unique names;
   - identifiers;
+  - integer and decimal parameter ranges have `Min <= Max`;
   - `TransportListParam.Min >= 0`;
   - `Max` null or `Max >= Min`;
   - type sets non-empty.
 - Struct schema validation:
   - unique and valid field names;
   - supported field kinds;
+  - integer and decimal field ranges have `Min <= Max`;
   - recursive validation with a visited set, allowing shared/cyclic schema
     references without revalidation.
 - Alias validation:
@@ -836,9 +845,12 @@ Implement the numbered order from `parsing.md` §6.7 exactly:
    names in input order.
 3. Reject duplicate canonical names.
 4. Reject duplicate parameter names within a constructor.
-5. Normalize type sets and reject empty `OneOf`.
+5. Normalize type sets for all parameters and reject empty `OneOf`; then check
+   integer and decimal parameter ranges in declaration order. A full type-set
+   pass precedes the full scalar-range pass.
 6. Validate transport-list ranges.
-7. Validate struct schemas recursively, in schema order, with a visited set.
+7. Validate struct schemas recursively, in schema order, with a visited set:
+   field name, duplicate, kind, field range, then nested schema recursion.
 8. Normalize aliases; ignore duplicates within one registration and aliases
    equal to the constructor's own canonical name.
 9. Enforce alias-to-type rules as described in §8.2.
@@ -879,6 +891,7 @@ Registration rules follow `parsing.md` §6.7 rule 9 exactly:
 - parameter normalization and duplicates;
 - invalid parameter names;
 - invalid list ranges;
+- integer and decimal parameter and field ranges, including validation order;
 - empty type sets;
 - struct schema duplicates, invalid names, nested/shared schemas;
 - alias normalization, collisions, same-type duplicates, and canonical overlap;
@@ -917,7 +930,7 @@ DTOs:
 - `ResolvedExpr`, `ResolvedTransport`, `ResolvedCast`
 - `ParamBinding`
 - `ResolvedValue`, `DataValue`, `ResolvedExpr`, `ScalarValue`, `StringValue`,
-  `TransportListValue`, `StructValue`
+  `IntegerValue`, `DecimalValue`, `TransportListValue`, `StructValue`
 - `StructFieldBinding`
 
 `ResolvedExpr` exposes `TransportType Type` for every node. `ResolvedTransport`
@@ -972,6 +985,17 @@ No public classes in `Pontifex.TransportFormula.Semantics`.
   - requires `AstScalar`;
   - runs `ScalarValidator`;
   - null valid; non-null or thrown validator → `E_SEM_VALIDATOR_FAILED`.
+- Integer parameter:
+  - requires `AstScalar`;
+  - parses with `NumberStyles.AllowLeadingSign` and invariant culture;
+  - parse failure → `E_SEM_VALIDATOR_FAILED` reason `expected an integer`;
+  - range failure after parsing → reason `out of range [<min>, <max>]`.
+- Decimal parameter:
+  - requires `AstScalar`;
+  - parses exactly through `DecimalText.TryParse`; overflow, underflow, and
+    precision loss are parse failures;
+  - parse failure → `E_SEM_VALIDATOR_FAILED` reason `expected a decimal`;
+  - range failure after parsing → reason `out of range [<min>, <max>]`.
 - Transport parameter:
   - requires `AstExpr`;
   - resolves with the parameter’s expected type set;
@@ -996,6 +1020,9 @@ No public classes in `Pontifex.TransportFormula.Semantics`.
 - Checks missing required fields in schema order.
 - Validates provided fields in schema order:
   - `StringField` requires scalar and runs its validator;
+  - `IntegerField` requires scalar, parses exactly as `Int64`, and checks range;
+  - `DecimalField` requires scalar, parses exactly as `decimal`, and checks
+    range;
   - `NestedStructField` requires struct and recurses.
 - Produces `StructValue` fields in schema order.
 - Maintains a dot-separated field path for diagnostics. Known schema segments
@@ -1051,6 +1078,9 @@ No error recovery, no multiple errors, no backtracking.
 - too many positionals;
 - unknown, duplicate, missing parameters;
 - string validators: valid, invalid, throwing, empty reason;
+- integer parsing, range, and overflow cases;
+- decimal exact parsing, canonical forms, underflow, overflow, precision loss,
+  and range cases;
 - expected scalar/transport/list/struct shape errors;
 - list min, max, element type, homogeneity;
 - struct unknown, duplicate, missing, nested, field validators, field kinds;
@@ -1125,11 +1155,12 @@ No public classes in `Pontifex.TransportFormula.Canonicalization`.
   - `Provided` is in declaration order;
   - `Type == Constructor.Type`;
   - per parameter in declaration order: value kind, expected-type membership,
-    list arity/homogeneity, struct fields (unknown → missing → duplicate → order
-    → kind);
+    integer/decimal range, list arity/homogeneity, struct fields (unknown →
+    missing → duplicate → order → kind → range);
   - canonical scheme, parameter, and field names;
   - cast target exists and differs from inner type;
-  - scalar printability.
+  - string printability.
+- Uses `DecimalText` for canonical decimal text and range messages.
 - Failures produce the matching `E_PRN_*` error, including
   `E_PRN_STRUCT_FIELD_DUPLICATE` and the `E_PRN_INCONSISTENT_TREE` detail set
   from `parsing.md` §13.5.
@@ -1160,6 +1191,8 @@ PrintTransport(t):
 
 PrintValue:
   string → ScalarFormatter
+  integer → invariant Int64 text
+  decimal → canonical plain decimal text
   ResolvedExpr → PrintExpr
   list → "[" + join(elements, ", ") + "]"
   struct → "{" + schema-ordered fields + "}"
@@ -1175,6 +1208,10 @@ No prefix, no trailing comma, no trailing whitespace, no newline.
 - comma-space output;
 - minimal quoting: empty, commas, equals, braces, quotes, backslashes,
   whitespace, Unicode, CR/LF, unpaired surrogates;
+- integer canonical text: no leading `+`, no leading zeros, no exponent;
+- decimal canonical text: trailing zeros trimmed, negative zero as `0`, no
+  exponent, decimal min/max and the smallest scale in plain form;
+- `DecimalText` exact parsing, underflow/rounding rejection, and round-trip;
 - lists and nested structs;
 - identity casts absent;
 - aliases normalized to canonical names;
@@ -1275,6 +1312,8 @@ ITransportBuildContext
     ILogger Logger
     IMemoryRental Memory
     bool TryGetString(string name, out string value)
+    bool TryGetInt64(string name, out long value)
+    bool TryGetDecimal(string name, out decimal value)
     bool TryGetTransport(string name, out NestedTransportFactory factory)
     bool TryGetTransportList(string name, out IReadOnlyList<NestedTransportFactory> factories)
     bool TryGetStruct(string name, out ITransportStructValue value)
@@ -1283,11 +1322,15 @@ ITransportBuildContext
 Parameter DTOs:
 
 - `StringParameter`
+- `IntegerParameter`
+- `DecimalParameter`
 - `NestedTransportParameter`
 - `TransportListParameter`
 - `StructParameter`
 - `TransportTypeSet` (`Any`, `Exactly`, `OneOf`)
-- `StructSchema`, `StringField`, `NestedStructField`
+- `IntegerType`, `DecimalType`
+- `StructSchema`, `StringField`, `IntegerField`, `DecimalField`,
+  `NestedStructField`
 - `ScalarValidator`
 
 Rules:
@@ -1299,7 +1342,8 @@ Rules:
   invocation compiles the corresponding resolved subtree into a fresh transport.
 - `TryGetTransportList` preserves element order and returns one factory per
   element.
-- Struct values expose only string fields and nested structs.
+- Struct values expose only string fields, integer fields, decimal fields, and
+  nested structs.
 - The constructor owns every nested transport it creates; on failure it must
   stop or discard partially created transports before rethrowing.
 - `Create` is called exactly once per resolved transport expression.
@@ -1435,14 +1479,17 @@ Build context:
 
 - role, logger, and memory are visible to `Create`;
 - string parameter value is passed decoded;
-- absent optional string returns `false`;
+- integer and decimal parameter values are passed typed;
+- absent optional string, integer, or decimal returns `false`;
 - nested transport returns a lazy factory;
 - invoking the nested factory creates a transport;
 - invoking it twice creates two independent transports;
 - transport list returns factories in source order;
-- struct returns string fields and nested structs;
+- struct returns string, integer, and decimal fields and nested structs;
 - absent optional struct field returns `false`;
-- parameter and field lookup is by canonical lowercase name.
+- parameter and field lookup is by canonical lowercase name;
+- a wrong parameter kind reports `E_CMP_PARAM_KIND_MISMATCH` with resolved kinds
+  (`string`, `integer`, `decimal`, `transport`, `transport list`, `struct`).
 
 Failure paths:
 
@@ -1615,6 +1662,8 @@ Existing tests remain valid with updated paths. Add:
 - `RegisterTransport(ITransportRegistration)` registers metadata and a runtime
   constructor;
 - `RegisterTransport` normalizes the scheme;
+- `RegisterTransport` maps core integer and decimal parameters and fields to
+  formula metadata, and unsorted core bounds reach `E_REG_INVALID_*`;
 - formula-only registration resolves but compilation reports
   `E_BLD_CONSTRUCTOR_NOT_FOUND`;
 - `CreateCompiler` returns the requested role;

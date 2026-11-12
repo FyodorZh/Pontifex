@@ -201,6 +201,62 @@ public sealed class TransportCompilerTests
     }
 
     [Test]
+    public void Compile_WithIntegerAndDecimalParameters_PassesTypedValues()
+    {
+        var count = CompilationTestData.IntegerParam(
+            "count",
+            -10,
+            10,
+            required: true,
+            positional: true);
+        var ratio = CompilationTestData.DecimalParam(
+            "ratio",
+            -1.5m,
+            1.5m,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            count,
+            ratio);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Integer(count, -7),
+                CompilationTestData.Decimal(ratio, 1.25m))));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetInt64("count", out var integer), Is.True);
+        Assert.That(integer, Is.EqualTo(-7L));
+        Assert.That(context.TryGetDecimal("ratio", out var decimalValue), Is.True);
+        Assert.That(decimalValue, Is.EqualTo(1.25m));
+    }
+
+    [Test]
+    public void Compile_WithAbsentOptionalIntegerAndDecimal_ReturnsFalse()
+    {
+        var count = CompilationTestData.IntegerParam("count", 0, 10, positional: true);
+        var ratio = CompilationTestData.DecimalParam("ratio", -1.5m, 1.5m, positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            count,
+            ratio);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(constructor)));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetInt64("count", out _), Is.False);
+        Assert.That(context.TryGetDecimal("ratio", out _), Is.False);
+    }
+
+    [Test]
     public void Compile_WithNestedTransport_ReturnsLazyFactory()
     {
         var (compiler, outer, inner) = OuterWithNestedTransport();
@@ -416,6 +472,39 @@ public sealed class TransportCompilerTests
     }
 
     [Test]
+    public void Compile_WithStruct_ExposesIntegerAndDecimalFields()
+    {
+        var countField = CompilationTestData.IntegerField("count", 0, 10, required: true);
+        var ratioField = CompilationTestData.DecimalField("ratio", -1.5m, 1.5m);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(countField, ratioField),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Struct(
+                    configParam,
+                    CompilationTestData.IntegerText(countField, 5),
+                    CompilationTestData.DecimalText(ratioField, 1.25m)))));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetStruct("config", out var value), Is.True);
+        Assert.That(value!.TryGetInt64("count", out var count), Is.True);
+        Assert.That(count, Is.EqualTo(5L));
+        Assert.That(value.TryGetDecimal("ratio", out var ratio), Is.True);
+        Assert.That(ratio, Is.EqualTo(1.25m));
+    }
+
+    [Test]
     public void Compile_WithAbsentOptionalStructField_ReturnsFalse()
     {
         var nameField = CompilationTestData.StringField("name");
@@ -482,6 +571,194 @@ public sealed class TransportCompilerTests
             exception.Error.Message,
             Is.EqualTo(
                 "compiler expected value kind string for parameter 'path', got transport"));
+    }
+
+    [Test]
+    public void Compile_WhenStringParameterReceivesInteger_ReportsStringExpected()
+    {
+        var param = CompilationTestData.StringParam(
+            "path",
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            param);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            new[] { CompilationTestData.CoreStringParameter("path", required: true, positional: true) },
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetString("path", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Integer(param, 5)))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo(
+                "compiler expected value kind string for parameter 'path', got integer"));
+    }
+
+    [Test]
+    public void Compile_WhenIntegerParameterReceivesString_ReportsIntegerExpected()
+    {
+        var param = CompilationTestData.IntegerParam(
+            "count",
+            0,
+            10,
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            param);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            new[] { CompilationTestData.CoreIntegerParameter("count", 0, 10, required: true, positional: true) },
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetInt64("count", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Scalar(param, "x")))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo(
+                "compiler expected value kind integer for parameter 'count', got string"));
+    }
+
+    [Test]
+    public void Compile_WhenDecimalParameterReceivesInteger_ReportsDecimalExpected()
+    {
+        var param = CompilationTestData.DecimalParam(
+            "ratio",
+            -1.5m,
+            1.5m,
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            param);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            new[] { CompilationTestData.CoreDecimalParameter("ratio", -1.5m, 1.5m, required: true, positional: true) },
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetDecimal("ratio", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Integer(param, 1)))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo(
+                "compiler expected value kind decimal for parameter 'ratio', got integer"));
+    }
+
+    [Test]
+    public void Compile_WhenDecimalFieldReceivesString_ThrowsInconsistentTree()
+    {
+        var field = CompilationTestData.DecimalField("ratio", -1.5m, 1.5m, required: true);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(field),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            Array.Empty<Core.TransportParameter>(),
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetStruct("config", out var value);
+                value!.TryGetDecimal("ratio", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Struct(
+                        configParam,
+                        CompilationTestData.Text(field, "x"))))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
+    }
+
+    [Test]
+    public void Compile_WhenIntegerFieldReceivesString_ThrowsInconsistentTree()
+    {
+        var field = CompilationTestData.IntegerField("count", 0, 10, required: true);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(field),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            Array.Empty<Core.TransportParameter>(),
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetStruct("config", out var value);
+                value!.TryGetInt64("count", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Struct(
+                        configParam,
+                        CompilationTestData.Text(field, "x"))))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
     }
 
     [Test]

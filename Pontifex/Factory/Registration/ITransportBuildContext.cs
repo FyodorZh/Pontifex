@@ -39,6 +39,10 @@ namespace Pontifex.Factory.Registration
 
         bool TryGetString(string parameterName, out string value);
 
+        bool TryGetInt64(string parameterName, out long value);
+
+        bool TryGetDecimal(string parameterName, out decimal value);
+
         bool TryGetTransport(string parameterName, out NestedTransportFactory factory);
 
         bool TryGetTransportList(
@@ -56,6 +60,10 @@ namespace Pontifex.Factory.Registration
     public interface ITransportStructValue
     {
         bool TryGetString(string fieldName, out string value);
+
+        bool TryGetInt64(string fieldName, out long value);
+
+        bool TryGetDecimal(string fieldName, out decimal value);
 
         bool TryGetStruct(string fieldName, out ITransportStructValue value);
     }

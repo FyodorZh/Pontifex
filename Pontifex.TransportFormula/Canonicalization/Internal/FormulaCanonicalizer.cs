@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
+using Pontifex.TransportFormula.Internal;
 using Pontifex.TransportFormula.Registry;
 using Pontifex.TransportFormula.Semantics;
 
@@ -101,6 +103,14 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                     builder.Append(ScalarFormatter.Format(stringValue.Text));
                     return;
 
+                case IntegerValue integerValue:
+                    builder.Append(integerValue.Value.ToString(CultureInfo.InvariantCulture));
+                    return;
+
+                case DecimalValue decimalValue:
+                    builder.Append(DecimalText.Format(decimalValue.Value));
+                    return;
+
                 case ResolvedExpr expression:
                     PrintExpression(expression, builder);
                     return;
@@ -151,6 +161,14 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                 {
                     case StringValue stringValue:
                         builder.Append(ScalarFormatter.Format(stringValue.Text));
+                        break;
+
+                    case IntegerValue integerValue:
+                        builder.Append(integerValue.Value.ToString(CultureInfo.InvariantCulture));
+                        break;
+
+                    case DecimalValue decimalValue:
+                        builder.Append(DecimalText.Format(decimalValue.Value));
                         break;
 
                     case StructValue nestedValue:
