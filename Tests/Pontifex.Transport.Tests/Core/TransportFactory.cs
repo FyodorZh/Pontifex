@@ -1,37 +1,50 @@
 using Actuarius.Memory;
-using Pontifex.OldFactory;
+using Pontifex.Factory.Compilation;
+using Pontifex.Factory.Registration;
 using Scriba;
 
 namespace Pontifex.Tests;
 
 public class TransportFactory
 {
-    private readonly IMemoryRental _memory;
-    private readonly ILogger _logger;
+    private readonly string _serverFormula;
+    private readonly string _clientFormula;
+    private readonly ITransportCompiler _serverCompiler;
+    private readonly ITransportCompiler _clientCompiler;
 
-    private readonly IDescription _serverDesc;
-    private readonly IDescription _clientDesc;
-
-    public TransportFactory(IDescription serverDesc, IDescription clientDesc, bool failIfError = true)
+    public TransportFactory(
+        string serverFormula,
+        string clientFormula,
+        bool failIfError = true)
     {
-        _serverDesc = serverDesc;
-        _clientDesc = clientDesc;
-        _memory = TransportRegistry.Memory;
-        _logger = TransportRegistry.GetLogger(failIfError);
+        _serverFormula = serverFormula;
+        _clientFormula = clientFormula;
+
+        var memory = TransportRegistry.Memory;
+        var logger = TransportRegistry.GetLogger(failIfError);
+
+        _serverCompiler = TransportRegistry.Factory.CreateCompiler(
+            TransportRole.Server,
+            logger,
+            memory);
+        _clientCompiler = TransportRegistry.Factory.CreateCompiler(
+            TransportRole.Client,
+            logger,
+            memory);
     }
 
     public ITransport BuildServer()
     {
-        return TransportRegistry.Builder.BuildServer(_serverDesc, _memory, _logger);
+        return TransportRegistry.Factory.Compile(_serverFormula, _serverCompiler);
     }
 
     public ITransport BuildClient()
     {
-        return TransportRegistry.Builder.BuildClient(_clientDesc, _memory, _logger);
+        return TransportRegistry.Factory.Compile(_clientFormula, _clientCompiler);
     }
 
     public override string ToString()
     {
-        return _serverDesc.ToString() ?? "";
+        return _serverFormula;
     }
 }

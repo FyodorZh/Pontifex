@@ -1,21 +1,20 @@
 using Actuarius.Memory;
+using Pontifex.Factory;
+using Pontifex.Factory.Registration;
 using Pontifex.Raw.Reliable.Ack.Direct;
 using Pontifex.Raw.Reliable.Ack.Tcp;
-using Pontifex.Converters;
-using Pontifex.OldFactory;
-//using Pontifex.Raw.Reliable.NoAck.Direct;
 using Pontifex.Raw.Unreliable.NoAck.Direct;
 using Pontifex.Raw.Unreliable.NoAck.Udp;
 using Scriba;
 using Scriba.Consumers;
+using FormulaRegistry = Pontifex.TransportFormula.Registry;
 
 namespace Pontifex.Tests;
 
 public static class TransportRegistry
 {
     public static IMemoryRental Memory { get; }
-    public static TransportBuilder Builder { get; }
-    public static IDescriptionFactory DescriptionFactory => Builder.DescriptionFactory;
+    public static ITransportFactory Factory { get; }
 
     public static ILogger GetLogger(bool failIfError)
     {
@@ -33,12 +32,20 @@ public static class TransportRegistry
     static TransportRegistry()
     {
         Memory = MemoryRental.Shared;
-        Builder = new TransportBuilder(ConvertersGraph.Default);
 
-        Builder.RegisterTransport(new RawReliableAckDirectConstructor());
-        Builder.RegisterTransport(new RawReliableAckTcpConstructor());
-        Builder.RegisterTransport(new RawUnreliableNoAckDirectConstructor());
-        Builder.RegisterTransport(new RawUnreliableNoAckUdpConstructor());
+        var builder = TransportFactoryBootstrap.CreateBuilder();
+        foreach (TransportType type in Enum.GetValues(typeof(TransportType)))
+        {
+            builder.Registry.RegisterType(
+                new FormulaRegistry.TransportTypeInfo(type, type.ToString()));
+        }
+
+        builder.RegisterTransport(RawReliableAckDirectBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
+        builder.RegisterTransport(RawUnreliableNoAckDirectBinding.CreateRegistration());
+        builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
+
+        Factory = builder.Build();
     }
 
     private class LogConsumer : ILogConsumer

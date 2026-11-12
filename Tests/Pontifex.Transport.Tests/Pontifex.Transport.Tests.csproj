@@ -24,6 +24,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
+      <ProjectReference Include="..\..\Pontifex.Factory\Pontifex.Factory.csproj" />
       <ProjectReference Include="..\..\Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
       <ProjectReference Include="..\..\Transports\Pontifex.Transport.Net\Pontifex.Transport.Net.csproj" />
       <ProjectReference Include="..\..\Api\Pontifex.Api\Pontifex.Api.csproj" />

@@ -2023,9 +2023,8 @@ Aim for:
    parser tooling and diagnostics, or make it internal and expose only
    AST/errors.
 7. **Legacy retirement.** `Pontifex.OldFactory`, `IDescription`, `IElement`, and
-   the old `TransportBuilder` must remain untouched during this phase. Plan their
-   retirement only after the new compiler and transport registrations are
-   proven.
+   the old `TransportBuilder` are retired. The transport packages now expose only
+   the `ITransportRegistration` bindings and direct factory construction.
 8. **No limits vs stack depth.** The language defines no limits. The parser must
    not impose artificial ones; if recursive descent risks stack exhaustion on
    adversarial input, use an explicit stack or document the implementation
@@ -2102,13 +2101,13 @@ Execute in this order. Each step must leave `dotnet build` and the existing
 - Record any contract gap found here before migrating the remaining transports.
 - Do not delete the legacy constructor or URI parser yet.
 - All transport constructors are now bound; see §18.1 for the binding list.
-  The legacy constructors and URI parsers remain untouched.
+  The legacy constructors, URI parsers, and descriptor factory are removed.
 
 ### 18.1 Transport factory bindings
 
-Every transport constructor has a parallel `ITransportRegistration` binding in
-its own package. The bindings coexist with the legacy `ITransportConstructor`
-path and do not require a transport package to reference `Pontifex.Factory`.
+Every transport implementation has a single `ITransportRegistration` binding in
+its own package. The bindings replace the legacy `ITransportConstructor` path and
+do not require a transport package to reference `Pontifex.Factory`.
 
 | Scheme | Transport package | Binding |
 |---|---|---|
@@ -2132,9 +2131,8 @@ Binding rules:
   have constructors.
 - Real transports require an `ILogger` that implements `ILoggerExt`; pass a
   `Scriba.Logger` or another `ILoggerExt` implementation, not `VoidLogger`.
-- The delivery struct is translated to the existing delivery factory through a
-  transitional `IDescription` bridge; the bridge stays inside the transport
-  package, not in the formula or compiler assemblies.
+- The delivery struct is mapped directly to `NetemConfig`; no descriptor objects
+  are involved in the new path.
 
 
 ### Step 6 — Documentation and hardening

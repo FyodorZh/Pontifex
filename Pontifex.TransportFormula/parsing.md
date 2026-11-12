@@ -2615,7 +2615,6 @@ This document does not specify:
 - how the converter graph chooses paths;
 - how concrete constructors read their parameters;
 - how aliases are chosen by an application;
-- how the legacy `Pontifex.OldFactory` descriptor path is consumed;
 - any concrete transport scheme or parameter name.
 
 The parser and canonical printer are complete without those.

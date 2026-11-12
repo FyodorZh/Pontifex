@@ -30,6 +30,10 @@ namespace Pontifex.Factory.Bootstrap
         private readonly ITransportConstructorRegistry _constructors;
         private readonly IConvertersGraph _converters;
 
+        // The parser keeps a cursor as instance state, so the read-only pipeline is
+        // serialized. Caller-supplied compilers run outside this gate.
+        private readonly object _sync = new object();
+
         public TransportFactory(
             IParser parser,
             IResolver resolver,
@@ -48,19 +52,19 @@ namespace Pontifex.Factory.Bootstrap
             string formula,
             TransportTypeSet? expected = null)
         {
-            var parsed = _parser.Parse(formula);
-            if (parsed.Error is not null)
+            lock (_sync)
             {
-                return new FormulaResolveResult(null, parsed.Error);
+                return ResolveCore(formula, expected);
             }
-
-            return _resolver.Resolve(parsed.Formula!, expected ?? AnySet);
         }
 
         public string Canonicalize(string formula)
         {
-            var resolved = ResolveOrThrow(formula, null);
-            return _canonicalizer.Canonicalize(resolved);
+            lock (_sync)
+            {
+                var resolved = ResolveOrThrowCore(formula, null);
+                return _canonicalizer.Canonicalize(resolved);
+            }
         }
 
         public ITransportCompiler CreateCompiler(
@@ -106,7 +110,30 @@ namespace Pontifex.Factory.Bootstrap
             return compiler.Compile(resolved);
         }
 
+        private FormulaResolveResult ResolveCore(
+            string formula,
+            TransportTypeSet? expected)
+        {
+            var parsed = _parser.Parse(formula);
+            if (parsed.Error is not null)
+            {
+                return new FormulaResolveResult(null, parsed.Error);
+            }
+
+            return _resolver.Resolve(parsed.Formula!, expected ?? AnySet);
+        }
+
         private ResolvedFormula ResolveOrThrow(
+            string formula,
+            TransportTypeSet? expected)
+        {
+            lock (_sync)
+            {
+                return ResolveOrThrowCore(formula, expected);
+            }
+        }
+
+        private ResolvedFormula ResolveOrThrowCore(
             string formula,
             TransportTypeSet? expected)
         {

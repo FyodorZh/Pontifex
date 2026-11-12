@@ -1,40 +1,63 @@
 using System;
 using Actuarius.Memory;
-using Scriba;
+using Pontifex.Factory;
+using Pontifex.Factory.Registration;
 using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Raw.Reliable.Ack.Direct;
 using Pontifex.Raw.Reliable.Ack.Logger;
 using Pontifex.Raw.Reliable.Ack.Reconnectable;
 using Pontifex.Raw.Reliable.Ack.Tcp;
 using Pontifex.Raw.Reliable.Ack.Zip;
-using Pontifex.Converters;
-using Pontifex.OldFactory;
+using Scriba;
+using FormulaRegistry = Pontifex.TransportFormula.Registry;
 
 namespace Pontifex.Test
 {
     public class TransportFactory
     {
-        private static readonly TransportBuilder mBuilder = new TransportBuilder(ConvertersGraph.Default);
+        private readonly ITransportFactory _factory;
 
         public TransportFactory()
         {
-            mBuilder.RegisterTransport(new RawReliableAckDirectConstructor());
-            mBuilder.RegisterTransport(new RawReliableAckTcpConstructor());
-            mBuilder.RegisterTransport(new RawReliableAckZipConstructor());
-            mBuilder.RegisterTransport(new RawReliableAckReconnectableConstructor());
-            mBuilder.RegisterTransport(new RawReliableAckLoggerConstructor());
+            var builder = TransportFactoryBootstrap.CreateBuilder();
+
+            foreach (TransportType type in Enum.GetValues(typeof(TransportType)))
+            {
+                builder.Registry.RegisterType(
+                    new FormulaRegistry.TransportTypeInfo(type, type.ToString()));
+            }
+
+            builder.RegisterTransport(RawReliableAckDirectBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableAckZipBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableAckReconnectableBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableAckLoggerBinding.CreateRegistration());
+
+            _factory = builder.Build();
         }
 
-        public IRawReliableAckServer? ConstructServer(string url, ILogger logger, IMemoryRental memoryRental)
+        public IRawReliableAckServer? ConstructServer(
+            string formula,
+            ILogger logger,
+            IMemoryRental memoryRental)
         {
-            var description = mBuilder.DescriptionFactory.FromUri("transport://" + url);
-            return mBuilder.BuildServer(description, memoryRental, logger) as IRawReliableAckServer;
+            var compiler = _factory.CreateCompiler(
+                TransportRole.Server,
+                logger,
+                memoryRental);
+            return _factory.Compile(formula, compiler) as IRawReliableAckServer;
         }
 
-        public IRawReliableAckClient? ConstructClient(string url, ILogger logger, IMemoryRental memoryRental)
+        public IRawReliableAckClient? ConstructClient(
+            string formula,
+            ILogger logger,
+            IMemoryRental memoryRental)
         {
-            var description = mBuilder.DescriptionFactory.FromUri("transport://" + url);
-            return mBuilder.BuildClient(description, memoryRental, logger) as IRawReliableAckClient;
+            var compiler = _factory.CreateCompiler(
+                TransportRole.Client,
+                logger,
+                memoryRental);
+            return _factory.Compile(formula, compiler) as IRawReliableAckClient;
         }
     }
 }

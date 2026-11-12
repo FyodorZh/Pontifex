@@ -20,7 +20,6 @@ namespace Pontifex.Test
         
         private readonly CheckBox _zipProtocol;
         private readonly CheckBox _loggerProtocol;
-        private readonly CheckBox _monitorProtocol;
         private readonly CheckBox _reconectableProtocol;
         //private readonly CheckBox _reliableProtocol;
 
@@ -43,7 +42,7 @@ namespace Pontifex.Test
             Width = 55;
             Height = 17;
             
-            var urlLabel = new Label() { Title = "Url: ", X = 0, Y = 0, Width = Dim.Auto(), Height = 1 };
+            var urlLabel = new Label() { Title = "Formula: ", X = 0, Y = 0, Width = Dim.Auto(), Height = 1 };
             Add(urlLabel);
 
             _urlField = new TextField() { X = Pos.Right(urlLabel), Y = 0, Width = Dim.Fill(), Height = 1 };
@@ -88,18 +87,10 @@ namespace Pontifex.Test
             _zipProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
             protocolsGroup.Add(_zipProtocol);
             
-            // Monitor
-            _monitorProtocol = new CheckBox()
-            {
-                Title = "monitor", X = Pos.Right(_zipProtocol)+ 1, Y = 0, Width = Dim.Auto(), Height = 1
-            };
-            _monitorProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
-            protocolsGroup.Add(_monitorProtocol);
-            
             // Logger
             _loggerProtocol = new CheckBox()
             {
-                Title = "log", X = Pos.Right(_monitorProtocol) + 1, Y = 0, Width = Dim.Auto(), Height = 1
+                Title = "log", X = Pos.Right(_zipProtocol) + 1, Y = 0, Width = Dim.Auto(), Height = 1
             };
             _loggerProtocol.CheckedStateChanged += (_, _) => OnCheckedStateChanged();
             protocolsGroup.Add(_loggerProtocol);
@@ -198,11 +189,11 @@ namespace Pontifex.Test
             string cmd = "";
             if (_directTransport.CheckedState == CheckState.Checked)
             {
-                cmd = "direct|123";
+                cmd = "direct(\"123\")";
             }
             else if (_tcpTransport.CheckedState == CheckState.Checked)
             {
-                cmd = $"tcp|{_tcpUdpAddressField.Text}:{_tcpUdpPortField.Text}";
+                cmd = $"tcp(\"{_tcpUdpAddressField.Text}\", {_tcpUdpPortField.Text})";
             }
             else
             {
@@ -211,13 +202,11 @@ namespace Pontifex.Test
             }
 
             if (_reconectableProtocol.CheckedState == CheckState.Checked)
-                cmd = "reconnectable|2000:" + cmd;
+                cmd = "reconnectable(2000, " + cmd + ")";
             if (_zipProtocol.CheckedState == CheckState.Checked) 
-                cmd = "zip|9:" + cmd;
-            if (_monitorProtocol.CheckedState == CheckState.Checked) 
-                cmd = "monitor|" + cmd;
+                cmd = "zip(" + cmd + ", compression_level = 9)";
             if (_loggerProtocol.CheckedState == CheckState.Checked) 
-                cmd = "log|" + cmd;
+                cmd = "log(" + cmd + ")";
             
             _urlField.Text = cmd;
 

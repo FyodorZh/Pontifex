@@ -1,6 +1,7 @@
 using System;
 using Pontifex.Factory.Registration;
 using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable.Ack.Protocols;
 
 namespace Pontifex.Raw.Reliable.Ack.Zip
 {
@@ -12,6 +13,37 @@ namespace Pontifex.Raw.Reliable.Ack.Zip
         public const string SchemeName = ZipInfo.TransportName;
 
         private const int DefaultCompressionLevel = 9;
+
+        private sealed class ZipClient
+            : RawReliableAckWrapperClient<RawReliableAckZipClientLogic>, IRawReliableAckClient
+        {
+            public ZipClient(IRawReliableAckClient transportToWrap, int compressionLevel)
+                : base(ZipInfo.TransportName, transportToWrap,
+                    (logger, memoryRental) =>
+                        new RawReliableAckZipClientLogic(logger, memoryRental, compressionLevel))
+            {
+            }
+        }
+
+        private sealed class ZipServer
+            : RawReliableAckWrapperServer<
+                AcknowledgerWrapper<HandlerWrapper<RawReliableAckZipServerLogic>>>,
+                IRawReliableAckServer
+        {
+            public ZipServer(IRawReliableAckServer transportToWrap, int compressionLevel)
+                : base(
+                    ZipInfo.TransportName,
+                    transportToWrap,
+                    (logger, memory) =>
+                        new AcknowledgerWrapper<HandlerWrapper<RawReliableAckZipServerLogic>>(
+                            () => new HandlerWrapper<RawReliableAckZipServerLogic>(
+                                () => new RawReliableAckZipServerLogic(
+                                    logger,
+                                    memory,
+                                    compressionLevel))))
+            {
+            }
+        }
 
         public static ITransportRegistration CreateRegistration()
         {
@@ -49,10 +81,10 @@ namespace Pontifex.Raw.Reliable.Ack.Zip
             }
 
             return context.Role == TransportRole.Server
-                ? new RawReliableAckZipConstructor.ZipServer(
+                ? new ZipServer(
                     (IRawReliableAckServer)nested(),
                     compressionLevel)
-                : new RawReliableAckZipConstructor.ZipClient(
+                : new ZipClient(
                     (IRawReliableAckClient)nested(),
                     compressionLevel);
         }
