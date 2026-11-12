@@ -86,13 +86,15 @@
 | `Validate_ForStringParameterWithNullValidator_AcceptsAnyText` | `ParameterValidator` | §6.4, §7.5 | A null validator accepts any scalar, including empty text. | — |
 | `Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | A transport value for a string parameter reports shape `transport`. | — |
 | `Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape` | `ParameterValidator` | §7.5, §13.3 | A struct value for a string parameter reports shape `struct`. | — |
-| `Validate_ForTransportParameterReceivingList_ReportsExpectedTransport` | `ParameterValidator` | §7.5, §13.3 | A list for a transport parameter reports shape `transport list`. | — |
+| `Validate_ForTransportParameterReceivingList_ReportsExpectedTransport` | `ParameterValidator` | §7.5, §13.3 | A list for a transport parameter reports shape `list`. | — |
 | `Validate_ForTransportParameterReceivingStruct_ReportsExpectedTransport` | `ParameterValidator` | §7.5, §13.3 | A struct for a transport parameter reports shape `struct`. | — |
 | `Validate_ForListParameterReceivingScalar_ReportsExpectedTransportList` | `ParameterValidator` | §7.5, §13.3 | A scalar for a list parameter reports shape `scalar`. | — |
 | `Validate_ForListParameterReceivingStruct_ReportsExpectedTransportList` | `ParameterValidator` | §7.5, §13.3 | A struct for a list parameter reports shape `struct`. | — |
-| `Validate_ForStructParameterReceivingList_ReportsExpectedStruct` | `ParameterValidator` | §7.5, §13.3 | A list for a struct parameter reports shape `transport list`. | — |
+| `Validate_ForStructParameterReceivingList_ReportsExpectedStruct` | `ParameterValidator` | §7.5, §13.3 | A list for a struct parameter reports shape `list`. | — |
 | `Validate_ForStructParameterReceivingTransport_ReportsExpectedStruct` | `ParameterValidator` | §7.5, §13.3 | A transport for a struct parameter reports shape `transport`. | — |
 | `Validate_ForHomogeneousListWithThreeTypes_ReportsAllDistinctTypesInElementOrder` | `ParameterValidator` | §7.5, §13.3 | Homogeneity reports all distinct element types in first-encounter order. | Three distinct types. |
+| `Validate_ForListWithScalarElement_ReportsListElementType` | `ParameterValidator` | §7.5, §13.3 | A transport list rejects a scalar element with `E_SEM_LIST_ELEMENT_TYPE`. | — |
+| `Validate_ForListWithStructElement_ReportsListElementType` | `ParameterValidator` | §7.5, §13.3 | A transport list rejects a struct element with `E_SEM_LIST_ELEMENT_TYPE`. | — |
 | `Validate_ForListBelowMinimum_ReportsMinimumAndCount` | `ParameterValidator` | §7.5, §13.3 | `E_SEM_LIST_MIN` reports the declared minimum and actual count. | — |
 | `Validate_ForListWithUnboundedMaximum_AcceptsLargeList` | `ParameterValidator` | §7.5 | A null `Max` is unbounded and accepts any count above the minimum. | — |
 | `Validate_ForListElementsWithExpectedSet_ResolvesElementAgainstParameterExpectedType` | `ParameterValidator` | §7.1, §7.5 | List elements resolve with the parameter expected set. | Harness `listB`. |
@@ -130,9 +132,9 @@
 | `Validate_ReportsBindingErrorsInSourceOrder` | `StructValidator` | §7.9 | When multiple binding errors exist, the first in source order is reported. | — |
 | `Validate_ReportsFieldValueErrorsInSchemaOrder` | `StructValidator` | §7.8, §7.9 | Field value validation runs in schema order, not source order. | — |
 | `Validate_ForUnknownField_ReportsSchemaFieldOrder` | `StructValidator` | §13.3 | The unknown-field expectation lists fields in schema order. | Custom non-alphabetical schema. |
-| `Validate_ForStringFieldReceivingList_ReportsExpectedScalarWithListShape` | `StructValidator` | §7.8, §13.3 | A list for a string field reports shape `transport list`. | — |
+| `Validate_ForStringFieldReceivingList_ReportsExpectedScalarWithListShape` | `StructValidator` | §7.8, §13.3 | A list for a string field reports shape `list`. | — |
 | `Validate_ForNestedStructFieldReceivingTransport_ReportsExpectedStruct` | `StructValidator` | §7.8, §13.3 | A transport for a nested struct field reports shape `transport`. | — |
-| `Validate_ForNestedStructFieldReceivingList_ReportsExpectedStruct` | `StructValidator` | §7.8, §13.3 | A transport list for a nested struct field reports shape `transport list`. | — |
+| `Validate_ForNestedStructFieldReceivingList_ReportsExpectedStruct` | `StructValidator` | §7.8, §13.3 | A list for a nested struct field reports shape `list`. | — |
 | `Validate_ForEmptySchemaWithNoFields_AcceptsEmptyStruct` | `StructValidator` | §7.8 | An empty schema accepts an empty struct. | — |
 | `Validate_ForNestedStruct_ProducesStructValue` | `StructValidator` | §7.8 | Nested structs produce `StructValue` recursively. | — |
 | `Validate_ForStringField_ProducesValueAssignableToDataValue` | `StructValidator` | §7.8, §8 | A struct-field value is a `DataValue`; a string field is a `StringValue`. | Compile-time assignment pins the `StructFieldBinding.Value` type. |
@@ -173,12 +175,13 @@ phase `Resolution`, offset, and zero-length span.
 | `E_SEM_MISSING_REQUIRED_PARAM` | `Bind_ForMultipleMissingRequiredParameters_ReportsFirstInDeclarationOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`MissingRequiredParameter`, `MissingRequiredParameterPreservesRawSchemeSpelling`) |
 | `E_SEM_TOO_MANY_POSITIONAL` | `Bind_ChecksTooManyPositionalArgumentsBeforeNamedArguments`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`TooManyPositionalArguments`) |
 | `E_SEM_EXPECTED_SCALAR` | `Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape`, `Validate_ForIntegerParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForIntegerParameterReceivingList_ReportsExpectedScalar`, `Validate_ForDecimalParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForDecimalParameterReceivingList_ReportsExpectedScalar`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedScalar`, `IntegerParameterExpectedScalar`, `DecimalParameterExpectedScalar`) |
-| `E_SEM_EXPECTED_TRANSPORT` | `Validate_ForTransportParameterReceivingList_ReportsExpectedTransport`, `Validate_ForTransportParameterReceivingStruct_ReportsExpectedTransport`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedTransport`) |
+| `E_SEM_EXPECTED_TRANSPORT` | `Validate_ForTransportParameterReceivingList_ReportsExpectedTransport`, `Validate_ForTransportParameterReceivingStruct_ReportsExpectedTransport`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedTransport`, `ExpectedTransportForList`, `ExpectedTransportForListWithBareWord`) |
 | `E_SEM_EXPECTED_TRANSPORT_LIST` | `Validate_ForListParameterReceivingScalar_ReportsExpectedTransportList`, `Validate_ForListParameterReceivingStruct_ReportsExpectedTransportList`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedTransportList`) |
 | `E_SEM_EXPECTED_STRUCT` | `Validate_ForStructParameterReceivingList_ReportsExpectedStruct`, `Validate_ForStructParameterReceivingTransport_ReportsExpectedStruct`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedStruct`) |
 | `E_SEM_LIST_MIN` | `Validate_ForListBelowMinimum_ReportsMinimumAndCount`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ListMinimum`) |
 | `E_SEM_LIST_MAX` | `Validate_ChecksListMaximumBeforeResolvingElements`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ListMaximum`) |
 | `E_SEM_LIST_HOMOGENEITY` | `Validate_ForHomogeneousListWithThreeTypes_ReportsAllDistinctTypesInElementOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ListHomogeneity`, `ListHomogeneityPreservesElementOrder`) |
+| `E_SEM_LIST_ELEMENT_TYPE` | `Validate_ForListWithScalarElement_ReportsListElementType`, `Validate_ForListWithStructElement_ReportsListElementType`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ListElementScalar`, `ListElementScalarAtFirstIndex`, `ListElementStruct`) |
 | `E_SEM_UNKNOWN_STRUCT_FIELD` | `Validate_ForUnknownField_PreservesRawLeafSpelling`, `Validate_ForUnknownField_ReportsSchemaFieldOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`UnknownStructField`, `UnknownNestedStructField`, `UnknownStructFieldWhenSchemaHasNoFields`) |
 | `E_SEM_DUPLICATE_STRUCT_FIELD` | `Validate_ForDuplicateNestedField_ReportsFullPath`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`DuplicateStructField`) |
 | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`MissingRequiredStructField`, `MissingRequiredNestedStructField`, `MissingRequiredFieldCheckedBeforeFieldKinds`) |

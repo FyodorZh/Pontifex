@@ -104,7 +104,9 @@ These decisions are already reflected in `grammar.md` and `parsing.md`.
 - `as` is contextual, not a reserved word.
 - At most one cast per expression.
 - Identity casts collapse during resolution.
-- Lists are `[expr, ...]`; no nested lists; no scalars; no top-level list.
+- Lists are `[list_element, ...]`, where an element may be a transport
+  expression, struct, quoted string, or bare scalar; no nested lists; no
+  top-level list.
 - Structs are `{ name=value, ... }`; named fields only; no trailing comma.
 - Positional arguments must precede named arguments.
 - Python-style positional binding: positionals fill positional-capable
@@ -652,8 +654,9 @@ Rules:
   - Word followed by `(` → `ParseExpr`;
   - other Word → `AstScalar` bare;
   - anything else → expected value.
-- `ParseList`: elements are expressions; nested list gets
-  `E_SYN_NESTED_LIST`; trailing comma rejected; empty list allowed.
+- `ParseList`: elements are generic `ParseValue` results; nested list gets
+  `E_SYN_NESTED_LIST` with message `nested lists are not allowed`; trailing
+  comma rejected with context `list`; empty list allowed.
 - `ParseStruct`: named fields only; `=` required; trailing comma rejected;
   empty struct allowed; field values are `ParseValue`.
 - `ParseTypeName`: identifier required; known type checked only in semantics.
@@ -695,7 +698,9 @@ Test suites/groups:
   - spans;
   - quoted/bare scalar flags;
   - cast optionality;
-  - positional/named argument shape.
+  - positional/named argument shape;
+  - `AstList.Elements` accepts expressions, structs, and scalars but never
+    nested lists.
 - **Parser**
   - all valid forms from `grammar.md`;
   - nested calls;
@@ -1006,6 +1011,8 @@ No public classes in `Pontifex.TransportFormula.Semantics`.
 - Transport list parameter:
   - requires `AstList`;
   - checks `Min`/`Max` before elements;
+  - requires every element to be `AstExpr`; otherwise
+    `E_SEM_LIST_ELEMENT_TYPE` at the element start with the actual AST shape;
   - resolves every element with the expected set;
   - checks homogeneity after all elements;
   - no backtracking.

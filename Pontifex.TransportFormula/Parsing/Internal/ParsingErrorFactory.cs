@@ -91,7 +91,7 @@ namespace Pontifex.TransportFormula.Parsing.Internal
             return FormulaErrorFactory.Create(
                 FactoryPhase.Parsing,
                 "E_SYN_NESTED_LIST",
-                "nested transport lists are not allowed",
+                "nested lists are not allowed",
                 offset);
         }
 

@@ -94,7 +94,7 @@ public sealed class StructValidatorTests
             "{name=[beta()]}",
             StructySchema(),
             "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
-            "field 'name' expects a scalar value, got transport list");
+            "field 'name' expects a scalar value, got list");
     }
 
     [Test]
@@ -114,7 +114,7 @@ public sealed class StructValidatorTests
             "{name=x, nested=[beta()]}",
             StructySchema(),
             "E_SEM_STRUCT_FIELD_EXPECTED_STRUCT",
-            "field 'nested' expects a struct, got transport list");
+            "field 'nested' expects a struct, got list");
     }
 
     [Test]

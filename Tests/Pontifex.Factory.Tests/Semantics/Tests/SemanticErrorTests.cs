@@ -165,6 +165,41 @@ public sealed class SemanticErrorTests
             "parameter 'input' expects a transport, got scalar");
 
         yield return Case(
+            "ExpectedTransportForList",
+            "alpha([alpha(), 1])",
+            "E_SEM_EXPECTED_TRANSPORT",
+            6,
+            "parameter 'input' expects a transport, got list");
+
+        yield return Case(
+            "ExpectedTransportForListWithBareWord",
+            "alpha([alpha])",
+            "E_SEM_EXPECTED_TRANSPORT",
+            6,
+            "parameter 'input' expects a transport, got list");
+
+        yield return Case(
+            "ListElementScalar",
+            "gamma([alpha(beta(x)), 1])",
+            "E_SEM_LIST_ELEMENT_TYPE",
+            23,
+            "transport list for 'items' expects transport elements, got scalar");
+
+        yield return Case(
+            "ListElementScalarAtFirstIndex",
+            "bag([1])",
+            "E_SEM_LIST_ELEMENT_TYPE",
+            5,
+            "transport list for 'items' expects transport elements, got scalar");
+
+        yield return Case(
+            "ListElementStruct",
+            "gamma([alpha(beta(x)), {}])",
+            "E_SEM_LIST_ELEMENT_TYPE",
+            23,
+            "transport list for 'items' expects transport elements, got struct");
+
+        yield return Case(
             "ExpectedTransportList",
             "gamma(beta(x))",
             "E_SEM_EXPECTED_TRANSPORT_LIST",
@@ -183,7 +218,7 @@ public sealed class SemanticErrorTests
             "beta([alpha(beta(x))])",
             "E_SEM_EXPECTED_SCALAR",
             5,
-            "parameter 'value' expects a scalar value, got transport list");
+            "parameter 'value' expects a scalar value, got list");
 
         yield return Case(
             "ListMinimum",

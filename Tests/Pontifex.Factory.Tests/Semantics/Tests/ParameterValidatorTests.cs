@@ -59,7 +59,7 @@ public sealed class ParameterValidatorTests
             "alpha([beta(x)])",
             Constructor("alpha"),
             "E_SEM_EXPECTED_TRANSPORT",
-            "parameter 'input' expects a transport, got transport list");
+            "parameter 'input' expects a transport, got list");
     }
 
     [Test]
@@ -92,7 +92,7 @@ public sealed class ParameterValidatorTests
             "structy([beta(x)])",
             Constructor("structy"),
             "E_SEM_EXPECTED_STRUCT",
-            "parameter 'config' expects a struct, got transport list");
+            "parameter 'config' expects a struct, got list");
     }
 
     [Test]
@@ -115,6 +115,28 @@ public sealed class ParameterValidatorTests
             Constructor("structy"),
             "E_SEM_EXPECTED_STRUCT",
             "parameter 'config' expects a struct, got transport");
+    }
+
+    [Test]
+    public void Validate_ForListWithScalarElement_ReportsListElementType()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "gamma([alpha(beta(x)), 1])",
+            Constructor("gamma"),
+            "E_SEM_LIST_ELEMENT_TYPE",
+            "transport list for 'items' expects transport elements, got scalar");
+    }
+
+    [Test]
+    public void Validate_ForListWithStructElement_ReportsListElementType()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "gamma([alpha(beta(x)), {}])",
+            Constructor("gamma"),
+            "E_SEM_LIST_ELEMENT_TYPE",
+            "transport list for 'items' expects transport elements, got struct");
     }
 
     [Test]
@@ -262,7 +284,7 @@ public sealed class ParameterValidatorTests
             "numbers([beta(x)])",
             Constructor("numbers"),
             "E_SEM_EXPECTED_SCALAR",
-            "parameter 'count' expects a scalar value, got transport list");
+            "parameter 'count' expects a scalar value, got list");
     }
 
     [Test]
@@ -284,7 +306,7 @@ public sealed class ParameterValidatorTests
             "numbers(0, [beta(x)])",
             Constructor("numbers"),
             "E_SEM_EXPECTED_SCALAR",
-            "parameter 'ratio' expects a scalar value, got transport list");
+            "parameter 'ratio' expects a scalar value, got list");
     }
 
     [Test]

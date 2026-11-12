@@ -38,7 +38,7 @@ namespace Pontifex.TransportFormula.Parsing
         SourceSpan Span) : AstValue(Span);
 
     public sealed record AstList(
-        IReadOnlyList<AstExpr> Elements,
+        IReadOnlyList<AstValue> Elements,
         int OpenOffset,
         int CloseOffset,
         SourceSpan Span) : AstValue(Span);

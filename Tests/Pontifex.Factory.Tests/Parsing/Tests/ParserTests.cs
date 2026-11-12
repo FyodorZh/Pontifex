@@ -102,7 +102,21 @@ public sealed class ParserTests
         var formula = Parse("alpha([beta(), gamma(), delta()])");
         var list = (AstList)formula.Root.Call.Arguments.Single().Value;
 
-        Assert.That(list.Elements.Select(e => e.Call.Scheme), Is.EqualTo(new[] { "beta", "gamma", "delta" }));
+        Assert.That(
+            list.Elements.Cast<AstExpr>().Select(e => e.Call.Scheme),
+            Is.EqualTo(new[] { "beta", "gamma", "delta" }));
+    }
+
+    [Test]
+    public void Parse_ForListWithScalarsAndStructs_ProducesGenericValueElements()
+    {
+        var formula = Parse("alpha([beta(), 1, {p=2}])");
+        var list = (AstList)formula.Root.Call.Arguments.Single().Value;
+
+        Assert.That(list.Elements, Has.Count.EqualTo(3));
+        Assert.That(list.Elements[0], Is.InstanceOf<AstExpr>());
+        Assert.That(((AstScalar)list.Elements[1]).Text, Is.EqualTo("1"));
+        Assert.That(list.Elements[2], Is.InstanceOf<AstStruct>());
     }
 
     [Test]
@@ -145,9 +159,9 @@ public sealed class ParserTests
         var formula = Parse("alpha([beta() as TypeA, gamma()])");
         var list = (AstList)formula.Root.Call.Arguments.Single().Value;
 
-        Assert.That(list.Elements[0].Cast, Is.Not.Null);
-        Assert.That(list.Elements[0].Cast!.TypeName, Is.EqualTo("TypeA"));
-        Assert.That(list.Elements[1].Cast, Is.Null);
+        Assert.That(((AstExpr)list.Elements[0]).Cast, Is.Not.Null);
+        Assert.That(((AstExpr)list.Elements[0]).Cast!.TypeName, Is.EqualTo("TypeA"));
+        Assert.That(((AstExpr)list.Elements[1]).Cast, Is.Null);
     }
 
     [Test]
@@ -178,7 +192,8 @@ public sealed class ParserTests
         Assert.That(formula.Root.Call.Scheme, Is.EqualTo("alpha"));
         Assert.That(formula.Root.Call.Arguments, Has.Count.EqualTo(2));
         Assert.That(((AstExpr)formula.Root.Call.Arguments[0].Value).Cast, Is.Not.Null);
-        Assert.That(((AstList)formula.Root.Call.Arguments[1].Value).Elements.Single().Call.Scheme,
+        Assert.That(
+            ((AstExpr)((AstList)formula.Root.Call.Arguments[1].Value).Elements.Single()).Call.Scheme,
             Is.EqualTo("gamma"));
     }
 
@@ -436,7 +451,7 @@ public sealed class ParserTests
             "expected a value, got ','").SetName("MissingArgumentAfterComma");
 
         yield return SyntaxError("alpha([,])", "E_SYN_UNEXPECTED_TOKEN", 7,
-            "expected a transport expression, got ','").SetName("ListStartsWithComma");
+            "expected a value, got ','").SetName("ListStartsWithComma");
 
         yield return SyntaxError("alpha(a b)", "E_SYN_UNEXPECTED_TOKEN", 8,
             "expected ',' or ')', got 'b'").SetName("MissingCommaBetweenArguments");
@@ -444,14 +459,8 @@ public sealed class ParserTests
         yield return SyntaxError("alpha(p=1, a)", "E_SYN_POSITIONAL_AFTER_NAMED", 11,
             "positional argument is not allowed after a named argument").SetName("PositionalAfterNamed");
 
-        yield return SyntaxError("alpha([alpha(), 1])", "E_SYN_UNEXPECTED_TOKEN", 16,
-            "expected a transport expression, got '1'").SetName("ScalarInTransportList");
-
-        yield return SyntaxError("alpha([alpha])", "E_SYN_UNEXPECTED_TOKEN", 12,
-            "expected '(', got ']'").SetName("BareWordInTransportList");
-
         yield return SyntaxError("alpha([[alpha()]])", "E_SYN_NESTED_LIST", 7,
-            "nested transport lists are not allowed").SetName("NestedTransportList");
+            "nested lists are not allowed").SetName("NestedList");
 
         yield return SyntaxError("alpha({p})", "E_SYN_UNEXPECTED_TOKEN", 8,
             "expected '=', got '}'").SetName("StructFieldMissingEquals");
@@ -481,7 +490,7 @@ public sealed class ParserTests
             "chained casts are not allowed").SetName("ChainedCast");
 
         yield return SyntaxError("alpha([beta() as TypeA,])", "E_SYN_TRAILING_COMMA", 22,
-            "trailing comma is not allowed in transport list").SetName("ListTrailingComma");
+            "trailing comma is not allowed in list").SetName("ListTrailingComma");
 
         yield return SyntaxError("alpha([beta(),gamma()", "E_SYN_UNEXPECTED_TOKEN", 21,
             "expected ',' or ']', got <end of input>").SetName("ListMissingCloseBracket");
@@ -658,7 +667,7 @@ public sealed class ParserTests
                 Assert.That(list.CloseOffset, Is.InRange(0, inputLength));
                 foreach (var element in list.Elements)
                 {
-                    AssertExprWithin(element, inputLength);
+                    AssertValueWithin(element, inputLength);
                 }
 
                 break;

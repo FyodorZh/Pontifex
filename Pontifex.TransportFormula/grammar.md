@@ -14,7 +14,7 @@ The grammar described here is a small expression language:
 
 - a transport declaration is a named call with arguments;
 - arguments may be positional or named;
-- a value may be a transport expression, a transport list, a struct, or a scalar;
+- a value may be a transport expression, a list, a struct, or a scalar;
 - a transport expression may be cast to a transport type with `as`;
 - there is no prefix, no comments, and no line-oriented structure.
 
@@ -165,7 +165,11 @@ value       := expr
              | quoted
              | bare
 
-list        := "[" [ expr { "," expr } ] "]"
+list        := "[" [ list_element { "," list_element } ] "]"
+list_element := expr
+             | struct
+             | quoted
+             | bare
 
 struct      := "{" [ field { "," field } ] "}"
 field       := identifier "=" value
@@ -185,9 +189,10 @@ Notes:
   This is enforced syntactically.
 - `args` is absent for `name()`. `name()` is a valid transport declaration with
   zero arguments.
-- `list` elements are transport expressions (`expr`), not arbitrary values.
-  Scalars, structs, and nested lists are not valid list elements. An empty list
-  `[]` is syntactically valid.
+- `list` elements are `list_element` values: transport expressions, structs,
+  quoted strings, or bare scalars. Nested lists are not valid list elements. An
+  empty list `[]` is syntactically valid. The list shape is shared by transport
+  lists and data arrays; the parameter or field kind decides which is required.
 - A single transport is never implicitly treated as a one-element list, and a
   list is never implicitly treated as a single transport. Brackets are
   significant: `[alpha()]` and `alpha()` are different shapes.
@@ -206,7 +211,7 @@ Notes:
 The grammar is shape-directed. At a point where a `value` is expected:
 
 1. If the next token is `"`, it is a `QuotedString` scalar.
-2. If the next token is `[`, it is a transport list.
+2. If the next token is `[`, it is a list.
 3. If the next token is `{`, it is a struct.
 4. If the next token is a `Word` and the following token is `(`, it is a
    transport expression.
@@ -253,7 +258,7 @@ The grammar validates only shape and token structure. The following are
 - whether an argument value has the kind required by a parameter;
 - transport type names in casts;
 - expected transport types and type sets;
-- transport list minimum/maximum sizes and homogeneity;
+- transport list minimum/maximum sizes, homogeneity, and element kinds;
 - struct field names, requiredness, and field kinds;
 - scalar validators;
 - whether an integer scalar parses as a signed 64-bit integer and lies within its
@@ -304,6 +309,7 @@ alpha(p=1, q=two)
 alpha(1, 2, p=3, q=4)
 alpha(beta(), gamma(x=1))
 alpha([beta(), gamma(), delta()])
+alpha([beta(), 1, {p=2}])
 alpha({p=1, q={r=2}})
 alpha() as TypeA
 alpha(beta() as TypeA)
@@ -324,7 +330,6 @@ Syntactically invalid:
 | `alpha(a,)` | Trailing comma. |
 | `alpha(a b)` | Missing comma. |
 | `alpha(p=1, a)` | Positional after named. |
-| `alpha([beta(), 1])` | List element is not a transport. |
 | `alpha([[beta()]])` | Nested list. |
 | `alpha({p=1,})` | Trailing comma. |
 | `alpha({p})` | Missing `=`. |

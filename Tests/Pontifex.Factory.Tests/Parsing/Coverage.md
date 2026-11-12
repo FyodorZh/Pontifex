@@ -66,7 +66,8 @@
 | `Parse_ForUppercaseNames_PreservesRawSpelling` | `parsing.md` §4 | Scheme, argument-name, and struct-field-name spelling is preserved exactly by the parser. | Normalization is deferred to resolution. |
 | `Parse_ForPositionalPrefixThenNamedSuffix_PreservesOrderAndForms` | `grammar.md` §5; `parsing.md` §5.4 | A positional prefix may be followed by named arguments; shapes are recorded. | — |
 | `Parse_ForNestedCalls_ProducesNestedTransportExpressions` | `grammar.md` §5–6 | A word followed by `(` is a transport expression, including nested arguments. | — |
-| `Parse_ForTransportList_ProducesExpressionElements` | `grammar.md` §5–6 | Lists contain transport expressions and preserve element order. | — |
+| `Parse_ForTransportList_ProducesExpressionElements` | `grammar.md` §5–6 | Lists of transport expressions contain `AstExpr` elements and preserve order. | — |
+| `Parse_ForListWithScalarsAndStructs_ProducesGenericValueElements` | `grammar.md` §5–6; `parsing.md` §4 | A list may contain an expression, a scalar, and a struct; elements are `AstValue`. | Non-expression elements are valid syntax and fail later only for a transport-list parameter. |
 | `Parse_ForStructWithNestedStruct_ProducesFieldTree` | `grammar.md` §5–6 | Struct fields are named and may contain nested structs and scalar values. | — |
 | `Parse_ForTopLevelCast_ProducesSingleCast` | `grammar.md` §5; `parsing.md` §5.2 | `expr as Type` records one cast. | Type validity is semantic and not checked here. |
 | `Parse_ForCastInsideArgument_ProducesCastOnNestedExpression` | `grammar.md` §5 | A cast may appear inside an argument value. | — |
@@ -108,12 +109,10 @@ The message column is the exact expected `FactoryError.Message`.
 | `ArgumentStartsWithComma` | `alpha(,)` | `E_SYN_UNEXPECTED_TOKEN` | 6 | `expected a value or ')', got ','` |
 | `UnterminatedArgumentStartsWithComma` | `alpha(,` | `E_SYN_UNEXPECTED_TOKEN` | 6 | `expected a value or ')', got ','` |
 | `MissingArgumentAfterComma` | `alpha(a,,b)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected a value, got ','` |
-| `ListStartsWithComma` | `alpha([,])` | `E_SYN_UNEXPECTED_TOKEN` | 7 | `expected a transport expression, got ','` |
+| `ListStartsWithComma` | `alpha([,])` | `E_SYN_UNEXPECTED_TOKEN` | 7 | `expected a value, got ','` |
 | `MissingCommaBetweenArguments` | `alpha(a b)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected ',' or ')', got 'b'` |
 | `PositionalAfterNamed` | `alpha(p=1, a)` | `E_SYN_POSITIONAL_AFTER_NAMED` | 11 | `positional argument is not allowed after a named argument` |
-| `ScalarInTransportList` | `alpha([alpha(), 1])` | `E_SYN_UNEXPECTED_TOKEN` | 16 | `expected a transport expression, got '1'` |
-| `BareWordInTransportList` | `alpha([alpha])` | `E_SYN_UNEXPECTED_TOKEN` | 12 | `expected '(', got ']'` |
-| `NestedTransportList` | `alpha([[alpha()]])` | `E_SYN_NESTED_LIST` | 7 | `nested transport lists are not allowed` |
+| `NestedList` | `alpha([[alpha()]])` | `E_SYN_NESTED_LIST` | 7 | `nested lists are not allowed` |
 | `StructFieldMissingEquals` | `alpha({p})` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected '=', got '}'` |
 | `MissingCommaBetweenStructFields` | `alpha({p=1 q=2})` | `E_SYN_UNEXPECTED_TOKEN` | 11 | `expected ',' or '}', got 'q'` |
 | `StructTrailingComma` | `alpha({p=1,})` | `E_SYN_TRAILING_COMMA` | 10 | `trailing comma is not allowed in struct` |
@@ -123,7 +122,7 @@ The message column is the exact expected `FactoryError.Message`.
 | `CastMissingTypeName` | `alpha() as` | `E_SYN_UNEXPECTED_TOKEN` | 10 | `expected a transport type name, got <end of input>` |
 | `CastTypeIsNotIdentifier` | `alpha() as 1Type` | `E_SYN_UNEXPECTED_TOKEN` | 11 | `expected a transport type name, got '1Type'` |
 | `ChainedCast` | `alpha() as TypeA as TypeB` | `E_SYN_CHAINED_CAST` | 17 | `chained casts are not allowed` |
-| `ListTrailingComma` | `alpha([beta() as TypeA,])` | `E_SYN_TRAILING_COMMA` | 22 | `trailing comma is not allowed in transport list` |
+| `ListTrailingComma` | `alpha([beta() as TypeA,])` | `E_SYN_TRAILING_COMMA` | 22 | `trailing comma is not allowed in list` |
 | `ListMissingCloseBracket` | `alpha([beta(),gamma()` | `E_SYN_UNEXPECTED_TOKEN` | 21 | `expected ',' or ']', got <end of input>` |
 | `StructMissingCloseBrace` | `alpha({p=1` | `E_SYN_UNEXPECTED_TOKEN` | 10 | `expected ',' or '}', got <end of input>` |
 | `TopLevelList` | `[alpha()]` | `E_SYN_UNEXPECTED_TOKEN` | 0 | `expected a transport expression, got '['` |

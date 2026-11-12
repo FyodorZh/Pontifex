@@ -186,7 +186,7 @@ SpanFrom(start, end) => SourceSpan { Start = start; Length = end - start }
 
 AstValue          (abstract)  { SourceSpan Span; }
 AstExpr           : AstValue   { AstTransportCall Call; AstCast? Cast; }
-AstList           : AstValue   { IReadOnlyList<AstExpr> Elements;
+AstList           : AstValue   { IReadOnlyList<AstValue> Elements;
                                  int OpenOffset; int CloseOffset; }
 AstStruct         : AstValue   { IReadOnlyList<AstField> Fields;
                                  int OpenOffset; int CloseOffset; }
@@ -210,8 +210,8 @@ AST invariants:
 - `AstExpr.Cast` is `null` or one cast; there is no chain.
 - `AstArg.Name` is `null` for positional arguments and non-null for named
   arguments. Named arguments form a suffix; the parser enforces this.
-- `AstList.Elements` contains only `AstExpr`; never scalars, structs, or nested
-  lists.
+- `AstList.Elements` contains `AstExpr`, `AstScalar`, or `AstStruct` values;
+  nested lists are never present.
 - `AstStruct.Fields` are named; field names are identifier tokens.
 - No AST node contains resolved types, constructors, or validators.
 - `Span` covers the full source range of the node and is used for semantic
@@ -400,16 +400,18 @@ ParseList():
     loop:
         if tokens.current is LBracket:
             error E_SYN_NESTED_LIST at current.Offset
-        if tokens.current is not Word or not IsIdentifier(current.Text):
+                  message "nested lists are not allowed"
+
+        if not CanStartValue(tokens.current):
             error E_SYN_UNEXPECTED_TOKEN
-                  expected "a transport expression"
+                  expected "a value"
                   at current.Offset
-        elements.add(ParseExpr())
+        elements.add(ParseValue())
 
         if tokens.current is Comma:
             comma = consume()
             if tokens.current is RBracket:
-                error E_SYN_TRAILING_COMMA context "transport list"
+                error E_SYN_TRAILING_COMMA context "list"
                       at comma.Offset
             continue
 
@@ -421,8 +423,10 @@ ParseList():
         error E_SYN_UNEXPECTED_TOKEN expected "',' or ']'" at current.Offset
 ```
 
-List elements are expressions. Scalars, structs, and nested lists are rejected
-syntactically.
+List elements are generic values: transport expressions, structs, quoted
+strings, or bare scalars. Nested lists are rejected syntactically. The parser
+does not decide whether a list is a transport list or a data array; that is a
+semantic decision made from the parameter or field kind.
 
 ### 5.7 Structs
 
@@ -1045,6 +1049,9 @@ for each param in constructor.Params in declaration order:
 
             resolvedElements = []
             for each element in value.Elements in order:
+                if element is not AstExpr:
+                    error E_SEM_LIST_ELEMENT_TYPE at element.Span.Start
+                          actual = Shape(element)
                 resolved = ResolveExpr(element, param.Expected)
                 resolvedElements.add(resolved)
 
@@ -1071,7 +1078,7 @@ for each param in constructor.Params in declaration order:
 ```text
 "scalar"          for AstScalar
 "transport"       for AstExpr (including casts)
-"transport list"  for AstList
+"list"            for AstList
 "struct"          for AstStruct
 ```
 
@@ -1827,6 +1834,7 @@ sealed class BuildException : FactoryException { }
 - Nested list: offset of the nested `[` token.
 - Trailing input: offset of the first extra token.
 - List minimum/maximum: offset of the list's `[` token.
+- List element type: offset of the offending element.
 - List homogeneity: offset of the first element whose resolved type differs from
   the first element's type.
 - Struct unknown/duplicate field: offset of the field name token.
@@ -1889,7 +1897,7 @@ Expected-string contexts:
 | Named-argument name that is not an identifier | `an identifier` |
 | After an argument value | `',' or ')'` |
 | Value position | `a value` |
-| List element | `a transport expression` |
+| List element | `a value` |
 | After a list element | `',' or ']'` |
 | Struct field name | `a struct field name` |
 | After a struct field name | `'='` |
@@ -1904,18 +1912,18 @@ Specific syntax errors:
 | `E_SYN_TRAILING_COMMA` | Comma immediately following an argument, list element, or struct field, and immediately before the matching `)`, `]`, or `}` | `trailing comma is not allowed in <context>` | Comma |
 | `E_SYN_POSITIONAL_AFTER_NAMED` | Positional argument after a named argument | `positional argument is not allowed after a named argument` | First token of the positional value |
 | `E_SYN_CHAINED_CAST` | Second `as` in one expression | `chained casts are not allowed` | Second `as` |
-| `E_SYN_NESTED_LIST` | `[` as a list element | `nested transport lists are not allowed` | Nested `[` |
+| `E_SYN_NESTED_LIST` | `[` as a list element | `nested lists are not allowed` | Nested `[` |
 | `E_SYN_TRAILING_INPUT` | Non-EOF token after the top-level expression | `unexpected trailing input` | First extra token |
 
-`<context>` is exactly one of `argument list`, `transport list`, `struct`.
+`<context>` is exactly one of `argument list`, `list`, `struct`.
 A comma with no preceding argument, element, or field is not a trailing comma;
 it is reported as `E_SYN_UNEXPECTED_TOKEN` (for example, `alpha(,)` and
 `alpha([,])`).
 
-The `List element` expected-string row applies when the token cannot start a
-transport expression. If the token is a `Word` identifier not followed by `(`,
-`ParseTransportCall` reports the `After the scheme` row (`'('`) at the following
-token. For example, `alpha([alpha])` reports `expected '('` at offset 12.
+A list element may be a transport expression, struct, quoted string, or bare
+scalar. Nested lists are excluded syntactically. Consequently `alpha([alpha])`,
+`alpha([alpha(), 1])`, and `alpha([beta(), {p=1}])` are syntactically valid; a
+transport-list parameter rejects non-expression elements during resolution.
 
 ### 13.3 Semantic errors
 
@@ -1957,6 +1965,7 @@ Formatting helpers used in messages:
 | `E_SEM_EXPECTED_TRANSPORT` | Transport parameter received non-expression | `parameter '<name>' expects a transport, got <shape>` | Value start |
 | `E_SEM_EXPECTED_TRANSPORT_LIST` | Transport-list parameter received non-list | `parameter '<name>' expects a transport list, got <shape>` | Value start |
 | `E_SEM_EXPECTED_STRUCT` | Struct parameter received non-struct | `parameter '<name>' expects a struct, got <shape>` | Value start |
+| `E_SEM_LIST_ELEMENT_TYPE` | Transport-list element is not a transport expression | `transport list for '<name>' expects transport elements, got <shape>` | Element start |
 | `E_SEM_LIST_MIN` | List count below minimum | `transport list for '<name>' requires at least <min> element(s), got <count>` | List `[` |
 | `E_SEM_LIST_MAX` | List count above maximum | `transport list for '<name>' requires at most <max> element(s), got <count>` | List `[` |
 | `E_SEM_LIST_HOMOGENEITY` | Homogeneous list contains different types | `transport list for '<name>' must contain one transport type; found <types>` | First differing element |
@@ -1984,7 +1993,7 @@ is outside the declared inclusive range. For decimal parameters and fields,
 underflow, and precision loss) or `out of range [<min>, <max>]`. Range bounds use
 invariant integer text and canonical decimal text respectively.
 
-`<shape>` is exactly one of `scalar`, `transport`, `transport list`, `struct`.
+`<shape>` is exactly one of `scalar`, `transport`, `list`, `struct`.
 
 `<known>` is `FormatKnownSchemes()` for unknown schemes and
 `FormatKnownTypes()` for unknown transport types.
@@ -2008,7 +2017,7 @@ Placeholder sources:
 | `<path>` in struct-field errors | Dot-separated field path. Segments for known schema fields are canonical lowercase; the final segment of an unknown field is raw input spelling. |
 | `<param>` | Canonical declared parameter name (lowercase). |
 | `<target>`, `<type>`, `<from>`, `<to>`, `<set>`, `<variants>`, `<types>` | Canonical transport-type names and formatted lists. |
-| `<shape>` | One of `scalar`, `transport`, `transport list`, `struct`. |
+| `<shape>` | One of `scalar`, `transport`, `list`, `struct`. |
 
 In `E_SEM_VALIDATOR_FAILED`, `<name>` is the canonical parameter name for a
 parameter validator; `<path>` is the field path for a struct-field validator.
@@ -2224,6 +2233,7 @@ wide         TypeA
 | `alpha(beta(x)) as TypeB` | inner TypeA, cast to TypeB |
 | `alpha(beta(x)) as TypeA` | identity cast collapses to `alpha(beta(x))` |
 | `gamma([alpha(beta(x)), alpha(beta(x))])` | homogeneous TypeA list |
+| `alpha([alpha(), 1, {p=2}])` | syntactically valid generic list; semantic validity depends on parameter kind |
 | `structy({name=x, nested={a=1}})` | nested struct |
 | `beta("a, b")` | quoted scalar with comma |
 | `beta("")` | empty scalar |
@@ -2241,11 +2251,9 @@ wide         TypeA
 | `alpha(` | `E_SYN_UNEXPECTED_TOKEN` expected `a value or ')'` | 6 |
 | `alpha(a,)` | `E_SYN_TRAILING_COMMA` | 7 |
 | `alpha(,)` | `E_SYN_UNEXPECTED_TOKEN` expected `a value or ')'` | 6 |
-| `alpha([,])` | `E_SYN_UNEXPECTED_TOKEN` expected `a transport expression` | 7 |
+| `alpha([,])` | `E_SYN_UNEXPECTED_TOKEN` expected `a value` | 7 |
 | `alpha(a b)` | `E_SYN_UNEXPECTED_TOKEN` expected `',' or ')'` | 8 |
 | `alpha(p=1, a)` | `E_SYN_POSITIONAL_AFTER_NAMED` | 11 |
-| `alpha([alpha(), 1])` | `E_SYN_UNEXPECTED_TOKEN` expected `a transport expression` | 16 |
-| `alpha([alpha])` | `E_SYN_UNEXPECTED_TOKEN` expected `'('` | 12 |
 | `alpha([[alpha()]])` | `E_SYN_NESTED_LIST` | 7 |
 | `alpha({p})` | `E_SYN_UNEXPECTED_TOKEN` expected `'='` | 8 |
 | `alpha({p=1,})` | `E_SYN_TRAILING_COMMA` | 10 |
@@ -2270,6 +2278,10 @@ wide         TypeA
 | `gamma([alpha(beta(x))])` | `E_SEM_LIST_MIN` | 6 |
 | `gamma([alpha(beta(x)), alpha(beta(x)), alpha(beta(x)), alpha(beta(x))])` | `E_SEM_LIST_MAX` | 6 |
 | `gamma([alpha(beta(x)), beta(y)])` | `E_SEM_LIST_HOMOGENEITY` | 23 |
+| `alpha([alpha(), 1])` | `E_SEM_EXPECTED_TRANSPORT` (shape `list`) | 6 |
+| `alpha([alpha])` | `E_SEM_EXPECTED_TRANSPORT` (shape `list`) | 6 |
+| `gamma([alpha(beta(x)), 1])` | `E_SEM_LIST_ELEMENT_TYPE` (shape `scalar`) | 23 |
+| `gamma([alpha(beta(x)), {}])` | `E_SEM_LIST_ELEMENT_TYPE` (shape `struct`) | 23 |
 | `outer(gamma([alpha(beta(x)), alpha(beta(x))]))` | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` | 6 |
 | `shared(x)` | `E_SEM_AMBIGUOUS_SCHEME` | 0 |
 | `validated(bad)` | `E_SEM_VALIDATOR_FAILED` | 10 |

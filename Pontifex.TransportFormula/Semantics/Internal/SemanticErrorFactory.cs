@@ -125,6 +125,17 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                 offset);
         }
 
+        public static FactoryError ListElementType(
+            string paramName,
+            string shape,
+            int offset)
+        {
+            return Create(
+                "E_SEM_LIST_ELEMENT_TYPE",
+                "transport list for '" + paramName + "' expects transport elements, got " + shape,
+                offset);
+        }
+
         public static FactoryError ListMin(string paramName, int min, int count, int offset)
         {
             return Create(

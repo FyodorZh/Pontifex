@@ -254,7 +254,7 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                 case AstExpr:
                     return "transport";
                 case AstList:
-                    return "transport list";
+                    return "list";
                 case AstStruct:
                     return "struct";
                 default:
@@ -291,7 +291,16 @@ namespace Pontifex.TransportFormula.Semantics.Internal
             var elements = new List<ResolvedExpr>(count);
             for (var i = 0; i < count; i++)
             {
-                elements.Add(resolveExpression(list.Elements[i], parameter.Expected));
+                var element = list.Elements[i];
+                if (element is not AstExpr expression)
+                {
+                    throw new SemanticAbort(SemanticErrorFactory.ListElementType(
+                        parameter.Name,
+                        Shape(element),
+                        element.Span.Start));
+                }
+
+                elements.Add(resolveExpression(expression, parameter.Expected));
             }
 
             if (parameter.Homogeneous && elements.Count > 1)

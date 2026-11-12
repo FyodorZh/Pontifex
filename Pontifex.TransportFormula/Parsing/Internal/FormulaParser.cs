@@ -215,13 +215,13 @@ namespace Pontifex.TransportFormula.Parsing.Internal
             {
                 var emptyClose = _cursor.Consume();
                 return new AstList(
-                    Array.Empty<AstExpr>(),
+                    Array.Empty<AstValue>(),
                     open.Span.Start,
                     emptyClose.Span.Start,
                     SpanFrom(open.Span.Start, emptyClose.Span.End));
             }
 
-            var elements = new List<AstExpr>();
+            var elements = new List<AstValue>();
 
             while (true)
             {
@@ -231,13 +231,12 @@ namespace Pontifex.TransportFormula.Parsing.Internal
                         ParsingErrorFactory.SyntaxNestedList(_cursor.Current.Span.Start));
                 }
 
-                if (_cursor.Current.Kind != FormulaTokenKind.Word
-                    || !NameNormalizer.IsIdentifier(_cursor.Current.Text))
+                if (!CanStartValue(_cursor.Current))
                 {
-                    throw Unexpected("a transport expression");
+                    throw Unexpected("a value");
                 }
 
-                elements.Add(ParseExpr());
+                elements.Add(ParseValue());
 
                 if (_cursor.Current.Kind == FormulaTokenKind.Comma)
                 {
@@ -245,7 +244,7 @@ namespace Pontifex.TransportFormula.Parsing.Internal
                     if (_cursor.Current.Kind == FormulaTokenKind.RBracket)
                     {
                         throw new SyntaxAbort(
-                            ParsingErrorFactory.SyntaxTrailingComma("transport list", comma.Span.Start));
+                            ParsingErrorFactory.SyntaxTrailingComma("list", comma.Span.Start));
                     }
 
                     continue;
