@@ -39,16 +39,18 @@ Implemented and covered by the existing suites:
 - resolver, argument binder, parameter and struct validation;
 - canonical printer and invariant validation;
 - bootstrap facade over the formula pipeline;
-- core transport registration contract in `Pontifex/Factory/Registration`.
+- core transport registration contract in `Pontifex/Factory/Registration`;
+- project decomposition into `Pontifex.TransportFormula` and `Pontifex.Factory`;
+- direct `ITransport` compiler and runtime constructor registry;
+- `Compilation` test suite (38 tests).
 
 Not implemented yet:
 
-- the formula/runtime project split described in §4;
-- the direct `ITransport` compiler and runtime constructor registry;
-- the `Compilation` test suite;
-- bootstrap registration and compiler-creation wiring;
+- bootstrap registration and compiler-creation wiring (`CoreRegistrationAdapter`,
+  `RegisterTransport(ITransportRegistration)`, `CreateCompiler`);
 - migration of concrete transport constructors to the core registration
-  contract.
+  contract;
+- optional `TransportTypeId` decoupling and its binding layer.
 
 ---
 
@@ -270,7 +272,7 @@ These decisions supersede the earlier `IDescription` adapter plan.
 
 ## 4. Solution and project layout
 
-Current state before Milestone 5:
+Historical layout before Step 1 (for migration context):
 
 ```text
 Pontifex/
@@ -305,7 +307,7 @@ Tests/Pontifex.Factory.Tests/
   Bootstrap/
 ```
 
-Target layout after Milestone 5:
+Target layout (Steps 1-3 implemented; Step 4 bootstrap wiring pending):
 
 ```text
 Pontifex/
@@ -1372,11 +1374,9 @@ pass.
 
 ### 11.6 Compilation tests
 
-Create a `Compilation` Test Suit under
-`Tests/Pontifex.Factory.Tests/Compilation/` when the first compiler test is
-added. `Tests/RULES.md` forbids an empty layer, so the suite `README.md`,
-`Coverage.md`, `Harness/`, and `Tests/` land in the same change as the first
-test file.
+The `Compilation` Test Suit is implemented under
+`Tests/Pontifex.Factory.Tests/Compilation/` with 38 tests. The shape and matrix
+below are the coverage contract; keep them in sync when adding cases.
 
 Suite shape:
 
@@ -1818,15 +1818,16 @@ Aim for:
 - Keep the core registration contract in `Pontifex.Factory.Registration`.
 - Implement the runtime `TransportCompiler`, `ITransportCompiler`,
   `ITransportConstructorRegistry`, and `TransportConstructorRegistry`.
-- Implement `CoreRegistrationAdapter` from core registrations to formula
-  metadata.
 - Add `E_BLD_CONSTRUCTOR_NOT_FOUND`; keep `E_BLD_CONSTRUCTOR_FAILED` and
   `E_BLD_NO_CONVERSION_PATH`.
 - Add the `Compilation` Test Suit with the matrix in §11.6.
 - Build/test passes.
+- **Status:** implemented and verified (38 Compilation tests; 591 total tests).
 
 ### Milestone 6 — Bootstrap integration
 
+- Implement `CoreRegistrationAdapter` from core registrations to formula
+  metadata.
 - Extend `ITransportFactoryBuilder` with
   `RegisterTransport(ITransportRegistration)`.
 - Seal both the formula registry and the runtime constructor registry on
@@ -1935,10 +1936,12 @@ Aim for:
 
 ## 18. Handoff checklist
 
+**Status:** Steps 1-3 are implemented and verified. Start at Step 4.
+
 Execute in this order. Each step must leave `dotnet build` and the existing
 `dotnet test` suites green before the next step starts.
 
-### Step 1 — Split the projects
+### Step 1 — Split the projects (done)
 
 - Rename the current `Pontifex.Factory` formula project to
   `Pontifex.TransportFormula`.
@@ -1954,7 +1957,7 @@ Execute in this order. Each step must leave `dotnet build` and the existing
 - Verify the formula assembly has no `ITransport`, `ILogger`, `IMemoryRental`,
   `IConvertersGraph`, or `IDescription` reference.
 
-### Step 2 — Add the runtime compiler
+### Step 2 — Add the runtime compiler (done)
 
 - Add `ITransportCompiler`, `TransportCompiler`,
   `ITransportConstructorRegistry`, and `TransportConstructorRegistry`.
@@ -1965,7 +1968,7 @@ Execute in this order. Each step must leave `dotnet build` and the existing
 - Keep null-root and unknown-node checks on `E_CMP_INCONSISTENT_TREE`.
 - Make the constructor registry immutable after the factory is built.
 
-### Step 3 — Create the Compilation suite
+### Step 3 — Create the Compilation suite (done)
 
 - Create `Tests/Pontifex.Factory.Tests/Compilation/` with root `README.md`,
   root `Coverage.md`, `Harness/`, and `Tests/` in one change.
@@ -1976,7 +1979,7 @@ Execute in this order. Each step must leave `dotnet build` and the existing
   `Pontifex.Factory.Tests.Compilation`.
 - Update `Coverage.md` in the same change.
 
-### Step 4 — Integrate the bootstrap
+### Step 4 — Integrate the bootstrap (next)
 
 - Add `ITransportFactoryBuilder.RegisterTransport(ITransportRegistration)`.
 - Add the internal `CoreRegistrationAdapter`.
