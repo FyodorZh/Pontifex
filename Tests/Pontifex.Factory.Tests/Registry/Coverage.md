@@ -6,13 +6,13 @@
   `MetadataValidator`, and `RegistryErrorFactory`.
 - **Directory:** `Tests/Pontifex.Factory.Tests/Registry`
 - **Inheritance parent:** — (root, Test Suit)
-- **Contract:** [parsing.md](../../../Pontifex.Factory/parsing.md) §6.6-6.8 and
-  §13.4, [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md)
-  §8, [IRegistry.cs](../../../Pontifex.Factory/Registry/IRegistry.cs),
-  [ITransportTypeCatalog.cs](../../../Pontifex.Factory/Registry/ITransportTypeCatalog.cs),
-  [MetadataDtos.cs](../../../Pontifex.Factory/Registry/MetadataDtos.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
-  [FactoryExceptions.cs](../../../Pontifex.Factory/FactoryExceptions.cs)
+- **Contract:** [parsing.md](../../../Pontifex.TransportFormula/parsing.md) §6.6-6.8 and
+  §13.4, [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md)
+  §8, [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
+  [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
+  [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
+  [FactoryExceptions.cs](../../../Pontifex.TransportFormula/FactoryExceptions.cs)
 
 ## Covered tests
 

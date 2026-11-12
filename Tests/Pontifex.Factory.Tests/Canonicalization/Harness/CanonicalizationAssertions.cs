@@ -1,7 +1,7 @@
 using System;
-using Pontifex.Factory;
-using Pontifex.Factory.Canonicalization.Internal;
-using Pontifex.Factory.Semantics;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Canonicalization.Internal;
+using Pontifex.TransportFormula.Semantics;
 
 namespace Pontifex.Factory.Tests.Canonicalization.Harness;
 

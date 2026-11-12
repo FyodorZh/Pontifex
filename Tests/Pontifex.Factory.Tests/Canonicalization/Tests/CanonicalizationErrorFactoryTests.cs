@@ -1,6 +1,6 @@
 using NUnit.Framework;
-using Pontifex.Factory;
-using Pontifex.Factory.Canonicalization.Internal;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Canonicalization.Internal;
 using Pontifex.Factory.Tests.Canonicalization.Harness;
 
 namespace Pontifex.Factory.Tests.Canonicalization;

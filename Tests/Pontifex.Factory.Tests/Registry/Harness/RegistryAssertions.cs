@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using Pontifex.Factory;
+using Pontifex.TransportFormula;
 
 namespace Pontifex.Factory.Tests.Registry.Harness;
 

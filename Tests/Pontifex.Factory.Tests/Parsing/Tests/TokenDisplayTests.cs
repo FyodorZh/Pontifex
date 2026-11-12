@@ -1,4 +1,4 @@
-using Pontifex.Factory.Internal;
+using Pontifex.TransportFormula.Internal;
 
 namespace Pontifex.Factory.Tests.Parsing;
 

@@ -27,35 +27,35 @@ production project; no test-only production seam exists.
 
 ## Contract references
 
-Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
-`Pontifex.TransportFormula` and updates these links.
+Paths below reflect the split layout: formula sources live under
+`Pontifex.TransportFormula`, runtime sources under `Pontifex.Factory`.
 
-- [parsing.md](../../../Pontifex.Factory/parsing.md) — resolution entry points and
+- [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — resolution entry points and
   expected types (§7.1), casts (§7.2), transport selection (§7.3), binding
   (§7.4), parameter validation (§7.5), expected-type guarantees (§7.6), struct
   resolution (§7.8), determinism order (§7.9), the resolved tree (§8), offset
   rules (§12.2), error precedence (§12.3), semantic errors (§13.3), and the
   conformance matrix (§14.1-14.3).
-- [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) —
+- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
   semantics milestone, component responsibilities, cast rules, resolution order,
   and test expectations (§9).
 - Public contract and DTOs:
-  [IResolver.cs](../../../Pontifex.Factory/Semantics/IResolver.cs),
-  [ResolvedDtos.cs](../../../Pontifex.Factory/Semantics/ResolvedDtos.cs),
-  [AstDtos.cs](../../../Pontifex.Factory/Parsing/AstDtos.cs),
-  [IRegistry.cs](../../../Pontifex.Factory/Registry/IRegistry.cs),
-  [ITransportTypeCatalog.cs](../../../Pontifex.Factory/Registry/ITransportTypeCatalog.cs),
-  [MetadataDtos.cs](../../../Pontifex.Factory/Registry/MetadataDtos.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
-  [SourceSpan.cs](../../../Pontifex.Factory/SourceSpan.cs).
+  [IResolver.cs](../../../Pontifex.TransportFormula/Semantics/IResolver.cs),
+  [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
+  [AstDtos.cs](../../../Pontifex.TransportFormula/Parsing/AstDtos.cs),
+  [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
+  [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
+  [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
+  [SourceSpan.cs](../../../Pontifex.TransportFormula/SourceSpan.cs).
 - Internal subjects:
-  [FormulaResolver.cs](../../../Pontifex.Factory/Semantics/Internal/FormulaResolver.cs),
-  [ConstructorSelector.cs](../../../Pontifex.Factory/Semantics/Internal/ConstructorSelector.cs),
-  [ArgumentBinder.cs](../../../Pontifex.Factory/Semantics/Internal/ArgumentBinder.cs),
-  [ParameterValidator.cs](../../../Pontifex.Factory/Semantics/Internal/ParameterValidator.cs),
-  [StructValidator.cs](../../../Pontifex.Factory/Semantics/Internal/StructValidator.cs),
-  [SemanticErrorFactory.cs](../../../Pontifex.Factory/Semantics/Internal/SemanticErrorFactory.cs),
-  [SemanticAbort.cs](../../../Pontifex.Factory/Semantics/Internal/SemanticAbort.cs).
+  [FormulaResolver.cs](../../../Pontifex.TransportFormula/Semantics/Internal/FormulaResolver.cs),
+  [ConstructorSelector.cs](../../../Pontifex.TransportFormula/Semantics/Internal/ConstructorSelector.cs),
+  [ArgumentBinder.cs](../../../Pontifex.TransportFormula/Semantics/Internal/ArgumentBinder.cs),
+  [ParameterValidator.cs](../../../Pontifex.TransportFormula/Semantics/Internal/ParameterValidator.cs),
+  [StructValidator.cs](../../../Pontifex.TransportFormula/Semantics/Internal/StructValidator.cs),
+  [SemanticErrorFactory.cs](../../../Pontifex.TransportFormula/Semantics/Internal/SemanticErrorFactory.cs),
+  [SemanticAbort.cs](../../../Pontifex.TransportFormula/Semantics/Internal/SemanticAbort.cs).
 
 ## Layers
 

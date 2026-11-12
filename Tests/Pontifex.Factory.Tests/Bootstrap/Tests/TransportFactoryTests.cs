@@ -1,5 +1,6 @@
 using System;
-using Pontifex.Factory.Semantics;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Semantics;
 using Pontifex.Factory.Tests.Bootstrap.Harness;
 
 namespace Pontifex.Factory.Tests.Bootstrap

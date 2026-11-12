@@ -1,7 +1,8 @@
 using System.Linq;
 using Pontifex;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Semantics;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Semantics;
 using Pontifex.Factory.Tests.Semantics.Harness;
 
 namespace Pontifex.Factory.Tests.Semantics;

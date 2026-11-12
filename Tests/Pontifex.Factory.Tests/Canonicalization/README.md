@@ -27,29 +27,29 @@ production project; no test-only production seam exists.
 
 ## Contract references
 
-Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
-`Pontifex.TransportFormula` and updates these links.
+Paths below reflect the split layout: formula sources live under
+`Pontifex.TransportFormula`, runtime sources under `Pontifex.Factory`.
 
-- [parsing.md](../../../Pontifex.Factory/parsing.md) — canonical printer (§10),
+- [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — canonical printer (§10),
   printer examples (§10.6), round-trip and equality (§11), printer errors
   (§13.5), and the printer invariant matrix (§14.7).
-- [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) —
+- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
   canonicalization milestone, component responsibilities, printing algorithm,
   and test expectations (§10).
 - Public contract and DTOs:
-  [ICanonicalizer.cs](../../../Pontifex.Factory/Canonicalization/ICanonicalizer.cs),
-  [ResolvedDtos.cs](../../../Pontifex.Factory/Semantics/ResolvedDtos.cs),
-  [MetadataDtos.cs](../../../Pontifex.Factory/Registry/MetadataDtos.cs),
-  [ITransportTypeCatalog.cs](../../../Pontifex.Factory/Registry/ITransportTypeCatalog.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
-  [FactoryExceptions.cs](../../../Pontifex.Factory/FactoryExceptions.cs),
-  [SourceSpan.cs](../../../Pontifex.Factory/SourceSpan.cs).
+  [ICanonicalizer.cs](../../../Pontifex.TransportFormula/Canonicalization/ICanonicalizer.cs),
+  [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
+  [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
+  [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
+  [FactoryExceptions.cs](../../../Pontifex.TransportFormula/FactoryExceptions.cs),
+  [SourceSpan.cs](../../../Pontifex.TransportFormula/SourceSpan.cs).
 - Internal subjects:
-  [FormulaCanonicalizer.cs](../../../Pontifex.Factory/Canonicalization/Internal/FormulaCanonicalizer.cs),
-  [PositionalFormatter.cs](../../../Pontifex.Factory/Canonicalization/Internal/PositionalFormatter.cs),
-  [ScalarFormatter.cs](../../../Pontifex.Factory/Canonicalization/Internal/ScalarFormatter.cs),
-  [PrinterInvariantValidator.cs](../../../Pontifex.Factory/Canonicalization/Internal/PrinterInvariantValidator.cs),
-  [CanonicalizationErrorFactory.cs](../../../Pontifex.Factory/Canonicalization/Internal/CanonicalizationErrorFactory.cs).
+  [FormulaCanonicalizer.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/FormulaCanonicalizer.cs),
+  [PositionalFormatter.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/PositionalFormatter.cs),
+  [ScalarFormatter.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/ScalarFormatter.cs),
+  [PrinterInvariantValidator.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/PrinterInvariantValidator.cs),
+  [CanonicalizationErrorFactory.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/CanonicalizationErrorFactory.cs).
 
 ## Layers
 

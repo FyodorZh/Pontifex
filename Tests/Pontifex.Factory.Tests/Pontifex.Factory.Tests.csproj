@@ -20,6 +20,8 @@
     <Using Include="NUnit.Framework"/>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
+    <ProjectReference Include="..\..\Pontifex.TransportFormula\Pontifex.TransportFormula.csproj" />
     <ProjectReference Include="..\..\Pontifex.Factory\Pontifex.Factory.csproj" />
   </ItemGroup>
 </Project>

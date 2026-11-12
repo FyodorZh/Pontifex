@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using Pontifex.Factory;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Registry.Internal;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Registry.Internal;
 using Pontifex.Factory.Tests.Registry.Harness;
 
 namespace Pontifex.Factory.Tests.Registry;

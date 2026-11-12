@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Pontifex.Factory.Semantics;
+using Pontifex.TransportFormula.Semantics;
 using Pontifex.Factory.Tests.Semantics.Harness;
 
 namespace Pontifex.Factory.Tests.Semantics;

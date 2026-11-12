@@ -6,12 +6,12 @@
   `TransportFactory`, and `FactoryComponentFactory` (through `Build`).
 - **Directory:** `Tests/Pontifex.Factory.Tests/Bootstrap`
 - **Inheritance parent:** — (root, Test Suit)
-- **Contract:** [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md)
-  §5, §12, §16; [parsing.md](../../../Pontifex.Factory/parsing.md) §12–13;
+- **Contract:** [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md)
+  §5, §12, §16; [parsing.md](../../../Pontifex.TransportFormula/parsing.md) §12–13;
   [ITransportFactory.cs](../../../Pontifex.Factory/ITransportFactory.cs),
   [ITransportFactoryBuilder.cs](../../../Pontifex.Factory/ITransportFactoryBuilder.cs),
   [TransportFactoryBootstrap.cs](../../../Pontifex.Factory/TransportFactoryBootstrap.cs),
-  [FactoryExceptions.cs](../../../Pontifex.Factory/FactoryExceptions.cs)
+  [FactoryExceptions.cs](../../../Pontifex.TransportFormula/FactoryExceptions.cs)
 
 ## Covered tests
 

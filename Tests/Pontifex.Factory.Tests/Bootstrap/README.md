@@ -29,23 +29,23 @@ directly; `InternalsVisibleTo` is not used to reach bootstrap internals.
 
 ## Contract references
 
-Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
-`Pontifex.TransportFormula` and updates these links.
+Paths below reflect the split layout: formula sources live under
+`Pontifex.TransportFormula`, runtime sources under `Pontifex.Factory`.
 
-- [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) —
+- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
   bootstrap subsystem (§12), dependency rules (§5), and definition of done (§16).
-- [parsing.md](../../../Pontifex.Factory/parsing.md) — parse, resolution, and
+- [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — parse, resolution, and
   printing error phases (§12–13).
 - Public contract:
   [TransportFactoryBootstrap.cs](../../../Pontifex.Factory/TransportFactoryBootstrap.cs),
   [ITransportFactoryBuilder.cs](../../../Pontifex.Factory/ITransportFactoryBuilder.cs),
   [ITransportFactory.cs](../../../Pontifex.Factory/ITransportFactory.cs),
-  [IRegistry.cs](../../../Pontifex.Factory/Registry/IRegistry.cs),
-  [MetadataDtos.cs](../../../Pontifex.Factory/Registry/MetadataDtos.cs),
-  [ResolvedDtos.cs](../../../Pontifex.Factory/Semantics/ResolvedDtos.cs),
-  [ICompiler.cs](../../../Pontifex.Factory/Compilation/ICompiler.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
-  [FactoryExceptions.cs](../../../Pontifex.Factory/FactoryExceptions.cs).
+  [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
+  [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
+  [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
+  [ICompiler.cs](../../../Pontifex.TransportFormula/Compilation/ICompiler.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
+  [FactoryExceptions.cs](../../../Pontifex.TransportFormula/FactoryExceptions.cs).
 - Core registration contract:
   [ITransportRegistration.cs](../../../Pontifex/Factory/Registration/ITransportRegistration.cs),
   [ITransportBuildContext.cs](../../../Pontifex/Factory/Registration/ITransportBuildContext.cs),

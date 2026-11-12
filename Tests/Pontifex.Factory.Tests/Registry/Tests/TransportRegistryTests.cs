@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Pontifex;
-using Pontifex.Factory.Registry;
+using Pontifex.TransportFormula.Registry;
 using Pontifex.Factory.Tests.Registry.Harness;
 
 namespace Pontifex.Factory.Tests.Registry;

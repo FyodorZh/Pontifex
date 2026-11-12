@@ -6,16 +6,16 @@
   `PrinterInvariantValidator`, and `CanonicalizationErrorFactory`.
 - **Directory:** `Tests/Pontifex.Factory.Tests/Canonicalization`
 - **Inheritance parent:** — (root, Test Suit)
-- **Contract:** [parsing.md](../../../Pontifex.Factory/parsing.md) §10, §11,
+- **Contract:** [parsing.md](../../../Pontifex.TransportFormula/parsing.md) §10, §11,
   §13.5, §14.4, §14.7, §14.8,
-  [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) §10,
-  [ICanonicalizer.cs](../../../Pontifex.Factory/Canonicalization/ICanonicalizer.cs),
-  [ResolvedDtos.cs](../../../Pontifex.Factory/Semantics/ResolvedDtos.cs),
-  [MetadataDtos.cs](../../../Pontifex.Factory/Registry/MetadataDtos.cs),
-  [ITransportTypeCatalog.cs](../../../Pontifex.Factory/Registry/ITransportTypeCatalog.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
-  [FactoryExceptions.cs](../../../Pontifex.Factory/FactoryExceptions.cs),
-  [SourceSpan.cs](../../../Pontifex.Factory/SourceSpan.cs)
+  [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) §10,
+  [ICanonicalizer.cs](../../../Pontifex.TransportFormula/Canonicalization/ICanonicalizer.cs),
+  [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
+  [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
+  [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
+  [FactoryExceptions.cs](../../../Pontifex.TransportFormula/FactoryExceptions.cs),
+  [SourceSpan.cs](../../../Pontifex.TransportFormula/SourceSpan.cs)
 
 ## Covered tests
 

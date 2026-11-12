@@ -1,8 +1,8 @@
 using System;
 using Pontifex;
-using Pontifex.Factory.Compilation;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Semantics;
+using Pontifex.TransportFormula.Compilation;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Semantics;
 
 namespace Pontifex.Factory.Tests.Bootstrap.Harness
 {

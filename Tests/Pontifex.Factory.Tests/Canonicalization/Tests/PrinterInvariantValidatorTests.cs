@@ -1,9 +1,9 @@
 using NUnit.Framework;
 using Pontifex;
-using Pontifex.Factory;
-using Pontifex.Factory.Canonicalization.Internal;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Semantics;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Canonicalization.Internal;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Semantics;
 using Pontifex.Factory.Tests.Canonicalization.Harness;
 
 namespace Pontifex.Factory.Tests.Canonicalization;

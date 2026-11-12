@@ -1,4 +1,4 @@
-using Pontifex.Factory.Registry;
+using Pontifex.TransportFormula.Registry;
 
 namespace Pontifex.Factory
 {

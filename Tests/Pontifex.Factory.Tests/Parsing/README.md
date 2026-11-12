@@ -25,27 +25,27 @@ production project; no test-only production seam exists.
 
 ## Contract references
 
-Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
-`Pontifex.TransportFormula` and updates these links.
+Paths below reflect the split layout: formula sources live under
+`Pontifex.TransportFormula`, runtime sources under `Pontifex.Factory`.
 
-- [grammar.md](../../../Pontifex.Factory/grammar.md) — normative syntax.
-- [parsing.md](../../../Pontifex.Factory/parsing.md) — lexing, parser algorithms,
+- [grammar.md](../../../Pontifex.TransportFormula/grammar.md) — normative syntax.
+- [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — lexing, parser algorithms,
   display rules, diagnostics, and error catalogue.
-- [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) —
+- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
   parsing milestone, test expectations, and reconciliation decisions.
 - Production contract and DTOs:
-  [IParser.cs](../../../Pontifex.Factory/Parsing/IParser.cs),
-  [FormulaToken.cs](../../../Pontifex.Factory/Parsing/FormulaToken.cs),
-  [AstDtos.cs](../../../Pontifex.Factory/Parsing/AstDtos.cs),
-  [FormulaParseResult.cs](../../../Pontifex.Factory/Parsing/FormulaParseResult.cs),
-  [SourceSpan.cs](../../../Pontifex.Factory/SourceSpan.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs).
+  [IParser.cs](../../../Pontifex.TransportFormula/Parsing/IParser.cs),
+  [FormulaToken.cs](../../../Pontifex.TransportFormula/Parsing/FormulaToken.cs),
+  [AstDtos.cs](../../../Pontifex.TransportFormula/Parsing/AstDtos.cs),
+  [FormulaParseResult.cs](../../../Pontifex.TransportFormula/Parsing/FormulaParseResult.cs),
+  [SourceSpan.cs](../../../Pontifex.TransportFormula/SourceSpan.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs).
 - Internal subjects:
-  [FormulaLexer.cs](../../../Pontifex.Factory/Parsing/Internal/FormulaLexer.cs),
-  [TokenCursor.cs](../../../Pontifex.Factory/Parsing/Internal/TokenCursor.cs),
-  [FormulaParser.cs](../../../Pontifex.Factory/Parsing/Internal/FormulaParser.cs),
-  [ParsingErrorFactory.cs](../../../Pontifex.Factory/Parsing/Internal/ParsingErrorFactory.cs),
-  [TokenDisplay.cs](../../../Pontifex.Factory/Internal/TokenDisplay.cs).
+  [FormulaLexer.cs](../../../Pontifex.TransportFormula/Parsing/Internal/FormulaLexer.cs),
+  [TokenCursor.cs](../../../Pontifex.TransportFormula/Parsing/Internal/TokenCursor.cs),
+  [FormulaParser.cs](../../../Pontifex.TransportFormula/Parsing/Internal/FormulaParser.cs),
+  [ParsingErrorFactory.cs](../../../Pontifex.TransportFormula/Parsing/Internal/ParsingErrorFactory.cs),
+  [TokenDisplay.cs](../../../Pontifex.TransportFormula/Internal/TokenDisplay.cs).
 
 ## Layers
 

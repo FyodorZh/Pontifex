@@ -1,5 +1,5 @@
 using System.Linq;
-using Pontifex.Factory.Registry;
+using Pontifex.TransportFormula.Registry;
 using Pontifex.Factory.Tests.Semantics.Harness;
 
 namespace Pontifex.Factory.Tests.Semantics;

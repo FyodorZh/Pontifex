@@ -1,11 +1,11 @@
 using System;
-using Pontifex.Factory.Canonicalization;
-using Pontifex.Factory.Canonicalization.Internal;
-using Pontifex.Factory.Parsing;
-using Pontifex.Factory.Parsing.Internal;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Semantics;
-using Pontifex.Factory.Semantics.Internal;
+using Pontifex.TransportFormula.Canonicalization;
+using Pontifex.TransportFormula.Canonicalization.Internal;
+using Pontifex.TransportFormula.Parsing;
+using Pontifex.TransportFormula.Parsing.Internal;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Semantics;
+using Pontifex.TransportFormula.Semantics.Internal;
 
 namespace Pontifex.Factory.Bootstrap
 {

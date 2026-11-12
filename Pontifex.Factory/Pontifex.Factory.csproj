@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
+    <ProjectReference Include="..\Pontifex.TransportFormula\Pontifex.TransportFormula.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Pontifex.Factory.Tests" />

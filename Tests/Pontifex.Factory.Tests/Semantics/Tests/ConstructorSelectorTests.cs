@@ -1,6 +1,6 @@
 using System;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Semantics.Internal;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Semantics.Internal;
 using Pontifex.Factory.Tests.Semantics.Harness;
 
 namespace Pontifex.Factory.Tests.Semantics;

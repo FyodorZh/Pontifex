@@ -6,14 +6,14 @@
   `ParsingErrorFactory`, and `TokenDisplay`.
 - **Directory:** `Tests/Pontifex.Factory.Tests/Parsing`
 - **Inheritance parent:** — (root, Test Suit)
-- **Contract:** [grammar.md](../../../Pontifex.Factory/grammar.md),
-  [parsing.md](../../../Pontifex.Factory/parsing.md),
-  [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md),
-  [IParser.cs](../../../Pontifex.Factory/Parsing/IParser.cs),
-  [FormulaToken.cs](../../../Pontifex.Factory/Parsing/FormulaToken.cs),
-  [AstDtos.cs](../../../Pontifex.Factory/Parsing/AstDtos.cs),
-  [SourceSpan.cs](../../../Pontifex.Factory/SourceSpan.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs)
+- **Contract:** [grammar.md](../../../Pontifex.TransportFormula/grammar.md),
+  [parsing.md](../../../Pontifex.TransportFormula/parsing.md),
+  [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md),
+  [IParser.cs](../../../Pontifex.TransportFormula/Parsing/IParser.cs),
+  [FormulaToken.cs](../../../Pontifex.TransportFormula/Parsing/FormulaToken.cs),
+  [AstDtos.cs](../../../Pontifex.TransportFormula/Parsing/AstDtos.cs),
+  [SourceSpan.cs](../../../Pontifex.TransportFormula/SourceSpan.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs)
 
 ## Covered tests
 

@@ -1,13 +1,14 @@
 using System;
 using Pontifex;
-using Pontifex.Factory.Canonicalization.Internal;
-using Pontifex.Factory.Internal;
-using Pontifex.Factory.Parsing;
-using Pontifex.Factory.Parsing.Internal;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Registry.Internal;
-using Pontifex.Factory.Semantics;
-using Pontifex.Factory.Semantics.Internal;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Canonicalization.Internal;
+using Pontifex.TransportFormula.Internal;
+using Pontifex.TransportFormula.Parsing;
+using Pontifex.TransportFormula.Parsing.Internal;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Registry.Internal;
+using Pontifex.TransportFormula.Semantics;
+using Pontifex.TransportFormula.Semantics.Internal;
 
 namespace Pontifex.Factory.Tests.Canonicalization.Harness;
 

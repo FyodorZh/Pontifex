@@ -26,26 +26,26 @@ production project; no test-only production seam exists.
 
 ## Contract references
 
-Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
-`Pontifex.TransportFormula` and updates these links.
+Paths below reflect the split layout: formula sources live under
+`Pontifex.TransportFormula`, runtime sources under `Pontifex.Factory`.
 
-- [parsing.md](../../../Pontifex.Factory/parsing.md) — registry and metadata
+- [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — registry and metadata
   (§6), registration rules (§6.7), lookup rules (§6.8), and registration errors
   (§13.4).
-- [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) —
+- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
   registry milestone, component responsibilities, and test expectations (§8).
 - Public contract and DTOs:
-  [IRegistry.cs](../../../Pontifex.Factory/Registry/IRegistry.cs),
-  [ITransportTypeCatalog.cs](../../../Pontifex.Factory/Registry/ITransportTypeCatalog.cs),
-  [MetadataDtos.cs](../../../Pontifex.Factory/Registry/MetadataDtos.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
-  [FactoryExceptions.cs](../../../Pontifex.Factory/FactoryExceptions.cs).
+  [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
+  [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
+  [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
+  [FactoryExceptions.cs](../../../Pontifex.TransportFormula/FactoryExceptions.cs).
 - Internal subjects:
-  [TransportTypeCatalog.cs](../../../Pontifex.Factory/Registry/Internal/TransportTypeCatalog.cs),
-  [TransportRegistry.cs](../../../Pontifex.Factory/Registry/Internal/TransportRegistry.cs),
-  [TransportRegistryBuilder.cs](../../../Pontifex.Factory/Registry/Internal/TransportRegistryBuilder.cs),
-  [MetadataValidator.cs](../../../Pontifex.Factory/Registry/Internal/MetadataValidator.cs),
-  [RegistryErrorFactory.cs](../../../Pontifex.Factory/Registry/Internal/RegistryErrorFactory.cs).
+  [TransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/Internal/TransportTypeCatalog.cs),
+  [TransportRegistry.cs](../../../Pontifex.TransportFormula/Registry/Internal/TransportRegistry.cs),
+  [TransportRegistryBuilder.cs](../../../Pontifex.TransportFormula/Registry/Internal/TransportRegistryBuilder.cs),
+  [MetadataValidator.cs](../../../Pontifex.TransportFormula/Registry/Internal/MetadataValidator.cs),
+  [RegistryErrorFactory.cs](../../../Pontifex.TransportFormula/Registry/Internal/RegistryErrorFactory.cs).
 
 ## Layers
 

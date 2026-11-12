@@ -1,6 +1,7 @@
 using System;
 using Pontifex;
-using Pontifex.Factory.Registry;
+using Pontifex.TransportFormula;
+using Pontifex.TransportFormula.Registry;
 using Pontifex.Factory.Tests.Bootstrap.Harness;
 
 namespace Pontifex.Factory.Tests.Bootstrap

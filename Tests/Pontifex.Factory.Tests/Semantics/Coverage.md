@@ -7,16 +7,16 @@
   internal `SemanticAbort` channel.
 - **Directory:** `Tests/Pontifex.Factory.Tests/Semantics`
 - **Inheritance parent:** — (root, Test Suit)
-- **Contract:** [parsing.md](../../../Pontifex.Factory/parsing.md) §7, §8,
+- **Contract:** [parsing.md](../../../Pontifex.TransportFormula/parsing.md) §7, §8,
   §12.2-12.3, §13.3, §14.1-14.3,
-  [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) §9,
-  [IResolver.cs](../../../Pontifex.Factory/Semantics/IResolver.cs),
-  [ResolvedDtos.cs](../../../Pontifex.Factory/Semantics/ResolvedDtos.cs),
-  [IRegistry.cs](../../../Pontifex.Factory/Registry/IRegistry.cs),
-  [ITransportTypeCatalog.cs](../../../Pontifex.Factory/Registry/ITransportTypeCatalog.cs),
-  [MetadataDtos.cs](../../../Pontifex.Factory/Registry/MetadataDtos.cs),
-  [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
-  [SourceSpan.cs](../../../Pontifex.Factory/SourceSpan.cs)
+  [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) §9,
+  [IResolver.cs](../../../Pontifex.TransportFormula/Semantics/IResolver.cs),
+  [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
+  [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
+  [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
+  [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
+  [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
+  [SourceSpan.cs](../../../Pontifex.TransportFormula/SourceSpan.cs)
 
 ## Covered tests
 

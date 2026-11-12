@@ -1,7 +1,7 @@
 using System;
 using Pontifex;
-using Pontifex.Factory.Registry;
-using Pontifex.Factory.Registry.Internal;
+using Pontifex.TransportFormula.Registry;
+using Pontifex.TransportFormula.Registry.Internal;
 
 namespace Pontifex.Factory.Tests.Registry.Harness;
 

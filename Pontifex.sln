@@ -38,7 +38,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transports.Tests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Transport.Net.Tests", "Tests\Pontifex.Transport.Net.Tests\Pontifex.Transport.Net.Tests.csproj", "{BE618702-2C45-42EA-A4FA-A3549EE9B427}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Factory", "Pontifex.Factory\Pontifex.Factory.csproj", "{F06BA455-321E-4115-AA96-572A121B9E88}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.TransportFormula", "Pontifex.TransportFormula\Pontifex.TransportFormula.csproj", "{F06BA455-321E-4115-AA96-572A121B9E88}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Factory", "Pontifex.Factory\Pontifex.Factory.csproj", "{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pontifex.Factory.Tests", "Tests\Pontifex.Factory.Tests\Pontifex.Factory.Tests.csproj", "{DAE1EEC8-35F8-4D5C-8749-1B0441F0B132}"
 EndProject
@@ -256,6 +258,18 @@ Global
 		{DAE1EEC8-35F8-4D5C-8749-1B0441F0B132}.Release|x64.Build.0 = Release|Any CPU
 		{DAE1EEC8-35F8-4D5C-8749-1B0441F0B132}.Release|x86.ActiveCfg = Release|Any CPU
 		{DAE1EEC8-35F8-4D5C-8749-1B0441F0B132}.Release|x86.Build.0 = Release|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Debug|x64.Build.0 = Debug|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Debug|x86.Build.0 = Debug|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Release|x64.ActiveCfg = Release|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Release|x64.Build.0 = Release|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Release|x86.ActiveCfg = Release|Any CPU
+		{7C3B1D2E-5A4F-4B8C-9D1E-2F3A4B5C6D7E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
