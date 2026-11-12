@@ -25,6 +25,9 @@ production project; no test-only production seam exists.
 
 ## Contract references
 
+Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
+`Pontifex.TransportFormula` and updates these links.
+
 - [grammar.md](../../../Pontifex.Factory/grammar.md) — normative syntax.
 - [parsing.md](../../../Pontifex.Factory/parsing.md) — lexing, parser algorithms,
   display rules, diagnostics, and error catalogue.
@@ -144,7 +147,8 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 - Registry, type catalog, parameter metadata, constructors, and registration.
 - Semantics and resolution.
 - Canonical printing.
-- Compilation and the `IDescription` adapter.
+- Compilation and the direct transport compiler; those belong to the
+  `Factory.Compilation` suite.
 - Bootstrap wiring and `ITransportFactory`.
 - Transport building and concrete transports.
 - Culture-sensitive behaviour, normalization, and case folding of scalar values.

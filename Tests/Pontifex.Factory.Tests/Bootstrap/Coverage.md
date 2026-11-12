@@ -41,7 +41,16 @@
 
 ## Planned
 
-None. All §12.4 bootstrap tests are implemented.
+- Core `ITransportRegistration` registration, formula/runtime registry sealing,
+  `CreateCompiler`, and end-to-end compile integration, as listed in
+  implementation-plan §12.4. Planned cases:
+  - `RegisterTransport_WithCoreRegistration_RegistersFormulaMetadataAndRuntimeConstructor`
+  - `RegisterTransport_WithCoreRegistration_NormalizesTheScheme`
+  - `Build_SealsTheRuntimeConstructorRegistry`
+  - `CreateCompiler_WithRole_ReturnsCompilerForThatRole`
+  - `Compile_WithCoreRegistration_ReturnsLiveTransport`
+  - `Compile_WithFormulaOnlyRegistration_ReportsConstructorNotFound`
+  These land with Milestone 6.
 
 ## Deferred by design
 
@@ -49,10 +58,12 @@ None. All §12.4 bootstrap tests are implemented.
   tree produced by the resolver, and a correct resolver never produces an
   invalid tree. The printer invariant path is covered by
   `Canonicalization/Tests/PrinterInvariantValidatorTests.cs` instead.
-- **`E_CMP_*` compilation invariants.** These belong to the Milestone 5
-  descriptor adapter and its future Compilation suite. This suite proves only
-  that a compiler-raised `CompilerException` passes through unchanged.
-- **Absence of `IDescription` on the facade.** This is a project-reference and
+- **`E_CMP_*` and `E_BLD_*` compiler invariants.** These belong to the future
+  `Factory.Compilation` suite and its direct transport compiler. This suite
+  proves only that a compiler-raised `CompilerException` passes through
+  unchanged.
+- **Formula assembly isolation.** The formula assembly must not reference
+  transports, converters, logging, or memory. This is a project-reference and
   API-shape property. `Tests/RULES.md` TEST-01 forbids reflection, so it is
   verified by dependency review, not by a runtime test.
 - **Thread safety of `Build`.** The contract defines no concurrency guarantee;

@@ -1,10 +1,24 @@
-# Transport Formula Implementation Plan
+# Transport Formula and Factory Implementation Plan
 
 ## 1. Purpose
 
-This document is the implementation plan for the `Pontifex.Factory` subsystem:
-the Transport Formula language and its supporting registry, resolver, canonical
-printer, and compiler boundary.
+This document is the implementation plan for the Transport Formula language and
+the runtime factory that compiles formulas into live transports.
+
+Target assemblies:
+
+- `Pontifex` — core transport types plus the transport-facing registration
+  contract in `Pontifex.Factory.Registration`.
+- `Pontifex.TransportFormula` — grammar, parser, registry, resolver, canonical
+  printer, generic compiler boundary, and formula error types.
+- `Pontifex.Factory` — direct transport compiler, runtime constructor registry,
+  bootstrap, and public facade.
+- `Tests/Pontifex.Factory.Tests` — conformance and component test suites.
+
+Until Milestone 5 performs the split, the formula sources and this plan live in
+the current `Pontifex.Factory` project. Section 4 records the transition; source
+paths in this document describe the target layout unless they explicitly say
+"current".
 
 Normative specifications:
 
@@ -15,6 +29,26 @@ Normative specifications:
 This plan covers implementation structure, internal components, algorithms,
 test strategy, milestones, and acceptance criteria. It does not implement any
 subsystem.
+
+### Document status
+
+Implemented and covered by the existing suites:
+
+- lexer, parser, AST, and syntax/lexical errors;
+- transport type catalog and metadata registry;
+- resolver, argument binder, parameter and struct validation;
+- canonical printer and invariant validation;
+- bootstrap facade over the formula pipeline;
+- core transport registration contract in `Pontifex/Factory/Registration`.
+
+Not implemented yet:
+
+- the formula/runtime project split described in §4;
+- the direct `ITransport` compiler and runtime constructor registry;
+- the `Compilation` test suite;
+- bootstrap registration and compiler-creation wiring;
+- migration of concrete transport constructors to the core registration
+  contract.
 
 ---
 
@@ -28,18 +62,21 @@ subsystem.
 - Make metadata an immutable, validated registry.
 - Make resolution the only place where syntax and metadata meet.
 - Make canonical printing deterministic and alias-free.
-- Keep compilation opaque and generic so `IDescription`, a typed builder, or a
-  future representation can be used without changing the language.
+- Compile resolved formulas directly into live `ITransport` instances.
+- Keep the formula assembly free of `ITransport`, logger, memory, and converter
+  references.
+- Let transport packages register with the factory while depending only on the
+  core `Pontifex` assembly.
 - Provide a small bootstrap facade that hides component wiring.
 
 ### Non-goals
 
-- Building transports.
-- Choosing converter paths.
-- Implementing concrete transport constructors.
-- Replacing the current `TransportBuilder` in the same change.
+- Replacing the legacy `TransportBuilder` and `Pontifex.OldFactory` in this
+  change.
+- Migrating every concrete transport constructor in this change.
+- Removing the legacy descriptor types before the new compiler is proven.
 - UI integration in `Pontifex.TestUI`.
-- Removing `IDescription` in this phase.
+- Changing the Transport Formula syntax, resolution rules, or canonical output.
 
 ---
 
@@ -108,10 +145,19 @@ These decisions are already reflected in `grammar.md` and `parsing.md`.
 
 ### Compilation
 
-- `ICompiler<T>` is opaque.
-- `IDescription` support belongs to an adapter, not to the language core.
-- Build-time conversion failure is `E_BLD_NO_CONVERSION_PATH`, outside the
-  parser/printer contract.
+- `ICompiler<T>` is generic and opaque; it lives in the formula assembly.
+- The runtime factory implements `ITransportCompiler : ICompiler<ITransport>`.
+- Transport packages implement the core registration contract in
+  `Pontifex.Factory.Registration`; they do not reference the formula or factory
+  assemblies.
+- `IDescription`, `IElement`, and the legacy builder are not part of the new
+  compilation path.
+- Constructor lookup failure is `E_BLD_CONSTRUCTOR_NOT_FOUND`.
+- Constructor or converter failure is `E_BLD_CONSTRUCTOR_FAILED` with the
+  original exception preserved as the inner exception.
+- Build-time conversion failure is `E_BLD_NO_CONVERSION_PATH`.
+- Compiler invariant violations use `E_CMP_*` and `CompilerException`.
+- The parser and resolver never check converter availability.
 
 ### 3.1 Scaffold-to-spec reconciliation
 
@@ -188,135 +234,203 @@ cannot be implemented exactly as specified.
 - The exception hierarchy is class-based (`FactoryException` base plus
   `RegistrationException`, `PrinterException`, `CompilerException`,
   `BuildException`) instead of record-based.
-- `parsing.md` §12.1 must be synchronized during Milestone 0. The error codes,
-  message templates, and offset rules do not change.
+- `parsing.md` §12.1 documents the concrete `FactoryError` record and the
+  class-based hierarchy. Error codes, message templates, and offset rules do not
+  change.
+
+### 3.2 Direct-compiler revision decisions
+
+These decisions supersede the earlier `IDescription` adapter plan.
+
+- **Project split.** The formula language moves to `Pontifex.TransportFormula`.
+  The `Pontifex.Factory` name is reused by the runtime assembly that references
+  both `Pontifex` and `Pontifex.TransportFormula`.
+- **No descriptor adapter.** `IDescription`, `IElement`, `DescriptionElement`,
+  `ArrayElement`, and `Pontifex.OldFactory` are not referenced by the new
+  compiler or by the formula assembly.
+- **Direct result.** `TransportCompiler` returns `ITransport`.
+- **Transport-owned registration.** The transport-facing contract lives in
+  `Pontifex.Factory.Registration`, so transport packages reference only
+  `Pontifex`.
+- **One registration source.** The facade registers a core
+  `ITransportRegistration` once and derives both the formula metadata and the
+  runtime constructor entry from it.
+- **Lazy nested construction.** Nested transport values are exposed as
+  `NestedTransportFactory` delegates, not as pre-built instances. This preserves
+  reconnect-style transports that need to create a fresh nested transport later.
+- **Per-compiler role.** `TransportRole` is compiler configuration, not formula
+  data. The resolved tree remains side-neutral.
+- **Compiler creation seam.** The facade exposes a way to create a
+  `ITransportCompiler` from its frozen runtime registry; callers do not construct
+  the concrete compiler or registry.
+- **Converter policy.** The facade owns the converter graph used by the compiler;
+  the formula layer never validates converter paths.
 
 ---
 
 ## 4. Solution and project layout
 
-Existing projects:
+Current state before Milestone 5:
 
 ```text
-Pontifex.Factory/
-  Pontifex.Factory.csproj
+Pontifex/
+  Factory/Registration/        core transport registration contract
+  Abstractions/                TransportType, ITransport, ...
+  Converters/                  IConvertersGraph, converters
+
+Pontifex.Factory/              formula + bootstrap today
   grammar.md
   parsing.md
   implementation-plan.md
   SourceSpan.cs
   FactoryError.cs
+  FactoryExceptions.cs
+  IsExternalInit.cs
   ITransportFactory.cs
   ITransportFactoryBuilder.cs
   TransportFactoryBootstrap.cs
-  IsExternalInit.cs
+  Parsing/
+  Registry/
+  Semantics/
+  Canonicalization/
+  Compilation/
+    ICompiler.cs
+  Bootstrap/
 
+Tests/Pontifex.Factory.Tests/
+  Parsing/
+  Registry/
+  Semantics/
+  Canonicalization/
+  Bootstrap/
+```
+
+Target layout after Milestone 5:
+
+```text
+Pontifex/
+  Factory/Registration/        transport-facing registration contract
+    ITransportRegistration.cs
+    TransportRegistration.cs
+    ITransportBuildContext.cs
+    TransportParameter.cs
+    TransportTypeSet.cs
+    StructSchema.cs
+    ScalarValidator.cs
+
+Pontifex.TransportFormula/     renamed formula assembly
+  Pontifex.TransportFormula.csproj
+  grammar.md
+  parsing.md
+  implementation-plan.md
+  SourceSpan.cs
+  FactoryError.cs
+  FactoryExceptions.cs
+  IsExternalInit.cs
   Parsing/
     IParser.cs
     FormulaToken.cs
     AstDtos.cs
     FormulaParseResult.cs
-
+    Internal/...
   Registry/
     IRegistry.cs
     ITransportTypeCatalog.cs
     MetadataDtos.cs
-
+    Internal/...
   Semantics/
     IResolver.cs
     ResolvedDtos.cs
-
+    Internal/...
   Canonicalization/
     ICanonicalizer.cs
-
+    Internal/...
   Compilation/
-    ICompiler.cs
-
-Tests/Pontifex.Factory.Tests/
-  Pontifex.Factory.Tests.csproj
-```
-
-Planned internal folders:
-
-```text
-Pontifex.Factory/
-  FactoryExceptions.cs          (FactoryException + phase subclasses)
+    ICompiler.cs               generic only
   Internal/
     NameNormalizer.cs
     FormulaErrorFactory.cs
     TokenDisplay.cs
     TypeSetFormatter.cs
 
-  Parsing/Internal/
-    FormulaLexer.cs
-    TokenCursor.cs
-    FormulaParser.cs
-    ParsingErrorFactory.cs
-
-  Registry/Internal/
-    TransportTypeCatalog.cs
-    TransportRegistry.cs
-    TransportRegistryBuilder.cs
-    MetadataValidator.cs
-    RegistryErrorFactory.cs
-
-  Semantics/Internal/
-    FormulaResolver.cs
-    ConstructorSelector.cs
-    ArgumentBinder.cs
-    ParameterValidator.cs
-    StructValidator.cs
-    SemanticErrorFactory.cs
-
-  Canonicalization/Internal/
-    FormulaCanonicalizer.cs
-    PositionalFormatter.cs
-    ScalarFormatter.cs
-    PrinterInvariantValidator.cs
-    CanonicalizationErrorFactory.cs
-
+Pontifex.Factory/              runtime factory assembly
+  Pontifex.Factory.csproj
+  ITransportFactory.cs
+  ITransportFactoryBuilder.cs
+  TransportFactoryBootstrap.cs
+  Compilation/
+    ITransportCompiler.cs
+    TransportCompiler.cs
+    Internal/TransportBuildContext.cs
+  ITransportConstructorRegistry.cs
+  TransportConstructorRegistry.cs
+  TransportTypeBindings.cs      only if TypeId decoupling is adopted
   Bootstrap/
     TransportFactory.cs
     TransportFactoryBuilder.cs
     FactoryComponentFactory.cs
+    CoreRegistrationAdapter.cs
+
+Tests/Pontifex.Factory.Tests/
+  Parsing/
+  Registry/
+  Semantics/
+  Canonicalization/
+  Bootstrap/
+  Compilation/                  created with its first test file
 ```
 
-Optional, recommended companion project for the legacy adapter:
+Transition rules:
 
-```text
-Pontifex.Factory.Description/
-  Pontifex.Factory.Description.csproj
-  DescriptionCompiler.cs
-  CastDescriptionAdapter.cs
-```
+- The move is a rename plus namespace update, not a rewrite. Formula behavior and
+  DTOs do not change. Formula namespaces become `Pontifex.TransportFormula.*`
+  (`Parsing`, `Registry`, `Semantics`, `Canonicalization`, `Compilation`, and
+  shared root types). Runtime namespaces stay under `Pontifex.Factory.*`.
+- `Pontifex.TransportFormula` must not reference `ITransport`, `ILogger`,
+  `IMemoryRental`, `IConvertersGraph`, or concrete transports. Until the
+  optional `TransportTypeId` decoupling is adopted, it references `Pontifex`
+  only for `TransportType`.
+- `Pontifex.Factory` references `Pontifex` and `Pontifex.TransportFormula`.
+- Transport packages reference `Pontifex` only and implement
+  `Pontifex.Factory.Registration.ITransportRegistration`.
+- Test suite READMEs keep their current links until the move lands; the move
+  commit updates those links. Suite namespaces stay
+  `Pontifex.Factory.Tests.<Subsystem>` and categories stay
+  `Factory.<Subsystem>` unless the test project itself is renamed.
 
-Do not add `IDescription`, `ITransport`, `ILogger`, `IMemoryRental`, or concrete
-transport references to `Pontifex.Factory` itself. The optional adapter project
-may reference both `Pontifex` and `Pontifex.Factory`.
+Do not create a `Pontifex.Factory.Description` project. The descriptor adapter
+is obsolete and must not be reintroduced.
 
 ---
 
 ## 5. Dependency rules
 
 ```text
-Parsing        → nothing (except shared internal helpers)
-Registry       → TransportType and metadata DTOs
-Semantics      → Parsing + Registry
-Canonicalization → Semantics + Registry (type catalog/metadata)
-Compilation    → Semantics
-Bootstrap      → Parsing + Registry + Semantics + Canonicalization + Compilation
+Core registration       → Pontifex only (TransportType, ITransport, logging, memory)
+Formula Parsing         → shared formula helpers
+Formula Registry        → TransportType (current) or TransportTypeId (optional)
+Formula Semantics       → Parsing + Registry
+Formula Canonicalization → Semantics + Registry (type catalog/metadata)
+Formula Compilation     → Semantics (generic ICompiler<T> only)
+Runtime Compilation     → Pontifex + formula Semantics + core registration
+Bootstrap               → formula + runtime compilation
 ```
 
 Rules:
 
-- `Parsing` must not reference `Registry`, `Semantics`, or transport types.
-- `Registry` must not reference `Parsing` or `Semantics`.
-- `Semantics` may reference both `Parsing` and `Registry`.
-- `Canonicalization` must not reference `Parsing`.
-- `Compilation` must not reference `Parsing` or `Registry` except through
-  `ResolvedFormula`'s embedded metadata.
-- Public subsystem namespaces contain interfaces and DTOs only.
-- Implementations are `internal` and live under `Internal` namespaces.
-- Bootstrap is the only place that wires components together.
+- Core registration lives in `Pontifex` and has no formula dependency.
+- Formula Parsing must not reference Registry, Semantics, or transport types.
+- Formula Registry must not reference Parsing or Semantics.
+- Formula Semantics may reference both Parsing and Registry.
+- Formula Canonicalization must not reference Parsing.
+- Formula Compilation must not reference Parsing, Registry, `ITransport`, logging,
+  or memory.
+- Runtime Compilation is the only place that joins a resolved tree with live
+  transports and converters.
+- Bootstrap is the only place that wires formula and runtime components together.
+- Public formula namespaces contain interfaces and DTOs only. Runtime
+  implementation classes may be public only when they are the documented
+  compiler or registry surface; bootstrap wiring classes remain internal.
 
 ---
 
@@ -329,8 +443,8 @@ Implement shared internals before the subsystems that use them.
 `FactoryError` already exists and is the single diagnostic DTO used by result
 objects. Its phase and span identify the failing stage and source position.
 
-Add a small exception hierarchy in the root bootstrap namespace, preserving the
-names already specified in `parsing.md` §12.1:
+Add a small exception hierarchy in the formula assembly root namespace,
+preserving the names already specified in `parsing.md` §12.1:
 
 - `FactoryException` — common base with `FactoryError Error { get; }`.
 - `RegistrationException : FactoryException`
@@ -350,10 +464,9 @@ Policy:
   exception for configuration and invariant errors.
 - Implementations must not create additional error formats.
 
-Documentation sync: `parsing.md` §12.1 currently names a `ParseError` record and
-record-based exception types. The scaffold uses `FactoryError` and a class-based
-exception hierarchy; treat `FactoryError` as the concrete diagnostic name and
-update that document section during Milestone 0.
+`parsing.md` §12.1 documents the concrete `FactoryError` record and the
+class-based hierarchy. The runtime factory assembly reuses these types; it does
+not define a second error model.
 
 ### 6.2 `NameNormalizer`
 
@@ -386,7 +499,9 @@ Responsibilities:
 - Construct `FactoryError` with the correct code, message, phase, span.
 - Own the exact message templates from `parsing.md`.
 - Join expected alternatives and sorted name lists deterministically.
-- Provide helpers for all error codes in §13 of `parsing.md`.
+- Provide helpers for all formula error codes in §13 of `parsing.md`.
+- Build and compiler errors (`E_BLD_*`, `E_CMP_*`) are constructed by the runtime
+  compiler, not by this factory.
 
 ### 6.5 `TypeSetFormatter`
 
@@ -413,7 +528,7 @@ Already present. Keep it internal. It is required for records on
 Existing:
 
 ```text
-Pontifex.Factory.Parsing.IParser
+Pontifex.TransportFormula.Parsing.IParser
 FormulaParseResult Parse(string formula)
 ```
 
@@ -430,7 +545,7 @@ Before implementation, add the AST offsets required by `parsing.md`:
 `AstTransportCall.CloseParenOffset`, `AstList.OpenOffset/CloseOffset`,
 `AstStruct.OpenOffset/CloseOffset`, and `SourceSpan.End`.
 
-No public classes in `Pontifex.Factory.Parsing`.
+No public classes in `Pontifex.TransportFormula.Parsing`.
 
 ### 7.2 Internal components
 
@@ -600,7 +715,7 @@ Test suites/groups:
 
 - Every grammar example in `grammar.md` parses or fails as documented.
 - No reference to `Registry`, `Semantics`, or `TransportType`.
-- No public class in `Pontifex.Factory.Parsing`.
+- No public class in `Pontifex.TransportFormula.Parsing`.
 - All parser error messages match `parsing.md`.
 
 ---
@@ -612,9 +727,9 @@ Test suites/groups:
 Existing:
 
 ```text
-Pontifex.Factory.Registry.IRegistry
-Pontifex.Factory.Registry.IRegistryBuilder
-Pontifex.Factory.Registry.ITransportTypeCatalog
+Pontifex.TransportFormula.Registry.IRegistry
+Pontifex.TransportFormula.Registry.IRegistryBuilder
+Pontifex.TransportFormula.Registry.ITransportTypeCatalog
 ```
 
 DTOs:
@@ -627,7 +742,7 @@ DTOs:
 - `TransportConstructorInfo`
 - `TransportRegistration`
 
-No public classes in `Pontifex.Factory.Registry`.
+No public classes in `Pontifex.TransportFormula.Registry`.
 
 ### 8.2 Internal components
 
@@ -774,7 +889,7 @@ Registration rules follow `parsing.md` §6.7 rule 9 exactly:
 - No reference to `Parsing` or `Semantics`.
 - All registration errors match `parsing.md` §13.4.
 - Metadata is immutable after `Build`.
-- No public class in `Pontifex.Factory.Registry`.
+- No public class in `Pontifex.TransportFormula.Registry`.
 
 ---
 
@@ -785,7 +900,7 @@ Registration rules follow `parsing.md` §6.7 rule 9 exactly:
 Existing:
 
 ```text
-Pontifex.Factory.Semantics.IResolver
+Pontifex.TransportFormula.Semantics.IResolver
 FormulaResolveResult Resolve(AstFormula formula, TransportTypeSet expected)
 ```
 
@@ -803,7 +918,7 @@ DTOs:
 `ResolvedExpr` exposes `TransportType Type` for every node. `ResolvedTransport`
 inherits `Constructor.Type`; `ResolvedCast` returns `Target`.
 
-No public classes in `Pontifex.Factory.Semantics`.
+No public classes in `Pontifex.TransportFormula.Semantics`.
 
 ### 9.2 Internal components
 
@@ -941,9 +1056,9 @@ No error recovery, no multiple errors, no backtracking.
 
 ### 9.6 Acceptance criteria
 
-- No reference to `IDescription` or transport construction.
+- No reference to transports, converters, or the direct compiler.
 - All `E_SEM_*` messages match `parsing.md`.
-- No public class in `Pontifex.Factory.Semantics`.
+- No public class in `Pontifex.TransportFormula.Semantics`.
 - Resolver determinism and no backtracking are tested.
 
 ---
@@ -955,11 +1070,11 @@ No error recovery, no multiple errors, no backtracking.
 Existing:
 
 ```text
-Pontifex.Factory.Canonicalization.ICanonicalizer
+Pontifex.TransportFormula.Canonicalization.ICanonicalizer
 string Canonicalize(ResolvedFormula formula)
 ```
 
-No public classes in `Pontifex.Factory.Canonicalization`.
+No public classes in `Pontifex.TransportFormula.Canonicalization`.
 
 ### 10.2 Internal components
 
@@ -1067,108 +1182,294 @@ No prefix, no trailing comma, no trailing whitespace, no newline.
 
 ### 10.5 Acceptance criteria
 
-- No reference to `Parsing`, `IRegistry`, or `IDescription`.
+- No reference to `Parsing`, the registry, transports, or the direct compiler.
 - Only `ResolvedFormula` + type catalog + metadata in resolved nodes.
 - All `E_PRN_*` errors covered.
-- No public class in `Pontifex.Factory.Canonicalization`.
+- No public class in `Pontifex.TransportFormula.Canonicalization`.
 
 ---
 
 ## 11. Compilation subsystem
 
-### 11.1 Public contract
+### 11.1 Generic compiler boundary
 
-Existing:
+The formula assembly defines only:
 
 ```text
-Pontifex.Factory.Compilation.ICompiler<TOutput>
+Pontifex.TransportFormula.Compilation.ICompiler<TOutput>
 TOutput Compile(ResolvedFormula formula)
 ```
 
-No public classes in `Pontifex.Factory.Compilation`.
+The formula assembly does not reference `ITransport`, `IConvertersGraph`,
+`ILogger`, `IMemoryRental`, or the core registration contract.
 
-### 11.2 Core compiler boundary
+### 11.2 Direct transport compiler
 
-The core project defines only the generic interface. It must not reference:
-
-- `IDescription`
-- `IElement`
-- `ITransport`
-- `ILogger`
-- `IMemoryRental`
-- concrete transports
-
-### 11.3 `IDescription` adapter
-
-Recommended as a separate project:
+Public runtime contract:
 
 ```text
-Pontifex.Factory.Description/
-  Pontifex.Factory.Description.csproj
-  DescriptionCompiler.cs
+Pontifex.Factory.Compilation.ITransportCompiler : ICompiler<ITransport>
+    TransportRole Role { get; }
+
+Pontifex.Factory.Compilation.TransportCompiler
+    TransportCompiler(
+        ITransportConstructorRegistry constructors,
+        IConvertersGraph converters,
+        ILogger logger,
+        IMemoryRental memory,
+        TransportRole role)
 ```
 
-References:
+`TransportCompiler` is the documented public compilation class in
+`Pontifex.Factory`. Its internal `TransportBuildContext : ITransportBuildContext`
+maps resolved values to the core registration contract.
 
-- `Pontifex.Factory`
-- `Pontifex` for existing descriptor types under `Pontifex.OldFactory`
+The runtime constructor registry:
 
-Mapping, following `parsing.md` §9.1:
+```text
+Pontifex.Factory.ITransportConstructorRegistry
+    ITransportRegistration? Find(string canonicalScheme, TransportType type)
 
-- `ResolvedTransport` → `Description` with:
-  - `name` = canonical constructor name;
-  - `type` = canonical type name, resolved through
-    `ITransportTypeCatalog.TryGetCanonicalName`;
-  - each provided parameter by declared name, with parameter keys prefixed
-    `param.`:
-    - `ScalarValue` → `StringElement`
-    - `TransportValue` → `DescriptionElement`
-    - `TransportListValue` → `ArrayElement` of `DescriptionElement`
-    - `StructValue` → `DescriptionElement`
-- `ResolvedCast` → internal adapter `Description` with `name = "convert"`,
-  `type = canonical target`, `from = DescriptionElement(inner)`.
-- struct-field keys are prefixed `field.`.
-- absent parameters are absent.
-- no default synthesis.
-- the adapter reserves the scheme name `convert`; encountering a constructor
-  with that canonical name produces `E_CMP_RESERVED_SCHEME`.
-- the adapter’s `name`, `type`, and `from` keys are reserved.
-- no `IDescription` type exists outside this adapter assembly.
+Pontifex.Factory.TransportConstructorRegistry
+    void Register(ITransportRegistration registration)
+    void Seal()
+```
 
-The adapter validates the resolved-tree invariants it relies on and maps failures
-to `CompilerException` with `E_CMP_*` codes. Its validation order follows the
-printer’s order in `parsing.md` §10.
+- The key is `(normalized canonical scheme, core TransportType)`.
+- `Register` rejects a duplicate key with `ArgumentException`.
+- `Seal` freezes the registry. `Register` after `Seal` throws
+  `InvalidOperationException`; `Find` remains available.
+- `Find` returns `null` for an unknown key.
+- The registry is populated from the same core registrations that feed the
+  formula registry; the bootstrap calls `Seal` when the factory is built.
+- The resolved constructor metadata and the runtime registration must agree on
+  `Name` and `Type`. The adapter normalizes the name before storing it.
 
-### 11.4 Build-time conversion
+If the optional `TransportTypeId` decoupling is adopted, the compiler also takes
+`ITransportTypeBindings` and maps cast targets to core `TransportType`. Until
+then, `ResolvedCast.Target` and `TransportConstructorInfo.Type` are already core
+`TransportType` values and no binding layer is needed.
 
-The adapter only serializes the cast node. The builder or converter graph
-performs the actual conversion:
+### 11.3 Core transport registration contract
 
-- identity casts are already collapsed;
-- otherwise build inner and request a conversion path;
-- no path → `E_BLD_NO_CONVERSION_PATH`;
-- constructor failure → `E_BLD_CONSTRUCTOR_FAILED`.
+The transport-facing contract lives in `Pontifex.Factory.Registration` and is
+described normatively in `parsing.md` §6.9. Summary:
 
-The parser and resolver must not check converter paths.
+```text
+ITransportRegistration
+    string Name
+    TransportType Type
+    IReadOnlyList<TransportParameter> Parameters
+    IReadOnlyList<string> Aliases
+    ITransport Create(ITransportBuildContext context)
 
-### 11.5 Compilation tests
+ITransportBuildContext
+    TransportRole Role
+    ILogger Logger
+    IMemoryRental Memory
+    bool TryGetString(string name, out string value)
+    bool TryGetTransport(string name, out NestedTransportFactory factory)
+    bool TryGetTransportList(string name, out IReadOnlyList<NestedTransportFactory> factories)
+    bool TryGetStruct(string name, out ITransportStructValue value)
+```
 
-- `ResolvedTransport` to `IDescription` mapping for every value kind;
-- nested transports and lists;
-- nested structs;
-- cast adapter shape and canonical target lookup;
-- reserved `convert` scheme → `E_CMP_RESERVED_SCHEME`;
-- invalid cast target → `E_CMP_INVALID_CAST_TARGET`;
-- absent parameters remain absent;
-- deterministic key order and `param.`/`field.` prefixes;
-- invalid resolved trees produce `CompilerException` with `E_CMP_*`;
-- no `IDescription` references outside the adapter assembly.
+Parameter DTOs:
 
-### 11.6 Acceptance criteria
+- `StringParameter`
+- `NestedTransportParameter`
+- `TransportListParameter`
+- `StructParameter`
+- `TransportTypeSet` (`Any`, `Exactly`, `OneOf`)
+- `StructSchema`, `StringField`, `NestedStructField`
+- `ScalarValidator`
 
-- `Pontifex.Factory` remains free of descriptor and builder references.
-- `IDescriptionCompiler` is replaceable without touching the language.
-- All mapping rules and build-time boundary are tested.
+Rules:
+
+- Parameter and field names are canonical lowercase.
+- `TryGet*` returns `false` when an optional value is absent; required values are
+  guaranteed by resolution.
+- `TryGetTransport` returns a lazy factory. Each invocation compiles the
+  corresponding resolved subtree into a fresh transport.
+- `TryGetTransportList` preserves element order and returns one factory per
+  element.
+- Struct values expose only string fields and nested structs.
+- The constructor owns every nested transport it creates; on failure it must
+  stop or discard partially created transports before rethrowing.
+- `Create` is called exactly once per resolved transport expression.
+
+### 11.4 Compilation algorithm
+
+```text
+Compile(ResolvedFormula formula):
+    if formula is null: ArgumentNullException
+    if formula.Root is null:
+        E_CMP_INCONSISTENT_TREE "unspecified invariant violation"
+    return CompileExpr(formula.Root)
+
+CompileExpr(expr):
+    ResolvedTransport -> CompileTransport(expr)
+    ResolvedCast      -> CompileCast(expr)
+    other             -> E_CMP_INCONSISTENT_TREE "unspecified invariant violation"
+
+CompileTransport(t):
+    registration = constructors.Find(t.Constructor.Name, t.Constructor.Type)
+    if registration is null:
+        E_BLD_CONSTRUCTOR_NOT_FOUND
+            "transport constructor '<scheme>' is not registered"
+    context = TransportBuildContext(t, role, logger, memory, this)
+    try:
+        return registration.Create(context)
+    catch exception:
+        E_BLD_CONSTRUCTOR_FAILED
+            "transport constructor '<scheme>' failed"
+            inner = exception
+
+CompileCast(c):
+    inner = CompileExpr(c.Inner)
+    if inner.Type == c.Target:
+        return inner
+    convert = converters.TryConvert(
+        inner.Type, c.Target, () => inner, memory, logger)
+    if convert is null:
+        E_BLD_NO_CONVERSION_PATH
+            "no conversion path from <from> to <to>"
+    try:
+        return convert()
+    catch exception:
+        E_BLD_CONSTRUCTOR_FAILED
+            "transport constructor '<inner scheme>' failed"
+            inner = exception
+```
+
+- Build errors use `BuildException` with phase `Building`.
+- Compiler invariant errors use `CompilerException` with phase `Compilation`.
+- Constructor and converter failures always preserve the original exception as
+  `InnerException`.
+- A nested factory invoked inside `Create` may throw its own `BuildException`;
+  the outer constructor boundary wraps it as the parent constructor failure with
+  that exception preserved as the inner exception.
+- The compiler does not recover, retry, or partially succeed.
+- The compiler is deterministic and has no static state.
+
+### 11.5 Optional invariant checks
+
+The resolver guarantees a valid tree. The compiler MAY perform cheap defensive
+checks:
+
+- null root;
+- unknown resolved node kind;
+- registration `Type` differs from `t.Constructor.Type`;
+- created transport `Type` differs from the registration type.
+
+Failures use `E_CMP_INCONSISTENT_TREE` with a detail from the closed set in
+`parsing.md` §13.6. The compiler MUST NOT duplicate the full printer validation
+pass.
+
+### 11.6 Compilation tests
+
+Create a `Compilation` Test Suit under
+`Tests/Pontifex.Factory.Tests/Compilation/` when the first compiler test is
+added. `Tests/RULES.md` forbids an empty layer, so the suite `README.md`,
+`Coverage.md`, `Harness/`, and `Tests/` land in the same change as the first
+test file.
+
+Suite shape:
+
+```text
+Compilation/
+  README.md
+  Coverage.md
+  Harness/
+    CompilationTestData.cs
+    FakeTransport.cs
+    RecordingConvertersGraph.cs
+  Tests/
+    TransportCompilerTests.cs
+    TransportConstructorRegistryTests.cs
+```
+
+- Suite type: Test Suit; root subject is the tightly coupled direct-compilation
+  group (`TransportCompiler`, `TransportConstructorRegistry`, and the internal
+  `TransportBuildContext`). One root layer.
+- Suite root category: `Factory.Compilation`.
+- Namespace: `Pontifex.Factory.Tests.Compilation`.
+- Harness namespace: `Pontifex.Factory.Tests.Compilation.Harness`.
+- Test names: `Method_Scenario_ExpectedResult`.
+- No mocking library; hand-written doubles only.
+- Core registration DTO construction is covered through the adapter mapping and
+  the build-context accessor cases. A separate suite for the core DTOs is
+  optional and outside this test project.
+
+Required cases:
+
+Registry:
+
+- register and find by `(scheme, type)`;
+- duplicate `(scheme, type)` throws;
+- unknown pair returns `null`;
+- registration with the same scheme and a different type is distinct;
+- null registration is rejected;
+- `Register` after `Seal` throws `InvalidOperationException`;
+- registration after factory build is rejected through the bootstrap.
+
+Compiler input and lookup:
+
+- null formula throws `ArgumentNullException`;
+- null root produces `E_CMP_INCONSISTENT_TREE`;
+- unknown constructor produces `E_BLD_CONSTRUCTOR_NOT_FOUND` with phase
+  `Building` and the exact message;
+- registered constructor is called exactly once;
+- returned transport is the constructor's result.
+
+Build context:
+
+- role, logger, and memory are visible to `Create`;
+- string parameter value is passed decoded;
+- absent optional string returns `false`;
+- nested transport returns a lazy factory;
+- invoking the nested factory creates a transport;
+- invoking it twice creates two independent transports;
+- transport list returns factories in source order;
+- struct returns string fields and nested structs;
+- absent optional struct field returns `false`;
+- parameter and field lookup is by canonical lowercase name.
+
+Failure paths:
+
+- constructor throws -> `E_BLD_CONSTRUCTOR_FAILED`, phase `Building`, original
+  exception preserved;
+- nested constructor failure -> parent failure with the nested exception as the
+  inner exception;
+- converter throws -> `E_BLD_CONSTRUCTOR_FAILED` for the inner scheme;
+- no conversion path -> `E_BLD_NO_CONVERSION_PATH` with canonical type names;
+- unknown resolved node -> `E_CMP_INCONSISTENT_TREE`.
+
+Casts:
+
+- identity cast returns the inner transport without invoking the converter;
+- changing cast invokes the converter;
+- converter receives the inner type, target type, a factory that produces the
+  inner transport, logger, and memory;
+- invoking the converter's inner factory twice creates two inner transports.
+
+Bootstrap integration, covered in either this suite or the Bootstrap suite but
+not both:
+
+- `RegisterTransport(ITransportRegistration)` registers formula metadata and a
+  runtime constructor from one call;
+- a core-registered transport resolves and compiles through the facade;
+- `CreateCompiler` returns a compiler with the requested role;
+- a formula-only registration resolves but compilation reports
+  `E_BLD_CONSTRUCTOR_NOT_FOUND`;
+- the runtime registry is sealed after `Build`.
+
+Acceptance criteria:
+
+- every `E_BLD_*` and `E_CMP_*` compiler path is covered;
+- all context value kinds are covered;
+- lazy nested factory behaviour is covered;
+- compilation is deterministic and leaves no static state;
+- the suite follows `Tests/RULES.md`.
 
 ---
 
@@ -1176,117 +1477,156 @@ The parser and resolver must not check converter paths.
 
 ### 12.1 Public contract
 
-Existing root interfaces:
+Runtime interfaces:
 
 ```text
 Pontifex.Factory.ITransportFactory
 Pontifex.Factory.ITransportFactoryBuilder
 ```
 
-The bootstrap also exposes a single public creation seam, because every
-implementation type is internal:
+Public creation seam:
 
 ```text
-Pontifex.Factory.TransportFactoryBootstrap.CreateBuilder() -> ITransportFactoryBuilder
+Pontifex.Factory.TransportFactoryBootstrap.CreateBuilder(
+    IConvertersGraph? converters = null) -> ITransportFactoryBuilder
 ```
 
-`CreateBuilder` returns interfaces only. It is the only public way to obtain a
-builder; callers never see `TransportFactoryBuilder`, `TransportFactory`, or
-`FactoryComponentFactory`.
+`converters` defaults to `ConvertersGraph.Default`. The builder is the only
+public way to configure a factory; concrete bootstrap classes stay internal.
 
-Add the root exception hierarchy:
+Registration and compiler creation:
 
 ```text
-Pontifex.Factory.FactoryException
-Pontifex.Factory.RegistrationException
-Pontifex.Factory.PrinterException
-Pontifex.Factory.CompilerException
-Pontifex.Factory.BuildException
+ITransportFactoryBuilder
+    IRegistryBuilder Registry { get; }
+    void RegisterTransport(ITransportRegistration registration)
+    ITransportFactory Build()
+
+ITransportFactory
+    FormulaResolveResult Resolve(string formula, TransportTypeSet? expected = null)
+    string Canonicalize(string formula)
+    ITransportCompiler CreateCompiler(
+        TransportRole role, ILogger logger, IMemoryRental memory)
+    TOutput Compile<TOutput>(
+        string formula, ICompiler<TOutput> compiler, TransportTypeSet? expected = null)
 ```
 
-The bootstrap is the only public place where concrete wiring lives.
+- `RegisterTransport(ITransportRegistration)` is the preferred registration API
+  for transports that will be compiled.
+- `Registry.RegisterTransport(...)` remains available for metadata-only and
+  formula-only tooling; such registrations resolve and print but report
+  `E_BLD_CONSTRUCTOR_NOT_FOUND` if compiled.
+- `CreateCompiler` binds the frozen runtime registry, the converter graph, the
+  role, and the build environment. Callers never construct `TransportCompiler`
+  or `TransportConstructorRegistry` themselves.
+- `Compile<T>` remains the generic escape hatch for caller-supplied compilers.
+
+Exception hierarchy in the formula assembly root namespace
+(`Pontifex.TransportFormula`; the runtime factory assembly reuses it):
+
+```text
+FactoryException
+RegistrationException
+PrinterException
+CompilerException
+BuildException
+```
 
 ### 12.2 Internal components
 
 **`TransportFactoryBuilder`**
 
 - Implements `ITransportFactoryBuilder`.
-- Holds `IRegistryBuilder`.
+- Holds:
+  - the formula `IRegistryBuilder`;
+  - the runtime `TransportConstructorRegistry`;
+  - the converter graph.
+- `RegisterTransport(ITransportRegistration)`:
+  1. adapts core metadata to formula `TransportRegistration`;
+  2. normalizes the scheme name;
+  3. calls `Registry.RegisterTransport(...)`;
+  4. stores the core registration in the runtime registry under
+     `(normalized name, Type)`.
 - `Build()`:
-  - freezes registry;
-  - creates parser, resolver, canonicalizer;
+  - freezes the formula registry;
+  - seals the runtime registry;
+  - creates parser, resolver, and canonicalizer;
   - returns `TransportFactory`;
-  - is idempotent: repeated calls return the same `ITransportFactory`
-    instance (matching `TransportRegistryBuilder.Build`);
-  - fails if the registry is invalid. Registration errors surface during
-    `RegisterType`/`RegisterTransport`, before `Build`.
+  - is idempotent: repeated calls return the same factory.
 
 **`TransportFactory`**
 
 - Implements `ITransportFactory`.
-- Holds `IParser`, `IResolver`, `ICanonicalizer`; the frozen registry is owned
-  by the resolver and the canonicalizer.
-- `Resolve(string, expected)`:
-  1. parse;
-  2. on error return parse result;
-  3. resolve;
-  4. return resolve result.
-- `Canonicalize(string)`:
-  1. parse + resolve;
-  2. on parse/resolve error throw `FactoryException` with the same `FactoryError`;
-  3. canonicalize; canonicalizer failures are `PrinterException`.
-- `Compile<T>(string, ICompiler<T>, expected)`:
-  1. parse + resolve;
-  2. on parse/resolve error throw `FactoryException`;
-  3. call the caller-supplied compiler. `ICompiler<T>` is opaque, so exceptions
-     it raises propagate unchanged; a compiler that detects its own invariant
-     failure may throw `CompilerException`.
-- `FactoryError` phase must identify the failing stage.
-- No hidden static state.
+- Holds the parser, resolver, canonicalizer, frozen runtime registry, converter
+  graph, and no mutable state.
+- `Resolve` and `Canonicalize` are unchanged from the formula pipeline.
+- `CreateCompiler(role, logger, memory)` returns
+  `new TransportCompiler(runtimeRegistry, converters, logger, memory, role)`.
+- `Compile<T>` parses, resolves, and calls the caller-supplied compiler.
+- `FactoryError` phase identifies the failing stage.
+
+**`CoreRegistrationAdapter`**
+
+- Internal.
+- Maps `Pontifex.Factory.Registration` DTOs to formula `Param`,
+  `TransportTypeSet`, `StructSchema`, and `TransportRegistration`.
+- Maps core `Aliases` to formula `TransportRegistration.Aliases`; the
+  `SuggestedAliases` hint list is left empty because the host explicitly
+  registered them.
+- Normalizes names only; it does not add validation beyond the formula
+  registry's existing registration rules.
+- Preserves declaration order.
+- The core DTO and the formula DTO are both named `TransportRegistration`; use a
+  namespace alias (for example `CoreRegistration`) inside the adapter.
 
 **`FactoryComponentFactory`**
 
 - Internal wiring helper.
-- Creates parser, resolver, canonicalizer from a built registry.
-- Does not expose component instances publicly.
+- Creates parser, resolver, canonicalizer, and compiler from built components.
+- Does not leak concrete instances publicly.
 
 ### 12.3 Exception and result policy
 
-- `IParser.Parse` and `IResolver.Resolve` return result DTOs.
-- `ITransportFactory.Resolve` returns a result DTO.
-- `ITransportFactory.Canonicalize` and `Compile` throw `FactoryException`
-  because they cannot return a partial result; the derived type identifies the
-  stage.
+- Parser and resolver return result DTOs.
+- `Resolve` returns a result DTO.
+- `Canonicalize` and `Compile` throw `FactoryException` with the failing stage.
 - Registration throws `RegistrationException`.
 - Printing throws `PrinterException`.
-- Compilation throws `CompilerException` for invariant errors.
-- Build-time conversion errors remain `E_BLD_*` / `BuildException` outside the
-  formula core.
+- Compilation invariant errors throw `CompilerException`.
+- Constructor and conversion failures throw `BuildException` with `E_BLD_*`.
+- Legacy descriptor errors are not part of this path.
 
 ### 12.4 Bootstrap tests
 
-- the public `CreateBuilder` seam returns a working builder;
-- builder creates a working factory;
-- two builders are independent (no hidden static registry);
-- parser/resolver/canonicalizer wiring;
-- parse errors pass through `Resolve`;
-- resolve errors pass through `Canonicalize`/`Compile`;
-- null expected type means `Any`;
-- null formula is reported as empty input (`nonapproved-behaviour.md` §6.1);
-- canonicalization errors wrapped as `PrinterException` with phase `Printing`
-  (unreachable through the facade with a correct resolver; covered at the
-  canonicalizer layer);
-- compilation errors with phase `Compilation` (compiler-raised exceptions
-  propagate unchanged);
+Existing tests remain valid with updated paths. Add:
+
+- `CreateBuilder` uses `ConvertersGraph.Default` when no graph is supplied;
+- `CreateBuilder` uses an injected graph;
+- `RegisterTransport(ITransportRegistration)` registers metadata and a runtime
+  constructor;
+- `RegisterTransport` normalizes the scheme;
+- formula-only registration resolves but compilation reports
+  `E_BLD_CONSTRUCTOR_NOT_FOUND`;
+- `CreateCompiler` returns the requested role;
+- `CreateCompiler` uses the frozen runtime registry;
+- `Build` seals both registries;
+- two builders are independent;
+- `Compile` through the facade uses the created compiler and returns a live
+  transport;
+- parse/resolve errors still prevent compiler invocation;
+- compiler exceptions propagate unchanged;
 - null compiler argument guard;
-- `Build` twice returns the same factory;
-- registry is sealed after build;
-- facade does not expose `IDescription`.
+- null formula policy;
+- `Build` twice returns the same factory.
 
 ### 12.5 Acceptance criteria
 
-- A caller can use only `ITransportFactory` for resolve/canonicalize/compile.
-- Subsystems remain independently usable for tests and tooling.
+- A caller can resolve, canonicalize, create a compiler, and compile through
+  `ITransportFactory`.
+- Runtime components are obtainable only through interfaces or the documented
+  public compiler/registry classes.
+- Formula and runtime registries cannot drift because a core registration is
+  the single source.
 - No static registry or global state.
 - All phases are represented correctly in `FactoryError`.
 
@@ -1300,23 +1640,38 @@ Implement a single error-catalogue module with one method per code:
 ErrorFactory.LexUnterminatedString(span)
 ErrorFactory.SyntaxUnexpectedToken(expected, token)
 ErrorFactory.SemanticUnknownScheme(scheme, span, known)
+ErrorFactory.BuildConstructorNotFound(scheme)
+ErrorFactory.BuildConstructorFailed(scheme)
+ErrorFactory.BuildNoConversionPath(from, to)
+ErrorFactory.CompilerInconsistentTree(detail)
+ErrorFactory.CompilerDuplicateParam(name)
+ErrorFactory.CompilerUnknownParam(name)
+ErrorFactory.CompilerParamKindMismatch(name, expected, actual)
 ...
 ```
 
 Rules:
 
 - Messages are copied exactly from `parsing.md` §13.
+- `E_BLD_*` errors use `BuildException`; `E_CMP_*` errors use
+  `CompilerException`.
+- `E_BLD_TYPE_NOT_BOUND` is added only if the optional `TransportTypeId`
+  binding layer is adopted.
+- The adapter-only `E_CMP_RESERVED_SCHEME` and `E_CMP_INVALID_CAST_TARGET` codes
+  are removed from the compiler catalogue. `E_PRN_INVALID_CAST_TARGET` remains a
+  printer error.
 - Placeholders are formatted deterministically.
 - Name lists are sorted.
 - Parameter/field lists use declaration/schema order.
 - Offsets use `SourceSpan.Start`.
 - EOF offset is input length.
+- Compiler and build errors have no source offset.
 - No localized resources in this phase.
-- No “did you mean” suggestions.
+- No "did you mean" suggestions.
 - No error recovery.
 
-Tests must assert both code and offset; message assertions are recommended for all
-templates.
+Tests must assert both code and offset for parser/resolver errors, and code,
+phase, and message for compiler/build errors.
 
 ---
 
@@ -1324,8 +1679,9 @@ templates.
 
 ### 14.1 Test project structure
 
-The test project is currently bare. Before adding tests, follow
-`Tests/RULES.md`. Recommended layout is one suite per subsystem:
+The test project is not bare: `Parsing`, `Registry`, `Semantics`,
+`Canonicalization`, and `Bootstrap` suites exist. Before adding tests, follow
+`Tests/RULES.md`. The target layout is one suite per subsystem:
 
 ```text
 Tests/Pontifex.Factory.Tests/
@@ -1348,6 +1704,7 @@ Tests/Pontifex.Factory.Tests/
   Compilation/
     README.md
     Coverage.md
+    Harness/
     Tests/
   Bootstrap/
     README.md
@@ -1358,6 +1715,10 @@ Tests/Pontifex.Factory.Tests/
 Each subsystem directory is its own suite root, so its `README.md` and
 `Coverage.md` are owned by that suite. The project root itself is not a suite
 unless a project-level suite is explicitly defined.
+
+The `Compilation` suite does not exist yet. `Tests/RULES.md` forbids an empty
+layer, so create its `README.md`, `Coverage.md`, `Harness/`, and `Tests/` in the
+same change as the first compiler test. The full case matrix is in §11.6.
 
 If a suite is not warranted yet, use loose test files outside suite directories;
 promote them when they become cohesive, as `Tests/RULES.md` requires.
@@ -1371,7 +1732,10 @@ promote them when they become cohesive, as `Tests/RULES.md` requires.
 - **Property** — parser never crashes; spans in range; round-trip stability.
 - **Component isolation** — parsing tests with no registry; registry tests with
   no parser; printer tests with hand-built resolved trees.
-- **Adapter** — `IDescription` mapping in the bridge project.
+- **Compiler** — direct `ITransport` compilation, context value access, lazy
+  nested factories, casts, converter failures, and build/compiler error phases.
+- **Registration adapter** — core `ITransportRegistration` to formula metadata
+  mapping, including name normalization and declaration order.
 
 ### 14.3 Determinism
 
@@ -1389,8 +1753,11 @@ Aim for:
 - all parameter kinds;
 - all alias/type-set combinations;
 - all canonicalization branches;
-- all compiler value kinds;
-- all facade phases.
+- all compiler value kinds and build-context accessors;
+- lazy nested transport factory behaviour;
+- cast identity, conversion, and failure paths;
+- all `E_BLD_*` and `E_CMP_*` compiler codes;
+- all facade phases and registration paths.
 
 ---
 
@@ -1435,18 +1802,34 @@ Aim for:
 - Add printer and round-trip tests.
 - Build/test passes.
 
-### Milestone 5 — Compilation
+### Milestone 5 — Compilation and project split
 
-- Keep `ICompiler<T>` in core.
-- Add `Pontifex.Factory.Description` adapter project if approved.
-- Add mapping and boundary tests.
+- Keep `ICompiler<T>` in the formula assembly.
+- Rename the current `Pontifex.Factory` formula project to
+  `Pontifex.TransportFormula` and update namespaces, solution entries, and test
+  project references.
+- Create the runtime `Pontifex.Factory` project referencing `Pontifex` and
+  `Pontifex.TransportFormula`.
+- Keep the core registration contract in `Pontifex.Factory.Registration`.
+- Implement the runtime `TransportCompiler`, `ITransportCompiler`,
+  `ITransportConstructorRegistry`, and `TransportConstructorRegistry`.
+- Implement `CoreRegistrationAdapter` from core registrations to formula
+  metadata.
+- Add `E_BLD_CONSTRUCTOR_NOT_FOUND`; keep `E_BLD_CONSTRUCTOR_FAILED` and
+  `E_BLD_NO_CONVERSION_PATH`.
+- Add the `Compilation` Test Suit with the matrix in §11.6.
 - Build/test passes.
 
-### Milestone 6 — Bootstrap
+### Milestone 6 — Bootstrap integration
 
-- Implement `TransportFactoryBuilder`, `TransportFactory`, `FactoryComponentFactory`,
-  and the public `TransportFactoryBootstrap.CreateBuilder` seam.
-- Add facade tests.
+- Extend `ITransportFactoryBuilder` with
+  `RegisterTransport(ITransportRegistration)`.
+- Seal both the formula registry and the runtime constructor registry on
+  `Build`.
+- Add `ITransportFactory.CreateCompiler(role, logger, memory)`.
+- Wire the runtime compiler through `FactoryComponentFactory`.
+- Update the Bootstrap suite for registration, compiler creation, and compile
+  integration.
 - Build/test passes.
 
 ### Milestone 7 — Conformance and hardening
@@ -1465,22 +1848,32 @@ Aim for:
 - The scaffold-to-spec reconciliation in §3.1 is complete, including AST offsets,
   `SourceSpan.End`, `ResolvedExpr.Type`, catalog canonical-name lookup,
   `AllSchemeNames`, and type-set helpers.
-- All subsystem public namespaces contain only interfaces and DTOs.
-- No public implementation class exists in a subsystem namespace.
+- The formula/runtime split in §4 is complete.
+- All formula public namespaces contain only interfaces and DTOs.
+- No public implementation class exists in a formula subsystem namespace.
 - Parsing has no registry dependency.
 - Registry has no parsing/semantics dependency.
 - Semantics is the only syntax/metadata join.
 - Canonicalization has no parser dependency.
-- Compilation is the only descriptor/builder boundary.
-- No `IDescription` reference exists in `Pontifex.Factory`.
-- All error codes from `parsing.md` are implemented and tested.
+- Formula compilation contains only the generic `ICompiler<T>` and references no
+  transport, converter, logging, or memory types.
+- Runtime compilation is the only place that builds live transports.
+- No `IDescription`, `IElement`, or `Pontifex.OldFactory` reference exists in the
+  formula assembly or the runtime compiler.
+- Transport packages can register through
+  `Pontifex.Factory.Registration.ITransportRegistration` while referencing only
+  `Pontifex`.
+- All error codes from `parsing.md` are implemented and tested, including
+  `E_BLD_CONSTRUCTOR_NOT_FOUND`, `E_BLD_CONSTRUCTOR_FAILED`, and
+  `E_BLD_NO_CONVERSION_PATH`.
+- The `Compilation` suite covers registry lookup, build-context accessors, lazy
+  nested factories, casts, conversion failures, and compiler invariants.
 - Canonical round-trip properties pass.
 - No implementation limits are introduced.
 - No `transport://`, comments, aliases in canonical output, default synthesis,
   schema overload, or converter tie-breaking exists.
 - All subsystems remain independently usable; the public creation seam is the
-  only way to obtain a builder, and all bootstrap implementation types are
-  internal.
+  only way to obtain a builder, and bootstrap implementation types are internal.
 - `ITransportFactory.Resolve` returns result DTOs; `Canonicalize` and `Compile`
   throw `FactoryException` with the failing stage's phase.
 - `dotnet build` and `dotnet test` pass with zero warnings/errors.
@@ -1490,23 +1883,116 @@ Aim for:
 
 ## 17. Risks and open decisions
 
-1. **Adapter project.** `Pontifex.Factory.Description` is recommended. If it is
-   not created, the adapter must remain internal to `Pontifex.Factory` and must
-   not leak descriptor types into public APIs.
-2. **Exception hierarchy placement.** The exception hierarchy lives in the root
-   bootstrap namespace. If the team wants zero public classes outside
+1. **Project split timing.** The split is required before the compiler can live
+   in a transport-free formula assembly. The minimum-churn alternative is to keep
+   one project temporarily, but that makes the formula package reference
+   `ITransport`, converters, logging, and memory. If the split is deferred, record
+   it explicitly as a temporary exception rather than silently widening the
+   formula project's dependencies.
+2. **Type identifiers.** The formula layer currently uses the core
+   `TransportType` enum. The optional `TransportTypeId` decoupling lets the
+   formula assembly drop its `Pontifex` reference but adds
+   `ITransportTypeBindings` and `E_BLD_TYPE_NOT_BOUND` to the compiler. Decide
+   before implementing the Compilation suite, because the binding layer changes
+   the compiler constructor and several tests.
+3. **Compiler creation seam.** The plan uses
+   `ITransportFactory.CreateCompiler(role, logger, memory)`. An alternative is to
+   expose convenience `BuildServer`/`BuildClient` methods, or to let callers
+   construct `TransportCompiler` directly. Keep one seam only; duplicating them
+   makes lifecycle and registry sealing harder to test.
+4. **Converter graph configuration.** The plan defaults to
+   `ConvertersGraph.Default` and allows an injected graph through
+   `CreateBuilder`. Decide whether the graph is frozen at builder creation or
+   passed to `CreateCompiler`; do not make it mutable after `Build`.
+5. **Exception hierarchy placement.** The hierarchy lives in the formula
+   assembly root namespace. If the team wants zero public classes outside
    interfaces, replace exceptions with result DTOs or keep the hierarchy
    internal and expose only `FactoryError`.
-3. **`FormulaToken` visibility.** It is currently public. Keep it public for
-   parser tooling and diagnostics, or make it internal and expose only AST/errors.
-4. **`TransportTypeSet` ergonomics.** The DTO has no static helpers. Internal
-   factory methods can be added in `Internal` without changing the DTO shape.
-5. **Legacy retirement.** `Pontifex.OldFactory` and the old `TransportBuilder`
-   must remain untouched during this phase. Plan their retirement only after the
-   new compiler adapter is proven.
-6. **No limits vs stack depth.** The language defines no limits. The parser must
+6. **`FormulaToken` visibility.** It is currently public. Keep it public for
+   parser tooling and diagnostics, or make it internal and expose only
+   AST/errors.
+7. **Legacy retirement.** `Pontifex.OldFactory`, `IDescription`, `IElement`, and
+   the old `TransportBuilder` must remain untouched during this phase. Plan their
+   retirement only after the new compiler and transport registrations are
+   proven.
+8. **No limits vs stack depth.** The language defines no limits. The parser must
    not impose artificial ones; if recursive descent risks stack exhaustion on
    adversarial input, use an explicit stack or document the implementation
    strategy without adding a language limit.
-7. **Span retention.** Resolved DTOs retain `SourceSpan`. Keep this for diagnostics
-   and tests; it is not printed.
+9. **Span retention.** Resolved DTOs retain `SourceSpan`. Keep this for
+   diagnostics and tests; it is not printed.
+10. **Registration source of truth.** The facade must derive formula metadata
+    and the runtime constructor registry from one core registration. Do not add a
+    second public registration API that can create a formula-only entry silently
+    expecting compilation to work.
+
+---
+
+## 18. Handoff checklist
+
+Execute in this order. Each step must leave `dotnet build` and the existing
+`dotnet test` suites green before the next step starts.
+
+### Step 1 — Split the projects
+
+- Rename the current `Pontifex.Factory` formula project to
+  `Pontifex.TransportFormula`.
+- Rename its root namespace and subsystem namespaces to
+  `Pontifex.TransportFormula.*`.
+- Keep `ICompiler<T>` in `Pontifex.TransportFormula.Compilation`.
+- Move `grammar.md`, `parsing.md`, and `implementation-plan.md` with the formula
+  project; update links in every suite README.
+- Create the runtime `Pontifex.Factory` project with references to `Pontifex` and
+  `Pontifex.TransportFormula`.
+- Add `InternalsVisibleTo` for `Pontifex.Factory.Tests` to both assemblies.
+- Update `Pontifex.sln` and the test project references.
+- Verify the formula assembly has no `ITransport`, `ILogger`, `IMemoryRental`,
+  `IConvertersGraph`, or `IDescription` reference.
+
+### Step 2 — Add the runtime compiler
+
+- Add `ITransportCompiler`, `TransportCompiler`,
+  `ITransportConstructorRegistry`, and `TransportConstructorRegistry`.
+- Implement the internal `TransportBuildContext` over `ResolvedTransport` and
+  `ResolvedValue`.
+- Add `BuildException` factories for `E_BLD_CONSTRUCTOR_NOT_FOUND` and keep the
+  existing `E_BLD_CONSTRUCTOR_FAILED` and `E_BLD_NO_CONVERSION_PATH`.
+- Keep null-root and unknown-node checks on `E_CMP_INCONSISTENT_TREE`.
+- Make the constructor registry immutable after the factory is built.
+
+### Step 3 — Create the Compilation suite
+
+- Create `Tests/Pontifex.Factory.Tests/Compilation/` with root `README.md`,
+  root `Coverage.md`, `Harness/`, and `Tests/` in one change.
+- Add `FakeTransport`, `RecordingConvertersGraph`, and the resolved-tree data
+  helpers.
+- Implement the matrix in §11.6.
+- Use category `Factory.Compilation` and namespace
+  `Pontifex.Factory.Tests.Compilation`.
+- Update `Coverage.md` in the same change.
+
+### Step 4 — Integrate the bootstrap
+
+- Add `ITransportFactoryBuilder.RegisterTransport(ITransportRegistration)`.
+- Add the internal `CoreRegistrationAdapter`.
+- Seal both registries in `Build`.
+- Add `ITransportFactory.CreateCompiler(role, logger, memory)`.
+- Wire the runtime registry and converter graph through
+  `FactoryComponentFactory`.
+- Extend the Bootstrap suite with the integration cases in §12.4.
+
+### Step 5 — Prove one transport end to end
+
+- Migrate one small transport registration first, preferably a direct or TCP
+  constructor, to `ITransportRegistration`.
+- Register it through the facade and compile a real formula into an `ITransport`.
+- Record any contract gap found here before migrating the remaining transports.
+- Do not delete the legacy constructor or URI parser yet.
+
+### Step 6 — Documentation and hardening
+
+- Update all suite links after the project move.
+- Run the full error catalogue for `E_BLD_*` and `E_CMP_*`.
+- Verify no formula assembly reference leaks into the runtime compiler tests.
+- Confirm the definition of done in §16.
+- Update `nonapproved-behaviour.md` with any new test-pinned assumptions.

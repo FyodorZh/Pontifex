@@ -2,10 +2,12 @@
 
 Contract tests for the Transport Formula composition root and public facade. The
 suite proves that the only public entry point — `TransportFactoryBootstrap` —
-builds a frozen pipeline over the registry, exposes it through
-`ITransportFactory`, and translates each stage according to the documented
-result/exception policy: `Resolve` returns a result DTO, while `Canonicalize`
-and `Compile` throw `FactoryException` carrying the stage's `FactoryError`.
+builds a frozen formula pipeline, exposes it through `ITransportFactory`, and
+translates each stage according to the documented result/exception policy:
+`Resolve` returns a result DTO, while `Canonicalize` and `Compile` throw
+`FactoryException` carrying the stage's `FactoryError`. After Milestone 6 the
+suite also covers registering core transport constructors and creating the direct
+`ITransportCompiler`.
 
 ## Suite type
 
@@ -21,11 +23,14 @@ Root subject: the bootstrap wiring group above.
 
 The suite intentionally uses only the public surface (`TransportFactoryBootstrap`,
 `ITransportFactoryBuilder`, `ITransportFactory`, `IRegistryBuilder`,
-`IRegistry`) together with the public metadata DTOs. It does not construct
-internal components directly; `InternalsVisibleTo` is not used to reach
-bootstrap internals.
+`IRegistry`, `ITransportRegistration`, `ITransportCompiler`, `TransportRole`)
+together with the public metadata DTOs. It does not construct internal components
+directly; `InternalsVisibleTo` is not used to reach bootstrap internals.
 
 ## Contract references
+
+Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
+`Pontifex.TransportFormula` and updates these links.
 
 - [implementation-plan.md](../../../Pontifex.Factory/implementation-plan.md) —
   bootstrap subsystem (§12), dependency rules (§5), and definition of done (§16).
@@ -41,6 +46,14 @@ bootstrap internals.
   [ICompiler.cs](../../../Pontifex.Factory/Compilation/ICompiler.cs),
   [FactoryError.cs](../../../Pontifex.Factory/FactoryError.cs),
   [FactoryExceptions.cs](../../../Pontifex.Factory/FactoryExceptions.cs).
+- Core registration contract:
+  [ITransportRegistration.cs](../../../Pontifex/Factory/Registration/ITransportRegistration.cs),
+  [ITransportBuildContext.cs](../../../Pontifex/Factory/Registration/ITransportBuildContext.cs),
+  [TransportParameter.cs](../../../Pontifex/Factory/Registration/TransportParameter.cs).
+- Planned runtime compilation surface, added in Milestone 5:
+  `Pontifex.Factory/Compilation/ITransportCompiler.cs`,
+  `Pontifex.Factory/Compilation/TransportCompiler.cs`,
+  `Pontifex.Factory/ITransportConstructorRegistry.cs`.
 - Internal subjects:
   [TransportFactoryBuilder.cs](../../../Pontifex.Factory/Bootstrap/TransportFactoryBuilder.cs),
   [TransportFactory.cs](../../../Pontifex.Factory/Bootstrap/TransportFactory.cs),
@@ -135,8 +148,9 @@ dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --filter 
 1. Put the test under `Tests/`, or under a new group folder inside `Tests/` if
    the suite grows cohesive subgroups.
 2. Use only the public contract: `TransportFactoryBootstrap`,
-   `ITransportFactoryBuilder`, `ITransportFactory`, `IRegistryBuilder`, and the
-   metadata/resolution DTOs. Do not call internal bootstrap types directly.
+   `ITransportFactoryBuilder`, `ITransportFactory`, `IRegistryBuilder`,
+   `ITransportRegistration`, `ITransportCompiler`, and the metadata/resolution
+   DTOs. Do not call internal bootstrap types directly.
 3. Use one naming convention and descriptive scenario/expected-result names.
 4. Assert the result DTO or the exception type, `Error.Code`, and `Error.Phase`;
    assert exact messages only for new templates.
@@ -153,13 +167,15 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 - Parsing, registry, semantics, and canonicalization algorithms themselves; they
   are covered by their own suites. This suite asserts only wiring and stage
   translation.
-- `E_CMP_*` compilation invariants and the `IDescription` adapter; they belong
-  to Milestone 5 and a future Compilation suite.
+- `E_CMP_*` and `E_BLD_*` compiler invariants and direct compiler behaviour;
+  those belong to the future `Factory.Compilation` suite. This suite proves only
+  that compiler-raised exceptions pass through unchanged.
 - Thread safety of `Build`. The contract defines no concurrency guarantee.
 - Performance, allocation, and adversarial input limits.
 
-The facade is expected to expose no `IDescription` or transport types; that is a
-project-reference property and is verified by dependency review rather than by a
+After Milestone 6 the runtime facade exposes `ITransport`, `ITransportCompiler`,
+logging, and memory types. The formula assembly must not reference them; that is
+a project-reference property verified by dependency review rather than by a
 runtime test.
 
 ## Rules

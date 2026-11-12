@@ -15,9 +15,11 @@ Terms used below:
 - **AST** — the syntax tree produced by the parser. It contains no semantic
   information.
 - **Resolved tree** — the typed, metadata-bound tree produced by the resolver.
-- **Compiler** — an opaque consumer of a resolved tree. It may produce
-  `IDescription`, a typed builder tree, or anything else. The parser and printer
-  do not depend on the compiler.
+- **Compiler** — a consumer of a resolved tree. The generic contract is
+  `ICompiler<T>` in `Pontifex.TransportFormula.Compilation`. The runtime factory
+  provides `TransportCompiler : ICompiler<ITransport>`, which builds live
+  transports through the core registration contract. The parser and printer do
+  not depend on either implementation.
 - **Canonical printer** — a function that turns a resolved tree into a canonical
   formula.
 - **MUST**, **MUST NOT**, **SHOULD** are normative.
@@ -41,8 +43,7 @@ source
   ├─ 1. Lexing            → tokens (lexical errors)
   ├─ 2. Parsing           → AST (syntax errors)
   ├─ 3. Resolution        → resolved tree (semantic errors)
-  ├─ 4. Compiler          → opaque output (compiler/build errors)
-  └─ 5. Builder           → live transports (build errors)
+  └─ 4. Compiler          → live transport tree (compiler/build errors)
 
 resolved tree
   └─ Canonical printer    → canonical formula
@@ -511,6 +512,10 @@ interface ITransportConstructor
 - `Type` is the fixed transport type produced by the constructor. Every
   constructor has one fixed type.
 
+`ITransportConstructor` here is the formula registry's normalized metadata
+view. Transport packages do not implement it directly; they implement the core
+registration contract in §6.9, and the factory adapter produces this view.
+
 ### 6.2 Parameters
 
 ```csharp
@@ -725,6 +730,40 @@ interface ITransportRegistry
 - `FindByName(list, normalizedName)` performs a case-insensitive lookup over
   normalized names in `Params`, `StructSchema.Fields`, or equivalent lists and
   returns `null` when no entry matches.
+
+### 6.9 Core transport registration contract
+
+The transport-facing registration contract is defined in the core `Pontifex`
+assembly under `Pontifex.Factory.Registration`. It is the only metadata contract
+that transport packages reference; the formula registry is an adapter view of it.
+
+```csharp
+interface ITransportRegistration
+{
+    string Name { get; }
+    TransportType Type { get; }
+    IReadOnlyList<TransportParameter> Parameters { get; }
+    IReadOnlyList<string> Aliases { get; }
+    ITransport Create(ITransportBuildContext context);
+}
+```
+
+- `Name`, `Type`, `Parameters`, and `Aliases` map to the formula
+  `ITransportConstructor` metadata in §6.1–§6.5.
+- The factory adapter normalizes names to lowercase; the core DTO does not
+  require pre-normalized input.
+- `Aliases` are proposed aliases. The factory host registers them; the core DTO
+  does not register anything by itself.
+- `Create` is invoked only by the direct compiler (§9). The formula parser,
+  resolver, and printer never call it.
+- `TransportParameter` and its subclasses mirror `Param`; `TransportTypeSet`,
+  `StructSchema`, and `ScalarValidator` mirror their formula counterparts.
+- A transport package implementing this contract depends only on `Pontifex`.
+
+The runtime adapter in `Pontifex.Factory` converts the core DTOs to the formula
+`TransportRegistration` and registers the same object with the runtime
+constructor registry. There is no second, independently maintained metadata
+definition.
 
 ---
 
@@ -1131,106 +1170,197 @@ Invariants:
 
 ## 9. Compiler boundary
 
-The compiler is an **opaque module** that consumes a resolved tree. It is not part
-of the parser or printer.
+The compiler consumes a resolved tree. It is not part of the parser or printer.
+Two layers exist:
+
+- `Pontifex.TransportFormula.Compilation.ICompiler<TOutput>` — the generic,
+  opaque formula-assembly boundary. The earlier name
+  `IResolvedTreeCompiler<TOutput>` maps to this interface; `Compile` takes the
+  `ResolvedFormula` wrapper.
+- `Pontifex.Factory.Compilation.ITransportCompiler` — the direct runtime
+  implementation, `ICompiler<ITransport>`.
+
+The formula assembly MUST NOT reference `ITransport`, `IConvertersGraph`,
+`ILogger`, `IMemoryRental`, or concrete transports.
+
+The compiler receives a valid resolved tree. A correct parser/resolver pair never
+produces an invalid one. If the compiler detects an invariant violation, it
+reports `CompilerException` with an `E_CMP_*` code (§13.6). Build failures report
+`BuildException` with an `E_BLD_*` code (§13.6).
+
+### 9.1 Core registration contract
+
+Transport packages register through `Pontifex.Factory.Registration` (§6.9), not
+through formula DTOs:
 
 ```csharp
-interface IResolvedTreeCompiler<TOutput>
+interface ITransportRegistration
 {
-    TOutput Compile(ResolvedExpr root);
+    string Name { get; }
+    TransportType Type { get; }
+    IReadOnlyList<TransportParameter> Parameters { get; }
+    IReadOnlyList<string> Aliases { get; }
+    ITransport Create(ITransportBuildContext context);
 }
 ```
 
-- The compiler receives a valid resolved tree.
-- The compiler MUST NOT be required by the lexer, parser, resolver, or canonical
-  printer.
-- The compiler MAY produce `IDescription`, a typed builder tree, or any other
-  representation.
-- If the compiler detects an invariant violation, it reports a `CompilerException`
-  with an `E_CMP_*` code (§13.6). A correct parser never produces such a tree.
+The factory adapter maps this to the formula `ITransportConstructor` metadata.
+`Name` and `Type` identify the constructor; `Parameters` and `Aliases` populate
+the registry. `Create` is the only transport-construction entry point.
 
-### 9.1 `IDescription` adapter (example, not normative)
+The build context is core-only:
 
-The current builder consumes `IDescription`, a string-keyed bag of `IElement`.
-An implementation MAY provide an adapter with this mapping:
+```csharp
+enum TransportRole { Server, Client }
+delegate ITransport NestedTransportFactory();
 
-```text
-CompileExpr(ResolvedExpr e, ITransportTypeCatalog catalog):
-    if e is ResolvedCast:
-        if not catalog.TryGetCanonicalName(e.Target, out canonicalTarget):
-            error E_CMP_INVALID_CAST_TARGET
-        return Description {
-            "name" = "convert",                 # internal adapter node only
-            "type" = canonicalTarget,
-            "from" = DescriptionElement(CompileTransport(e.Inner, catalog))
-        }
-    if e is ResolvedTransport:
-        return CompileTransport(e, catalog)
+interface ITransportBuildContext
+{
+    TransportRole Role { get; }
+    ILogger Logger { get; }
+    IMemoryRental Memory { get; }
 
-CompileTransport(ResolvedTransport t, ITransportTypeCatalog catalog):
-    if t.Constructor.Name == "convert":
-        error E_CMP_RESERVED_SCHEME
-    if not catalog.TryGetCanonicalName(t.Type, out canonicalType):
-        error E_CMP_INCONSISTENT_TREE detail "transport type not in catalog"
-    d = Description {
-        "name" = t.Constructor.Name,
-        "type" = canonicalType
-    }
-    for each binding in t.Provided in declaration order:
-        d.Add(AdapterKey(binding.Param.Name),
-              CompileValue(binding.Param, binding.Value, catalog))
-    return d
+    bool TryGetString(string parameterName, out string value);
+    bool TryGetTransport(string parameterName, out NestedTransportFactory factory);
+    bool TryGetTransportList(
+        string parameterName,
+        out IReadOnlyList<NestedTransportFactory> factories);
+    bool TryGetStruct(string parameterName, out ITransportStructValue value);
+}
 
-CompileValue(param, value, ITransportTypeCatalog catalog):
-    ScalarValue            -> StringElement(value.Text)
-    TransportValue         -> DescriptionElement(CompileExpr(value.Expr, catalog))
-    TransportListValue     -> ArrayElement(value.Elements
-        .Select(e => CompileExpr(e, catalog))
-        .Select(DescriptionElement))
-    StructValue            -> DescriptionElement(CompileStruct(value, catalog))
-
-CompileStruct(value, ITransportTypeCatalog catalog):
-    d = Description
-    for each binding in schema order:
-        field = binding.Field
-        if binding.Value is StringFieldValue:
-            d.Add(FieldKey(field.Name), StringElement(binding.Value.Text))
-        if binding.Value is NestedStructFieldValue:
-            d.Add(FieldKey(field.Name),
-                  DescriptionElement(CompileStruct(binding.Value, catalog)))
-    return d
+interface ITransportStructValue
+{
+    bool TryGetString(string fieldName, out string value);
+    bool TryGetStruct(string fieldName, out ITransportStructValue value);
+}
 ```
 
-`AdapterKey(name)` is `param.` + name and `FieldKey(name)` is `field.` + name.
-The adapter’s consumer must strip those prefixes.
+Rules:
 
-Notes:
+- Parameter and field names are canonical lowercase names from the resolved
+  metadata.
+- `TryGet*` returns `false` when an optional parameter or field is absent.
+  Required values are guaranteed by resolution.
+- `NestedTransportFactory` compiles the corresponding resolved subtree on each
+  invocation. Each invocation produces a fresh transport. This is required by
+  reconnect-style transports.
+- `TryGetTransportList` preserves element order and returns one factory per
+  element.
+- Struct values contain only strings and nested structs.
+- The transport constructor owns every nested transport it creates. If creation
+  fails after some nested transports were created, the constructor must stop or
+  discard them before rethrowing.
+- `Create` is called exactly once per resolved transport expression. The compiler
+  does not call it speculatively.
 
-- `convert` exists only inside this adapter. It is not formula syntax and has no
-  scheme registration. This adapter reserves the scheme name `convert` and
-  reports `E_CMP_RESERVED_SCHEME` if it encounters a transport constructor with
-  that canonical name. A different compiler may represent casts differently or
-  call the builder directly.
-- Absent parameters are never added.
-- The adapter assumes the resolved tree is valid; duplicate keys, unknown
-  parameters, and kind mismatches are compiler invariant errors.
-- The adapter’s `name` and `type` keys are reserved. Parameter keys are prefixed
-  with `param.` and struct-field keys with `field.` to avoid collisions.
-- `IDescription` is not the parser’s or printer’s model. It is an adapter output.
+### 9.2 Direct compiler components
 
-### 9.2 Build-time cast conversion
+The runtime factory assembly defines:
 
-When a builder or compiler builds a `ResolvedCast`:
+```csharp
+interface ITransportCompiler : ICompiler<ITransport>
+{
+    TransportRole Role { get; }
+}
 
-1. Build `Inner`.
-2. If `Inner.Type == Target`, use the inner transport (identity casts should
-   already have been collapsed; this is defense in depth).
-3. Otherwise ask the converter graph for a path from `Inner.Type` to `Target`.
-4. If no path exists, report `E_BLD_NO_CONVERSION_PATH`.
+interface ITransportConstructorRegistry
+{
+    ITransportRegistration? Find(string canonicalScheme, TransportType type);
+}
+```
 
-The parser MUST NOT validate converter paths. It validates that the target type
-exists and is within the expected set. Converter availability is build-time
-configuration.
+The compiler is constructed with the frozen constructor registry, the converter
+graph, the logger, the memory rental, and the role. It has no static state.
+
+The constructor registry is keyed by the normalized canonical scheme plus the
+core `TransportType`. Duplicate keys are rejected at registration time. The
+registry is sealed when the factory is built.
+
+If the optional `TransportTypeId` decoupling is adopted, the compiler also maps
+formula type ids to core `TransportType` through a binding table. Until then,
+resolved cast targets and constructor types are already core `TransportType`
+values.
+
+### 9.3 Compilation algorithm
+
+```text
+Compile(formula):
+    if formula is null: ArgumentNullException
+    if formula.Root is null:
+        CompilerException E_CMP_INCONSISTENT_TREE
+            "compiler received an inconsistent resolved tree: unspecified invariant violation"
+    return CompileExpr(formula.Root)
+
+CompileExpr(expr):
+    ResolvedTransport -> CompileTransport(expr)
+    ResolvedCast      -> CompileCast(expr)
+    other             -> E_CMP_INCONSISTENT_TREE
+
+CompileTransport(t):
+    registration = registry.Find(t.Constructor.Name, t.Constructor.Type)
+    if registration is null:
+        BuildException E_BLD_CONSTRUCTOR_NOT_FOUND
+            "transport constructor '<scheme>' is not registered"
+    context = TransportBuildContext(t, role, logger, memory, this)
+    try:
+        return registration.Create(context)
+    catch exception:
+        BuildException E_BLD_CONSTRUCTOR_FAILED
+            "transport constructor '<scheme>' failed"
+            inner = exception
+
+CompileCast(c):
+    inner = CompileExpr(c.Inner)
+    if inner.Type == c.Target:
+        return inner
+    convert = converters.TryConvert(
+        inner.Type, c.Target, () => inner, memory, logger)
+    if convert is null:
+        BuildException E_BLD_NO_CONVERSION_PATH
+            "no conversion path from <from> to <to>"
+    try:
+        return convert()
+    catch exception:
+        BuildException E_BLD_CONSTRUCTOR_FAILED
+            "transport constructor '<inner scheme>' failed"
+            inner = exception
+```
+
+- Casts compile depth-first: inner first, then conversion.
+- Constructor and converter failures preserve the original exception as
+  `InnerException`.
+- A nested factory invoked inside `Create` may throw its own build error; the
+  outer constructor boundary wraps it as the parent constructor failure.
+- No recovery, retry, or partial result.
+- The compiler never synthesizes absent parameters and never applies defaults.
+- The compiler does not validate converter paths during parsing or resolution.
+
+### 9.4 Build-time cast conversion
+
+1. Compile the inner transport.
+2. If `inner.Type == Target`, return the inner transport. Identity casts are
+   already collapsed during resolution; this check is defense in depth.
+3. Otherwise request a conversion factory from `IConvertersGraph.TryConvert`
+   using the inner type, target type, an inner factory, logger, and memory.
+4. No factory -> `E_BLD_NO_CONVERSION_PATH`.
+5. Converter failure -> `E_BLD_CONSTRUCTOR_FAILED` for the cast's inner scheme.
+
+The parser and resolver MUST NOT check converter availability. Converter
+availability is build-time configuration.
+
+### 9.5 Compiler invariants
+
+The following are invariant violations, not user errors:
+
+- null root;
+- unknown resolved node kind;
+- registration name/type disagreeing with resolved constructor metadata;
+- created transport type disagreeing with the registration type, if checked.
+
+They use `E_CMP_INCONSISTENT_TREE` with a detail from the closed set in §13.6.
+The compiler MAY perform these checks; it MUST NOT duplicate the full printer
+validation pass. Parameter and struct shape errors are resolution errors, not
+compiler errors.
 
 ---
 
@@ -1239,7 +1369,7 @@ configuration.
 The canonical printer turns a resolved tree into a canonical formula. Its input
 is the resolved tree plus the constructor/parameter metadata reachable from that
 tree and the `ITransportTypeCatalog` needed to print cast targets. It does not
-depend on the AST, on `IDescription`, or on the compiler.
+depend on the AST, on the core registration contract, or on the compiler.
 
 If the input tree violates the invariants in §8, the printer throws
 `PrinterException` with an `E_PRN_*` code (§13.5). A correct resolver never
@@ -1493,32 +1623,41 @@ resolved tree:
 
 ### 12.1 Error objects
 
+The concrete diagnostic DTO is `FactoryError` in the formula assembly:
+
 ```csharp
-abstract record SpecException(string Code, string Message)
+enum FactoryPhase
 {
-    public override string ToString() => $"{Code}: {Message}";
+    Lexing, Parsing, Resolution, Registration, Printing, Compilation, Building
 }
 
-sealed record ParseError(string Code, string Message, int Offset)
-    : SpecException(Code, Message)
-{
-    public override string ToString()
-        => $"{Code}: {Message} (offset {Offset})";
-}
-
-sealed record PrinterException(string Code, string Message)
-    : SpecException(Code, Message);
-sealed record CompilerException(string Code, string Message)
-    : SpecException(Code, Message);
-sealed record RegistrationException(string Code, string Message)
-    : SpecException(Code, Message);
-sealed record BuildException(string Code, string Message)
-    : SpecException(Code, Message);
+sealed record FactoryError(
+    string Code, string Message, FactoryPhase Phase, SourceSpan? Span);
 ```
 
-- Parser/lexer/semantic errors use `ParseError` and always include an offset.
-- Registration, printer, compiler, and build errors have no source offset.
+Exceptions live in the formula assembly root namespace and are class-based:
+
+```csharp
+class FactoryException : Exception
+{
+    FactoryError Error { get; }
+}
+
+sealed class RegistrationException : FactoryException { }
+sealed class PrinterException : FactoryException { }
+sealed class CompilerException : FactoryException { }
+sealed class BuildException : FactoryException { }
+```
+
+- Parser, lexer, and semantic results carry `FactoryError` with the matching
+  phase and a non-null span; they do not throw for user input.
+- Registration, printing, compiler, and build failures throw the matching
+  exception; the phase is set by the exception type.
+- `BuildException` carries `E_BLD_*`; `CompilerException` carries `E_CMP_*`.
+- `FactoryException` is the common catch type; the derived type identifies the
+  stage.
 - Messages are the exact templates in §13, with placeholders substituted.
+- The legacy `ParseError` record and record-based exception sketch are obsolete.
 - No error recovery, no multiple errors, no warnings.
 
 ### 12.2 Offset rules
@@ -1804,19 +1943,23 @@ These are outside the parser/printer contract but complete the boundary.
 | `E_CMP_DUPLICATE_PARAM` | Compiler | `compiler received duplicate parameter '<name>'` |
 | `E_CMP_UNKNOWN_PARAM` | Compiler | `compiler received unknown parameter '<name>'` |
 | `E_CMP_PARAM_KIND_MISMATCH` | Compiler | `compiler expected value kind <expected> for parameter '<name>', got <actual>` |
-| `E_CMP_RESERVED_SCHEME` | Compiler | `scheme 'convert' is reserved by this adapter` |
-| `E_CMP_INVALID_CAST_TARGET` | Compiler | `cast target '<type>' is invalid` |
-| `E_BLD_NO_CONVERSION_PATH` | Builder | `no conversion path from <from> to <to>` |
-| `E_BLD_CONSTRUCTOR_FAILED` | Builder | `transport constructor '<scheme>' failed` |
+| `E_BLD_CONSTRUCTOR_NOT_FOUND` | Build | `transport constructor '<scheme>' is not registered` |
+| `E_BLD_CONSTRUCTOR_FAILED` | Build | `transport constructor '<scheme>' failed` |
+| `E_BLD_NO_CONVERSION_PATH` | Build | `no conversion path from <from> to <to>` |
+| `E_BLD_TYPE_NOT_BOUND` | Build | `transport type '<id>' is not bound to a core transport type` |
+
+`E_BLD_TYPE_NOT_BOUND` is present only when the optional `TransportTypeId`
+binding layer is adopted. The former adapter-only codes
+`E_CMP_RESERVED_SCHEME` and `E_CMP_INVALID_CAST_TARGET` are removed from the
+compiler catalogue; `E_PRN_INVALID_CAST_TARGET` remains a printer error.
 
 In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are value kinds. In
 `E_CMP_INCONSISTENT_TREE`, `<detail>` uses the same closed set as
 `E_PRN_INCONSISTENT_TREE`. Elsewhere in compiler/build messages, `<scheme>` is
 canonical lowercase; `<name>` is canonical except in `E_CMP_UNKNOWN_PARAM`, where
 it is the stored parameter name; `<from>` and `<to>` are catalog canonical type
-names. In `E_CMP_INVALID_CAST_TARGET`, `<type>` is the transport type's
-`ToString()` value. Compiler invariant checks, if performed, follow the printer
-validation order defined in §10.
+names; `<id>` is a formula transport type id. Compiler invariant checks, if
+performed, follow the printer validation order defined in §10.
 
 ---
 
@@ -2085,15 +2228,15 @@ Representative non-semantic error messages:
 | Printer tree with out-of-order struct fields | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: struct field order violation` |
 | Printer scalar containing CR | `E_PRN_INVALID_SCALAR: scalar value contains a character that cannot be printed: U+000D` |
 | Printer tree with cast target `TypeZ` | `E_PRN_INVALID_CAST_TARGET: cast target 'TypeZ' is invalid` |
-| Compiler tree with transport type absent from catalog | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: transport type not in catalog` |
+| Compiler tree with null root | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: unspecified invariant violation` |
 | Compiler tree with unknown parameter `x` | `E_CMP_UNKNOWN_PARAM: compiler received unknown parameter 'x'` |
 | Compiler tree with duplicate parameter `input` | `E_CMP_DUPLICATE_PARAM: compiler received duplicate parameter 'input'` |
 | Compiler tree with scalar for transport parameter `input` | `E_CMP_PARAM_KIND_MISMATCH: compiler expected value kind transport for parameter 'input', got scalar` |
 | Compiler tree with inconsistent constructor type | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: constructor type mismatch` |
-| Compiler tree with cast target `TypeZ` | `E_CMP_INVALID_CAST_TARGET: cast target 'TypeZ' is invalid` |
-| Compiler tree with scheme `convert` | `E_CMP_RESERVED_SCHEME: scheme 'convert' is reserved by this adapter` |
 | Build cast from `TypeA` to `TypeB` without a path | `E_BLD_NO_CONVERSION_PATH: no conversion path from TypeA to TypeB` |
+| Constructor `alpha` not registered | `E_BLD_CONSTRUCTOR_NOT_FOUND: transport constructor 'alpha' is not registered` |
 | Constructor `alpha` fails | `E_BLD_CONSTRUCTOR_FAILED: transport constructor 'alpha' failed` |
+| Build cast target `TypeZ` not bound (optional binding layer) | `E_BLD_TYPE_NOT_BOUND: transport type 'TypeZ' is not bound to a core transport type` |
 
 ---
 
@@ -2101,11 +2244,11 @@ Representative non-semantic error messages:
 
 This document does not specify:
 
-- how transports are built;
+- how concrete transports are implemented beyond the core registration contract;
 - how the converter graph chooses paths;
 - how concrete constructors read their parameters;
 - how aliases are chosen by an application;
-- how `IDescription` is consumed;
+- how the legacy `Pontifex.OldFactory` descriptor path is consumed;
 - any concrete transport scheme or parameter name.
 
 The parser and canonical printer are complete without those.

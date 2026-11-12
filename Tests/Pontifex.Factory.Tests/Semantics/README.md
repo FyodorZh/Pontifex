@@ -27,6 +27,9 @@ production project; no test-only production seam exists.
 
 ## Contract references
 
+Paths below reflect the pre-split layout. Milestone 5 moves formula sources to
+`Pontifex.TransportFormula` and updates these links.
+
 - [parsing.md](../../../Pontifex.Factory/parsing.md) — resolution entry points and
   expected types (§7.1), casts (§7.2), transport selection (§7.3), binding
   (§7.4), parameter validation (§7.5), expected-type guarantees (§7.6), struct
@@ -219,7 +222,8 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 - Registry registration, metadata validation, and catalog lookup rules; those
   belong to the `Factory.Registry` suite.
 - Canonical printing, canonicalization invariants, and round-trip properties.
-- Compilation, the `IDescription` adapter, and the compiler invariant errors.
+- Compilation, the direct transport compiler, and compiler invariant errors;
+  those belong to the `Factory.Compilation` suite.
 - Bootstrap wiring and `ITransportFactory`.
 - Transport building, converter paths, concrete transports, and runtime
   construction.
