@@ -168,8 +168,8 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
   are covered by their own suites. This suite asserts only wiring and stage
   translation.
 - `E_CMP_*` and `E_BLD_*` compiler invariants and direct compiler behaviour;
-  those belong to the future `Factory.Compilation` suite. This suite proves only
-  that compiler-raised exceptions pass through unchanged.
+  those belong to the `Factory.Compilation` suite. This suite proves only that
+  compiler-raised exceptions pass through unchanged.
 - Thread safety of `Build`. The contract defines no concurrency guarantee.
 - Performance, allocation, and adversarial input limits.
 

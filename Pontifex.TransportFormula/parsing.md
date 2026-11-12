@@ -1304,6 +1304,8 @@ CompileTransport(t):
     context = TransportBuildContext(t, role, logger, memory, this)
     try:
         return registration.Create(context)
+    catch CompilerException:
+        rethrow
     catch exception:
         BuildException E_BLD_CONSTRUCTOR_FAILED
             "transport constructor '<scheme>' failed"
@@ -1331,6 +1333,10 @@ CompileCast(c):
   `InnerException`.
 - A nested factory invoked inside `Create` may throw its own build error; the
   outer constructor boundary wraps it as the parent constructor failure.
+- A `CompilerException` raised by a build-context accessor inside `Create` is a
+  resolved-tree invariant violation, not a constructor failure. It propagates
+  unchanged with phase `Compilation` and MUST NOT be wrapped as
+  `E_BLD_CONSTRUCTOR_FAILED`.
 - No recovery, retry, or partial result.
 - The compiler never synthesizes absent parameters and never applies defaults.
 - The compiler does not validate converter paths during parsing or resolution.

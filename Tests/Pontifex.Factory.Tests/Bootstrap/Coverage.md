@@ -58,7 +58,7 @@
   tree produced by the resolver, and a correct resolver never produces an
   invalid tree. The printer invariant path is covered by
   `Canonicalization/Tests/PrinterInvariantValidatorTests.cs` instead.
-- **`E_CMP_*` and `E_BLD_*` compiler invariants.** These belong to the future
+- **`E_CMP_*` and `E_BLD_*` compiler invariants.** These belong to the
   `Factory.Compilation` suite and its direct transport compiler. This suite
   proves only that a compiler-raised `CompilerException` passes through
   unchanged.

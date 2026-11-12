@@ -91,6 +91,14 @@ namespace Pontifex.Factory.Compilation
             {
                 return registration.Create(context);
             }
+            catch (CompilerException)
+            {
+                // A build-context accessor reports a resolved-tree invariant
+                // violation (for example a parameter value-kind mismatch). That
+                // is a compiler error, not a constructor failure, so it must not
+                // be relabeled as E_BLD_CONSTRUCTOR_FAILED.
+                throw;
+            }
             catch (Exception exception)
             {
                 throw ConstructorFailed(scheme, exception);
