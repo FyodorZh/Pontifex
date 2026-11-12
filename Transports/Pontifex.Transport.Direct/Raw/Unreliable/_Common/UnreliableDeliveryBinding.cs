@@ -1,17 +1,15 @@
 using System;
 using Actuarius.Memory;
 using Pontifex.Factory.Registration;
-using Pontifex.OldFactory;
 using Pontifex.VirtualDelivery;
+using Pontifex.VirtualDelivery.Netem;
 
 namespace Pontifex.Raw.Unreliable.Direct
 {
     /// <summary>
     /// Shared factory-binding support for the unreliable Direct transports. The
-    /// formula-facing delivery value is a typed struct; this helper converts it
-    /// to the legacy description consumed by <see cref="DeliverySystemFactory"/>.
-    /// The bridge is transitional until the delivery configuration is expressed
-    /// without <see cref="IDescription"/>.
+    /// formula-facing delivery value is a typed struct that is mapped directly to
+    /// the virtual-delivery configuration.
     /// </summary>
     internal static class UnreliableDeliveryBinding
     {
@@ -40,140 +38,379 @@ namespace Pontifex.Raw.Unreliable.Direct
                 throw new ArgumentNullException(nameof(memory));
             }
 
-            var description = ToDescription(value);
-            return DeliverySystemFactory.Build(
-                       description,
-                       memory.CollectablePool,
-                       memory.ByteArraysPool)
-                   ?? new PerfectDeliverySystem();
-        }
-
-        private static Description ToDescription(ITransportStructValue value)
-        {
-            var description = new Description();
-
-            AddString(description, value, "type", "type");
-            AddLong(description, value, "latencyns", "latencyNs");
-            AddLong(description, value, "jitterns", "jitterNs");
-            AddLong(description, value, "lossprobability", "lossProbability");
-            AddLong(description, value, "duplicateprobability", "duplicateProbability");
-            AddLong(description, value, "reorderprobability", "reorderProbability");
-            AddLong(description, value, "gap", "gap");
-            AddLong(description, value, "ratebytespersec", "rateBytesPerSec");
-            AddLong(description, value, "packetoverhead", "packetOverhead");
-            AddLong(description, value, "cellsize", "cellSize");
-            AddLong(description, value, "celloverhead", "cellOverhead");
-            AddLong(description, value, "queuelimit", "queueLimit");
-            AddString(description, value, "lossmodel", "lossModel");
-
-            AddNested(description, value, "correlation", "correlation", ToCorrelation);
-            AddNested(description, value, "slot", "slot", ToSlot);
-            AddNested(description, value, "delaydistribution", "delayDistribution", ToDistribution);
-            AddNested(description, value, "slotdistribution", "slotDistribution", ToDistribution);
-            AddNested(description, value, "fourstate", "fourState", ToFourState);
-            AddNested(description, value, "gilbertelliot", "gilbertElliot", ToGilbertElliot);
-
-            return description;
-        }
-
-        private static Description ToCorrelation(ITransportStructValue value)
-        {
-            var description = new Description();
-            AddLong(description, value, "delayrho", "delayRho");
-            AddLong(description, value, "lossrho", "lossRho");
-            AddLong(description, value, "duplicaterho", "duplicateRho");
-            AddLong(description, value, "reorderrho", "reorderRho");
-            return description;
-        }
-
-        private static Description ToSlot(ITransportStructValue value)
-        {
-            var description = new Description();
-            AddLong(description, value, "mindelayns", "minDelayNs");
-            AddLong(description, value, "maxdelayns", "maxDelayNs");
-            AddLong(description, value, "distdelayns", "distDelayNs");
-            AddLong(description, value, "distjitterns", "distJitterNs");
-            AddLong(description, value, "maxpackets", "maxPackets");
-            AddLong(description, value, "maxbytes", "maxBytes");
-            return description;
-        }
-
-        private static Description ToDistribution(ITransportStructValue value)
-        {
-            var description = new Description();
-            if (!value.TryGetArray("values", out var values))
+            if (!value.TryGetString("type", out var type))
             {
-                return description;
+                return new PerfectDeliverySystem();
             }
 
-            var elements = new IElement[values.Count];
-            for (var i = 0; i < elements.Length; i++)
+            switch (type)
             {
-                elements[i] = values.TryGetInt64(i, out var element)
-                    ? new LongElement(element)
-                    : VoidElement.Instance;
+                case "perfect":
+                    return new PerfectDeliverySystem();
+                case "netem":
+                    return BuildNetem(value, memory) ?? new PerfectDeliverySystem();
+                default:
+                    return new PerfectDeliverySystem();
+            }
+        }
+
+        private static IDeliverySystem? BuildNetem(
+            ITransportStructValue value,
+            IMemoryRental memory)
+        {
+            var config = ParseNetemConfig(value);
+            if (config is null)
+            {
+                return null;
             }
 
-            description.Add("values", new ArrayElement(elements));
-            return description;
+            try
+            {
+                return new NetemDeliverySystem(
+                    config,
+                    memory.CollectablePool,
+                    memory.ByteArraysPool);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
-        private static Description ToFourState(ITransportStructValue value)
+        private static NetemConfig? ParseNetemConfig(ITransportStructValue value)
         {
-            var description = new Description();
-            AddLong(description, value, "p13", "p13");
-            AddLong(description, value, "p31", "p31");
-            AddLong(description, value, "p32", "p32");
-            AddLong(description, value, "p14", "p14");
-            AddLong(description, value, "p23", "p23");
-            return description;
+            if (!TryGetLong(value, "latencyns", out var latencyNs))
+            {
+                return null;
+            }
+
+            TryGetLong(value, "jitterns", out var jitterNs);
+            TryGetUInt32(value, "lossprobability", out var lossProbability);
+            TryGetUInt32(value, "duplicateprobability", out var duplicateProbability);
+            TryGetUInt32(value, "reorderprobability", out var reorderProbability);
+            TryGetUInt32(value, "gap", out var gap);
+            TryGetUInt64(value, "ratebytespersec", out var rateBytesPerSec);
+            TryGetInt32(value, "packetoverhead", out var packetOverhead);
+            TryGetUInt32(value, "cellsize", out var cellSize);
+            TryGetInt32(value, "celloverhead", out var cellOverhead);
+            TryGetInt32(value, "queuelimit", out var queueLimit);
+
+            LossModelKind? lossModel = null;
+            if (TryGetString(value, "lossmodel", out var lossModelText))
+            {
+                lossModel = ParseLossModelKind(lossModelText);
+                if (lossModel is null)
+                {
+                    return null;
+                }
+            }
+
+            CorrelationParams? correlation = null;
+            if (TryGetStruct(value, "correlation", out var correlationValue))
+            {
+                correlation = ParseCorrelation(correlationValue);
+                if (correlation is null)
+                {
+                    return null;
+                }
+            }
+
+            SlotConfig? slot = null;
+            if (TryGetStruct(value, "slot", out var slotValue))
+            {
+                slot = ParseSlotConfig(slotValue);
+                if (slot is null)
+                {
+                    return null;
+                }
+            }
+
+            DistributionTable? delayDistribution = null;
+            if (TryGetStruct(value, "delaydistribution", out var delayDistributionValue))
+            {
+                delayDistribution = ParseDistributionTable(delayDistributionValue);
+                if (delayDistribution is null)
+                {
+                    return null;
+                }
+            }
+
+            DistributionTable? slotDistribution = null;
+            if (TryGetStruct(value, "slotdistribution", out var slotDistributionValue))
+            {
+                slotDistribution = ParseDistributionTable(slotDistributionValue);
+                if (slotDistribution is null)
+                {
+                    return null;
+                }
+            }
+
+            FourStateParams? fourState = null;
+            if (TryGetStruct(value, "fourstate", out var fourStateValue))
+            {
+                fourState = ParseFourStateParams(fourStateValue);
+                if (fourState is null)
+                {
+                    return null;
+                }
+            }
+
+            GilbertElliotParams? gilbertElliot = null;
+            if (TryGetStruct(value, "gilbertelliot", out var gilbertElliotValue))
+            {
+                gilbertElliot = ParseGilbertElliotParams(gilbertElliotValue);
+                if (gilbertElliot is null)
+                {
+                    return null;
+                }
+            }
+
+            return new NetemConfig
+            {
+                LatencyNs = latencyNs,
+                JitterNs = jitterNs,
+                LossProbability = lossProbability,
+                DuplicateProbability = duplicateProbability,
+                ReorderProbability = reorderProbability,
+                Gap = gap,
+                RateBytesPerSec = rateBytesPerSec,
+                PacketOverhead = packetOverhead,
+                CellSize = cellSize,
+                CellOverhead = cellOverhead,
+                QueueLimit = queueLimit,
+                LossModel = lossModel ?? LossModelKind.Random,
+                Correlation = correlation ?? default,
+                Slot = slot ?? default,
+                DelayDistribution = delayDistribution,
+                SlotDistribution = slotDistribution,
+                FourState = fourState,
+                GilbertElliot = gilbertElliot
+            };
         }
 
-        private static Description ToGilbertElliot(ITransportStructValue value)
+        private static LossModelKind? ParseLossModelKind(string value)
         {
-            var description = new Description();
-            AddLong(description, value, "p", "p");
-            AddLong(description, value, "r", "r");
-            AddLong(description, value, "h", "h");
-            AddLong(description, value, "k1", "k1");
-            return description;
+            return value switch
+            {
+                "random" => LossModelKind.Random,
+                "fourState" => LossModelKind.FourState,
+                "gilbertElliot" => LossModelKind.GilbertElliot,
+                _ => null
+            };
         }
 
-        private static void AddString(
-            Description description,
+        private static CorrelationParams? ParseCorrelation(ITransportStructValue value)
+        {
+            if (!TryGetUInt32(value, "delayrho", out var delayRho))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "lossrho", out var lossRho))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "duplicaterho", out var duplicateRho))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "reorderrho", out var reorderRho))
+            {
+                return null;
+            }
+
+            return new CorrelationParams(delayRho, lossRho, duplicateRho, reorderRho);
+        }
+
+        private static SlotConfig? ParseSlotConfig(ITransportStructValue value)
+        {
+            if (!TryGetLong(value, "mindelayns", out var minDelayNs))
+            {
+                return null;
+            }
+
+            if (!TryGetLong(value, "maxdelayns", out var maxDelayNs))
+            {
+                return null;
+            }
+
+            if (!TryGetLong(value, "distdelayns", out var distDelayNs))
+            {
+                return null;
+            }
+
+            if (!TryGetLong(value, "distjitterns", out var distJitterNs))
+            {
+                return null;
+            }
+
+            if (!TryGetInt32(value, "maxpackets", out var maxPackets))
+            {
+                return null;
+            }
+
+            if (!TryGetInt32(value, "maxbytes", out var maxBytes))
+            {
+                return null;
+            }
+
+            return new SlotConfig(
+                minDelayNs,
+                maxDelayNs,
+                distDelayNs,
+                distJitterNs,
+                maxPackets,
+                maxBytes);
+        }
+
+        private static DistributionTable? ParseDistributionTable(
+            ITransportStructValue value)
+        {
+            if (!value.TryGetArray("values", out var values) || values.Count == 0)
+            {
+                return null;
+            }
+
+            var shorts = new short[values.Count];
+            for (var i = 0; i < shorts.Length; i++)
+            {
+                if (!values.TryGetInt64(i, out var number))
+                {
+                    return null;
+                }
+
+                shorts[i] = (short)number;
+            }
+
+            return new DistributionTable(shorts);
+        }
+
+        private static FourStateParams? ParseFourStateParams(
+            ITransportStructValue value)
+        {
+            if (!TryGetUInt32(value, "p13", out var p13))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "p31", out var p31))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "p32", out var p32))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "p14", out var p14))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "p23", out var p23))
+            {
+                return null;
+            }
+
+            return new FourStateParams(p13, p31, p32, p14, p23);
+        }
+
+        private static GilbertElliotParams? ParseGilbertElliotParams(
+            ITransportStructValue value)
+        {
+            if (!TryGetUInt32(value, "p", out var p))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "r", out var r))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "h", out var h))
+            {
+                return null;
+            }
+
+            if (!TryGetUInt32(value, "k1", out var k1))
+            {
+                return null;
+            }
+
+            return new GilbertElliotParams(p, r, h, k1);
+        }
+
+        private static bool TryGetLong(
             ITransportStructValue value,
             string fieldName,
-            string descriptionName)
+            out long number)
         {
-            if (value.TryGetString(fieldName, out var text))
-            {
-                description.Add(descriptionName, new StringElement(text));
-            }
+            return value.TryGetInt64(fieldName, out number);
         }
 
-        private static void AddLong(
-            Description description,
+        private static bool TryGetInt32(
             ITransportStructValue value,
             string fieldName,
-            string descriptionName)
+            out int number)
         {
-            if (value.TryGetInt64(fieldName, out var number))
+            if (value.TryGetInt64(fieldName, out var value64))
             {
-                description.Add(descriptionName, new LongElement(number));
+                number = (int)value64;
+                return true;
             }
+
+            number = 0;
+            return false;
         }
 
-        private static void AddNested(
-            Description description,
+        private static bool TryGetUInt32(
             ITransportStructValue value,
             string fieldName,
-            string descriptionName,
-            Func<ITransportStructValue, Description> convert)
+            out uint number)
         {
-            if (value.TryGetStruct(fieldName, out var nested))
+            if (value.TryGetInt64(fieldName, out var value64))
             {
-                description.Add(descriptionName, new DescriptionElement(convert(nested)));
+                number = (uint)value64;
+                return true;
             }
+
+            number = 0;
+            return false;
+        }
+
+        private static bool TryGetUInt64(
+            ITransportStructValue value,
+            string fieldName,
+            out ulong number)
+        {
+            if (value.TryGetInt64(fieldName, out var value64))
+            {
+                number = (ulong)value64;
+                return true;
+            }
+
+            number = 0;
+            return false;
+        }
+
+        private static bool TryGetString(
+            ITransportStructValue value,
+            string fieldName,
+            out string text)
+        {
+            return value.TryGetString(fieldName, out text);
+        }
+
+        private static bool TryGetStruct(
+            ITransportStructValue value,
+            string fieldName,
+            out ITransportStructValue nested)
+        {
+            return value.TryGetStruct(fieldName, out nested);
         }
 
         private static StructSchema CreateDeliverySchema()
