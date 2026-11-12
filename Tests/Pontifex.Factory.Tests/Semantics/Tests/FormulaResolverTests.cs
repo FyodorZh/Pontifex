@@ -139,8 +139,8 @@ public sealed class FormulaResolverTests
         var root = SemanticsAssertions.AsTransport(formula.Root);
         var binding = SemanticsAssertions.Provided(root, "input");
 
-        Assert.That(binding.Value, Is.InstanceOf<TransportValue>());
-        var cast = SemanticsAssertions.AsCast(((TransportValue)binding.Value).Expr);
+        Assert.That(binding.Value, Is.InstanceOf<ResolvedExpr>());
+        var cast = SemanticsAssertions.AsCast((ResolvedExpr)binding.Value);
         Assert.That(cast.Inner.Constructor.Name, Is.EqualTo("alpha"));
         Assert.That(cast.Inner.Type, Is.EqualTo(SemanticsTestData.TypeA));
         Assert.That(cast.Target, Is.EqualTo(SemanticsTestData.TypeB));
@@ -234,13 +234,13 @@ public sealed class FormulaResolverTests
 
         Assert.That(config.Fields.Select(f => f.Field.Name), Is.EqualTo(new[] { "name", "nested" }));
         Assert.That(
-            ((StringFieldValue)config.Fields[0].Value).Text,
+            ((StringValue)config.Fields[0].Value).Text,
             Is.EqualTo("x"));
 
-        var nested = (NestedStructFieldValue)config.Fields[1].Value;
+        var nested = (StructValue)config.Fields[1].Value;
         Assert.That(nested.Fields, Has.Count.EqualTo(1));
         Assert.That(nested.Fields[0].Field.Name, Is.EqualTo("a"));
-        Assert.That(((StringFieldValue)nested.Fields[0].Value).Text, Is.EqualTo("1"));
+        Assert.That(((StringValue)nested.Fields[0].Value).Text, Is.EqualTo("1"));
     }
 
     [Test]
@@ -257,13 +257,13 @@ public sealed class FormulaResolverTests
     {
         var root = ResolveTransport("deep({outer={inner={value=v}}})");
         var config = SemanticsAssertions.ProvidedStruct(root, "config");
-        var outer = (NestedStructFieldValue)config.Fields[0].Value;
-        var inner = (NestedStructFieldValue)outer.Fields[0].Value;
+        var outer = (StructValue)config.Fields[0].Value;
+        var inner = (StructValue)outer.Fields[0].Value;
 
         Assert.That(config.Fields[0].Field.Name, Is.EqualTo("outer"));
         Assert.That(outer.Fields[0].Field.Name, Is.EqualTo("inner"));
         Assert.That(inner.Fields[0].Field.Name, Is.EqualTo("value"));
-        Assert.That(((StringFieldValue)inner.Fields[0].Value).Text, Is.EqualTo("v"));
+        Assert.That(((StringValue)inner.Fields[0].Value).Text, Is.EqualTo("v"));
     }
 
     [Test]
@@ -403,9 +403,9 @@ public sealed class FormulaResolverTests
     {
         var root = ResolveTransport("dual(alpha(beta(x)))");
         var parameter = (TransportParam)SemanticsTestData.FindParam(root.Constructor, "input");
-        var value = (TransportValue)SemanticsAssertions.Provided(root, "input").Value;
+        var value = (ResolvedExpr)SemanticsAssertions.Provided(root, "input").Value;
 
-        Assert.That(parameter.Expected.Contains(value.Expr.Type), Is.True);
+        Assert.That(parameter.Expected.Contains(value.Type), Is.True);
     }
 
     [Test]
@@ -443,7 +443,7 @@ public sealed class FormulaResolverTests
 
         Assert.That(config.Fields, Has.Count.EqualTo(1));
         Assert.That(config.Fields[0].Field.Name, Is.EqualTo("self"));
-        Assert.That(((NestedStructFieldValue)config.Fields[0].Value).Fields, Is.Empty);
+        Assert.That(((StructValue)config.Fields[0].Value).Fields, Is.Empty);
     }
 
     private static ResolvedFormula Resolve(string source)

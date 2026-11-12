@@ -481,7 +481,7 @@ public sealed class TransportCompilerTests
         Assert.That(
             exception.Error.Message,
             Is.EqualTo(
-                "compiler expected value kind scalar for parameter 'path', got transport"));
+                "compiler expected value kind string for parameter 'path', got transport"));
     }
 
     [Test]

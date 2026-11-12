@@ -181,16 +181,16 @@ public sealed class PrinterInvariantValidatorTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     input,
-                    CanonicalizationTestData.TransportValue(
+                    CanonicalizationTestData.Expression(
                         EmptyTransport("beta", CanonicalizationTestData.TypeB))),
                 CanonicalizationTestData.Bind(
                     timeout,
-                    CanonicalizationTestData.TransportValue(EmptyTransport("beta", CanonicalizationTestData.TypeB)))));
+                    CanonicalizationTestData.Expression(EmptyTransport("beta", CanonicalizationTestData.TypeB)))));
 
         AssertPrinterError(
             formula,
             "E_PRN_PARAM_KIND_MISMATCH",
-            "parameter 'timeout' of scheme 'alpha' has value kind transport, expected scalar");
+            "parameter 'timeout' of scheme 'alpha' has value kind transport, expected string");
     }
 
     [Test]
@@ -205,7 +205,7 @@ public sealed class PrinterInvariantValidatorTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     input,
-                    CanonicalizationTestData.TransportValue(
+                    CanonicalizationTestData.Expression(
                         EmptyTransport("beta", CanonicalizationTestData.TypeB))),
                 CanonicalizationTestData.Bind(
                     timeout,
@@ -214,7 +214,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_PARAM_KIND_MISMATCH",
-            "parameter 'timeout' of scheme 'alpha' has value kind transport list, expected scalar");
+            "parameter 'timeout' of scheme 'alpha' has value kind transport list, expected string");
     }
 
     [Test]
@@ -229,7 +229,7 @@ public sealed class PrinterInvariantValidatorTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     input,
-                    CanonicalizationTestData.TransportValue(
+                    CanonicalizationTestData.Expression(
                         EmptyTransport("beta", CanonicalizationTestData.TypeB))),
                 CanonicalizationTestData.Bind(
                     timeout,
@@ -238,11 +238,11 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_PARAM_KIND_MISMATCH",
-            "parameter 'timeout' of scheme 'alpha' has value kind struct, expected scalar");
+            "parameter 'timeout' of scheme 'alpha' has value kind struct, expected string");
     }
 
     [Test]
-    public void Validate_WhenTransportParameterReceivesScalar_ReportsKindMismatch()
+    public void Validate_WhenTransportParameterReceivesString_ReportsKindMismatch()
     {
         var constructor = AlphaConstructor();
         var input = Param(constructor, "input");
@@ -255,11 +255,11 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_PARAM_KIND_MISMATCH",
-            "parameter 'input' of scheme 'alpha' has value kind scalar, expected transport");
+            "parameter 'input' of scheme 'alpha' has value kind string, expected transport");
     }
 
     [Test]
-    public void Validate_WhenListParameterReceivesScalar_ReportsKindMismatch()
+    public void Validate_WhenListParameterReceivesString_ReportsKindMismatch()
     {
         var items = CanonicalizationTestData.ListParam(
             "items",
@@ -279,11 +279,11 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_PARAM_KIND_MISMATCH",
-            "parameter 'items' of scheme 'bag' has value kind scalar, expected transport list");
+            "parameter 'items' of scheme 'bag' has value kind string, expected transport list");
     }
 
     [Test]
-    public void Validate_WhenStructParameterReceivesScalar_ReportsKindMismatch()
+    public void Validate_WhenStructParameterReceivesString_ReportsKindMismatch()
     {
         var config = CanonicalizationTestData.StructParam(
             "config",
@@ -303,7 +303,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_PARAM_KIND_MISMATCH",
-            "parameter 'config' of scheme 'emptystruct' has value kind scalar, expected struct");
+            "parameter 'config' of scheme 'emptystruct' has value kind string, expected struct");
     }
 
     [Test]
@@ -395,7 +395,7 @@ public sealed class PrinterInvariantValidatorTests
     }
 
     [Test]
-    public void Validate_WhenTransportValueIsOutsideExpectedSet_ReportsMembershipViolation()
+    public void Validate_WhenTransportExpressionIsOutsideExpectedSet_ReportsMembershipViolation()
     {
         var input = CanonicalizationTestData.TransportParam(
             "input",
@@ -412,7 +412,7 @@ public sealed class PrinterInvariantValidatorTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     input,
-                    CanonicalizationTestData.TransportValue(
+                    CanonicalizationTestData.Expression(
                         EmptyTransport("alpha", CanonicalizationTestData.TypeA)))));
 
         AssertInconsistent(formula, "expected-type membership violation");
@@ -614,7 +614,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
-            "field 'name' of struct parameter 'config' has value kind struct, expected scalar");
+            "field 'name' of struct parameter 'config' has value kind struct, expected string");
     }
 
     [Test]
@@ -638,7 +638,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
-            "field 'nested' of struct parameter 'config' has value kind scalar, expected struct");
+            "field 'nested' of struct parameter 'config' has value kind string, expected struct");
     }
 
     [Test]
@@ -984,7 +984,7 @@ public sealed class PrinterInvariantValidatorTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     items,
-                    CanonicalizationTestData.TransportValue(
+                    CanonicalizationTestData.Expression(
                         EmptyTransport("beta", CanonicalizationTestData.TypeB)))));
 
         AssertPrinterError(
@@ -1037,7 +1037,7 @@ public sealed class PrinterInvariantValidatorTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     config,
-                    CanonicalizationTestData.TransportValue(
+                    CanonicalizationTestData.Expression(
                         EmptyTransport("beta", CanonicalizationTestData.TypeB)))));
 
         AssertPrinterError(

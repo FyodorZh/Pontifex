@@ -178,22 +178,22 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
             {
                 case StringParam:
                 {
-                    if (value is not ScalarValue scalar)
+                    if (value is not StringValue stringValue)
                     {
                         throw CanonicalizationErrorFactory.ParamKindMismatch(
                             parameter.Name,
                             constructor.Name,
                             ValueKind(value),
-                            "scalar");
+                            "string");
                     }
 
-                    ScalarFormatter.EnsurePrintable(scalar.Text);
+                    ScalarFormatter.EnsurePrintable(stringValue.Text);
                     return;
                 }
 
                 case TransportParam transportParam:
                 {
-                    if (value is not TransportValue transportValue)
+                    if (value is not ResolvedExpr expression)
                     {
                         throw CanonicalizationErrorFactory.ParamKindMismatch(
                             parameter.Name,
@@ -202,9 +202,7 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                             "transport");
                     }
 
-                    var expression = transportValue.Expr;
-                    if (expression is null
-                        || !transportParam.Expected.Contains(expression.Type))
+                    if (!transportParam.Expected.Contains(expression.Type))
                     {
                         throw CanonicalizationErrorFactory.InconsistentTree(
                             CanonicalizationErrorFactory.ExpectedTypeMembershipViolation);
@@ -387,13 +385,13 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                 {
                     case StringField:
                     {
-                        if (binding.Value is not StringFieldValue stringValue)
+                        if (binding.Value is not StringValue stringValue)
                         {
                             throw CanonicalizationErrorFactory.StructFieldKindMismatch(
                                 path,
                                 parameterName,
-                                StructFieldValueKind(binding.Value),
-                                "scalar");
+                                ValueKind(binding.Value),
+                                "string");
                         }
 
                         ScalarFormatter.EnsurePrintable(stringValue.Text);
@@ -402,12 +400,12 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
 
                     case NestedStructField nestedField:
                     {
-                        if (binding.Value is not NestedStructFieldValue nestedValue)
+                        if (binding.Value is not StructValue nestedValue)
                         {
                             throw CanonicalizationErrorFactory.StructFieldKindMismatch(
                                 path,
                                 parameterName,
-                                StructFieldValueKind(binding.Value),
+                                ValueKind(binding.Value),
                                 "struct");
                         }
 
@@ -449,21 +447,10 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
         {
             return value switch
             {
-                ScalarValue => "scalar",
-                TransportValue => "transport",
-                TransportListValue => "transport list",
+                StringValue => "string",
                 StructValue => "struct",
-                _ => throw CanonicalizationErrorFactory.InconsistentTree(
-                    CanonicalizationErrorFactory.UnspecifiedInvariantViolation)
-            };
-        }
-
-        private static string StructFieldValueKind(ResolvedStructFieldValue? value)
-        {
-            return value switch
-            {
-                StringFieldValue => "scalar",
-                NestedStructFieldValue => "struct",
+                TransportListValue => "transport list",
+                ResolvedExpr => "transport",
                 _ => throw CanonicalizationErrorFactory.InconsistentTree(
                     CanonicalizationErrorFactory.UnspecifiedInvariantViolation)
             };

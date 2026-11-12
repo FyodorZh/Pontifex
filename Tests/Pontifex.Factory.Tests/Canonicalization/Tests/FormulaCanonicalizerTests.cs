@@ -64,7 +64,7 @@ public sealed class FormulaCanonicalizerTests
                 CanonicalizationTestData.Bind(flag, CanonicalizationTestData.Scalar("fast")),
                 CanonicalizationTestData.Bind(
                     input,
-                    CanonicalizationTestData.TransportValue(BetaTransport())))));
+                    CanonicalizationTestData.Expression(BetaTransport())))));
 
         Assert.That(output, Is.EqualTo("mixed(beta(x), flag=fast)"));
     }
@@ -80,7 +80,7 @@ public sealed class FormulaCanonicalizerTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     input,
-                    CanonicalizationTestData.TransportValue(BetaTransport())))));
+                    CanonicalizationTestData.Expression(BetaTransport())))));
 
         Assert.That(output, Is.EqualTo("alpha(beta(x))"));
     }
@@ -203,7 +203,7 @@ public sealed class FormulaCanonicalizerTests
                 constructor,
                 CanonicalizationTestData.Bind(
                     input,
-                    CanonicalizationTestData.TransportValue(cast)))));
+                    CanonicalizationTestData.Expression(cast)))));
 
         Assert.That(output, Is.EqualTo("alpha(beta(x) as TypeA)"));
     }

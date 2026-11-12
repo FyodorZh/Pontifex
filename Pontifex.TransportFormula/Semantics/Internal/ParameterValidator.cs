@@ -61,7 +61,7 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                                 value.Span.Start));
                         }
 
-                        provided.Add(new ParamBinding(stringParam, new ScalarValue(scalar.Text)));
+                        provided.Add(new ParamBinding(stringParam, new StringValue(scalar.Text)));
                         break;
                     }
 
@@ -78,7 +78,7 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                         // Expected-type membership is guaranteed by ResolveExpression;
                         // there is no user-visible post-resolution membership error.
                         var resolved = resolveExpression(expression, transportParam.Expected);
-                        provided.Add(new ParamBinding(transportParam, new TransportValue(resolved)));
+                        provided.Add(new ParamBinding(transportParam, resolved));
                         break;
                     }
 

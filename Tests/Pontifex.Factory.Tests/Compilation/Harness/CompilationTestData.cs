@@ -194,12 +194,13 @@ internal static class CompilationTestData
 
     public static ParamBinding Scalar(Formula.Param param, string text)
     {
-        return new ParamBinding(param, new ScalarValue(text));
+        return new ParamBinding(param, new StringValue(text));
     }
 
     public static ParamBinding Nested(Formula.Param param, ResolvedExpr expr)
     {
-        return new ParamBinding(param, new TransportValue(expr));
+        // A transport parameter stores the resolved expression directly.
+        return new ParamBinding(param, expr);
     }
 
     public static ParamBinding List(Formula.Param param, params ResolvedExpr[] elements)
@@ -214,13 +215,13 @@ internal static class CompilationTestData
 
     public static StructFieldBinding Text(Formula.StructField field, string text)
     {
-        return new StructFieldBinding(field, new StringFieldValue(text));
+        return new StructFieldBinding(field, new StringValue(text));
     }
 
     public static StructFieldBinding NestedStruct(
         Formula.StructField field,
         params StructFieldBinding[] fields)
     {
-        return new StructFieldBinding(field, new NestedStructFieldValue(fields));
+        return new StructFieldBinding(field, new StructValue(fields));
     }
 }

@@ -936,14 +936,14 @@ for each param in constructor.Params in declaration order:
             if reason is not null:
                 error E_SEM_VALIDATOR_FAILED at value.Span.Start
                       context = parameter '<param.Name>', reason
-            store ScalarValue(value.Text)
+            store StringValue(value.Text)
 
         TransportParam:
             if value is not AstExpr:
                 error E_SEM_EXPECTED_TRANSPORT at value.Span.Start
                       actual = Shape(value)
             resolved = ResolveExpr(value, param.Expected)
-            store TransportValue(resolved)
+            store resolved
 
         TransportListParam:
             if value is not AstList:
@@ -1057,7 +1057,7 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
                           context = field '<path>' of parameter '<paramName>'
                           reason
                 result.add(StructFieldBinding(
-                    schemaField, StringFieldValue(value.Text)))
+                    schemaField, StringValue(value.Text)))
 
             NestedStructField:
                 if value is not AstStruct:
@@ -1065,7 +1065,7 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
                           path = path, actual = Shape(value)
                 nested = ResolveStruct(value, schemaField.Schema, paramName, path)
                 result.add(StructFieldBinding(
-                    schemaField, NestedStructFieldValue(nested)))
+                    schemaField, StructValue(nested)))
 
     return result
 ```
@@ -1098,9 +1098,11 @@ or list in a struct field is rejected by the scalar/struct shape checks.
 ## 8. Resolved tree
 
 ```text
-ResolvedExpr           (abstract) { TransportType Type; SourceSpan Span; }
-ResolvedTransport      : ResolvedExpr
-ResolvedCast           : ResolvedExpr
+ResolvedValue               (abstract)
+DataValue                   (abstract) : ResolvedValue
+ResolvedExpr                (abstract) : ResolvedValue { TransportType Type; SourceSpan Span; }
+ResolvedTransport           : ResolvedExpr
+ResolvedCast                : ResolvedExpr
 
 ResolvedTransport
 {
@@ -1114,11 +1116,10 @@ ParamBinding
     ResolvedValue Value;
 }
 
-ResolvedValue          (abstract)
-ScalarValue            : ResolvedValue { string Text; }
-TransportValue         : ResolvedValue { ResolvedExpr Expr; }
-TransportListValue     : ResolvedValue { IReadOnlyList<ResolvedExpr> Elements; }
-StructValue            : ResolvedValue { IReadOnlyList<StructFieldBinding> Fields; }
+ScalarValue                 (abstract) : DataValue
+StringValue                 : ScalarValue { string Text; }
+StructValue                 : DataValue { IReadOnlyList<StructFieldBinding> Fields; }
+TransportListValue          : ResolvedValue { IReadOnlyList<ResolvedExpr> Elements; }
 
 ResolvedCast
 {
@@ -1129,12 +1130,8 @@ ResolvedCast
 StructFieldBinding
 {
     StructField Field;
-    ResolvedStructFieldValue Value;
+    DataValue Value;
 }
-
-ResolvedStructFieldValue (abstract)
-StringFieldValue         { string Text; }
-NestedStructFieldValue   { IReadOnlyList<StructFieldBinding> Fields; }
 ```
 
 Invariants:
@@ -1158,7 +1155,7 @@ Invariants:
   struct field names lowercase, type names canonical.
 - Every `ResolvedExpr`, including every list element and cast inner node, carries
   a `Span` inherited from `ResolvedExpr`.
-- For every `TransportValue` bound to a `TransportParam`, the value's `Type` is
+- For every `ResolvedExpr` bound to a `TransportParam`, the value's `Type` is
   in the parameter's `Expected` set. For every element of a
   `TransportListValue` bound to a `TransportListParam`, the element's `Type` is
   in the parameter's `Expected` set.
@@ -1468,8 +1465,8 @@ Consequences:
 
 ```text
 PrintValue(param, value):
-    ScalarValue        -> PrintScalar(value.Text)
-    TransportValue     -> PrintExpr(value.Expr)
+    StringValue        -> PrintScalar(value.Text)
+    ResolvedExpr       -> PrintExpr(value)
     TransportListValue -> "[" + join(value.Elements.Select(PrintExpr), ", ") + "]"
     StructValue        -> "{" + join(PrintStructFields(value), ", ") + "}"
 ```
@@ -1482,9 +1479,9 @@ PrintStructFields(value):
     parts = []
     for each binding in value.Fields in schema order:
         field = binding.Field
-        if binding.Value is StringFieldValue:
+        if binding.Value is StringValue:
             parts.add(field.Name + "=" + PrintScalar(binding.Value.Text))
-        if binding.Value is NestedStructFieldValue:
+        if binding.Value is StructValue:
             parts.add(field.Name + "={" +
                       join(PrintStructFields(binding.Value), ", ") + "}")
     return parts
@@ -1535,7 +1532,7 @@ The printer normalizes:
 
 The printer preserves:
 
-- scalar values exactly, including case, Unicode, and leading/trailing spaces
+- string values exactly, including case, Unicode, and leading/trailing spaces
   (quoted as needed);
 - presence versus absence of optional parameters;
 - the order of transport list elements;
@@ -1580,7 +1577,7 @@ Two resolved trees are equal iff:
 - transport list elements are equal and in the same order;
 - struct fields are equal; field order is compared in schema order;
 - cast nodes have equal inner trees and equal target types;
-- scalar text is identical (ordinal comparison);
+- string value text is identical (ordinal comparison);
 - absent parameters are absent in both trees.
 
 Equality ignores spans, original aliases, source case, original quoting, and the
@@ -1920,8 +1917,8 @@ For printer messages:
 - `<scheme>` and known `<path>` segments are canonical lowercase. `<name>` in
   `E_PRN_UNKNOWN_PARAM` is the stored parameter name; `<name>` elsewhere in
   printer messages is canonical.
-- `<actual>` and `<expected>` in kind-mismatch errors are value kinds: `scalar`,
-  `transport`, `transport list`, or `struct`.
+- `<actual>` and `<expected>` in kind-mismatch errors are resolved value kinds:
+  `string`, `transport`, `transport list`, or `struct`.
 - `<path>` is a dot-separated struct-field path of `StructField.Name` values.
   Known schema segments are canonical; an unknown leaf uses its stored name.
 - `<detail>` in `E_PRN_INCONSISTENT_TREE` is one of `identity cast node`,
@@ -1959,7 +1956,8 @@ binding layer is adopted. The former adapter-only codes
 `E_CMP_RESERVED_SCHEME` and `E_CMP_INVALID_CAST_TARGET` are removed from the
 compiler catalogue; `E_PRN_INVALID_CAST_TARGET` remains a printer error.
 
-In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are value kinds. In
+In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are resolved value
+kinds. In
 `E_CMP_INCONSISTENT_TREE`, `<detail>` uses the same closed set as
 `E_PRN_INCONSISTENT_TREE`. Elsewhere in compiler/build messages, `<scheme>` is
 canonical lowercase; `<name>` is canonical except in `E_CMP_UNKNOWN_PARAM`, where
@@ -2239,7 +2237,7 @@ Representative non-semantic error messages:
 | Compiler tree with null root | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: unspecified invariant violation` |
 | Compiler tree with unknown parameter `x` | `E_CMP_UNKNOWN_PARAM: compiler received unknown parameter 'x'` |
 | Compiler tree with duplicate parameter `input` | `E_CMP_DUPLICATE_PARAM: compiler received duplicate parameter 'input'` |
-| Compiler tree with scalar for transport parameter `input` | `E_CMP_PARAM_KIND_MISMATCH: compiler expected value kind transport for parameter 'input', got scalar` |
+| Compiler tree with a string value for transport parameter `input` | `E_CMP_PARAM_KIND_MISMATCH: compiler expected value kind transport for parameter 'input', got string` |
 | Compiler tree with inconsistent constructor type | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: constructor type mismatch` |
 | Build cast from `TypeA` to `TypeB` without a path | `E_BLD_NO_CONVERSION_PATH: no conversion path from TypeA to TypeB` |
 | Constructor `alpha` not registered | `E_BLD_CONSTRUCTOR_NOT_FOUND: transport constructor 'alpha' is not registered` |

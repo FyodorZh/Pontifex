@@ -12,7 +12,22 @@ namespace Pontifex.TransportFormula.Semantics
     public sealed record ResolvedFormula(
         ResolvedExpr Root);
 
-    public abstract record ResolvedExpr(SourceSpan Span)
+    // Resolved values form two branches. DataValue is pure data (strings, structs,
+    // and later integers, decimals, and arrays). ResolvedExpr is the special
+    // expression-value branch used where a transport expression is a value.
+    public abstract record ResolvedValue;
+
+    public abstract record DataValue : ResolvedValue;
+
+    public abstract record ScalarValue : DataValue;
+
+    public sealed record StringValue(
+        string Text) : ScalarValue;
+
+    public sealed record StructValue(
+        IReadOnlyList<StructFieldBinding> Fields) : DataValue;
+
+    public abstract record ResolvedExpr(SourceSpan Span) : ResolvedValue
     {
         public abstract TransportType Type { get; }
     }
@@ -37,29 +52,10 @@ namespace Pontifex.TransportFormula.Semantics
         Param Param,
         ResolvedValue Value);
 
-    public abstract record ResolvedValue;
-
-    public sealed record ScalarValue(
-        string Text) : ResolvedValue;
-
-    public sealed record TransportValue(
-        ResolvedExpr Expr) : ResolvedValue;
-
     public sealed record TransportListValue(
         IReadOnlyList<ResolvedExpr> Elements) : ResolvedValue;
 
-    public sealed record StructValue(
-        IReadOnlyList<StructFieldBinding> Fields) : ResolvedValue;
-
     public sealed record StructFieldBinding(
         StructField Field,
-        ResolvedStructFieldValue Value);
-
-    public abstract record ResolvedStructFieldValue;
-
-    public sealed record StringFieldValue(
-        string Text) : ResolvedStructFieldValue;
-
-    public sealed record NestedStructFieldValue(
-        IReadOnlyList<StructFieldBinding> Fields) : ResolvedStructFieldValue;
+        DataValue Value);
 }

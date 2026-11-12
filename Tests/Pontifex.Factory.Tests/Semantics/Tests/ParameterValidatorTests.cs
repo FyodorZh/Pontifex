@@ -10,15 +10,15 @@ namespace Pontifex.Factory.Tests.Semantics;
 public sealed class ParameterValidatorTests
 {
     [Test]
-    public void Validate_ForStringParameterWithValidText_ProducesScalarValue()
+    public void Validate_ForStringParameterWithValidText_ProducesStringValue()
     {
         var constructor = Constructor("validated");
         var provided = Validate("validated(ok)", constructor);
 
         Assert.That(provided, Has.Count.EqualTo(1));
         Assert.That(provided[0].Param, Is.SameAs(SemanticsTestData.FindParam(constructor, "value")));
-        Assert.That(provided[0].Value, Is.InstanceOf<ScalarValue>());
-        Assert.That(((ScalarValue)provided[0].Value).Text, Is.EqualTo("ok"));
+        Assert.That(provided[0].Value, Is.InstanceOf<StringValue>());
+        Assert.That(((StringValue)provided[0].Value).Text, Is.EqualTo("ok"));
     }
 
     [Test]
@@ -26,7 +26,7 @@ public sealed class ParameterValidatorTests
     {
         var provided = Validate("beta(\"\")", Constructor("beta"));
 
-        Assert.That(((ScalarValue)provided[0].Value).Text, Is.Empty);
+        Assert.That(((StringValue)provided[0].Value).Text, Is.Empty);
     }
 
     [Test]
@@ -226,13 +226,13 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
-    public void Validate_ForTransportParameter_ProducesResolvedTransportValue()
+    public void Validate_ForTransportParameter_ProducesResolvedExpressionValue()
     {
         var provided = Validate("alpha(beta(x))", Constructor("alpha"));
 
         Assert.That(provided, Has.Count.EqualTo(1));
-        Assert.That(provided[0].Value, Is.InstanceOf<TransportValue>());
-        Assert.That(((TransportValue)provided[0].Value).Expr, Is.InstanceOf<ResolvedTransport>());
+        Assert.That(provided[0].Value, Is.InstanceOf<ResolvedExpr>());
+        Assert.That((ResolvedExpr)provided[0].Value, Is.InstanceOf<ResolvedTransport>());
     }
 
     [Test]

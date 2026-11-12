@@ -185,8 +185,8 @@ internal static class SemanticsAssertions
         string parameterName)
     {
         var binding = Provided(transport, parameterName);
-        Assert.That(binding.Value, Is.InstanceOf<TransportValue>());
-        return AsTransport(((TransportValue)binding.Value).Expr);
+        Assert.That(binding.Value, Is.InstanceOf<ResolvedExpr>());
+        return AsTransport((ResolvedExpr)binding.Value);
     }
 
     public static IReadOnlyList<ResolvedExpr> ProvidedList(
@@ -207,13 +207,13 @@ internal static class SemanticsAssertions
         return (StructValue)binding.Value;
     }
 
-    public static ScalarValue ProvidedScalar(
+    public static StringValue ProvidedScalar(
         ResolvedTransport transport,
         string parameterName)
     {
         var binding = Provided(transport, parameterName);
-        Assert.That(binding.Value, Is.InstanceOf<ScalarValue>());
-        return (ScalarValue)binding.Value;
+        Assert.That(binding.Value, Is.InstanceOf<StringValue>());
+        return (StringValue)binding.Value;
     }
 
     public static void AssertError(

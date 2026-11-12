@@ -16,7 +16,7 @@ public sealed class StructValidatorTests
             StructySchema());
 
         Assert.That(fields.Select(f => f.Field.Name), Is.EqualTo(new[] { "name", "nested" }));
-        Assert.That(((StringFieldValue)fields[0].Value).Text, Is.EqualTo("x"));
+        Assert.That(((StringValue)fields[0].Value).Text, Is.EqualTo("x"));
     }
 
     [Test]
@@ -126,19 +126,29 @@ public sealed class StructValidatorTests
     }
 
     [Test]
-    public void Validate_ForNestedStruct_ProducesNestedStructFieldValue()
+    public void Validate_ForNestedStruct_ProducesStructValue()
     {
         var fields = SemanticsAssertions.ValidateStruct(
             "{outer={inner={value=v}}}",
             DeepSchema());
-        var outer = (NestedStructFieldValue)fields[0].Value;
-        var inner = (NestedStructFieldValue)outer.Fields[0].Value;
-        var value = (StringFieldValue)inner.Fields[0].Value;
+        var outer = (StructValue)fields[0].Value;
+        var inner = (StructValue)outer.Fields[0].Value;
+        var value = (StringValue)inner.Fields[0].Value;
 
         Assert.That(fields[0].Field.Name, Is.EqualTo("outer"));
         Assert.That(outer.Fields[0].Field.Name, Is.EqualTo("inner"));
         Assert.That(inner.Fields[0].Field.Name, Is.EqualTo("value"));
         Assert.That(value.Text, Is.EqualTo("v"));
+    }
+
+    [Test]
+    public void Validate_ForStringField_ProducesValueAssignableToDataValue()
+    {
+        var fields = SemanticsAssertions.ValidateStruct("{name=x}", StructySchema());
+
+        DataValue value = fields[0].Value;
+        Assert.That(value, Is.InstanceOf<StringValue>());
+        Assert.That(((StringValue)value).Text, Is.EqualTo("x"));
     }
 
     [Test]

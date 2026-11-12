@@ -97,12 +97,12 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
         {
             switch (value)
             {
-                case ScalarValue scalar:
-                    builder.Append(ScalarFormatter.Format(scalar.Text));
+                case StringValue stringValue:
+                    builder.Append(ScalarFormatter.Format(stringValue.Text));
                     return;
 
-                case TransportValue transportValue:
-                    PrintExpression(transportValue.Expr, builder);
+                case ResolvedExpr expression:
+                    PrintExpression(expression, builder);
                     return;
 
                 case TransportListValue listValue:
@@ -149,11 +149,11 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
 
                 switch (binding.Value)
                 {
-                    case StringFieldValue stringValue:
+                    case StringValue stringValue:
                         builder.Append(ScalarFormatter.Format(stringValue.Text));
                         break;
 
-                    case NestedStructFieldValue nestedValue:
+                    case StructValue nestedValue:
                         builder.Append('{');
                         PrintStructFields(nestedValue.Fields, builder);
                         builder.Append('}');

@@ -108,7 +108,7 @@ namespace Pontifex.TransportFormula.Semantics.Internal
 
                         result.Add(new StructFieldBinding(
                             stringField,
-                            new StringFieldValue(scalar.Text)));
+                            new StringValue(scalar.Text)));
                         break;
                     }
 
@@ -124,7 +124,7 @@ namespace Pontifex.TransportFormula.Semantics.Internal
 
                         result.Add(new StructFieldBinding(
                             nestedField,
-                            new NestedStructFieldValue(Validate(
+                            new StructValue(Validate(
                                 nestedStruct,
                                 nestedField.Schema,
                                 paramName,

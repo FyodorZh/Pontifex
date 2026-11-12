@@ -14,7 +14,7 @@ namespace Pontifex.Factory.Compilation.Internal
     // in the resolved tree; lookups normalize defensively. See parsing.md §9.1.
     internal sealed class TransportBuildContext : ITransportBuildContext
     {
-        private const string ScalarKind = "scalar";
+        private const string StringKind = "string";
         private const string TransportKind = "transport";
         private const string TransportListKind = "transport list";
         private const string StructKind = "struct";
@@ -51,13 +51,13 @@ namespace Pontifex.Factory.Compilation.Internal
                 return false;
             }
 
-            if (binding.Value is ScalarValue scalar)
+            if (binding.Value is StringValue stringValue)
             {
-                value = scalar.Text;
+                value = stringValue.Text;
                 return true;
             }
 
-            throw ParameterKindMismatch(binding, ScalarKind);
+            throw ParameterKindMismatch(binding, StringKind);
         }
 
         public bool TryGetTransport(
@@ -71,11 +71,11 @@ namespace Pontifex.Factory.Compilation.Internal
                 return false;
             }
 
-            if (binding.Value is TransportValue transportValue)
+            if (binding.Value is ResolvedExpr expression)
             {
                 // Compiles the resolved subtree afresh on every invocation, so
                 // reconnect-style transports get independent nested transports.
-                factory = () => _compiler.CompileExpr(transportValue.Expr);
+                factory = () => _compiler.CompileExpr(expression);
                 return true;
             }
 
@@ -172,9 +172,9 @@ namespace Pontifex.Factory.Compilation.Internal
         {
             switch (value)
             {
-                case ScalarValue _:
-                    return ScalarKind;
-                case TransportValue _:
+                case StringValue _:
+                    return StringKind;
+                case ResolvedExpr _:
                     return TransportKind;
                 case TransportListValue _:
                     return TransportListKind;
@@ -218,7 +218,7 @@ namespace Pontifex.Factory.Compilation.Internal
                     return false;
                 }
 
-                if (binding.Value is StringFieldValue field)
+                if (binding.Value is StringValue field)
                 {
                     value = field.Text;
                     return true;
@@ -238,7 +238,7 @@ namespace Pontifex.Factory.Compilation.Internal
                     return false;
                 }
 
-                if (binding.Value is NestedStructFieldValue nested)
+                if (binding.Value is StructValue nested)
                 {
                     value = new TransportStructValue(
                         nested.Fields,

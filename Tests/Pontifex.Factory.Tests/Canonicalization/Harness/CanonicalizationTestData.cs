@@ -144,14 +144,15 @@ internal static class CanonicalizationTestData
         return new ResolvedFormula(root);
     }
 
-    public static ScalarValue Scalar(string text)
+    public static StringValue Scalar(string text)
     {
-        return new ScalarValue(text);
+        return new StringValue(text);
     }
 
-    public static TransportValue TransportValue(ResolvedExpr expression)
+    // A transport parameter value stores the resolved expression directly.
+    public static ResolvedExpr Expression(ResolvedExpr expression)
     {
-        return new TransportValue(expression);
+        return expression;
     }
 
     public static TransportListValue List(params ResolvedExpr[] elements)
@@ -164,19 +165,19 @@ internal static class CanonicalizationTestData
         return new StructValue(fields);
     }
 
-    public static StructFieldBinding Field(StructField field, ResolvedStructFieldValue value)
+    public static StructFieldBinding Field(StructField field, DataValue value)
     {
         return new StructFieldBinding(field, value);
     }
 
-    public static StringFieldValue StringValue(string text)
+    public static StringValue StringValue(string text)
     {
-        return new StringFieldValue(text);
+        return new StringValue(text);
     }
 
-    public static NestedStructFieldValue NestedValue(params StructFieldBinding[] fields)
+    public static StructValue NestedValue(params StructFieldBinding[] fields)
     {
-        return new NestedStructFieldValue(fields);
+        return new StructValue(fields);
     }
 
     public static AstFormula Parse(string source)

@@ -121,25 +121,25 @@ internal static class CanonicalizationAssertions
     {
         switch (expected)
         {
-            case ScalarValue expectedScalar:
+            case StringValue expectedString:
             {
-                Assert.That(actual, Is.InstanceOf<ScalarValue>(), path + ": expected a scalar");
+                Assert.That(actual, Is.InstanceOf<StringValue>(), path + ": expected a string");
                 Assert.That(
-                    ((ScalarValue)actual).Text,
-                    Is.EqualTo(expectedScalar.Text),
+                    ((StringValue)actual).Text,
+                    Is.EqualTo(expectedString.Text),
                     path + ".text");
                 return;
             }
 
-            case TransportValue expectedTransport:
+            case ResolvedExpr expectedExpression:
             {
                 Assert.That(
                     actual,
-                    Is.InstanceOf<TransportValue>(),
-                    path + ": expected a transport value");
+                    Is.InstanceOf<ResolvedExpr>(),
+                    path + ": expected a transport expression value");
                 AssertExpression(
-                    expectedTransport.Expr,
-                    ((TransportValue)actual).Expr,
+                    expectedExpression,
+                    (ResolvedExpr)actual,
                     path + ".expr");
                 return;
             }
@@ -204,25 +204,25 @@ internal static class CanonicalizationAssertions
 
             switch (expectedField.Value)
             {
-                case StringFieldValue expectedString:
+                case StringValue expectedString:
                     Assert.That(
                         actualField.Value,
-                        Is.InstanceOf<StringFieldValue>(),
-                        fieldPath + ": expected a scalar field");
+                        Is.InstanceOf<StringValue>(),
+                        fieldPath + ": expected a string field");
                     Assert.That(
-                        ((StringFieldValue)actualField.Value).Text,
+                        ((StringValue)actualField.Value).Text,
                         Is.EqualTo(expectedString.Text),
                         fieldPath + ".text");
                     break;
 
-                case NestedStructFieldValue expectedNested:
+                case StructValue expectedNested:
                     Assert.That(
                         actualField.Value,
-                        Is.InstanceOf<NestedStructFieldValue>(),
+                        Is.InstanceOf<StructValue>(),
                         fieldPath + ": expected a nested struct field");
                     AssertStructFields(
                         expectedNested.Fields,
-                        ((NestedStructFieldValue)actualField.Value).Fields,
+                        ((StructValue)actualField.Value).Fields,
                         fieldPath);
                     break;
 

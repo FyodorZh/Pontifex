@@ -80,7 +80,7 @@
 | `Bind_ForEmptyArgumentsAndNoRequiredParameters_ReturnsEmptyBindings` | `ArgumentBinder` | §7.4 | A no-argument call with no required parameters yields no bindings. | — |
 | `Bind_ChecksNamedArgumentsInSourceOrder` | `ArgumentBinder` | §7.9 | Named arguments are checked in source order, name before duplicate. | — |
 | `Bind_ChecksTooManyPositionalArgumentsBeforeNamedArguments` | `ArgumentBinder` | §7.9 | Too-many-positional precedes all named-argument errors. | — |
-| `Validate_ForStringParameterWithValidText_ProducesScalarValue` | `ParameterValidator` | §7.5 | A string parameter produces `ScalarValue` with the original text and a reference-equal parameter. | — |
+| `Validate_ForStringParameterWithValidText_ProducesStringValue` | `ParameterValidator` | §7.5 | A string parameter produces `StringValue` with the original text and a reference-equal parameter. | — |
 | `Validate_ForStringParameterWithNullValidator_AcceptsAnyText` | `ParameterValidator` | §6.4, §7.5 | A null validator accepts any scalar, including empty text. | — |
 | `Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | A transport value for a string parameter reports shape `transport`. | — |
 | `Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape` | `ParameterValidator` | §7.5, §13.3 | A struct value for a string parameter reports shape `struct`. | — |
@@ -100,7 +100,7 @@
 | `Validate_VisitsBoundParametersInDeclarationOrder` | `ParameterValidator` | §7.5, §7.9 | The first bound parameter in declaration order reports its error first. | `alpha(1, [beta(x)])` fails both `input` and `mode`. |
 | `Validate_DelegatesStructParametersToStructValidation` | `ParameterValidator` | §7.5, §7.8 | Struct parameters delegate to `StructValidator` and surface its error. | — |
 | `Validate_ForStructParameterWithValidFields_ProducesStructValue` | `ParameterValidator` | §7.5 | A valid struct parameter produces `StructValue`. | — |
-| `Validate_ForTransportParameter_ProducesResolvedTransportValue` | `ParameterValidator` | §7.5 | A transport parameter produces `TransportValue` containing a resolved expression. | — |
+| `Validate_ForTransportParameter_ProducesResolvedExpressionValue` | `ParameterValidator` | §7.5 | A transport parameter stores its resolved `ResolvedExpr` directly. | — |
 | `Validate_SkipsUnboundOptionalParameters` | `ParameterValidator` | §7.5 | Only bound parameters are visited and produced. | — |
 | `Validate_ForProvidedFields_ReturnsBindingsInSchemaOrder` | `StructValidator` | §7.8 | Provided struct fields are returned in schema order. | — |
 | `Validate_ForUnknownField_PreservesRawLeafSpelling` | `StructValidator` | §13.3 | Unknown path leaves keep raw input spelling. | — |
@@ -113,7 +113,8 @@
 | `Validate_ForNestedStructFieldReceivingTransport_ReportsExpectedStruct` | `StructValidator` | §7.8, §13.3 | A transport for a nested struct field reports shape `transport`. | — |
 | `Validate_ForNestedStructFieldReceivingList_ReportsExpectedStruct` | `StructValidator` | §7.8, §13.3 | A transport list for a nested struct field reports shape `transport list`. | — |
 | `Validate_ForEmptySchemaWithNoFields_AcceptsEmptyStruct` | `StructValidator` | §7.8 | An empty schema accepts an empty struct. | — |
-| `Validate_ForNestedStruct_ProducesNestedStructFieldValue` | `StructValidator` | §7.8 | Nested structs produce `NestedStructFieldValue` recursively. | — |
+| `Validate_ForNestedStruct_ProducesStructValue` | `StructValidator` | §7.8 | Nested structs produce `StructValue` recursively. | — |
+| `Validate_ForStringField_ProducesValueAssignableToDataValue` | `StructValidator` | §7.8, §8 | A struct-field value is a `DataValue`; a string field is a `StringValue`. | Compile-time assignment pins the `StructFieldBinding.Value` type. |
 | `Validate_BindsFieldsToSchemaFieldInstances` | `StructValidator` | §8 | Struct field bindings are reference-equal to schema fields. | Reference identity, not structural equality. |
 | `Validate_ForCaseInsensitiveFieldName_UsesCanonicalSchemaField` | `StructValidator` | §7.8, §8 | Field lookup is case-insensitive and stores the canonical schema field. | — |
 | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` | `SemanticErrorFactory` | §13.3, §14.3 | Parameterized catalogue of semantic errors with exact code, offset, and message. | Forty cases cover the §14.3 matrix and most `E_SEM_*` templates; `E_SEM_UNKNOWN_SCHEME` has dedicated tests. |

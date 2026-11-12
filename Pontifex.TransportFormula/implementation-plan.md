@@ -125,6 +125,10 @@ These decisions are already reflected in `grammar.md` and `parsing.md`.
 
 ### Semantics
 
+- Resolved values have two branches: `DataValue` is pure data (strings, structs,
+  and later integers, decimals, and arrays); `ResolvedExpr` is the
+  expression-value branch. Transport parameters store `ResolvedExpr` directly;
+  struct fields store `DataValue`.
 - The top-level expected type set is `Any`.
 - A cast resolves its inner transport with `Any`; its output type is the cast
   target.
@@ -912,13 +916,14 @@ DTOs:
 - `ResolvedFormula`
 - `ResolvedExpr`, `ResolvedTransport`, `ResolvedCast`
 - `ParamBinding`
-- `ResolvedValue`, `ScalarValue`, `TransportValue`, `TransportListValue`,
-  `StructValue`
+- `ResolvedValue`, `DataValue`, `ResolvedExpr`, `ScalarValue`, `StringValue`,
+  `TransportListValue`, `StructValue`
 - `StructFieldBinding`
-- `ResolvedStructFieldValue`, `StringFieldValue`, `NestedStructFieldValue`
 
 `ResolvedExpr` exposes `TransportType Type` for every node. `ResolvedTransport`
-inherits `Constructor.Type`; `ResolvedCast` returns `Target`.
+inherits `Constructor.Type`; `ResolvedCast` returns `Target`. A transport
+parameter binds to its `ResolvedExpr` directly, and `StructFieldBinding.Value`
+is a `DataValue`.
 
 No public classes in `Pontifex.TransportFormula.Semantics`.
 
@@ -1154,8 +1159,8 @@ PrintTransport(t):
   parts = positional prefix values + remaining named parameters
 
 PrintValue:
-  scalar → ScalarFormatter
-  transport → PrintExpr
+  string → ScalarFormatter
+  ResolvedExpr → PrintExpr
   list → "[" + join(elements, ", ") + "]"
   struct → "{" + schema-ordered fields + "}"
 ```
@@ -1290,8 +1295,8 @@ Rules:
 - Parameter and field names are canonical lowercase.
 - `TryGet*` returns `false` when an optional value is absent; required values are
   guaranteed by resolution.
-- `TryGetTransport` returns a lazy factory. Each invocation compiles the
-  corresponding resolved subtree into a fresh transport.
+- `TryGetTransport` returns a lazy factory from the stored `ResolvedExpr`. Each
+  invocation compiles the corresponding resolved subtree into a fresh transport.
 - `TryGetTransportList` preserves element order and returns one factory per
   element.
 - Struct values expose only string fields and nested structs.

@@ -67,12 +67,12 @@ public sealed class CanonicalizationErrorFactoryTests
             "timeout",
             "alpha",
             "transport",
-            "scalar");
+            "string");
 
         CanonicalizationAssertions.AssertError(
             exception.Error,
             "E_PRN_PARAM_KIND_MISMATCH",
-            "parameter 'timeout' of scheme 'alpha' has value kind transport, expected scalar");
+            "parameter 'timeout' of scheme 'alpha' has value kind transport, expected string");
     }
 
     [Test]
@@ -156,13 +156,13 @@ public sealed class CanonicalizationErrorFactoryTests
         var exception = CanonicalizationErrorFactory.StructFieldKindMismatch(
             "nested",
             "config",
-            "scalar",
+            "string",
             "struct");
 
         CanonicalizationAssertions.AssertError(
             exception.Error,
             "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
-            "field 'nested' of struct parameter 'config' has value kind scalar, expected struct");
+            "field 'nested' of struct parameter 'config' has value kind string, expected struct");
     }
 
     [Test]
