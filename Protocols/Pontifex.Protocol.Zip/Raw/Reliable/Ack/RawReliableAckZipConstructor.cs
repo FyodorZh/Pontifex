@@ -13,7 +13,7 @@ namespace Pontifex.Raw.Reliable.Ack.Zip
         public TransportType Type => TransportType.RawReliableAck;
         public string Name => ZipInfo.TransportName;
 
-        private class ZipClient : RawReliableAckWrapperClient<RawReliableAckZipClientLogic>, IRawReliableAckClient
+        internal class ZipClient : RawReliableAckWrapperClient<RawReliableAckZipClientLogic>, IRawReliableAckClient
         {
             public ZipClient(IRawReliableAckClient transportToWrap, int compressionLevel)
                 : base(ZipInfo.TransportName, transportToWrap,
@@ -22,7 +22,7 @@ namespace Pontifex.Raw.Reliable.Ack.Zip
             }
         }
 
-        private class ZipServer : RawReliableAckWrapperServer<AcknowledgerWrapper<HandlerWrapper<RawReliableAckZipServerLogic>>>, IRawReliableAckServer
+        internal class ZipServer : RawReliableAckWrapperServer<AcknowledgerWrapper<HandlerWrapper<RawReliableAckZipServerLogic>>>, IRawReliableAckServer
         {
             public ZipServer(IRawReliableAckServer transportToWrap, int compressionLevel)
                 : base(

@@ -2041,7 +2041,7 @@ Aim for:
 
 ## 18. Handoff checklist
 
-**Status:** Steps 1-3 are implemented and verified. Start at Step 4.
+**Status:** Steps 1-5 are implemented and verified. Start at Step 6.
 
 Execute in this order. Each step must leave `dotnet build` and the existing
 `dotnet test` suites green before the next step starts.
@@ -2094,13 +2094,48 @@ Execute in this order. Each step must leave `dotnet build` and the existing
   `FactoryComponentFactory`.
 - Extend the Bootstrap suite with the integration cases in §12.4.
 
-### Step 5 — Prove one transport end to end (next)
+### Step 5 — Prove one transport end to end (done)
 
 - Migrate one small transport registration first, preferably a direct or TCP
   constructor, to `ITransportRegistration`.
 - Register it through the facade and compile a real formula into an `ITransport`.
 - Record any contract gap found here before migrating the remaining transports.
 - Do not delete the legacy constructor or URI parser yet.
+- All transport constructors are now bound; see §18.1 for the binding list.
+  The legacy constructors and URI parsers remain untouched.
+
+### 18.1 Transport factory bindings
+
+Every transport constructor has a parallel `ITransportRegistration` binding in
+its own package. The bindings coexist with the legacy `ITransportConstructor`
+path and do not require a transport package to reference `Pontifex.Factory`.
+
+| Scheme | Transport package | Binding |
+|---|---|---|
+| `direct` | `Pontifex.Transport.Direct` | `RawReliableAckDirectBinding` |
+| `direct-raw-unreliable-ack` | `Pontifex.Transport.Direct` | `RawUnreliableAckDirectBinding` |
+| `direct-raw-unreliable-noack` | `Pontifex.Transport.Direct` | `RawUnreliableNoAckDirectBinding` |
+| `tcp` | `Pontifex.Transport.Net` | `RawReliableAckTcpBinding` |
+| `udp-raw-unreliable-ack` | `Pontifex.Transport.Net` | `RawUnreliableAckUdpBinding` |
+| `udp` | `Pontifex.Transport.Net` | `RawUnreliableNoAckUdpBinding` |
+| `udp_rr` (alias `udp`) | `Pontifex.Transport.Net` | `RRUnreliableNoAckUdpBinding` |
+| `zip` | `Pontifex.Protocol.Zip` | `RawReliableAckZipBinding` |
+| `reconnectable` | `Pontifex.Protocol.Reconnectable` | `RawReliableAckReconnectableBinding` |
+| `log` | `Pontifex` | `RawReliableAckLoggerBinding` |
+
+Binding rules:
+
+- `delivery` on the two raw-unreliable Direct transports is optional. The server
+  ignores it; the client uses `PerfectDeliverySystem` when it is absent.
+- A host must register the transport types in the formula catalog before
+  registering the bindings. The bindings cover all `TransportType` values that
+  have constructors.
+- Real transports require an `ILogger` that implements `ILoggerExt`; pass a
+  `Scriba.Logger` or another `ILoggerExt` implementation, not `VoidLogger`.
+- The delivery struct is translated to the existing delivery factory through a
+  transitional `IDescription` bridge; the bridge stays inside the transport
+  package, not in the formula or compiler assemblies.
+
 
 ### Step 6 — Documentation and hardening
 
