@@ -9,8 +9,7 @@ namespace Pontifex.Factory.Bootstrap
     // Adapts the transport-facing registration DTOs to the formula registry DTOs.
     // A core registration is the single source for both the formula metadata and
     // the runtime constructor entry. The adapter normalizes names only; the
-    // formula registry owns all registration validation. See
-    // implementation-plan.md §12.2.
+    // formula registry owns all registration validation. See parsing.md §6.9.
     internal static class CoreRegistrationAdapter
     {
         public static Formula.TransportRegistration Adapt(

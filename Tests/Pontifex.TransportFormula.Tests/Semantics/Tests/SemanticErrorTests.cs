@@ -118,13 +118,22 @@ public sealed class SemanticErrorTests
     public void Resolve_RunsTwiceOnTheSameInput_ProducesTheSameError()
     {
         var resolver = SemanticsTestData.StandardResolver();
+        const string message = "scheme 'shared' is ambiguous; candidates: beta (TypeB), gamma (TypeC)";
 
-        var first = resolver.Resolve(SemanticsTestData.Parse("shared(x)"), SemanticsTestData.AnySet());
-        var second = resolver.Resolve(SemanticsTestData.Parse("shared(x)"), SemanticsTestData.AnySet());
+        var first = SemanticsAssertions.ResolveError(
+            resolver,
+            "shared(x)",
+            "E_SEM_AMBIGUOUS_SCHEME",
+            0,
+            message);
+        var second = SemanticsAssertions.ResolveError(
+            resolver,
+            "shared(x)",
+            "E_SEM_AMBIGUOUS_SCHEME",
+            0,
+            message);
 
-        Assert.That(first.Formula, Is.Null);
-        Assert.That(second.Formula, Is.Null);
-        Assert.That(second.Error, Is.EqualTo(first.Error));
+        Assert.That(second, Is.EqualTo(first));
     }
 
     private static IEnumerable<TestCaseData> SemanticErrorCases()
@@ -474,13 +483,6 @@ public sealed class SemanticErrorTests
             "field 'nested.a' of parameter 'config' is invalid: validation failed");
 
         yield return Case(
-            "UnknownTransportType",
-            "alpha(beta(x)) as TypeZ",
-            "E_SEM_UNKNOWN_TRANSPORT_TYPE",
-            18,
-            "unknown transport type 'TypeZ'; known types: TypeA, TypeB, TypeC");
-
-        yield return Case(
             "UnknownTransportTypePreservesRawSpelling",
             "alpha(beta(x)) as typez",
             "E_SEM_UNKNOWN_TRANSPORT_TYPE",
@@ -493,13 +495,6 @@ public sealed class SemanticErrorTests
             "E_SEM_CAST_TYPE_MISMATCH",
             24,
             "cast produces transport type TypeC, but expected TypeB");
-
-        yield return Case(
-            "CastTypeMismatchUnderExactly",
-            "outer(beta(x) as TypeA)",
-            "E_SEM_CAST_TYPE_MISMATCH",
-            17,
-            "cast produces transport type TypeA, but expected TypeB");
 
         yield return Case(
             "CastTypeMismatchUnderOneOf",

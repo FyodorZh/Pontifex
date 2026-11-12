@@ -344,6 +344,8 @@ public sealed class FormulaCanonicalizerTests
 
         Assert.That(firstOutput, Is.EqualTo(expected));
         Assert.That(secondOutput, Is.EqualTo(expected));
+        CanonicalizationAssertions.AssertNoRawNewlines(firstOutput);
+        CanonicalizationAssertions.AssertNoRawNewlines(secondOutput);
         CanonicalizationAssertions.AssertTreesEqual(firstTree, secondTree);
     }
 
@@ -404,16 +406,6 @@ public sealed class FormulaCanonicalizerTests
     }
 
     [Test]
-    public void Canonicalize_ForCrLfAndTabWhitespace_ProducesNoRawNewlines()
-    {
-        var output = CanonicalizationTestData.Canonicalize(
-            "\r\n\talpha(\r\n beta(x)\t,\r\n x\r\n)\r\n");
-
-        Assert.That(output, Is.EqualTo("alpha(beta(x), x)"));
-        CanonicalizationAssertions.AssertNoRawNewlines(output);
-    }
-
-    [Test]
     public void Canonicalize_ForCaseInsensitiveCastType_UsesCatalogCanonicalSpelling()
     {
         var output = CanonicalizationTestData.Canonicalize("alpha(beta(x)) as typeb");
@@ -452,6 +444,14 @@ public sealed class FormulaCanonicalizerTests
     }
 
     [Test]
+    public void Canonicalize_ForNonHomogeneousListWithMixedTypes_PrintsBothElements()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("bag([alpha(beta(x)), beta(y)])"),
+            Is.EqualTo("bag([alpha(beta(x)), beta(y)])"));
+    }
+
+    [Test]
     public void Canonicalize_ForIntegerAndDecimalParameters_PrintsCanonicalScalars()
     {
         Assert.That(
@@ -465,22 +465,6 @@ public sealed class FormulaCanonicalizerTests
         Assert.That(
             CanonicalizationTestData.Canonicalize("numeric(+5, 0)"),
             Is.EqualTo("numeric(5, 0)"));
-    }
-
-    [Test]
-    public void Canonicalize_ForExponentInput_PrintsPlainInteger()
-    {
-        Assert.That(
-            CanonicalizationTestData.Canonicalize("wide(1e3)"),
-            Is.EqualTo("wide(1000)"));
-    }
-
-    [Test]
-    public void Canonicalize_ForSmallestScaleDecimal_PrintsPlainForm()
-    {
-        Assert.That(
-            CanonicalizationTestData.Canonicalize("wide(1e-28)"),
-            Is.EqualTo("wide(0.0000000000000000000000000001)"));
     }
 
     [Test]

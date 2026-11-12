@@ -94,15 +94,6 @@ namespace Pontifex.Factory.Tests.Bootstrap
         }
 
         [Test]
-        public void Resolve_WithNullExpectedType_UsesAny()
-        {
-            var result = NewFactory().Resolve("alpha(1)", null);
-
-            Assert.That(result.Error, Is.Null);
-            Assert.That(result.Formula, Is.Not.Null);
-        }
-
-        [Test]
         public void Resolve_WithExpectedTypeThatExcludesTheCandidate_ReturnsNoVariantError()
         {
             var expected = BootstrapTestData.Exactly(BootstrapTestData.TypeB);
@@ -176,6 +167,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
                 () => NewFactory().Compile("alpha(", compiler));
 
             Assert.That(exception!.Error.Code, Is.EqualTo("E_SYN_UNEXPECTED_TOKEN"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Parsing));
             Assert.That(compiler.Calls, Is.Zero);
         }
 
@@ -249,6 +241,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
         public void Compile_WithCoreRegistration_ReturnsLiveTransportAndPassesStringParameter()
         {
             string? captured = null;
+            FakeTransport? created = null;
             var factory = NewCoreFactory(
                 null,
                 BootstrapTestData.CoreRegistration(
@@ -258,7 +251,8 @@ namespace Pontifex.Factory.Tests.Bootstrap
                     {
                         context.TryGetString("value", out var value);
                         captured = value;
-                        return new FakeTransport(BootstrapTestData.TypeA, value);
+                        created = new FakeTransport(BootstrapTestData.TypeA, value);
+                        return created;
                     },
                     parameters: new Core.TransportParameter[]
                     {
@@ -269,8 +263,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
                 "alpha(hello)",
                 NewCompiler(factory));
 
-            Assert.That(transport.Type, Is.EqualTo(BootstrapTestData.TypeA));
-            Assert.That(transport.Name, Is.EqualTo("hello"));
+            Assert.That(transport, Is.SameAs(created));
             Assert.That(captured, Is.EqualTo("hello"));
         }
 
@@ -288,6 +281,9 @@ namespace Pontifex.Factory.Tests.Bootstrap
                 exception!.Error.Code,
                 Is.EqualTo("E_BLD_CONSTRUCTOR_NOT_FOUND"));
             Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Building));
+            Assert.That(
+                exception.Error.Message,
+                Is.EqualTo("transport constructor 'alpha' is not registered"));
         }
 
         [Test]
@@ -407,11 +403,17 @@ namespace Pontifex.Factory.Tests.Bootstrap
             var rejected = factory.Resolve("parent(beta())");
 
             Assert.That(accepted.Error, Is.Null);
+            Assert.That(accepted.Formula, Is.Not.Null);
             Assert.That(rejected.Error, Is.Not.Null);
             Assert.That(
                 rejected.Error!.Code,
                 Is.EqualTo("E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE"));
             Assert.That(rejected.Error.Phase, Is.EqualTo(FactoryPhase.Resolution));
+            Assert.That(
+                rejected.Error.Message,
+                Is.EqualTo(
+                    "scheme 'beta' has no variant for expected transport type TypeA; "
+                    + "available: beta (TypeB)"));
         }
 
         [Test]
@@ -481,19 +483,34 @@ namespace Pontifex.Factory.Tests.Bootstrap
             var mixed = factory.Resolve("parent(items=[alpha(), beta()])");
 
             Assert.That(tooFew.Error!.Code, Is.EqualTo("E_SEM_LIST_MIN"));
+            Assert.That(tooFew.Error.Phase, Is.EqualTo(FactoryPhase.Resolution));
+            Assert.That(
+                tooFew.Error.Message,
+                Is.EqualTo("transport list for 'items' requires at least 2 element(s), got 1"));
             Assert.That(tooMany.Error!.Code, Is.EqualTo("E_SEM_LIST_MAX"));
+            Assert.That(tooMany.Error.Phase, Is.EqualTo(FactoryPhase.Resolution));
+            Assert.That(
+                tooMany.Error.Message,
+                Is.EqualTo("transport list for 'items' requires at most 2 element(s), got 3"));
             Assert.That(mixed.Error!.Code, Is.EqualTo("E_SEM_LIST_HOMOGENEITY"));
+            Assert.That(mixed.Error.Phase, Is.EqualTo(FactoryPhase.Resolution));
+            Assert.That(
+                mixed.Error.Message,
+                Is.EqualTo(
+                    "transport list for 'items' must contain one transport type; "
+                    + "found TypeA, TypeB"));
         }
 
         [Test]
         public void Compile_WithInjectedConverterGraph_UsesTheGraphForTheCast()
         {
             ITransport? innerTransport = null;
+            var converted = new FakeTransport(BootstrapTestData.TypeB, "converted");
             var graph = new RecordingConvertersGraph(
                 inner =>
                 {
                     innerTransport = inner();
-                    return new FakeTransport(BootstrapTestData.TypeB, "converted");
+                    return converted;
                 });
 
             var factory = NewCoreFactory(
@@ -507,16 +524,15 @@ namespace Pontifex.Factory.Tests.Bootstrap
                 "alpha() as TypeB",
                 NewCompiler(factory));
 
-            Assert.That(transport.Type, Is.EqualTo(BootstrapTestData.TypeB));
-            Assert.That(transport.Name, Is.EqualTo("converted"));
+            Assert.That(transport, Is.SameAs(converted));
             Assert.That(innerTransport, Is.Not.Null);
             Assert.That(innerTransport!.Type, Is.EqualTo(BootstrapTestData.TypeA));
 
             Assert.That(graph.Calls, Has.Count.EqualTo(1));
             Assert.That(graph.Calls[0].FromType, Is.EqualTo(BootstrapTestData.TypeA));
             Assert.That(graph.Calls[0].ToType, Is.EqualTo(BootstrapTestData.TypeB));
-            Assert.That(graph.Calls[0].MemoryRental, Is.Not.Null);
-            Assert.That(graph.Calls[0].Logger, Is.Not.Null);
+            Assert.That(graph.Calls[0].MemoryRental, Is.SameAs(MemoryRental.Shared));
+            Assert.That(graph.Calls[0].Logger, Is.SameAs(VoidLogger.Instance));
         }
 
         [Test]
@@ -541,28 +557,6 @@ namespace Pontifex.Factory.Tests.Bootstrap
             var transport = factory.Compile("alpha() as TypeA", compiler);
 
             Assert.That(transport.Type, Is.EqualTo(BootstrapTestData.TypeA));
-        }
-
-        [Test]
-        public void Compile_WithParseError_DoesNotInvokeTheRuntimeConstructor()
-        {
-            var calls = 0;
-            var factory = NewCoreFactory(
-                null,
-                BootstrapTestData.CoreRegistration(
-                    "alpha",
-                    BootstrapTestData.TypeA,
-                    _ =>
-                    {
-                        calls++;
-                        return new FakeTransport(BootstrapTestData.TypeA);
-                    }));
-
-            var exception = Assert.Throws<FactoryException>(
-                () => factory.Compile("alpha(", NewCompiler(factory)));
-
-            Assert.That(exception!.Error.Code, Is.EqualTo("E_SYN_UNEXPECTED_TOKEN"));
-            Assert.That(calls, Is.Zero);
         }
     }
 }

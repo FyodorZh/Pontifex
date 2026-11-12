@@ -8,7 +8,6 @@
 - **Inheritance parent:** — (root, Test Suit)
 - **Contract:** [grammar.md](../../../Pontifex.TransportFormula/grammar.md),
   [parsing.md](../../../Pontifex.TransportFormula/parsing.md),
-  [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md),
   [IParser.cs](../../../Pontifex.TransportFormula/Parsing/IParser.cs),
   [FormulaToken.cs](../../../Pontifex.TransportFormula/Parsing/FormulaToken.cs),
   [AstDtos.cs](../../../Pontifex.TransportFormula/Parsing/AstDtos.cs),
@@ -71,6 +70,8 @@
 | `Parse_ForStructWithNestedStruct_ProducesFieldTree` | `grammar.md` §5–6 | Struct fields are named and may contain nested structs and scalar values. | — |
 | `Parse_ForTopLevelCast_ProducesSingleCast` | `grammar.md` §5; `parsing.md` §5.2 | `expr as Type` records one cast. | Type validity is semantic and not checked here. |
 | `Parse_ForCastInsideArgument_ProducesCastOnNestedExpression` | `grammar.md` §5 | A cast may appear inside an argument value. | — |
+| `Parse_ForCastTypeNamedAs_ParsesItAsATypeName` | `grammar.md` §4.3, §5 | `as` is accepted as a cast type name because a type name is any identifier. | — |
+| `Parse_ForChainedCastAfterCastTypeNamedAs_ReportsChainedCast` | `grammar.md` §4.3, §5 | A further `as` keyword after a cast type named `as` is a chained cast at the second keyword. | — |
 | `Parse_ForCastInsideList_ProducesCastsOnElements` | `grammar.md` §5 | A cast may appear on a transport-list element. | — |
 | `Parse_ForEmptyListAndStruct_ProducesZeroElementsAndFields` | `grammar.md` §5 | `[]` and `{}` are syntactically valid. | — |
 | `Parse_ForBareScalarsWithBackslashAndPipe_PreservesText` | `grammar.md` §3, §4.1 | Backslash and pipe are ordinary bare-scalar characters outside quotes. | — |
@@ -78,8 +79,7 @@
 | `Parse_ForAsInValuePosition_TreatsItAsBareScalar` | `grammar.md` §4.3, §6 | `as` in value position is an ordinary bare scalar, not a cast. | — |
 | `Parse_ForUpperCaseAs_RecognizesCast` | `grammar.md` §4.3; `parsing.md` §5.2 | The cast keyword comparison is ASCII case-insensitive. | Type spelling is preserved in the AST. |
 | `Parse_ForAsAsSchemeName_ProducesTransportCall` | `grammar.md` §4.3 | `as` may be a scheme name because it is contextual. | — |
-| `SourceSpan_End_IsStartPlusLength` | `parsing.md` §4; reconciliation | `SourceSpan.End` is `Start + Length`. | — |
-| `Parse_ThroughIParser_ReturnsTheSameOutcome` | `IParser` contract; `parsing.md` §5.1 | The parser is usable through its public interface and returns a formula for valid input. | — |
+| `Parse_ThroughIParser_ProducesTheSameResultAsTheConcreteParser` | `IParser` contract; `parsing.md` §5.1 | The parser is usable through its public interface and produces the same success and error outcomes as the concrete parser. | Compares both a valid and an invalid input. |
 | `Parse_ForTransportCall_RecordsSchemeSpanCloseParenOffsetAndFullSpan` | `parsing.md` §4, §5.3 | Call span, scheme span, and closing-parenthesis offset are exact. | `CloseParenOffset` supports missing-required-parameter diagnostics in later phases. |
 | `Parse_ForCast_RecordsTypeSpanAndFullCastSpan` | `parsing.md` §4, §5.2 | Cast span covers call start through type end; type token span is retained. | — |
 | `Parse_ForList_RecordsBracketOffsetsAndFullSpan` | `parsing.md` §4, §5.6 | List open/close offsets and full span are exact. | Open/close offsets are required by list-arity diagnostics. |

@@ -17,7 +17,7 @@ internal static class CanonicalizationAssertions
     {
         var result = canonicalizer.Canonicalize(formula);
 
-        Assert.That(result, Is.Not.Null);
+        AssertNoRawNewlines(result);
         return result;
     }
 
@@ -52,8 +52,6 @@ internal static class CanonicalizationAssertions
 
     public static void AssertTreesEqual(ResolvedFormula expected, ResolvedFormula actual)
     {
-        Assert.That(expected, Is.Not.Null);
-        Assert.That(actual, Is.Not.Null);
         AssertExpression(expected.Root, actual.Root, "root");
     }
 

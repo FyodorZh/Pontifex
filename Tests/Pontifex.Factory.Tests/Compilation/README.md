@@ -22,8 +22,6 @@ Root subject: that direct-compilation group.
 
 ## Contract references
 
-- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md)
-  §11 — compilation subsystem, algorithm, invariants, and test matrix.
 - [parsing.md](../../../Pontifex.TransportFormula/parsing.md) §6.9 — core
   transport registration contract; §9 — compiler boundary, build context,
   compilation algorithm, build-time casts; §13.6 — compiler and build error
@@ -47,8 +45,6 @@ Root subject: that direct-compilation group.
   [FactoryExceptions.cs](../../../Pontifex.TransportFormula/FactoryExceptions.cs).
 
 ## Layers
-
-This is a Test Suit with exactly one layer at the suite root.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
@@ -83,9 +79,7 @@ Compilation/
 
 ## Groups
 
-There are no groups. All test files live directly under `Tests/`. If grouping is
-added later, groups must be subfolders of `Tests/`; they are organisational
-folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
+There are no groups. All test files live directly under `Tests/`.
 
 ## Harness layout and sharing
 
@@ -106,11 +100,7 @@ folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
   factory can throw.
 
 There are no harness self-tests, so the `Factory.Compilation.Harness` category is
-reserved but unused. Harness belongs to the root layer and is available to every
-test in this suite. Sibling suites do not share harness
-(`Tests/RULES.md` HARNESS-05), so these helpers are local. The repository does
-not use a mocking library. Harness types expose only the surface required by the
-tests and never private production state.
+reserved but unused. The harness is local to this suite.
 
 ## Coverage
 
@@ -149,23 +139,22 @@ dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --filter 
    `ITransportBuildContext`. The internal build context is inspected only through
    the interface a registration receives.
 3. Build trees and registrations with `Harness/CompilationTestData`; keep new
-   doubles hand-written and local to this suite.
+   doubles local to this suite.
 4. Assert exact `Error.Code`, `Error.Phase`, and `Error.Message` where the
    contract defines them. Preserve exception identity assertions for wrapped
    failures.
-5. Update [Coverage.md](Coverage.md) in the same change.
+5. Record the test in [Coverage.md](Coverage.md).
 
 ## Adding a layer
 
-A Test Suit has exactly one layer. If the subject becomes an inheritance tree or
-requires genuinely separate layers, split this suite into multiple Test Suits or
-convert it to an Abstract Test Suit instead of adding a nested layer here.
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
 ## Out of scope
 
 - Bootstrap registration and compiler-creation wiring (`RegisterTransport`,
   `CreateCompiler`, sealing after `Build`, formula-only registration). Those
-  belong to the `Bootstrap` suite, as allowed by implementation-plan §11.6.
+  belong to the `Bootstrap` suite.
 - Parser, resolver, registry, and canonicalization algorithms; they are covered
   by their own suites. This suite consumes their DTOs directly.
 - Real transport behaviour, sockets, threads, timing, and resource ownership.

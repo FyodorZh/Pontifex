@@ -125,8 +125,8 @@ Transports/
 
 ## Harness layout and sharing
 
-Harness is test-only: stubs, recording doubles, test implementations of abstract types, and
-manual drivers. It contains no production code.
+Harness contains stubs, recording doubles, test implementations of abstract types, and manual
+drivers.
 
 - The root `Harness/` holds the root layer's `TestAnyTransport`.
 - `Raw/Harness/` holds `TestRawTransport`.
@@ -135,9 +135,6 @@ manual drivers. It contains no production code.
 - Server-specific harness stays in `Raw/Reliable/Server/Harness/`. `ManualPeriodicLogicDriver`
   is here because it is shared by the server layer and its Ack child.
 - Ack-specific harness stays in the corresponding Ack layer's `Harness/`.
-- A layer may reference harness from an ancestor layer. Sibling layers must not reference each
-  other's harness. When siblings need shared logic, it moves to the nearest common ancestor's
-  `Harness/`.
 - The client layer reuses the endpoint double from
   `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness`. Both suites live in the same test
   assembly and the endpoint double is covered by the `Endpoints` suite.
@@ -430,7 +427,7 @@ and assert the observable result.
 - `namespace Pontifex.Tests.Transports;`, `public sealed class <ClassName>Tests`.
 - One test class per file; file named after the class.
 - Test methods: `Scenario_ExpectedResult`.
-- Hand-written fakes only — the repository has **no mocking library**.
+- Hand-written fakes only.
 - Add `[Category("Transports")]` to each test class.
 - **Do not use the conformance subsystem in this suite.** Do not obtain it through
   `GetControls`, do not inject a conformance control, do not arm gates, and do not call
@@ -444,21 +441,19 @@ and assert the observable result.
 2. Create the layer directory and add `Coverage.md` with layer identity, subject, directory,
    inheritance parent, contract link, covered tests, planned gaps, and deferred-by-design gaps.
 3. Add `Harness/` only if the layer needs new doubles; reuse ancestor harness where possible.
-4. Add `<Subject>Tests.cs` with exactly one `public sealed class <Subject>Tests` and
-   `[Category("Transports")]`.
+4. Add `<Subject>Tests.cs` with `[Category("Transports")]`.
 5. Add the layer row to the table and the directory layout in this README.
-6. Run the suite and update `Coverage.md` in the same change.
+6. Run the suite and record it in `Coverage.md`.
 
 ## Adding tests
 
 1. Put the test in the layer that owns the behavior (the subject's delta), not in an ancestor or
    sibling layer.
-2. Use the public + protected contract only; do not inspect private state or use reflection.
-3. Drive queues, clocks, and completion explicitly through the harness seams; never sleep or use
-   real time.
-4. Assert observable results: return values, callbacks and reasons, captured buffers, ordering,
-   counts, and contract-visible state.
-5. Update the owning layer's `Coverage.md` in the same change.
+2. Use the public and protected contract.
+3. Drive queues, clocks, and completion explicitly through the harness seams.
+4. Assert return values, callbacks and reasons, captured buffers, ordering, counts, and
+   contract-visible state.
+5. Record the test in the owning layer's `Coverage.md`.
 
 ## Running
 

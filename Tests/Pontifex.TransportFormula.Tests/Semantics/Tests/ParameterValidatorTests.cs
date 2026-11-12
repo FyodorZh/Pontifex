@@ -25,8 +25,10 @@ public sealed class ParameterValidatorTests
     public void Validate_ForStringParameterWithNullValidator_AcceptsAnyText()
     {
         var provided = Validate("beta(\"\")", Constructor("beta"));
+        var nonEmpty = Validate("beta(\"some text\")", Constructor("beta"));
 
         Assert.That(((StringValue)provided[0].Value).Text, Is.Empty);
+        Assert.That(((StringValue)nonEmpty[0].Value).Text, Is.EqualTo("some text"));
     }
 
     [Test]
@@ -206,11 +208,11 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
-    public void Validate_ResolvesListElementsInOrderBeforeCheckingHomogeneity()
+    public void Validate_ResolvesListElementsInForwardOrder()
     {
         SemanticsAssertions.ValidateParamsError(
             Registry(),
-            "gamma([alpha(x), beta(y)])",
+            "gamma([alpha(x), numbers(x)])",
             Constructor("gamma"),
             "E_SEM_EXPECTED_TRANSPORT",
             "parameter 'input' expects a transport, got scalar");
@@ -221,40 +223,31 @@ public sealed class ParameterValidatorTests
     {
         SemanticsAssertions.ValidateParamsError(
             Registry(),
-            "alpha(1, [beta(x)])",
-            Constructor("alpha"),
-            "E_SEM_EXPECTED_TRANSPORT",
-            "parameter 'input' expects a transport, got scalar");
-    }
-
-    [Test]
-    public void Validate_DelegatesStructParametersToStructValidation()
-    {
-        SemanticsAssertions.ValidateParamsError(
-            Registry(),
-            "pair({x=1})",
-            Constructor("pair"),
-            "E_SEM_UNKNOWN_STRUCT_FIELD",
-            "unknown field 'x' in struct for parameter 'config'; one of: 'a', 'b'");
+            "mixed(input=1, flag=[x])",
+            Constructor("mixed"),
+            "E_SEM_EXPECTED_SCALAR",
+            "parameter 'flag' expects a scalar value, got list");
     }
 
     [Test]
     public void Validate_ForStructParameterWithValidFields_ProducesStructValue()
     {
         var provided = Validate("structy({name=x})", Constructor("structy"));
+        var fields = ((StructValue)provided[0].Value).Fields;
 
-        Assert.That(provided[0].Value, Is.InstanceOf<StructValue>());
-        Assert.That(((StructValue)provided[0].Value).Fields, Has.Count.EqualTo(1));
+        Assert.That(fields, Has.Count.EqualTo(1));
+        Assert.That(fields[0].Field.Name, Is.EqualTo("name"));
+        Assert.That(((StringValue)fields[0].Value).Text, Is.EqualTo("x"));
     }
 
     [Test]
     public void Validate_ForTransportParameter_ProducesResolvedExpressionValue()
     {
         var provided = Validate("alpha(beta(x))", Constructor("alpha"));
+        var value = (ResolvedTransport)provided[0].Value;
 
         Assert.That(provided, Has.Count.EqualTo(1));
-        Assert.That(provided[0].Value, Is.InstanceOf<ResolvedExpr>());
-        Assert.That((ResolvedExpr)provided[0].Value, Is.InstanceOf<ResolvedTransport>());
+        Assert.That(value.Constructor.Name, Is.EqualTo("beta"));
     }
 
     [Test]
@@ -263,6 +256,17 @@ public sealed class ParameterValidatorTests
         var provided = Validate("alpha(beta(x))", Constructor("alpha"));
 
         Assert.That(provided.Select(p => p.Param.Name), Is.EqualTo(new[] { "input" }));
+    }
+
+    [Test]
+    public void Validate_ForIntegerParameterReceivingStruct_ReportsExpectedScalarWithStructShape()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers({a=1})",
+            Constructor("numbers"),
+            "E_SEM_EXPECTED_SCALAR",
+            "parameter 'count' expects a scalar value, got struct");
     }
 
     [Test]
@@ -324,10 +328,13 @@ public sealed class ParameterValidatorTests
     [Test]
     public void Validate_ForIntegerAndDecimalBoundaries_AcceptsInclusiveLimits()
     {
-        var provided = Validate("numbers(-10, -1.5)", Constructor("numbers"));
+        var lower = Validate("numbers(-10, -1.5)", Constructor("numbers"));
+        var upper = Validate("numbers(10, 1.5)", Constructor("numbers"));
 
-        Assert.That(((IntegerValue)provided[0].Value).Value, Is.EqualTo(-10L));
-        Assert.That(((DecimalValue)provided[1].Value).Value, Is.EqualTo(-1.5m));
+        Assert.That(((IntegerValue)lower[0].Value).Value, Is.EqualTo(-10L));
+        Assert.That(((DecimalValue)lower[1].Value).Value, Is.EqualTo(-1.5m));
+        Assert.That(((IntegerValue)upper[0].Value).Value, Is.EqualTo(10L));
+        Assert.That(((DecimalValue)upper[1].Value).Value, Is.EqualTo(1.5m));
     }
 
     [Test]
@@ -448,11 +455,11 @@ public sealed class ParameterValidatorTests
         Assert.That(((DecimalValue)provided[0].Value).Value, Is.EqualTo(1000m));
     }
 
-    [TestCase("1e-28")]
-    [TestCase("7922816251426433759354395033.5")]
-    [TestCase("79228162514264337593543950335")]
-    [TestCase("-79228162514264337593543950335")]
-    public void Validate_ForExactlyRepresentableDecimalBoundary_AcceptsIt(string text)
+    [TestCase("1e-28", "0.0000000000000000000000000001")]
+    [TestCase("7922816251426433759354395033.5", "7922816251426433759354395033.5")]
+    [TestCase("79228162514264337593543950335", "79228162514264337593543950335")]
+    [TestCase("-79228162514264337593543950335", "-79228162514264337593543950335")]
+    public void Validate_ForExactlyRepresentableDecimalBoundary_AcceptsIt(string text, string expected)
     {
         var registry = FullRangeRegistry();
         var provided = SemanticsAssertions.ValidateParams(
@@ -460,7 +467,9 @@ public sealed class ParameterValidatorTests
             "full(" + text + ")",
             FullRangeConstructor(registry));
 
-        Assert.That(provided[0].Value, Is.InstanceOf<DecimalValue>());
+        Assert.That(
+            ((DecimalValue)provided[0].Value).Value,
+            Is.EqualTo(decimal.Parse(expected, System.Globalization.CultureInfo.InvariantCulture)));
     }
 
     [TestCase("1e29")]

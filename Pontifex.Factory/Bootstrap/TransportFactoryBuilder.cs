@@ -10,8 +10,7 @@ namespace Pontifex.Factory.Bootstrap
     // IRegistryBuilder; RegisterTransport is the single registration path for
     // transports that will be compiled. Build freezes the formula registry, seals
     // the runtime constructor registry, and wires the pipeline once. Build is
-    // idempotent and returns the same factory on every call. See
-    // implementation-plan.md §12.2.
+    // idempotent and returns the same factory on every call. See parsing.md §9.
     internal sealed class TransportFactoryBuilder : ITransportFactoryBuilder
     {
         private readonly TransportRegistryBuilder _registry = new();

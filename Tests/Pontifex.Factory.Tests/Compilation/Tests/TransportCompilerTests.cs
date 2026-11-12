@@ -85,6 +85,8 @@ public sealed class TransportCompilerTests
 
         var exception = Assert.Throws<BuildException>(() => compiler.Compile(formula))!;
 
+        Assert.That(exception.Error.Code, Is.EqualTo("E_BLD_CONSTRUCTOR_NOT_FOUND"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Building));
         Assert.That(
             exception.Error.Message,
             Is.EqualTo("transport constructor 'missing' is not registered"));
@@ -114,7 +116,6 @@ public sealed class TransportCompilerTests
         compiler.Compile(CompilationTestData.FormulaFor(AlphaTransport()));
 
         Assert.That(registration.InvocationCount, Is.EqualTo(1));
-        Assert.That(registration.Created, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -264,16 +265,14 @@ public sealed class TransportCompilerTests
         compiler.Compile(OuterWithInnerFormula());
 
         Assert.That(outer.InvocationCount, Is.EqualTo(1));
-        Assert.That(inner.InvocationCount, Is.Zero);
 
         var context = outer.LastContext!;
         Assert.That(context.TryGetTransport("input", out var factory), Is.True);
-        Assert.That(factory, Is.Not.Null);
         Assert.That(inner.InvocationCount, Is.Zero);
     }
 
     [Test]
-    public void Compile_WithNestedTransportFactory_InvokedTwice_CreatesTwoTransports()
+    public void Compile_WithNestedFactoryInvokedTwice_CreatesTwoTransports()
     {
         var (compiler, outer, inner) = OuterWithNestedTransport();
         compiler.Compile(OuterWithInnerFormula());
@@ -285,8 +284,6 @@ public sealed class TransportCompilerTests
 
         Assert.That(inner.InvocationCount, Is.EqualTo(2));
         Assert.That(second, Is.Not.SameAs(first));
-        Assert.That(first.Type, Is.EqualTo(CompilationTestData.TypeB));
-        Assert.That(second.Type, Is.EqualTo(CompilationTestData.TypeB));
     }
 
     [Test]
@@ -462,11 +459,9 @@ public sealed class TransportCompilerTests
 
         var context = registration.LastContext!;
         Assert.That(context.TryGetStruct("config", out var value), Is.True);
-        Assert.That(value, Is.Not.Null);
         Assert.That(value!.TryGetString("name", out var name), Is.True);
         Assert.That(name, Is.EqualTo("n"));
         Assert.That(value.TryGetStruct("nested", out var nested), Is.True);
-        Assert.That(nested, Is.Not.Null);
         Assert.That(nested!.TryGetString("value", out var nestedValue), Is.True);
         Assert.That(nestedValue, Is.EqualTo("v"));
     }
@@ -737,6 +732,7 @@ public sealed class TransportCompilerTests
                         CompilationTestData.Text(values, "x"))))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
     }
 
@@ -777,6 +773,7 @@ public sealed class TransportCompilerTests
                             new StringValue("x")))))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
     }
 
@@ -879,6 +876,7 @@ public sealed class TransportCompilerTests
                     CompilationTestData.Integer(param, 5)))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(
             exception.Error.Message,
             Is.EqualTo(
@@ -917,6 +915,7 @@ public sealed class TransportCompilerTests
                     CompilationTestData.Scalar(param, "x")))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(
             exception.Error.Message,
             Is.EqualTo(
@@ -955,6 +954,7 @@ public sealed class TransportCompilerTests
                     CompilationTestData.Integer(param, 1)))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(
             exception.Error.Message,
             Is.EqualTo(
@@ -996,6 +996,7 @@ public sealed class TransportCompilerTests
                         CompilationTestData.Text(field, "x"))))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
     }
 
@@ -1031,6 +1032,7 @@ public sealed class TransportCompilerTests
                         new ArrayValue(Array.Empty<DataValue>()))))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(
             exception.Error.Message,
             Is.EqualTo(
@@ -1072,6 +1074,7 @@ public sealed class TransportCompilerTests
                         CompilationTestData.Text(field, "x"))))))!;
 
         Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Compilation));
         Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
     }
 
@@ -1326,7 +1329,6 @@ public sealed class TransportCompilerTests
         var transport = compiler.Compile(CompilationTestData.FormulaFor(cast));
 
         Assert.That(transport, Is.SameAs(converted));
-        Assert.That(transport.Type, Is.EqualTo(CompilationTestData.TypeB));
     }
 
     // --- Integration -----------------------------------------------------
@@ -1357,9 +1359,8 @@ public sealed class TransportCompilerTests
             _ => new FakeTransport(CompilationTestData.TypeA, "greeting"));
         var compiler = Compiler(CompilationTestData.NewRegistry(registration));
 
-        var transport = compiler.Compile(resolve.Formula!);
+        compiler.Compile(resolve.Formula!);
 
-        Assert.That(transport.Type, Is.EqualTo(CompilationTestData.TypeA));
         Assert.That(registration.InvocationCount, Is.EqualTo(1));
         var context = registration.LastContext!;
         Assert.That(context.TryGetString("text", out var text), Is.True);

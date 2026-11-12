@@ -12,7 +12,7 @@ namespace Pontifex.Factory.Bootstrap
 {
     // Internal wiring helper. Formula and runtime component instances are created
     // once from a frozen registry and never exposed publicly. See
-    // implementation-plan.md §12.2.
+    // parsing.md §9.
     internal static class FactoryComponentFactory
     {
         public static FactoryComponents Create(

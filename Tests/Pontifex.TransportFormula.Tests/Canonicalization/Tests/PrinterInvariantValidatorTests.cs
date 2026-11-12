@@ -90,12 +90,14 @@ public sealed class PrinterInvariantValidatorTests
         var constructor = AlphaConstructor();
         var input = Param(constructor, "input");
         var timeout = Param(constructor, "timeout");
+        var inner = CanonicalizationTestData.Transport(
+            CanonicalizationTestData.Constructor("beta", CanonicalizationTestData.TypeB));
 
         var formula = CanonicalizationTestData.Formula(
             CanonicalizationTestData.Transport(
                 constructor,
                 CanonicalizationTestData.Bind(timeout, CanonicalizationTestData.Scalar("t")),
-                CanonicalizationTestData.Bind(input, CanonicalizationTestData.Scalar("x"))));
+                CanonicalizationTestData.Bind(input, CanonicalizationTestData.Expression(inner))));
 
         AssertInconsistent(formula, "provided parameter order violation");
     }
@@ -321,6 +323,30 @@ public sealed class PrinterInvariantValidatorTests
             formula,
             "E_PRN_LIST_ARITY",
             "transport list parameter 'items' of scheme 'gamma' has 0 element(s), expected 2..3");
+    }
+
+    [Test]
+    public void Validate_WhenUnboundedListIsBelowMinimum_ReportsAtLeastRange()
+    {
+        var items = CanonicalizationTestData.ListParam(
+            "items",
+            CanonicalizationTestData.AnySet(),
+            min: 1,
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "bag",
+            CanonicalizationTestData.TypeA,
+            items);
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(items, CanonicalizationTestData.List())));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_LIST_ARITY",
+            "transport list parameter 'items' of scheme 'bag' has 0 element(s), expected at least 1");
     }
 
     [Test]
@@ -713,7 +739,7 @@ public sealed class PrinterInvariantValidatorTests
     }
 
     [Test]
-    public void Validate_WhenCastInnerIsInvalid_ValidatesInnerAfterCastTarget()
+    public void Validate_WhenCastTargetAndInnerAreInvalid_ReportsCastTargetFirst()
     {
         var input = CanonicalizationTestData.TransportParam(
             "input",
@@ -726,12 +752,12 @@ public sealed class PrinterInvariantValidatorTests
             input);
         var inner = CanonicalizationTestData.Transport(alpha);
         var formula = CanonicalizationTestData.Formula(
-            new ResolvedCast(inner, CanonicalizationTestData.TypeB, new SourceSpan(0, 0)));
+            new ResolvedCast(inner, CanonicalizationTestData.TypeNotInCatalog, new SourceSpan(0, 0)));
 
         AssertPrinterError(
             formula,
-            "E_PRN_MISSING_REQUIRED_PARAM",
-            "resolved transport 'alpha' is missing required parameter 'input'");
+            "E_PRN_INVALID_CAST_TARGET",
+            "cast target '" + CanonicalizationTestData.TypeNotInCatalog + "' is invalid");
     }
 
     [Test]
@@ -1374,7 +1400,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_VALUE_OUT_OF_RANGE",
-            "resolved value for 'ratio' is out of range: 1.6");
+            "resolved value for 'config.ratio' is out of range: 1.6");
     }
 
     [Test]
@@ -1433,7 +1459,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_VALUE_OUT_OF_RANGE",
-            "resolved value for 'nested.value' is out of range: 2");
+            "resolved value for 'config.nested.value' is out of range: 2");
     }
 
     [Test]
@@ -1521,7 +1547,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_VALUE_OUT_OF_RANGE",
-            "resolved value for 'values[0]' is out of range: 2");
+            "resolved value for 'config.values[0]' is out of range: 2");
     }
 
     [Test]
@@ -1540,7 +1566,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_VALUE_OUT_OF_RANGE",
-            "resolved value for 'values[0]' is out of range: 1.6");
+            "resolved value for 'config.values[0]' is out of range: 1.6");
     }
 
     [Test]
@@ -1665,7 +1691,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_VALUE_OUT_OF_RANGE",
-            "resolved value for 'nested.values[1]' is out of range: 2");
+            "resolved value for 'config.nested.values[1]' is out of range: 2");
     }
 
     private static ResolvedFormula ArrayFormula(StructField values, ArrayValue array)

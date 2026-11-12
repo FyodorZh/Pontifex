@@ -7,8 +7,8 @@
 - **Directory:** `Tests/Pontifex.TransportFormula.Tests/Registry`
 - **Inheritance parent:** — (root, Test Suit)
 - **Contract:** [parsing.md](../../../Pontifex.TransportFormula/parsing.md) §6.6-6.8 and
-  §13.4, [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md)
-  §8, [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
+  §13.4,
+  [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
   [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
   [MetadataDtos.cs](../../../Pontifex.TransportFormula/Registry/MetadataDtos.cs),
   [FactoryError.cs](../../../Pontifex.TransportFormula/FactoryError.cs),
@@ -28,7 +28,7 @@
 | `RegisterType_WithDuplicateNameDifferentCase_ThrowsDuplicateTypeName` | §6.6, §6.7 rule 0, §13.4 | Names are unique case-insensitively and the error message uses the canonical lowercase name. | Exact message asserted. |
 | `RegisterType_WithInvalidName_ThrowsInvalidTypeName` | §6.6, §6.7 rule 0, §13.4 | Non-identifiers are rejected before uniqueness and the message preserves the supplied spelling. | Parameterized: `1Type`, `Type A`, `Type.A`, empty, `_Type`. |
 | `RegisterType_WithIdentifierVariants_AcceptsThem` | `grammar.md` §3; `parsing.md` §6.6 | The identifier shape `[A-Za-z][A-Za-z0-9_-]*` is accepted for catalog names. | Parameterized: `Type_1`, `Type-1`, `t1`, `T`. |
-| `RegisterType_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12, §13.4; implementation-plan §8.2 | A built registry cannot gain catalog entries. | Lifecycle guard `E_REG_BUILDER_SEALED`; no offset. |
+| `RegisterType_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12, §13.4 | A built registry cannot gain catalog entries. | Lifecycle guard `E_REG_BUILDER_SEALED`; no offset. |
 | `RegisterType_AfterBuild_WithInvalidName_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12, §13.4 | The lifecycle guard is evaluated before catalog name validation. | Rule 12 is evaluated before rule 0. |
 | `RegisterTransport_NormalizesCanonicalNameAndParameterNames` | §6.1, §6.7 rules 1-2 | Canonical and parameter names are stored lowercase regardless of caller spelling. | Registry exposes only normalized metadata. |
 | `RegisterTransport_NormalizesAliasNames` | §6.7 rules 1, 8 | Aliases are normalized to lowercase and uppercase lookups do not match. | Both lookup methods require an already-normalized scheme. |
@@ -83,23 +83,23 @@
 | `RegisterTransport_WithInvalidStructFieldAndDuplicateAliasForType_ReportsStructFieldFirst` | §6.7 rules 7, 9 | Struct validation precedes alias-to-type checks. | — |
 | `RegisterTransport_WithDuplicateAliasAndExpectedTypeAbsent_ReportsDuplicateAliasFirst` | §6.7 rules 9, 11 | Alias-to-type checks precede catalog membership. | — |
 | `RegisterTransport_WithConstructorAndExpectedTypesAbsent_ReportsConstructorTypeFirst` | §6.7 rule 11 | The constructor type is checked before expected-set members. | Expected members are checked in parameter declaration order. |
-| `RegisterTransport_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12, §13.4; implementation-plan §8.2 | A built registry cannot gain transports. | Lifecycle guard `E_REG_BUILDER_SEALED`; no offset. |
+| `RegisterTransport_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12, §13.4 | A built registry cannot gain transports. | Lifecycle guard `E_REG_BUILDER_SEALED`; no offset. |
 | `Build_WithNoRegistrations_ReturnsEmptyRegistry` | `IRegistry` contract | An empty build produces empty collections and no candidates. | — |
-| `Build_ReturnsConstructorsInRegistrationOrder` | implementation-plan §8.2 | `Constructors` is the ordered constructor list, not a map order. | — |
+| `Build_ReturnsConstructorsInRegistrationOrder` | `IRegistryBuilder.Build` contract | `Constructors` is the ordered constructor list, not a map order. | — |
 | `FindCanonical_WithNormalizedScheme_ReturnsTheConstructor` | §6.8 | Canonical lookup returns the constructor whose normalized name equals the scheme. | — |
 | `FindCanonical_WithUppercaseScheme_ReturnsNullBecauseLookupRequiresNormalization` | §6.8 | Lookup does not normalize its argument. | The caller must normalize. |
 | `FindCanonical_WithUnknownScheme_ReturnsNull` | §6.8 | Unknown canonical lookup returns `null`. | — |
-| `FindCandidates_ForSchemeWithCanonicalAndAliases_ReturnsCanonicalFirstThenAliasesSortedByName` | §6.8; implementation-plan §8.4 | Candidate order is canonical first, then aliases sorted by canonical scheme name. | Registration order was deliberately scrambled. |
+| `FindCandidates_ForSchemeWithCanonicalAndAliases_ReturnsCanonicalFirstThenAliasesSortedByName` | `parsing.md` §6.8; `IRegistry.FindCandidates` contract | Candidate order is canonical first, then aliases sorted by canonical scheme name. | Registration order was deliberately scrambled. |
 | `FindCandidates_ForCanonicalSchemeThatIsAlsoAnAlias_ReturnsCanonicalFirst` | §6.8; §7.3 | Canonical membership in the candidate list is independent of alias membership and comes first. | — |
-| `FindCandidates_ForAliasOnlyScheme_ReturnsAliasesSortedByName` | §6.8; implementation-plan §8.4 | An alias-only scheme yields sorted alias candidates. | — |
-| `FindCandidates_DoesNotFilterByTypeOrApplyCanonicalPreference` | §6.8; §7.3 | The registry returns all candidates; expected-type filtering and preference belong to semantics. | Alias candidates have distinct types. |
+| `FindCandidates_ForAliasOnlyScheme_ReturnsAliasesSortedByName` | `parsing.md` §6.8; `IRegistry.FindCandidates` contract | An alias-only scheme yields sorted alias candidates. | — |
+| `FindCandidates_ForAliasOnlyScheme_ReturnsEveryCandidateWithoutTypeFiltering` | `parsing.md` §6.8, §7.3 | The registry returns every alias candidate; expected-type filtering and canonical preference belong to semantics. | Alias candidates have distinct types. |
 | `FindCandidates_WithUppercaseScheme_ReturnsEmptyBecauseLookupRequiresNormalization` | §6.8 | Alias lookup also requires a normalized scheme. | — |
 | `FindCandidates_WithUnknownScheme_ReturnsEmpty` | §6.8 | Unknown and alias-free schemes have no candidates. | — |
 | `AllSchemeNames_IsSortedUnionOfCanonicalAndAliasNames` | §6.8 | The union of canonical and alias names is sorted ordinally and contains each name once. | Expected list asserted exactly. |
 | `AllSchemeNames_ContainsAnAliasThatDuplicatesAnotherSchemeNameOnlyOnce` | §6.8 | A name that is both canonical and an alias of another scheme appears once. | — |
 | `Types_ExposesTheCatalog` | `IRegistry` contract | The built registry exposes the same type catalog used for registration checks. | — |
-| `Constructors_ExposeOnlyNormalizedMetadata` | §6.1; implementation-plan §8.2 | Registry metadata never reveals caller spelling for names and parameter names. | Suggested-alias normalization is asserted separately. |
-| `Build_CopiesAliases_SoLaterSourceMutationDoesNotAffectTheRegistry` | implementation-plan §8.2; acceptance criteria | The registry does not retain caller-owned mutable arrays. | Source array mutated after registration. |
+| `Constructors_ExposeOnlyNormalizedMetadata` | `parsing.md` §6.1 | Registry metadata never reveals caller spelling for names and parameter names. | Suggested-alias normalization is asserted separately. |
+| `Build_CopiesAliases_SoLaterSourceMutationDoesNotAffectTheRegistry` | `IRegistryBuilder.Build` contract | The registry does not retain caller-owned mutable arrays. | Source array mutated after registration. |
 
 ## Registration error catalogue
 

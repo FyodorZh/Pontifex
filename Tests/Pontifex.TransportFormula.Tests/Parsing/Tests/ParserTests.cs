@@ -51,7 +51,11 @@ public sealed class ParserTests
         var arguments = formula.Root.Call.Arguments;
 
         Assert.That(arguments.Select(a => a.Name), Is.EqualTo(new[] { "p", "q" }));
-        Assert.That(arguments.All(a => a.NameSpan is not null), Is.True);
+        Assert.That(arguments.Select(a => a.NameSpan), Is.EqualTo(new SourceSpan?[]
+        {
+            new SourceSpan(6, 1),
+            new SourceSpan(11, 1)
+        }));
         Assert.That(((AstScalar)arguments[0].Value).Text, Is.EqualTo("1"));
         Assert.That(((AstScalar)arguments[1].Value).Text, Is.EqualTo("two"));
     }
@@ -154,6 +158,25 @@ public sealed class ParserTests
     }
 
     [Test]
+    public void Parse_ForCastTypeNamedAs_ParsesItAsATypeName()
+    {
+        var formula = Parse("alpha() as as");
+
+        Assert.That(formula.Root.Cast, Is.Not.Null);
+        Assert.That(formula.Root.Cast!.TypeName, Is.EqualTo("as"));
+    }
+
+    [Test]
+    public void Parse_ForChainedCastAfterCastTypeNamedAs_ReportsChainedCast()
+    {
+        var result = new FormulaParser().Parse("alpha() as as as TypeB");
+
+        Assert.That(result.Formula, Is.Null);
+        Assert.That(result.Error!.Code, Is.EqualTo("E_SYN_CHAINED_CAST"));
+        Assert.That(result.Error.Span!.Value.Start, Is.EqualTo(14));
+    }
+
+    [Test]
     public void Parse_ForCastInsideList_ProducesCastsOnElements()
     {
         var formula = Parse("alpha([beta() as TypeA, gamma()])");
@@ -231,23 +254,26 @@ public sealed class ParserTests
     #region AST spans and offsets
 
     [Test]
-    public void SourceSpan_End_IsStartPlusLength()
-    {
-        var span = new SourceSpan(7, 5);
-
-        Assert.That(span.End, Is.EqualTo(12));
-    }
-
-    [Test]
-    public void Parse_ThroughIParser_ReturnsTheSameOutcome()
+    public void Parse_ThroughIParser_ProducesTheSameResultAsTheConcreteParser()
     {
         IParser parser = new FormulaParser();
+        var concrete = new FormulaParser();
 
-        var result = parser.Parse("alpha()");
+        foreach (var source in new[] { "alpha(beta(x), p=1)", "alpha(" })
+        {
+            var viaInterface = parser.Parse(source);
+            var viaConcrete = concrete.Parse(source);
 
-        Assert.That(result.Error, Is.Null);
-        Assert.That(result.Formula, Is.Not.Null);
-        Assert.That(result.Formula!.Root.Call.Scheme, Is.EqualTo("alpha"));
+            Assert.That(viaInterface.Formula?.Root.Call.Scheme,
+                Is.EqualTo(viaConcrete.Formula?.Root.Call.Scheme));
+            Assert.That(viaInterface.Formula?.Root.Call.Arguments.Count,
+                Is.EqualTo(viaConcrete.Formula?.Root.Call.Arguments.Count));
+            Assert.That(viaInterface.Formula?.Root.Cast?.TypeName,
+                Is.EqualTo(viaConcrete.Formula?.Root.Cast?.TypeName));
+            Assert.That(viaInterface.Error?.Code, Is.EqualTo(viaConcrete.Error?.Code));
+            Assert.That(viaInterface.Error?.Message, Is.EqualTo(viaConcrete.Error?.Message));
+            Assert.That(viaInterface.Error?.Span, Is.EqualTo(viaConcrete.Error?.Span));
+        }
     }
 
     [Test]
@@ -259,6 +285,7 @@ public sealed class ParserTests
         Assert.That(call.SchemeSpan, Is.EqualTo(new SourceSpan(0, 5)));
         Assert.That(call.CloseParenOffset, Is.EqualTo(12));
         Assert.That(call.Span, Is.EqualTo(new SourceSpan(0, 13)));
+        Assert.That(call.Span.End, Is.EqualTo(13));
         Assert.That(formula.Root.Span, Is.EqualTo(call.Span));
         Assert.That(formula.Span, Is.EqualTo(call.Span));
     }

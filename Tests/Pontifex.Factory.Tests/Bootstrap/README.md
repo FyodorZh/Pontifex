@@ -34,8 +34,6 @@ directly; `InternalsVisibleTo` is not used to reach bootstrap internals.
 Paths below reflect the split layout: formula sources live under
 `Pontifex.TransportFormula`, runtime sources under `Pontifex.Factory`.
 
-- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
-  bootstrap subsystem (§12), dependency rules (§5), and definition of done (§16).
 - [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — parse, resolution, and
   printing error phases (§12–13).
 - Public contract:
@@ -66,8 +64,6 @@ Paths below reflect the split layout: formula sources live under
   [CoreRegistrationAdapter.cs](../../../Pontifex.Factory/Bootstrap/CoreRegistrationAdapter.cs).
 
 ## Layers
-
-This is a Test Suit with exactly one layer at the suite root.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
@@ -103,9 +99,7 @@ groups.
 
 ## Groups
 
-There are no groups. All test files live directly under `Tests/`. If grouping is
-added later, groups must be subfolders of `Tests/`; they are organisational
-folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
+There are no groups. All test files live directly under `Tests/`.
 
 ## Harness layout and sharing
 
@@ -121,15 +115,9 @@ folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
 - `FakeRawUnreliableNoAckClient` — a non-I/O raw-unreliable client used only to
   exercise the built-in converter through the default graph.
 
-There are no harness self-tests. Harness belongs to the root layer and is
-available to every test in this suite. Sibling suites do not share harness
-(`Tests/RULES.md` HARNESS-05), so the metadata and transport doubles are local
-even though they resemble the compilation suite's fixtures. The repository does
-not use a mocking library; these doubles are hand-written. Harness types expose
-only the surface required by the tests and never private production state.
-
-If harness self-tests are added later, they live in `Harness/Tests/` and carry
-`Factory.Bootstrap.Harness` instead of the suite root category.
+There are no harness self-tests. The harness is local to this suite: the
+metadata and transport doubles resemble the compilation suite's fixtures but are
+separate copies.
 
 ## Coverage
 
@@ -166,16 +154,15 @@ dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --filter 
    `ITransportFactoryBuilder`, `ITransportFactory`, `IRegistryBuilder`,
    `ITransportRegistration`, `ITransportCompiler`, and the metadata/resolution
    DTOs. Do not call internal bootstrap types directly.
-3. Use one naming convention and descriptive scenario/expected-result names.
+3. Use the suite naming convention: `Method_Scenario_ExpectedResult`.
 4. Assert the result DTO or the exception type, `Error.Code`, and `Error.Phase`;
    assert exact messages only for new templates.
-5. Update [Coverage.md](Coverage.md) in the same change.
+5. Record the test in [Coverage.md](Coverage.md).
 
 ## Adding a layer
 
-A Test Suit has exactly one layer. If the subject becomes an inheritance tree or
-requires genuinely separate layers, split this suite into multiple Test Suits or
-convert it to an Abstract Test Suit instead of adding a nested layer here.
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
 ## Out of scope
 

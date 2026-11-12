@@ -8,7 +8,7 @@ namespace Pontifex.Factory.Tests.Bootstrap.Harness
     // Minimal live transport double. It exposes only the ITransport surface the
     // suite inspects, so tests can recognise the exact instance a constructor
     // returned. It never performs real I/O. The Compilation suite owns its own
-    // copy; sibling suites do not share harness (Tests/RULES.md HARNESS-05).
+    // copy, so this suite stays self-contained.
     internal sealed class FakeTransport : ITransport
     {
         public FakeTransport(

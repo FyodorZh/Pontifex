@@ -34,9 +34,6 @@ Paths below reflect the split layout: formula sources live under
 - [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — canonical printer (§10),
   printer examples (§10.6), round-trip and equality (§11), printer errors
   (§13.5), and the printer invariant matrix (§14.7).
-- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
-  canonicalization milestone, component responsibilities, printing algorithm,
-  and test expectations (§10).
 - Public contract and DTOs:
   [ICanonicalizer.cs](../../../Pontifex.TransportFormula/Canonicalization/ICanonicalizer.cs),
   [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
@@ -54,8 +51,6 @@ Paths below reflect the split layout: formula sources live under
   [CanonicalizationErrorFactory.cs](../../../Pontifex.TransportFormula/Canonicalization/Internal/CanonicalizationErrorFactory.cs).
 
 ## Layers
-
-This is a Test Suit with exactly one layer at the suite root.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
@@ -95,10 +90,7 @@ Canonicalization/
 
 ## Groups
 
-There are no groups. All test files live directly under `Tests/`. If grouping is
-added later, groups must be subfolders of `Tests/`; they are organisational
-folders, not layers, and they must not contain `Coverage.md` or `Harness/`. The
-root layer's `Coverage.md` covers every test in every group.
+There are no groups. All test files live directly under `Tests/`.
 
 ## Harness layout and sharing
 
@@ -122,15 +114,7 @@ fields), `wide` (full-range decimal), `numbers` (§14 numeric parameters),
 `numberStruct` (§14 numeric struct fields), `arrays` (string, integer, and
 decimal array fields), and `nestedArrays` (an array inside a nested struct).
 
-There are no harness self-tests. Harness belongs to the root layer and is
-available to every test in this suite. Sibling suites do not share this harness;
-the parsing, registry, and semantics suites have their own fixtures, as
-`Tests/RULES.md` requires. The repository does not use a mocking library; all
-doubles are hand-written. Harness types expose only the surface required by the
-tests and never private production state.
-
-If harness self-tests are added later, they live in `Harness/Tests/` and carry
-`TransportFormula.Canonicalization.Harness` instead of the suite root category.
+There are no harness self-tests. The harness is local to this suite.
 
 ## Coverage
 
@@ -165,22 +149,20 @@ dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Test
 1. Put the test under `Tests/`, or under a new group folder inside `Tests/` if the
    suite grows cohesive subgroups.
 2. Use `ICanonicalizer` for printing and round-trip behaviour and the internal
-   component contracts exposed by `InternalsVisibleTo` for unit-level behaviour;
-   do not use reflection or inspect private state.
+   component contracts exposed by `InternalsVisibleTo` for unit-level behaviour.
 3. For printer failures, assert the exact `FactoryError` code, message, phase
    `Printing`, and the absence of a span. Use `CanonicalizationAssertions` so the
    phase and span convention is checked consistently.
 4. When several invariants are violated at once, assert the first failure
    required by the validation order in `parsing.md` §10.
 5. Round-trip tests use the real parser, resolver, registry builder, and type
-   catalog; do not reference another suite's harness.
-6. Update [Coverage.md](Coverage.md) in the same change.
+   catalog.
+6. Record the test in [Coverage.md](Coverage.md).
 
 ## Adding a layer
 
-A Test Suit has exactly one layer. If the subject becomes an inheritance tree or
-requires genuinely separate layers, split this suite into multiple Test Suits or
-convert it to an Abstract Test Suite instead of adding a nested layer here.
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
 ## Contract notes
 

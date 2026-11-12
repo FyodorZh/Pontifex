@@ -772,7 +772,11 @@ public sealed class TransportRegistryBuilderTests
             Array.Empty<string>(),
             RegistryTestData.CreateTransportParam("input", RegistryTestData.AnySet())));
 
-        Assert.That(builder.Build().FindCanonical("alpha"), Is.Not.Null);
+        var constructor = builder.Build().FindCanonical("alpha");
+        Assert.That(constructor, Is.Not.Null);
+        var parameter = (TransportParam)constructor!.Params[0];
+        Assert.That(parameter.Expected.IsAny, Is.True);
+        Assert.That(parameter.Expected.Types, Is.Empty);
     }
 
     [Test]

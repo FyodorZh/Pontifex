@@ -23,6 +23,22 @@ public sealed class ArgumentBinderTests
     }
 
     [Test]
+    public void Bind_WithZeroPositionalParametersAndPositionalArgument_ReportsTooManyPositional()
+    {
+        var constructor = SemanticsTestData.Constructor(
+            "namedonly",
+            SemanticsTestData.TypeA,
+            SemanticsTestData.CreateStringParam("flag"));
+
+        SemanticsAssertions.BindError(
+            "namedonly(x)",
+            constructor,
+            "E_SEM_TOO_MANY_POSITIONAL",
+            10,
+            "too many positional arguments for scheme 'namedonly'; expected at most 0");
+    }
+
+    [Test]
     public void Bind_ForNamedArguments_BindsByNormalizedName()
     {
         var bound = SemanticsAssertions.Bind(

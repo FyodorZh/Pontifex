@@ -9,7 +9,6 @@
 - **Inheritance parent:** — (root, Test Suit)
 - **Contract:** [parsing.md](../../../Pontifex.TransportFormula/parsing.md) §7, §8,
   §12.2-12.3, §13.3, §14.1-14.3,
-  [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) §9,
   [IResolver.cs](../../../Pontifex.TransportFormula/Semantics/IResolver.cs),
   [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
   [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
@@ -38,14 +37,14 @@
 | `Resolve_ForNonHomogeneousList_PreservesElementOrder` | `FormulaResolver` | §7.5, §8 | A non-homogeneous list preserves element order and each element type. | — |
 | `Resolve_ForListWithExpectedSet_ResolvesElementsWithParameterExpectedType` | `FormulaResolver` | §7.1, §7.5 | List elements are resolved with the parameter's expected set, so an alias selects the expected variant. | Harness `listB` supplies `Exactly(TypeB)`. |
 | `Resolve_ForCastInsideTransportList_ResolvesInnerWithAny` | `FormulaResolver` | §7.1, §7.2 | A cast list element checks its target against the list's expected set and resolves its inner transport with `Any`. | Proves casts inside lists keep expected-type filtering. |
-| `Resolve_ForNestedStruct_ResolvesFieldsInSchemaOrder` | `FormulaResolver` | §7.8, §14.1 | Struct fields are resolved and returned in schema order with nested struct values. | — |
+| `Resolve_ForNestedStruct_ResolvesNestedFieldValues` | `FormulaResolver` | §7.8, §14.1 | Struct fields are resolved with their nested struct values. | Schema-order output is covered by the struct validator and printer suites. |
 | `Resolve_ForStructSchemaOrderDifferentFromSourceOrder_OrdersFieldsBySchema` | `FormulaResolver` | §7.8, §8 | Source field order does not affect the resolved field order. | — |
 | `Resolve_ForDeepNestedStruct_ProducesNestedFieldValues` | `FormulaResolver` | §7.8 | Three-level nested structs produce nested `StructFieldBinding` values. | — |
 | `Resolve_ForIntegerAndDecimalParameters_ProducesTypedValues` | `FormulaResolver` | §7.5, §8 | Parameter validation yields typed integer and decimal resolved values. | — |
 | `Resolve_ForIntegerAndDecimalStructFields_ProducesTypedValues` | `FormulaResolver` | §7.8, §8 | Struct validation yields typed integer and decimal field values. | — |
 | `Resolve_ForEmptyList_ProducesEmptyElementList` | `FormulaResolver` | §7.5 | An empty list is a valid `TransportListValue` when the range allows it. | Harness `bag` has `Min = 0`. |
 | `Resolve_ForEmptyStruct_ProducesEmptyFieldList` | `FormulaResolver` | §7.8 | An empty struct against an empty schema yields no field bindings. | — |
-| `Resolve_ForSingleElementList_ResolvesTheElement` | `FormulaResolver` | §7.5 | A one-element list satisfies `Min = 1, Max = 1`. | — |
+| `Resolve_ForSingleElementList_ResolvesTheElement` | `FormulaResolver` | §7.5 | A one-element list satisfies `Min = 1, Max = 1` and its element resolves to the expected transport. | — |
 | `Resolve_ForNamedArgumentsInReverseOrder_StoresProvidedInDeclarationOrder` | `FormulaResolver` | §7.4, §8 | `Provided` follows declaration order, not source order. | — |
 | `Resolve_ForNamedOnlyBeforePositionalParameter_StoresProvidedInDeclarationOrder` | `FormulaResolver` | §7.4, §8 | A named-only parameter declared before a positional parameter stays first in `Provided`. | Harness `mixed` has `flag` before `input`. |
 | `Resolve_ForNamedPositionalCapableParameter_BindsItWithoutSynthesizingEarlierOnes` | `FormulaResolver` | §7.4, §8 | A positional-capable parameter may be supplied by name without synthesizing earlier optional parameters. | — |
@@ -56,10 +55,8 @@
 | `Resolve_ForBareNumericScalar_AcceptsItAsString` | `FormulaResolver` | §7.5 | String parameters accept bare scalars such as `1`; no numeric conversion exists. | — |
 | `Resolve_BindsProvidedParametersToConstructorParameterInstances` | `FormulaResolver` | §8 | Every `ParamBinding.Param` is reference-equal to a constructor parameter. | Reference identity, not structural equality. |
 | `Resolve_BindsStructFieldsToSchemaFieldInstances` | `FormulaResolver` | §8 | Every `StructFieldBinding.Field` is reference-equal to a schema field. | Reference identity, not structural equality. |
-| `Resolve_ForRequiredParameters_ReportsEveryProvidedTypeIsInParameterExpectedSet` | `FormulaResolver` | §7.6, §8 | A resolved transport value satisfies the parameter's expected set. | The resolver has no user-visible membership error; the positive invariant is asserted instead. |
 | `Select_WithUppercaseScheme_NormalizesBeforeLookup` | `ConstructorSelector` | §7.3 | Scheme normalization is ASCII lowercase before candidate lookup. | — |
 | `Select_ForCanonicalSchemeWithAliasUnderAny_PrefersCanonical` | `ConstructorSelector` | §7.3 | Under `Any`, a canonical candidate wins even when an alias candidate exists. | Registry candidate order is canonical first. |
-| `Select_ForCanonicalSchemeWithMatchingExpectedType_PrefersCanonical` | `ConstructorSelector` | §7.3 | `Exactly` keeps the canonical candidate when its type matches. | — |
 | `Select_ForCanonicalSchemeWhoseExpectedSetExcludesIt_FallsBackToAlias` | `ConstructorSelector` | §7.3 | Expected filtering removes canonical alpha and selects the TypeB alias. | — |
 | `Select_ForOneOfExpectedSetWhereCanonicalSurvives_PrefersCanonicalAfterFiltering` | `ConstructorSelector` | §7.3 | Canonical preference runs after filtering for `OneOf` sets. | — |
 | `Select_ForSingleAliasCandidateUnderAny_ReturnsAliasConstructor` | `ConstructorSelector` | §7.3 | An alias-only scheme with one candidate is not ambiguous. | Harness `onlybeta`. |
@@ -70,6 +67,7 @@
 | `Select_WhenExpectedSetHasSeveralTypes_FormatsTypeSetSorted` | `ConstructorSelector` | §13.3 | `FormatTypeSet` uses distinct canonical names sorted and joined with ` or `. | Input set order was deliberately reversed. |
 | `Select_ForAliasOfTheSameTypeAsTheCanonicalConstructor_PrefersCanonical` | `ConstructorSelector` | §6.7 rule 9, §7.3 | An alias may share the canonical constructor's type; canonical preference resolves the overlap. | Custom two-constructor registry. |
 | `Bind_ForPositionalArguments_FillsPositionalCapableParametersInDeclarationOrder` | `ArgumentBinder` | §7.4 | Positionals fill positional-capable parameters in declaration order. | — |
+| `Bind_WithZeroPositionalParametersAndPositionalArgument_ReportsTooManyPositional` | `ArgumentBinder` | §7.4, §13.3 | A positional argument against a constructor with no positional parameters reports `expected at most 0` at the first extra value. | — |
 | `Bind_ForNamedArguments_BindsByNormalizedName` | `ArgumentBinder` | §7.4 | Named arguments match normalized parameter names case-insensitively. | — |
 | `Bind_ForPositionalPrefixThenNamedSuffix_ProducesDeclarationOrder` | `ArgumentBinder` | §7.4 | Bindings are produced in declaration order, not source order. | — |
 | `Bind_ExcludesNamedOnlyParametersFromPositionalSlots` | `ArgumentBinder` | §7.4 | Named-only parameters do not consume positional slots. | Harness `mixed`. |
@@ -99,14 +97,13 @@
 | `Validate_ForListElementsWithExpectedSet_ResolvesElementAgainstParameterExpectedType` | `ParameterValidator` | §7.1, §7.5 | List elements resolve with the parameter expected set. | Harness `listB`. |
 | `Validate_ChecksListArityBeforeResolvingElements` | `ParameterValidator` | §7.9 | Minimum arity is checked before element resolution. | The single element would also fail shape validation. |
 | `Validate_ChecksListMaximumBeforeResolvingElements` | `ParameterValidator` | §7.9 | Maximum arity is checked before element resolution. | Every element would also fail shape validation. |
-| `Validate_ResolvesListElementsInOrderBeforeCheckingHomogeneity` | `ParameterValidator` | §7.9 | Element resolution errors precede homogeneity. | — |
-| `Validate_VisitsBoundParametersInDeclarationOrder` | `ParameterValidator` | §7.5, §7.9 | The first bound parameter in declaration order reports its error first. | `alpha(1, [beta(x)])` fails both `input` and `mode`. |
-| `Validate_DelegatesStructParametersToStructValidation` | `ParameterValidator` | §7.5, §7.8 | Struct parameters delegate to `StructValidator` and surface its error. | — |
-| `Validate_ForStructParameterWithValidFields_ProducesStructValue` | `ParameterValidator` | §7.5 | A valid struct parameter produces `StructValue`. | — |
-| `Validate_ForTransportParameter_ProducesResolvedExpressionValue` | `ParameterValidator` | §7.5 | A transport parameter stores its resolved `ResolvedExpr` directly. | — |
+| `Validate_ResolvesListElementsInForwardOrder` | `ParameterValidator` | §7.9 | Elements are resolved from index 0 upward; the first element's error wins over a later element's error. | `gamma([alpha(x), numbers(x)])` fails in element 0. |
+| `Validate_VisitsBoundParametersInDeclarationOrder` | `ParameterValidator` | §7.5, §7.9 | The first bound parameter in declaration order reports its error first. | `mixed(input=1, flag=[x])` reverses source order; declaration order validates `flag` first. |
+| `Validate_ForStructParameterWithValidFields_ProducesStructValue` | `ParameterValidator` | §7.5 | A valid struct parameter produces `StructValue` with the expected field name and value. | — |
+| `Validate_ForTransportParameter_ProducesResolvedExpressionValue` | `ParameterValidator` | §7.5 | A transport parameter stores its resolved `ResolvedTransport` directly. | — |
 | `Validate_SkipsUnboundOptionalParameters` | `ParameterValidator` | §7.5 | Only bound parameters are visited and produced. | — |
 | `Validate_ForIntegerAndDecimalParameters_ProducesTypedValues` | `ParameterValidator` | §6.2, §7.5 | Integer and decimal parameters produce `IntegerValue` and `DecimalValue`. | — |
-| `Validate_ForIntegerAndDecimalBoundaries_AcceptsInclusiveLimits` | `ParameterValidator` | §6.2, §7.5 | Both range bounds are inclusive. | — |
+| `Validate_ForIntegerAndDecimalBoundaries_AcceptsInclusiveLimits` | `ParameterValidator` | §6.2, §7.5 | Both the lower and upper range bounds are inclusive. | — |
 | `Validate_ForIntegerAboveRange_ReportsIntegerOutOfRange` | `ParameterValidator` | §7.5, §13.3 | A parsed integer above `Max` reports the exact range reason. | — |
 | `Validate_ForIntegerBelowRange_ReportsIntegerOutOfRange` | `ParameterValidator` | §7.5, §13.3 | A parsed integer below `Min` reports the exact range reason. | — |
 | `Validate_ForDecimalAboveRange_ReportsDecimalOutOfRange` | `ParameterValidator` | §7.5, §13.3 | A parsed decimal above `Max` reports the exact canonical range reason. | — |
@@ -117,10 +114,11 @@
 | `Validate_ForDecimalWithTrailingWhitespace_ReportsExpectedDecimal` | `ParameterValidator` | §7.5, §13.3 | Numeric text with trailing whitespace is rejected. | — |
 | `Validate_ForRepresentableDecimalForm_ProducesDecimalValue` | `ParameterValidator` | §6.2, §7.5 | Signs, decimal points, and exponents parse exactly to decimal values. | Parameterized six forms. |
 | `Validate_ForQuotedDecimal_AcceptsIt` | `ParameterValidator` | §7.5 | Quoted exponent text is parsed exactly. | — |
-| `Validate_ForExactlyRepresentableDecimalBoundary_AcceptsIt` | `ParameterValidator` | §6.2, §7.5 | `1e-28`, the 96-bit coefficient boundary, and decimal min/max are accepted. | Parameterized boundary cases. |
+| `Validate_ForExactlyRepresentableDecimalBoundary_AcceptsIt` | `ParameterValidator` | §6.2, §7.5 | `1e-28`, the 96-bit coefficient boundary, and decimal min/max are accepted with their exact values. | Parameterized boundary cases with exact expected decimals. |
 | `Validate_ForInexactDecimal_ReportsExpectedDecimal` | `ParameterValidator` | §6.2, §7.5, §13.3 | Overflow, underflow, and precision loss are parse failures. | Parameterized underflow/rounding cases. |
 | `Validate_ForZeroWithAnyExponent_AcceptsZero` | `ParameterValidator` | §6.2, §7.5 | Zero with any exponent normalizes to zero. | — |
 | `Validate_ForIntegerParameterReceivingTransport_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | An integer parameter receiving a transport reports the scalar shape error. | — |
+| `Validate_ForIntegerParameterReceivingStruct_ReportsExpectedScalarWithStructShape` | `ParameterValidator` | §7.5, §13.3 | An integer parameter receiving a struct reports the `struct` shape. | — |
 | `Validate_ForIntegerParameterReceivingList_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | An integer parameter receiving a list reports the scalar shape error. | — |
 | `Validate_ForDecimalParameterReceivingTransport_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | A decimal parameter receiving a transport reports the scalar shape error. | — |
 | `Validate_ForDecimalParameterReceivingList_ReportsExpectedScalar` | `ParameterValidator` | §7.5, §13.3 | A decimal parameter receiving a list reports the scalar shape error. | — |
@@ -128,7 +126,7 @@
 | `Validate_ForUnknownField_PreservesRawLeafSpelling` | `StructValidator` | §13.3 | Unknown path leaves keep raw input spelling. | — |
 | `Validate_ForDuplicateNestedField_ReportsFullPath` | `StructValidator` | §7.8, §13.3 | Duplicate detection applies recursively and reports the full path. | — |
 | `Validate_ReportsUnknownFieldBeforeMissingRequiredField` | `StructValidator` | §7.8, §7.9 | Source-order binding errors precede missing-required errors. | — |
-| `Validate_ReportsBindingErrorsInSourceOrder` | `StructValidator` | §7.9 | When multiple binding errors exist, the first in source order is reported. | — |
+| `Validate_ReportsBindingErrorsInSourceOrder` | `StructValidator` | §7.9 | When multiple unknown fields exist, the first in source order is reported. | — |
 | `Validate_ReportsFieldValueErrorsInSchemaOrder` | `StructValidator` | §7.8, §7.9 | Field value validation runs in schema order, not source order. | — |
 | `Validate_ForUnknownField_ReportsSchemaFieldOrder` | `StructValidator` | §13.3 | The unknown-field expectation lists fields in schema order. | Custom non-alphabetical schema. |
 | `Validate_ForStringFieldReceivingList_ReportsExpectedScalarWithListShape` | `StructValidator` | §7.8, §13.3 | A list for a string field reports shape `list`. | — |
@@ -136,7 +134,7 @@
 | `Validate_ForNestedStructFieldReceivingList_ReportsExpectedStruct` | `StructValidator` | §7.8, §13.3 | A list for a nested struct field reports shape `list`. | — |
 | `Validate_ForEmptySchemaWithNoFields_AcceptsEmptyStruct` | `StructValidator` | §7.8 | An empty schema accepts an empty struct. | — |
 | `Validate_ForNestedStruct_ProducesStructValue` | `StructValidator` | §7.8 | Nested structs produce `StructValue` recursively. | — |
-| `Validate_ForStringField_ProducesValueAssignableToDataValue` | `StructValidator` | §7.8, §8 | A struct-field value is a `DataValue`; a string field is a `StringValue`. | Compile-time assignment pins the `StructFieldBinding.Value` type. |
+| `Validate_ForStringField_ProducesStringValue` | `StructValidator` | §7.8, §8 | A string field produces a `StringValue` with the source text. | — |
 | `Validate_ForIntegerAndDecimalFields_ProducesTypedValues` | `StructValidator` | §6.5, §7.8 | Integer and decimal fields produce `IntegerValue` and `DecimalValue`; `1.50` decodes to `1.5`. | — |
 | `Validate_ForOutOfRangeNestedIntegerField_ReportsFullPath` | `StructValidator` | §7.8, §13.3 | A nested integer range failure reports the dot-separated field path with an index-free segment. | — |
 | `Validate_ForNonIntegerField_ReportsExpectedInteger` | `StructValidator` | §7.8, §13.3 | Non-integer field text is a parse failure. | — |
@@ -175,7 +173,7 @@
 | `Resolve_ChecksCastExpectedMismatchBeforeResolvingInnerTransport` | `FormulaResolver` | §7.2, §7.9 | The cast target is checked against the expected set before the inner transport is resolved. | The inner scheme is deliberately unknown. |
 | `Resolve_ChecksBindingErrorsBeforeParameterValidation` | `FormulaResolver` | §7.9 | Binding errors precede parameter value validation. | — |
 | `Resolve_ChecksStructBindingErrorsBeforeFieldValueValidation` | `FormulaResolver` | §7.9 | Source-order struct binding errors precede field value validation. | The first field value would also fail its kind check. |
-| `Resolve_RunsTwiceOnTheSameInput_ProducesTheSameError` | `FormulaResolver` | §7.9 | Resolution is deterministic for the same input and registry. | — |
+| `Resolve_RunsTwiceOnTheSameInput_ProducesTheSameError` | `FormulaResolver` | §7.9 | Resolution is deterministic for the same input and registry; both runs report the exact ambiguous-scheme error. | — |
 
 ## Semantic error catalogue
 
@@ -191,7 +189,7 @@ phase `Resolution`, offset, and zero-length span.
 | `E_SEM_DUPLICATE_PARAM` | `Bind_ForRepeatedNamedArgument_ReportsDuplicateAtSecondName`, `Bind_ForDuplicateWithUppercaseName_PreservesRawSpelling`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`DuplicateParameter`) |
 | `E_SEM_MISSING_REQUIRED_PARAM` | `Bind_ForMultipleMissingRequiredParameters_ReportsFirstInDeclarationOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`MissingRequiredParameter`, `MissingRequiredParameterPreservesRawSchemeSpelling`) |
 | `E_SEM_TOO_MANY_POSITIONAL` | `Bind_ChecksTooManyPositionalArgumentsBeforeNamedArguments`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`TooManyPositionalArguments`) |
-| `E_SEM_EXPECTED_SCALAR` | `Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape`, `Validate_ForIntegerParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForIntegerParameterReceivingList_ReportsExpectedScalar`, `Validate_ForDecimalParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForDecimalParameterReceivingList_ReportsExpectedScalar`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedScalar`, `IntegerParameterExpectedScalar`, `DecimalParameterExpectedScalar`) |
+| `E_SEM_EXPECTED_SCALAR` | `Validate_ForStringParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForStringParameterReceivingStruct_ReportsExpectedScalarWithStructShape`, `Validate_ForIntegerParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForIntegerParameterReceivingList_ReportsExpectedScalar`, `Validate_ForIntegerParameterReceivingStruct_ReportsExpectedScalarWithStructShape`, `Validate_ForDecimalParameterReceivingTransport_ReportsExpectedScalar`, `Validate_ForDecimalParameterReceivingList_ReportsExpectedScalar`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedScalar`, `IntegerParameterExpectedScalar`, `DecimalParameterExpectedScalar`) |
 | `E_SEM_EXPECTED_TRANSPORT` | `Validate_ForTransportParameterReceivingList_ReportsExpectedTransport`, `Validate_ForTransportParameterReceivingStruct_ReportsExpectedTransport`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedTransport`, `ExpectedTransportForList`, `ExpectedTransportForListWithBareWord`) |
 | `E_SEM_EXPECTED_TRANSPORT_LIST` | `Validate_ForListParameterReceivingScalar_ReportsExpectedTransportList`, `Validate_ForListParameterReceivingStruct_ReportsExpectedTransportList`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedTransportList`) |
 | `E_SEM_EXPECTED_STRUCT` | `Validate_ForStructParameterReceivingList_ReportsExpectedStruct`, `Validate_ForStructParameterReceivingTransport_ReportsExpectedStruct`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ExpectedStruct`) |
@@ -208,8 +206,8 @@ phase `Resolution`, offset, and zero-length span.
 | `E_SEM_ARRAY_ELEMENT_TYPE` | `Validate_ForArrayElementWithTransportShape_ReportsElementType`, `Validate_ForArrayElementWithStructShape_ReportsElementType`, `Validate_ForStringArrayElementWithTransportShape_ReportsElementType`, `Validate_ForDecimalArrayElementWithTransportShape_ReportsElementType`, `Validate_ChecksArrayElementsInIndexOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ArrayElementType`) |
 | `E_SEM_ARRAY_MIN` | `Validate_ForArrayBelowMinimum_ReportsArrayMin`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ArrayMinimum`) |
 | `E_SEM_ARRAY_MAX` | `Validate_ForArrayAboveMaximum_ReportsArrayMax`, `Validate_ChecksArrayArityBeforeElementShapes`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ArrayMaximum`) |
-| `E_SEM_UNKNOWN_TRANSPORT_TYPE` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`UnknownTransportType`, `UnknownTransportTypePreservesRawSpelling`), `Resolve_ForUnknownTransportType_ReportsSortedKnownTypes`, `Resolve_ForUnknownTransportTypeWhenNoTypesAreRegistered_ReportsEmptyCatalog`, `Resolve_ChecksUnknownCastTargetBeforeExpectedMismatch` |
-| `E_SEM_CAST_TYPE_MISMATCH` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`CastTypeMismatch`, `CastTypeMismatchUnderExactly`, `CastTypeMismatchUnderOneOf`), `Resolve_ChecksCastExpectedMismatchBeforeResolvingInnerTransport` |
+| `E_SEM_UNKNOWN_TRANSPORT_TYPE` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`UnknownTransportTypePreservesRawSpelling`), `Resolve_ForUnknownTransportType_ReportsSortedKnownTypes`, `Resolve_ForUnknownTransportTypeWhenNoTypesAreRegistered_ReportsEmptyCatalog`, `Resolve_ChecksUnknownCastTargetBeforeExpectedMismatch` |
+| `E_SEM_CAST_TYPE_MISMATCH` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`CastTypeMismatch`, `CastTypeMismatchUnderOneOf`), `Resolve_ChecksCastExpectedMismatchBeforeResolvingInnerTransport` |
 | `E_SEM_VALIDATOR_FAILED` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ParameterValidatorFailed`, `ParameterValidatorThrew`, `ParameterValidatorReturnedEmptyReason`, `IntegerParameterOutOfRange`, `IntegerParameterParseFailure`, `DecimalParameterUnderflow`, `NumericStructFieldParseFailure`, `NumericStructFieldOutOfRange`, `ArrayElementRange`, `NestedArrayElementRange`, `StructFieldValidatorFailed`, `StructFieldValidatorThrew`, `NestedStructFieldValidatorReturnedEmptyReason`) |
 
 ## Planned
@@ -225,7 +223,7 @@ phase `Resolution`, offset, and zero-length span.
 | `ResolvedCast` whose `Inner` is itself a `ResolvedCast`. | `ResolvedCast.Inner` is typed `ResolvedTransport`, so the DTO cannot represent a nested cast. |
 | User-visible expected-type membership errors after resolution. | `parsing.md` §7.6 and §13.3 define this as a compiler invariant (`E_CMP_INCONSISTENT_TREE`), not a semantic error. The positive membership invariant is asserted instead. |
 | Converter-path validation during casts. | Build-time concern (`E_BLD_NO_CONVERSION_PATH`); the parser and resolver must not validate converter availability. |
-| Schema-based overload selection and converter tie-breaking. | Explicitly forbidden by `parsing.md` §7.3 and the approved decisions in `implementation-plan.md` §3. |
+| Schema-based overload selection and converter tie-breaking. | Explicitly forbidden by `parsing.md` §7.3. |
 | Default-value synthesis. | The metadata model defines no defaults; constructors apply their own defaults after resolution. |
 | `E_REG_*`, `E_PRN_*`, `E_CMP_*`, `E_BLD_*`, `E_LEX_*`, and `E_SYN_*`. | Owned by the registry, parsing, canonicalization, compilation, and build suites. |
 | Concurrency, allocation, performance, and adversarial depth. | The resolver is a pure deterministic function over an immutable registry; proving throughput or stack behavior is non-functional and belongs to a stress category. |

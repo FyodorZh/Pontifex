@@ -22,7 +22,10 @@ The grammar described here is a small expression language:
 
 - Input is a .NET UTF-16 string. Unpaired surrogates are not Unicode scalar
   values and are a lexical error (`E_LEX_INVALID_UNICODE` in `parsing.md`),
-  reported at the first offending code unit.
+  reported at the first offending code unit. Inside a quoted string, a code
+  unit consumed by a backslash escape is governed by the escape rules in §4.2:
+  an unpaired surrogate, CR, or LF there is reported as
+  `E_LEX_INVALID_ESCAPE` at the backslash instead.
 - The entire input is one expression. Leading and trailing whitespace is allowed.
 - Offsets used in errors are **0-based UTF-16 code-unit offsets** from the first
   character of the input. The offset of the end of input is equal to the input
@@ -32,8 +35,10 @@ The grammar described here is a small expression language:
   spelling is lowercase.
 - Type names are identifiers and are case-insensitive for comparison; their
   canonical spelling is defined by the transport-type catalog.
-- There are no implementation limits: no maximum depth, length, list size, or
-  argument count is defined by the grammar.
+- The grammar defines no implementation limits: no maximum depth, length, list
+  size, or argument count. An implementation may still be bounded by its
+  runtime (for example, recursion depth); such a limit is an implementation
+  concern, not part of the grammar.
 
 There is no `transport://` prefix. The input starts directly with an expression.
 Comments are not supported.
@@ -126,6 +131,15 @@ Rules:
   whitespace other than CR/LF, and any other Unicode scalar value.
 - The decoded value is preserved exactly. There are no other escape sequences
   (no `\n`, `\t`, `\uXXXX`, etc.).
+- Where several rules could apply, the precedence is:
+  1. A backslash consumes the following code unit.
+  2. If that unit is not `"` or `\`, the result is `E_LEX_INVALID_ESCAPE` at
+     the backslash, even when the unit is CR, LF, or an unpaired surrogate.
+  3. A backslash at end of input is `E_LEX_UNTERMINATED_STRING` at the opening
+     quote.
+  4. Otherwise, an unpaired surrogate is reported before a raw CR or LF.
+
+The normative precedence and offsets are in `parsing.md` §13.1.
 
 ### 4.3 Contextual keyword `as`
 
@@ -137,7 +151,12 @@ In every other position, `as` is an ordinary `Word` and may be used as:
 
 - a scheme name;
 - a parameter or struct-field name;
-- a bare scalar value.
+- a bare scalar value;
+- a cast type name, because `type_name` accepts any identifier.
+
+For example, `alpha() as as` is a cast to the transport type named `as`. The
+chained-cast rule concerns a further `as` *keyword* after that cast type name:
+`alpha() as as as TypeB` is a chained-cast error.
 
 ## 5. Grammar
 
@@ -202,7 +221,8 @@ Notes:
   positional struct fields. An empty struct `{}` is syntactically valid.
 - `field` syntactically accepts any `value`, including transports and lists.
   Semantic struct schemas restrict field values; see `parsing.md`.
-- `expr` permits at most one cast. A second `as` after a cast is a syntax error.
+- `expr` permits at most one cast. A second `as` keyword after a cast is a
+  syntax error; an `as` that serves as the cast type name is not a keyword.
 - A cast applies to the immediately preceding transport expression. Lists and
   structs are not transport expressions and cannot be cast.
 - The top level is an `expr`, so a top-level value must be a transport

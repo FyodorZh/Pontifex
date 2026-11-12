@@ -123,7 +123,6 @@ public sealed class FormulaResolverTests
         var formula = Resolve(source);
         var root = SemanticsAssertions.AsTransport(formula.Root);
 
-        Assert.That(root, Is.Not.InstanceOf<ResolvedCast>());
         Assert.That(root.Constructor.Name, Is.EqualTo("alpha"));
         Assert.That(root.Type, Is.EqualTo(SemanticsTestData.TypeA));
         Assert.That(root.Span, Is.EqualTo(new SourceSpan(0, source.Length)));
@@ -227,7 +226,7 @@ public sealed class FormulaResolverTests
     }
 
     [Test]
-    public void Resolve_ForNestedStruct_ResolvesFieldsInSchemaOrder()
+    public void Resolve_ForNestedStruct_ResolvesNestedFieldValues()
     {
         var root = ResolveTransport("structy({name=x, nested={a=1}})");
         var config = SemanticsAssertions.ProvidedStruct(root, "config");
@@ -286,8 +285,11 @@ public sealed class FormulaResolverTests
     public void Resolve_ForSingleElementList_ResolvesTheElement()
     {
         var root = ResolveTransport("single([beta(x)])");
+        var item = SemanticsAssertions.AsTransport(
+            SemanticsAssertions.ProvidedList(root, "item").Single());
 
-        Assert.That(SemanticsAssertions.ProvidedList(root, "item"), Has.Count.EqualTo(1));
+        Assert.That(item.Constructor.Name, Is.EqualTo("beta"));
+        Assert.That(SemanticsAssertions.ProvidedScalar(item, "value").Text, Is.EqualTo("x"));
     }
 
     [Test]
@@ -396,16 +398,6 @@ public sealed class FormulaResolverTests
         {
             Assert.That(ReferenceEquals(config.Fields[i].Field, schema.Fields[i]), Is.True);
         }
-    }
-
-    [Test]
-    public void Resolve_ForRequiredParameters_ReportsEveryProvidedTypeIsInParameterExpectedSet()
-    {
-        var root = ResolveTransport("dual(alpha(beta(x)))");
-        var parameter = (TransportParam)SemanticsTestData.FindParam(root.Constructor, "input");
-        var value = (ResolvedExpr)SemanticsAssertions.Provided(root, "input").Value;
-
-        Assert.That(parameter.Expected.Contains(value.Type), Is.True);
     }
 
     [Test]

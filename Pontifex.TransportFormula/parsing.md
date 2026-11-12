@@ -71,21 +71,21 @@ The token kinds are:
 
 ```text
 Word, QuotedString, LParen, RParen, LBracket, RBracket,
-LBrace, RBrace, Comma, Equals, EOF
+LBrace, RBrace, Comma, Equals, EndOfInput
 ```
 
 ```csharp
-sealed class Token
-{
-    TokenKind Kind;
-    string Text;          // decoded text for QuotedString; raw text for Word
-    int Start;            // 0-based UTF-16 offset
-    int End;              // Start + source length
-    int Offset => Start;
-}
+sealed record FormulaToken(
+    FormulaTokenKind Kind,
+    string Text,          // decoded text for QuotedString; raw text for Word
+    string RawText,       // raw source slice, retained for diagnostics
+    SourceSpan Span);     // Start + Length; End => Start + Length
 ```
 
-For `EOF`, `Start == End == input length`.
+`FormulaTokenKind` is `Word`, `QuotedString`, `LParen`, `RParen`, `LBracket`,
+`RBracket`, `LBrace`, `RBrace`, `Comma`, `Equals`, `EndOfInput`.
+
+For `EndOfInput`, `Span.Start == Span.End == input length`.
 
 Punctuation characters map one-to-one:
 
@@ -141,13 +141,14 @@ On `"`:
    quote.
 4. The token's decoded text is the content without the surrounding quotes.
 
-A `QuotedString` token preserves its raw source slice for diagnostics.
+A `QuotedString` token preserves its raw source slice for diagnostics in
+`RawText`.
 
 ### 3.4 Token display
 
 For deterministic error messages, define `displayToken(token)`:
 
-- `EOF` → `<end of input>`.
+- `EndOfInput` → `<end of input>`.
 - Punctuation → `'<char>'`.
 - `Word` → `'<escaped text>'`.
 - `QuotedString` → `'<escaped decoded text>'`.
@@ -184,31 +185,33 @@ types, or validation results.
 SourceSpan        { int Start; int Length; int End => Start + Length; }
 SpanFrom(start, end) => SourceSpan { Start = start; Length = end - start }
 
+AstFormula        { AstExpr Root; SourceSpan Span; }
+
 AstValue          (abstract)  { SourceSpan Span; }
 AstExpr           : AstValue   { AstTransportCall Call; AstCast? Cast; }
 AstList           : AstValue   { IReadOnlyList<AstValue> Elements;
                                  int OpenOffset; int CloseOffset; }
-AstStruct         : AstValue   { IReadOnlyList<AstField> Fields;
+AstStruct         : AstValue   { IReadOnlyList<AstStructField> Fields;
                                  int OpenOffset; int CloseOffset; }
 AstScalar         : AstValue   { string Text; bool WasQuoted; }
 
-AstTransportCall  { string Scheme; Token SchemeToken;
-                    IReadOnlyList<AstArg> Args; int CloseParenOffset;
+AstTransportCall  { string Scheme; SourceSpan SchemeSpan;
+                    IReadOnlyList<AstArgument> Arguments; int CloseParenOffset;
                     SourceSpan Span; }
 
-AstCast           { string TypeName; Token TypeToken; SourceSpan Span; }
+AstCast           { string TypeName; SourceSpan TypeSpan; SourceSpan Span; }
 
-AstArg            { string? Name; Token? NameToken; AstValue Value;
+AstArgument       { string? Name; SourceSpan? NameSpan; AstValue Value;
                     SourceSpan Span; }
 
-AstField          { string Name; Token NameToken; AstValue Value;
+AstStructField    { string Name; SourceSpan NameSpan; AstValue Value;
                     SourceSpan Span; }
 ```
 
 AST invariants:
 
 - `AstExpr.Cast` is `null` or one cast; there is no chain.
-- `AstArg.Name` is `null` for positional arguments and non-null for named
+- `AstArgument.Name` is `null` for positional arguments and non-null for named
   arguments. Named arguments form a suffix; the parser enforces this.
 - `AstList.Elements` contains `AstExpr`, `AstScalar`, or `AstStruct` values;
   nested lists are never present.
@@ -219,8 +222,8 @@ AST invariants:
   opening and closing bracket offsets; `AstStruct` records the opening brace and
   the closing brace offsets.
 - Scheme, argument-name, and field-name strings are stored exactly as written;
-  normalization happens during resolution. The corresponding tokens are retained
-  for diagnostics.
+  normalization happens during resolution. The corresponding token spans are
+  retained for diagnostics.
 
 ---
 
@@ -234,23 +237,26 @@ It MUST reject every input that does not match the grammar in `grammar.md`.
 ```text
 Parse(input):
     tokens = Lex(input)                 # lexical errors abort
-    if tokens.current is EOF:
+    if tokens.current is EndOfInput:
         error E_SYN_EMPTY_INPUT at offset 0
     if tokens.current is not Word or not IsIdentifier(current.Text):
         error E_SYN_UNEXPECTED_TOKEN
               expected "a transport expression"
               at current.Offset
     expr = ParseExpr()
-    if tokens.current is not EOF:
+    if tokens.current is not EndOfInput:
         error E_SYN_TRAILING_INPUT at tokens.current.Offset
-    return expr
+    return AstFormula(expr, expr.Span)
 ```
 
 The top level is exactly one expression. A top-level list, struct, scalar, or
 quoted string is not an expression and is rejected as shown above.
 
-`Parse` performs syntax only and returns `AstExpr`. It does not take a registry or
-catalog and does not resolve anything.
+`Parse` performs syntax only and returns `FormulaParseResult`. On success,
+`FormulaParseResult.Formula` is an `AstFormula` whose `Root` is the parsed
+`AstExpr` and whose `Span` is the root span; on failure, `FormulaParseResult.Error`
+carries the `FactoryError` and `Formula` is `null`. `Parse` does not throw for
+user input. It does not take a registry or catalog and does not resolve anything.
 
 ### 5.2 Expressions and casts
 
@@ -262,7 +268,7 @@ ParseExpr():
         typeToken = ParseTypeName()
         if tokens.current is Word equal to "as" (case-insensitive):
             error E_SYN_CHAINED_CAST at tokens.current.Offset
-        cast = AstCast(typeToken.Text, typeToken,
+        cast = AstCast(typeToken.Text, SpanFrom(typeToken.Start, typeToken.End),
                        SpanFrom(call.Span.Start, typeToken.End))
         return AstExpr(call, cast, SpanFrom(call.Span.Start, typeToken.End))
     return AstExpr(call, null, call.Span)
@@ -284,8 +290,8 @@ ParseTransportCall():
         error E_SYN_UNEXPECTED_TOKEN expected "'('" at current.Offset
     consume LParen
     args, closeParen = ParseArgs()
-    return AstTransportCall(schemeToken.Text, schemeToken, args,
-                            closeParen.Offset,
+    return AstTransportCall(schemeToken.Text, SpanFrom(schemeToken.Start, schemeToken.End),
+                            args, closeParen.Offset,
                             SpanFrom(schemeToken.Start, closeParen.End))
 ```
 
@@ -327,14 +333,14 @@ ParseArgs():
             nameToken = consume()
             consume Equals
             value = ParseValue()
-            args.add(AstArg(nameToken.Text, nameToken, value,
-                            SpanFrom(nameToken.Start, value.Span.End)))
+            args.add(AstArgument(nameToken.Text, SpanFrom(nameToken.Start, nameToken.End), value,
+                                 SpanFrom(nameToken.Start, value.Span.End)))
             seenNamed = true
         else:
             if seenNamed:
                 error E_SYN_POSITIONAL_AFTER_NAMED at current.Offset
             value = ParseValue()
-            args.add(AstArg(null, null, value, value.Span))
+            args.add(AstArgument(null, null, value, value.Span))
 
         if tokens.current is Comma:
             comma = consume()
@@ -451,8 +457,8 @@ ParseStruct():
         consume Equals
 
         value = ParseValue()
-        fields.add(AstField(nameToken.Text, nameToken, value,
-                            SpanFrom(nameToken.Start, value.Span.End)))
+        fields.add(AstStructField(nameToken.Text, SpanFrom(nameToken.Start, nameToken.End), value,
+                                  SpanFrom(nameToken.Start, value.Span.End)))
 
         if tokens.current is Comma:
             comma = consume()
@@ -498,13 +504,11 @@ table in §13.2. No error recovery is attempted.
 ### 6.1 Constructors
 
 ```csharp
-interface ITransportConstructor
-{
-    string Name { get; }                    // canonical scheme
-    TransportType Type { get; }
-    IReadOnlyList<Param> Params { get; }    // declaration order
-    IReadOnlyList<string> SuggestedAliases { get; } // optional hints
-}
+sealed record TransportConstructorInfo(
+    string Name,                            // canonical scheme
+    TransportType Type,
+    IReadOnlyList<Param> Params,            // declaration order
+    IReadOnlyList<string> SuggestedAliases); // optional hints
 ```
 
 - `Name` MUST be an identifier and is normalized to lowercase. The registry
@@ -516,7 +520,7 @@ interface ITransportConstructor
 - `Type` is the fixed transport type produced by the constructor. Every
   constructor has one fixed type.
 
-`ITransportConstructor` here is the formula registry's normalized metadata
+`TransportConstructorInfo` here is the formula registry's normalized metadata
 view. Transport packages do not implement it directly; they implement the core
 registration contract in §6.9, and the factory adapter produces this view.
 
@@ -594,25 +598,27 @@ forms include `+1`, `-0`, `.5`, `1.`, and zero with any exponent (for example
 ### 6.3 Type sets
 
 ```csharp
-readonly struct TransportTypeSet
+enum TransportTypeSetKind { Any, Exactly, OneOf }
+
+sealed record TransportTypeSet(
+    TransportTypeSetKind Kind,
+    IReadOnlyList<TransportType> Types)
 {
-    static TransportTypeSet Any;
-    static TransportTypeSet Exactly(TransportType type);
-    static TransportTypeSet OneOf(params TransportType[] types);
-    bool IsAny { get; }
-    IReadOnlyList<TransportType> Types { get; }   // empty for Any
+    bool IsAny { get; }                     // Kind == Any
     bool Contains(TransportType type);
 }
 ```
 
-- `Any` contains every transport type and has `IsAny = true` and an empty `Types`.
-- `Exactly(T)` contains only `T`; `Types` is `[T]`.
-- `OneOf(...)` contains the listed types; `Types` is the normalized list.
-- `OneOf(...)` MUST contain at least one type; duplicates are normalized away.
-- `OneOf()` with zero elements is a registration error.
-- An `Exactly` set with zero types is not constructible through the core helper,
-  but a malformed formula DTO that contains one is rejected with the same
-  `E_REG_EMPTY_TYPE_SET` error.
+- `Kind = Any` contains every transport type and has `IsAny = true` and an empty
+  `Types`.
+- `Kind = Exactly` contains only the single listed type.
+- `Kind = OneOf` contains the listed types.
+- The formula DTO does not normalize or validate on construction. Registration
+  normalizes duplicates away, and `OneOf` or `Exactly` with zero types is rejected
+  at registration with `E_REG_EMPTY_TYPE_SET`.
+- The core registration contract (§6.9) exposes a value-type `TransportTypeSet`
+  with `Any`, `Exactly(...)`, and `OneOf(...)` helpers. `OneOf(...)` with zero
+  elements throws there; the factory adapter then produces the formula view.
 
 ### 6.4 Validators
 
@@ -713,22 +719,30 @@ carries its own count range; there is no separate `ListRange` DTO.
 The resolver uses a transport-type catalog:
 
 ```csharp
+sealed record TransportTypeInfo(
+    TransportType Type,
+    string CanonicalName);
+
 interface ITransportTypeCatalog
 {
-    bool TryResolve(string name, out TransportType type, out string canonicalName);
-    bool TryGetCanonicalName(TransportType type, out string canonicalName);
-    string GetCanonicalName(TransportType type);
+    IReadOnlyList<TransportTypeInfo> Types { get; }
     IReadOnlyList<TransportType> AllTypes { get; }
+    bool TryResolve(string name, out TransportTypeInfo? type);
+    bool TryGetCanonicalName(TransportType type, out string? canonicalName);
+    string GetCanonicalName(TransportType type);
 }
 ```
 
 - Lookup is ASCII case-insensitive.
+- `TryResolve` returns `true` and a `TransportTypeInfo` (`Type` and
+  `CanonicalName`) when the name is known, otherwise `false` and `null`.
 - `TryGetCanonicalName` returns `false` when the type is absent from the catalog.
   `GetCanonicalName` MUST only be called for a type present in the catalog.
 - `canonicalName` is the exact spelling printed by the canonical printer.
 - Catalog names MUST be identifiers and MUST be unique case-insensitively.
-- `AllTypes` is the complete set of catalog types in canonical order.
-  Canonical order is the registration order, and `Types` uses the same order.
+- `Types` is the complete set of catalog entries in registration order, each with
+  its canonical name. `AllTypes` is the same set in the same order, projected to
+  `TransportType`.
 - Every `TransportType` used by a registered constructor or in an
   `Expected`/`OneOf` set MUST have a canonical name in the catalog. Registration
   rejects a type that is absent from the catalog.
@@ -737,15 +751,23 @@ interface ITransportTypeCatalog
 ### 6.7 Registration
 
 ```csharp
-RegisterTransport(ITransportConstructor constructor,
-                  IEnumerable<string>? aliases = null);
+void RegisterType(TransportTypeInfo type);
+void RegisterTransport(TransportRegistration registration);
+
+sealed record TransportRegistration(
+    TransportConstructorInfo Constructor,
+    IReadOnlyList<string> Aliases);
 ```
+
+Registration is performed on an `IRegistryBuilder`; `Build()` returns the
+immutable `IRegistry`.
 
 Rules:
 
-0. Build and validate the type catalog first: names are identifiers and unique
-   case-insensitively (`E_REG_INVALID_TYPE_NAME`, `E_REG_DUPLICATE_TYPE_NAME`).
-   All registry rules below follow catalog validation.
+0. Validate each registered transport type when `RegisterType` is called: names
+   are identifiers and unique case-insensitively (`E_REG_INVALID_TYPE_NAME`,
+   `E_REG_DUPLICATE_TYPE_NAME`). Catalog entries must be registered before the
+   transports that reference them.
 1. Normalize the canonical name, aliases, parameter names, and all nested
    struct-field names to lowercase.
 2. Validate canonical name, parameter names, and alias names as identifiers.
@@ -773,9 +795,10 @@ Rules:
    constructor's `Type` for the same scheme; canonical preference resolves that
    overlap at resolution. An alias name may not be registered twice for the same
    `Type` by different constructors.
-10. `SuggestedAliases` are normalized to lowercase and are not automatically
-    registered. A host MAY pass them (or any other aliases) to
-    `RegisterTransport`.
+10. `SuggestedAliases` are normalized with ASCII uppercase-to-lowercase folding
+    and are not automatically registered. A host MAY pass them (or any other
+    aliases) to `RegisterTransport`. Suggested aliases are not validated as
+    identifiers.
 11. Reject a constructor `Type` or any `Expected` member that is absent from the
     type catalog. Within this rule, the constructor type is checked first, then
     each `Expected` member in parameter declaration order.
@@ -783,36 +806,44 @@ Rules:
     `RegisterTransport` throw `RegistrationException` with
     `E_REG_BUILDER_SEALED`; a built registry is immutable.
 
-Checks run in the numbered order above (rule 0 first), and the first failure is
-reported. Rule 12 is a lifecycle guard, not a validation rule: it is evaluated
-before rule 0 on every registration call.
+Registration is incremental: rules 1–11 are evaluated on each
+`RegisterTransport` call in the numbered order, and the first failure for that
+call is reported. Rule 12 is a lifecycle guard, not a validation rule: it is
+evaluated before every other rule on every registration call. A transport that
+references a type not yet registered fails rule 11 at that point.
 Within rule 2, check the canonical name first, then parameter names in declaration
 order, then alias names in input order. Struct schemas are validated by rule 7:
 visit fields in schema order and validate the name as an identifier before
 uniqueness and kind. Registration errors are listed in §13.4. They occur when
-the registry is built, not while parsing.
+registration is attempted, not while parsing.
 
 ### 6.8 Registry lookup
 
 ```csharp
-interface ITransportRegistry
+interface IRegistry
 {
-    ITransportConstructor? Canonical(string normalizedScheme);
-    IReadOnlyList<ITransportConstructor> Aliases(string normalizedScheme);
+    ITransportTypeCatalog Types { get; }
+    IReadOnlyList<TransportConstructorInfo> Constructors { get; }
     IReadOnlyList<string> AllSchemeNames { get; }
-    void RegisterTransport(...);
+    TransportConstructorInfo? FindCanonical(string normalizedScheme);
+    IReadOnlyList<TransportConstructorInfo> FindCandidates(string normalizedScheme);
 }
 ```
 
-- `Canonical(scheme)` returns the constructor whose canonical `Name` equals the
-  normalized scheme, or `null`.
-- `Aliases(scheme)` returns all constructors that registered the normalized
-  scheme as an alias. The canonical constructor is not part of this result.
+- `FindCanonical(scheme)` returns the constructor whose canonical `Name` equals
+  the normalized scheme, or `null`.
+- `FindCandidates(scheme)` returns the canonical constructor first (when one
+  exists), followed by every constructor that registered the normalized scheme as
+  an alias, sorted by constructor name and then canonical type name. The result
+  is empty when the scheme is unknown.
+- `Constructors` is the frozen list in registration order.
 - `AllSchemeNames` is the sorted union of all canonical and alias names.
-- Both lookup methods require an already-normalized lowercase scheme.
+- Both lookup methods require an already-normalized lowercase scheme; they do not
+  normalize, filter by expected type, or apply canonical preference.
 - `FindByName(list, normalizedName)` performs a case-insensitive lookup over
   normalized names in `Params`, `StructSchema.Fields`, or equivalent lists and
-  returns `null` when no entry matches.
+  returns `null` when no entry matches. It is a helper, not part of the registry
+  interface.
 
 ### 6.9 Core transport registration contract
 
@@ -832,7 +863,7 @@ interface ITransportRegistration
 ```
 
 - `Name`, `Type`, `Parameters`, and `Aliases` map to the formula
-  `ITransportConstructor` metadata in §6.1–§6.5.
+  `TransportConstructorInfo` metadata in §6.1–§6.5.
 - The factory adapter normalizes names to lowercase; the core DTO does not
   require pre-normalized input.
 - `Aliases` are proposed aliases. The factory host registers them; the core DTO
@@ -844,7 +875,11 @@ interface ITransportRegistration
   and `StringType` mirror their formula counterparts. Core
   `IntegerType`/`DecimalType`, `IntegerParameter`/`DecimalParameter`,
   `IntegerField`/`DecimalField`, and `ArrayField` accept unsorted bounds and do
-  not throw; the formula registry owns range validation.
+  not throw; the formula registry owns range validation. The one exception is
+  core `TransportListParameter`, whose constructor rejects `Min < 0` and
+  `Max < Min` with `ArgumentOutOfRangeException`. Consequently
+  `E_REG_INVALID_LIST_RANGE` is reachable only by constructing the formula DTO
+  directly; the core adapter cannot produce it.
 - `ITransportBuildContext` exposes `TryGetString`, `TryGetInt64`,
   `TryGetDecimal`, `TryGetTransport`, `TryGetTransportList`, and `TryGetStruct`.
   `ITransportStructValue` exposes `TryGetString`, `TryGetInt64`,
@@ -867,14 +902,18 @@ catalog, and produces a resolved tree. It performs all semantic checks.
 Entry points:
 
 ```text
-Parse(input)                                  -> AstExpr
-Resolve(ast, registry, catalog)               -> ResolvedExpr
-ParseAndResolve(input, registry, catalog)     -> ResolvedExpr
+Parse(input)                                  -> FormulaParseResult
+Resolve(astFormula, expected)                 -> FormulaResolveResult
 ```
 
-`ParseAndResolve` is exactly `Resolve(Parse(input), registry, catalog)`.
-In the algorithms below, `span(x)` is `x.Span`, and `normalize(s)` is
-`ToLowerInvariant(s)` for identifiers.
+`IResolver` is constructed with an `IRegistry`; `Resolve` takes the parsed
+`AstFormula` and an expected `TransportTypeSet` and returns `FormulaResolveResult`,
+which carries either a `ResolvedFormula` (with `Root`) or a `FactoryError`. The
+formula assembly does not define a `ParseAndResolve` convenience method; compose
+`Parse` and `Resolve`, or use the `Pontifex.Factory` facade. A caller that wants
+the default top-level behaviour passes a `TransportTypeSet` with `Kind = Any`.
+In the algorithms below, `span(x)` is `x.Span`, and `normalize(s)` applies ASCII
+uppercase-to-lowercase folding for identifiers.
 
 An `IParser` instance is reusable sequentially. Its implementation keeps a
 cursor as instance state, so it is not thread-safe; callers must either
@@ -885,7 +924,8 @@ operation.
 
 Every expression is resolved with an **expected type set**:
 
-- At top level: `TransportTypeSet.Any`.
+- At top level: the caller-supplied expected set; the default is
+  `TransportTypeSet` with `Kind = Any`.
 - For a `TransportParam`: the parameter's `Expected`.
 - For each element of a `TransportListParam`: the parameter's `Expected`.
 - For the inner transport of a cast: `TransportTypeSet.Any`.
@@ -898,11 +938,12 @@ ResolveExpr(ast, expected):
     if ast.Cast is null:
         return ResolveTransport(ast.Call, expected)
 
-    if not catalog.TryResolve(ast.Cast.TypeName, out target, out canonicalName):
-        error E_SEM_UNKNOWN_TRANSPORT_TYPE at ast.Cast.TypeToken.Offset
+    if not catalog.TryResolve(ast.Cast.TypeName, out typeInfo):
+        error E_SEM_UNKNOWN_TRANSPORT_TYPE at ast.Cast.TypeSpan.Start
+    target = typeInfo.Type
 
     if not expected.Contains(target):
-        error E_SEM_CAST_TYPE_MISMATCH at ast.Cast.TypeToken.Offset
+        error E_SEM_CAST_TYPE_MISMATCH at ast.Cast.TypeSpan.Start
               target = target, expected = expected
 
     inner = ResolveTransport(ast.Call, TransportTypeSet.Any)
@@ -928,31 +969,30 @@ Consequences:
 ```text
 ResolveTransport(call, expected):
     scheme = normalize(call.Scheme)
-    canonical = registry.Canonical(scheme)
-    allCandidates = (canonical is null ? [] : [canonical])
-                    ∪ registry.Aliases(scheme)
+    allCandidates = registry.FindCandidates(scheme)   # canonical first, then aliases
 
     if allCandidates is empty:
-        error E_SEM_UNKNOWN_SCHEME at call.SchemeToken.Offset
+        error E_SEM_UNKNOWN_SCHEME at call.SchemeSpan.Start
 
     candidates = allCandidates
     if not expected.IsAny:
         candidates = allCandidates.Where(c => expected.Contains(c.Type))
         if candidates is empty:
             error E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE
-                  at call.SchemeToken.Offset
+                  at call.SchemeSpan.Start
                   available = FormatVariants(allCandidates)
 
+    canonical = registry.FindCanonical(scheme)
     if canonical is not null and candidates.Contains(canonical):
         candidates = { canonical }
 
     if candidates.Count > 1:
-        error E_SEM_AMBIGUOUS_SCHEME at call.SchemeToken.Offset
+        error E_SEM_AMBIGUOUS_SCHEME at call.SchemeSpan.Start
 
     constructor = candidates.Single()
     bind arguments (§7.4)
     validate parameters in declaration order (§7.5)
-    return ResolvedTransport(constructor, constructor.Type, provided, span(call))
+    return ResolvedTransport(constructor, provided, span(call))
 ```
 
 Rules:
@@ -968,7 +1008,8 @@ Rules:
 - An alias-only scheme with `Any` and multiple candidates is ambiguous.
 - `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` reports `available` from `allCandidates`,
   the set before expected-type filtering.
-- Within one alias group — that is, within `registry.Aliases(scheme)` — all
+- Within one alias group — that is, within the aliases returned by
+  `registry.FindCandidates(scheme)` after the canonical entry — all
   candidate types are distinct (rule 9 of §6.7). The canonical constructor may
   carry the same `Type` as an alias; canonical preference resolves that overlap
   deterministically.
@@ -992,9 +1033,9 @@ for each named arg in source order:
     name = normalize(arg.Name)
     param = FindByName(constructor.Params, name)
     if param is null:
-        error E_SEM_UNKNOWN_PARAM at arg.NameToken.Offset
+        error E_SEM_UNKNOWN_PARAM at arg.NameSpan.Start
     if bound.Contains(param):
-        error E_SEM_DUPLICATE_PARAM at arg.NameToken.Offset
+        error E_SEM_DUPLICATE_PARAM at arg.NameSpan.Start
     bound[param] = arg.Value
 
 for each param in constructor.Params in declaration order:
@@ -1123,17 +1164,19 @@ for each param in constructor.Params in declaration order:
 `ResolveExpr` filters candidates by the expected set and rejects cast targets
 outside that set. Therefore every resolved result passed to a transport
 parameter is guaranteed to be in the parameter's expected set. There is no
-user-visible `E_SEM_*` error for an expected-type mismatch after resolution; a
-violation is an internal invariant failure and MUST be reported as
-`E_CMP_INCONSISTENT_TREE` by the compiler.
+user-visible `E_SEM_*` error for an expected-type mismatch after resolution: a
+violation is a resolved-tree invariant. A compiler that performs the optional
+checks in §9.5 reports it as `E_CMP_INCONSISTENT_TREE`.
 
 ### 7.7 Type names
 
 Type names are resolved through the transport-type catalog:
 
 ```text
-if not catalog.TryResolve(typeName, out target, out canonicalName):
+if not catalog.TryResolve(typeName, out typeInfo):
     error E_SEM_UNKNOWN_TRANSPORT_TYPE at type token offset
+target = typeInfo.Type
+canonicalName = typeInfo.CanonicalName
 ```
 
 Type names are case-insensitive. The canonical spelling is `canonicalName` and is
@@ -1151,11 +1194,11 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
         schemaField = FindByName(schema.Fields, name)
         if schemaField is null:
             path = JoinPath(parentPath, field.Name)       # raw leaf
-            error E_SEM_UNKNOWN_STRUCT_FIELD at field.NameToken.Offset
+            error E_SEM_UNKNOWN_STRUCT_FIELD at field.NameSpan.Start
                   path = path, expected = schema field names
         path = JoinPath(parentPath, schemaField.Name)     # canonical segment
         if bound.Contains(schemaField):
-            error E_SEM_DUPLICATE_STRUCT_FIELD at field.NameToken.Offset
+            error E_SEM_DUPLICATE_STRUCT_FIELD at field.NameSpan.Start
                   path = path
         bound.add(schemaField, field.Value)
 
@@ -1299,8 +1342,9 @@ ResolvedCast                : ResolvedExpr
 
 ResolvedTransport
 {
-    ITransportConstructor Constructor;
+    TransportConstructorInfo Constructor;
     IReadOnlyList<ParamBinding> Provided;   // declaration order
+    SourceSpan Span;
 }
 
 ParamBinding
@@ -1404,7 +1448,7 @@ interface ITransportRegistration
 }
 ```
 
-The factory adapter maps this to the formula `ITransportConstructor` metadata.
+The factory adapter maps this to the formula `TransportConstructorInfo` metadata.
 `Name` and `Type` identify the constructor; `Parameters` and `Aliases` populate
 the registry. `Create` is the only transport-construction entry point.
 
@@ -1459,9 +1503,11 @@ Rules:
   reconnect-style transports.
 - `TryGetTransportList` preserves element order and returns one factory per
   element.
-- A `TryGet*` accessor for the wrong parameter kind reports
+- A `TryGet*` accessor whose stored value has the wrong value kind reports
   `E_CMP_PARAM_KIND_MISMATCH` with the resolved kinds. A struct-field accessor
-  for the wrong field kind reports `E_CMP_INCONSISTENT_TREE`.
+  whose stored value has the wrong field kind reports `E_CMP_INCONSISTENT_TREE`.
+  Because resolution validates schema kinds, a mismatch can only arise from a
+  hand-built or corrupted resolved tree.
 - Struct values contain only strings, integers, decimals, arrays, and nested
   structs. A present field whose schema kind is not `ArrayField`, or whose value
   is not an `ArrayValue`, is `E_CMP_INCONSISTENT_TREE` in `TryGetArray`.
@@ -1471,8 +1517,10 @@ Rules:
 - The transport constructor owns every nested transport it creates. If creation
   fails after some nested transports were created, the constructor must stop or
   discard them before rethrowing.
-- `Create` is called exactly once per resolved transport expression. The compiler
-  does not call it speculatively.
+- `Create` is called exactly once per compilation of a resolved transport
+  expression. A nested transport factory compiles its subtree afresh when
+  invoked, so a second invocation calls `Create` again. The compiler does not
+  call `Create` speculatively.
 
 ### 9.2 Direct compiler components
 
@@ -1568,7 +1616,8 @@ CompileCast(c):
 2. If `inner.Type == Target`, return the inner transport. Identity casts are
    already collapsed during resolution; this check is defense in depth.
 3. Otherwise request a conversion factory from `IConvertersGraph.TryConvert`
-   using the inner type, target type, an inner factory, logger, and memory.
+   using the inner type, target type, an inner factory, the memory rental, and
+   the logger.
 4. No factory -> `E_BLD_NO_CONVERSION_PATH`.
 5. Converter failure -> `E_BLD_CONSTRUCTOR_FAILED` for the cast's inner scheme.
 
@@ -1587,7 +1636,12 @@ The following are invariant violations, not user errors:
 They use `E_CMP_INCONSISTENT_TREE` with a detail from the closed set in §13.6.
 The compiler MAY perform these checks; it MUST NOT duplicate the full printer
 validation pass. Parameter and struct shape errors are resolution errors, not
-compiler errors.
+compiler errors. If the optional checks are omitted, a registration whose
+name/type pair does not match the resolved constructor is reported as
+`E_BLD_CONSTRUCTOR_NOT_FOUND` because the registry lookup is keyed by both
+scheme and type. `ResolvedTransport.Type` is derived from `Constructor.Type`, so
+`constructor type mismatch` cannot be produced through the formula DTOs; it is a
+defensive detail only.
 
 ---
 
@@ -1842,12 +1896,13 @@ original positional/named form.
 
 ### 11.2 Required properties
 
-Let `R` be a registry and `C` a type catalog.
+Let `R` be a registry and `C` its type catalog, and let `ResolveParse(s)` mean
+`Resolve(Parse(s), Any)` with `R` and `C`.
 
 For every resolved tree `t` produced with `R` and `C`:
 
 ```text
-ParseAndResolve(Print(t), R, C) == t
+ResolveParse(Print(t)) == t
 ```
 
 Equality is the span-insensitive structural equality defined in §11.1, not
@@ -1859,8 +1914,8 @@ tests use a suite-local comparer that implements this definition.
 For every syntactically and semantically valid source `s`:
 
 ```text
-Print(ParseAndResolve(Print(ParseAndResolve(s, R, C)), R, C))
-    == Print(ParseAndResolve(s, R, C))
+Print(ResolveParse(Print(ResolveParse(s))))
+    == Print(ResolveParse(s))
 ```
 
 For every resolved tree `t`, `Print(t)` is syntactically valid and contains no
@@ -2600,7 +2655,7 @@ Representative non-semantic error messages:
 | Printer tree missing required `input` | `E_PRN_MISSING_REQUIRED_PARAM: resolved transport 'alpha' is missing required parameter 'input'` |
 | Printer tree with identity cast | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: identity cast node` |
 | Printer tree with expected-type violation | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: expected-type membership violation` |
-| Printer tree with constructor type mismatch | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: constructor type mismatch` |
+| Printer tree with constructor type mismatch (defensive; unreachable through the resolved DTOs) | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: constructor type mismatch` |
 | Printer tree with non-canonical name | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: non-canonical name` |
 | Printer tree with out-of-order Provided | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: provided parameter order violation` |
 | Printer tree with out-of-order struct fields | `E_PRN_INCONSISTENT_TREE: resolved tree is inconsistent: struct field order violation` |
@@ -2609,16 +2664,20 @@ Representative non-semantic error messages:
 | Printer tree with an out-of-range decimal field | `E_PRN_VALUE_OUT_OF_RANGE: resolved value for 'config.ratio' is out of range: 1.6` |
 | Printer tree with a short array | `E_PRN_ARRAY_ARITY: resolved array field 'values' of parameter 'config' has 0 element(s), expected 1..2` |
 | Printer tree with a wrong array element kind | `E_PRN_ARRAY_ELEMENT_TYPE: resolved array element 'values[0]' of parameter 'config' expects integer, got string` |
-| Printer tree with cast target `TypeZ` | `E_PRN_INVALID_CAST_TARGET: cast target 'TypeZ' is invalid` |
+| Printer tree with a cast target absent from the catalog | `E_PRN_INVALID_CAST_TARGET: cast target '<TransportType.ToString()>' is invalid` |
 | Compiler tree with null root | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: unspecified invariant violation` |
 | Compiler tree with unknown parameter `x` | `E_CMP_UNKNOWN_PARAM: compiler received unknown parameter 'x'` |
 | Compiler tree with duplicate parameter `input` | `E_CMP_DUPLICATE_PARAM: compiler received duplicate parameter 'input'` |
 | Compiler tree with a string value for transport parameter `input` | `E_CMP_PARAM_KIND_MISMATCH: compiler expected value kind transport for parameter 'input', got string` |
-| Compiler tree with inconsistent constructor type | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: constructor type mismatch` |
-| Build cast from `TypeA` to `TypeB` without a path | `E_BLD_NO_CONVERSION_PATH: no conversion path from TypeA to TypeB` |
+| Compiler tree with inconsistent constructor type (defensive; unreachable through the resolved DTOs) | `E_CMP_INCONSISTENT_TREE: compiler received an inconsistent resolved tree: constructor type mismatch` |
+| Build cast from `<from>` to `<to>` without a path | `E_BLD_NO_CONVERSION_PATH: no conversion path from <from> to <to>` |
 | Constructor `alpha` not registered | `E_BLD_CONSTRUCTOR_NOT_FOUND: transport constructor 'alpha' is not registered` |
 | Constructor `alpha` fails | `E_BLD_CONSTRUCTOR_FAILED: transport constructor 'alpha' failed` |
 | Build cast target `TypeZ` not bound (optional binding layer) | `E_BLD_TYPE_NOT_BOUND: transport type 'TypeZ' is not bound to a core transport type` |
+
+In the two build rows, `<from>`, `<to>`, and the cast-target name are
+`TransportType.ToString()` values, not catalog canonical names: the direct
+compiler has no catalog.
 
 ---
 

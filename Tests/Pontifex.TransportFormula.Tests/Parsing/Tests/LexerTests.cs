@@ -232,8 +232,11 @@ public sealed class LexerTests
         var error = LexError("alpha(\"x\\\ny\")");
 
         Assert.That(error.Code, Is.EqualTo("E_LEX_INVALID_ESCAPE"));
+        Assert.That(error.Phase, Is.EqualTo(FactoryPhase.Lexing));
         Assert.That(error.Span!.Value.Start, Is.EqualTo(8));
-        Assert.That(error.Message, Does.StartWith("invalid escape sequence '"));
+        Assert.That(
+            error.Message,
+            Is.EqualTo("invalid escape sequence '\\\\\\n'; only \\\" and \\\\ are allowed"));
     }
 
     [Test]
@@ -242,7 +245,11 @@ public sealed class LexerTests
         var error = LexError("alpha(\"x\\" + '\uD800' + "\")");
 
         Assert.That(error.Code, Is.EqualTo("E_LEX_INVALID_ESCAPE"));
+        Assert.That(error.Phase, Is.EqualTo(FactoryPhase.Lexing));
         Assert.That(error.Span!.Value.Start, Is.EqualTo(8));
+        Assert.That(
+            error.Message,
+            Is.EqualTo("invalid escape sequence '\\\\\\uD800'; only \\\" and \\\\ are allowed"));
     }
 
     [Test]

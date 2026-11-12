@@ -32,8 +32,6 @@ Paths below reflect the split layout: formula sources live under
 - [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — registry and metadata
   (§6), registration rules (§6.7), lookup rules (§6.8), and registration errors
   (§13.4).
-- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
-  registry milestone, component responsibilities, and test expectations (§8).
 - Public contract and DTOs:
   [IRegistry.cs](../../../Pontifex.TransportFormula/Registry/IRegistry.cs),
   [ITransportTypeCatalog.cs](../../../Pontifex.TransportFormula/Registry/ITransportTypeCatalog.cs),
@@ -48,8 +46,6 @@ Paths below reflect the split layout: formula sources live under
   [RegistryErrorFactory.cs](../../../Pontifex.TransportFormula/Registry/Internal/RegistryErrorFactory.cs).
 
 ## Layers
-
-This is a Test Suit with exactly one layer at the suite root.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
@@ -87,9 +83,7 @@ groups.
 
 ## Groups
 
-There are no groups. All test files live directly under `Tests/`. If grouping
-is added later, groups must be subfolders of `Tests/`; they are organisational
-folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
+There are no groups. All test files live directly under `Tests/`.
 
 ## Harness layout and sharing
 
@@ -100,14 +94,7 @@ folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
 - `RegistryAssertions` — asserts that a delegate throws `RegistrationException`
   with an exact code, message, phase, and no span.
 
-There are no harness self-tests. Harness belongs to the root layer and is
-available to every test in this suite. Sibling layers do not exist. The
-repository does not use a mocking library; these doubles are hand-written.
-Harness types expose only the surface required by the tests and never private
-production state.
-
-If harness self-tests are added later, they live in `Harness/Tests/` and carry
-`TransportFormula.Registry.Harness` instead of the suite root category.
+There are no harness self-tests. The harness is local to this suite.
 
 ## Coverage
 
@@ -141,19 +128,17 @@ dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Test
 1. Put the test under `Tests/`, or under a new group folder inside `Tests/` if the
    suite grows cohesive subgroups.
 2. Use the public `IRegistry`, `IRegistryBuilder`, and `ITransportTypeCatalog`
-   contracts, and the internal implementations exposed by
-   `InternalsVisibleTo`; do not use reflection or inspect private state.
+   contracts, and the internal implementations exposed by `InternalsVisibleTo`.
 3. Assert both the returned metadata and, for failures, the exact
    `RegistrationException` code, message, phase, and absent offset.
 4. When several inputs can fail at once, assert the first failure required by
    the numbered order in `parsing.md` §6.7.
-5. Update [Coverage.md](Coverage.md) in the same change.
+5. Record the test in [Coverage.md](Coverage.md).
 
 ## Adding a layer
 
-A Test Suit has exactly one layer. If the subject becomes an inheritance tree or
-requires genuinely separate layers, split this suite into multiple Test Suits or
-convert it to an Abstract Test Suit instead of adding a nested layer here.
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
 ## Contract notes
 

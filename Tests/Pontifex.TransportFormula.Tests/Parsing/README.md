@@ -31,8 +31,6 @@ Paths below reflect the split layout: formula sources live under
 - [grammar.md](../../../Pontifex.TransportFormula/grammar.md) — normative syntax.
 - [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — lexing, parser algorithms,
   display rules, diagnostics, and error catalogue.
-- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
-  parsing milestone, test expectations, and reconciliation decisions.
 - Production contract and DTOs:
   [IParser.cs](../../../Pontifex.TransportFormula/Parsing/IParser.cs),
   [FormulaToken.cs](../../../Pontifex.TransportFormula/Parsing/FormulaToken.cs),
@@ -48,8 +46,6 @@ Paths below reflect the split layout: formula sources live under
   [TokenDisplay.cs](../../../Pontifex.TransportFormula/Internal/TokenDisplay.cs).
 
 ## Layers
-
-This is a Test Suit with exactly one layer at the suite root.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
@@ -82,21 +78,14 @@ Parsing/
 
 ## Groups
 
-There are no groups. All test files live directly under `Tests/`. If grouping
-is added later, groups must be subfolders of `Tests/`; they are organisational
-folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
+There are no groups. All test files live directly under `Tests/`.
 
 ## Harness layout and sharing
 
 The suite has no `Harness/` directory and no harness self-tests. Assertions and
-small AST helpers are private static methods inside their fixtures. There is no
-mocking library; no test doubles are currently needed because the subjects are
-deterministic and have no external dependencies.
-
-If shared test-only doubles become necessary, they belong in the root layer's
-`Harness/` and follow the harness-sharing rules in `Tests/RULES.md`. Harness
-self-tests, if added, would live in `Harness/Tests/` and carry
-`TransportFormula.Parsing.Harness` instead of the suite root category.
+small AST helpers are private static methods inside their fixtures. No test
+doubles are currently needed because the subjects are deterministic and have no
+external dependencies.
 
 ## Coverage
 
@@ -129,18 +118,17 @@ dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Test
 
 1. Put the test under `Tests/`, or under a new group folder inside `Tests/` if the
    suite grows cohesive subgroups.
-2. Use only the public contract of `IParser` and the internal contract exposed by
-   `InternalsVisibleTo`; do not use reflection or inspect private state.
-3. Use one naming convention and descriptive scenario/expected-result names.
+2. Use the public contract of `IParser` and the internal contract exposed by
+   `InternalsVisibleTo`.
+3. Use the suite naming convention described above.
 4. Cover both the positive grammar shape and the exact error code, message, and
    UTF-16 offset.
-5. Update [Coverage.md](Coverage.md) in the same change.
+5. Record the test in [Coverage.md](Coverage.md).
 
 ## Adding a layer
 
-A Test Suit has exactly one layer. If the subject becomes an inheritance tree or
-requires genuinely separate layers, split this suite into multiple Test Suits or
-convert it to an Abstract Test Suit instead of adding a nested layer here.
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
 ## Out of scope
 

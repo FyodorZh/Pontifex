@@ -53,10 +53,10 @@ public sealed class StructValidatorTests
     public void Validate_ReportsBindingErrorsInSourceOrder()
     {
         SemanticsAssertions.ValidateStructError(
-            "{extra=1, name=x, NAME=y}",
+            "{zeta=1, alpha=2}",
             StructySchema(),
             "E_SEM_UNKNOWN_STRUCT_FIELD",
-            "unknown field 'extra' in struct for parameter 'config'; one of: 'name', 'nested'");
+            "unknown field 'zeta' in struct for parameter 'config'; one of: 'name', 'nested'");
     }
 
     [Test]
@@ -142,13 +142,12 @@ public sealed class StructValidatorTests
     }
 
     [Test]
-    public void Validate_ForStringField_ProducesValueAssignableToDataValue()
+    public void Validate_ForStringField_ProducesStringValue()
     {
         var fields = SemanticsAssertions.ValidateStruct("{name=x}", StructySchema());
 
-        DataValue value = fields[0].Value;
-        Assert.That(value, Is.InstanceOf<StringValue>());
-        Assert.That(((StringValue)value).Text, Is.EqualTo("x"));
+        Assert.That(fields[0].Value, Is.InstanceOf<StringValue>());
+        Assert.That(((StringValue)fields[0].Value).Text, Is.EqualTo("x"));
     }
 
     [Test]

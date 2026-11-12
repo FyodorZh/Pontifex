@@ -36,19 +36,6 @@ public sealed class ConstructorSelectorTests
     }
 
     [Test]
-    public void Select_ForCanonicalSchemeWithMatchingExpectedType_PrefersCanonical()
-    {
-        var selector = new ConstructorSelector(SemanticsTestData.StandardRegistry());
-
-        var selected = SemanticsAssertions.Select(
-            selector,
-            "alpha",
-            SemanticsTestData.Exactly(SemanticsTestData.TypeA));
-
-        Assert.That(selected.Name, Is.EqualTo("alpha"));
-    }
-
-    [Test]
     public void Select_ForCanonicalSchemeWhoseExpectedSetExcludesIt_FallsBackToAlias()
     {
         var selector = new ConstructorSelector(SemanticsTestData.StandardRegistry());

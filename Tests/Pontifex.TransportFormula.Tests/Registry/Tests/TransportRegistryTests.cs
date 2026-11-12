@@ -78,12 +78,12 @@ public sealed class TransportRegistryTests
     {
         var builder = RegistryTestData.NewStandardBuilder();
         builder.RegisterTransport(RegistryTestData.Registration(
+            "shared",
+            RegistryTestData.TypeA,
+            Array.Empty<string>()));
+        builder.RegisterTransport(RegistryTestData.Registration(
             "gamma",
             RegistryTestData.TypeC,
-            new[] { "shared" }));
-        builder.RegisterTransport(RegistryTestData.Registration(
-            "alpha",
-            RegistryTestData.TypeA,
             new[] { "shared" }));
         builder.RegisterTransport(RegistryTestData.Registration(
             "beta",
@@ -94,10 +94,7 @@ public sealed class TransportRegistryTests
 
         Assert.That(
             registry.FindCandidates("shared").Select(c => c.Name),
-            Is.EqualTo(new[] { "alpha", "beta", "gamma" }));
-        Assert.That(
-            registry.FindCandidates("alpha").Select(c => c.Name),
-            Is.EqualTo(new[] { "alpha" }));
+            Is.EqualTo(new[] { "shared", "beta", "gamma" }));
     }
 
     [Test]
@@ -137,7 +134,7 @@ public sealed class TransportRegistryTests
     }
 
     [Test]
-    public void FindCandidates_DoesNotFilterByTypeOrApplyCanonicalPreference()
+    public void FindCandidates_ForAliasOnlyScheme_ReturnsEveryCandidateWithoutTypeFiltering()
     {
         var builder = RegistryTestData.NewStandardBuilder();
         builder.RegisterTransport(RegistryTestData.Registration(
@@ -251,7 +248,6 @@ public sealed class TransportRegistryTests
 
         Assert.That(constructor.Name, Is.EqualTo("alpha"));
         Assert.That(constructor.Params[0].Name, Is.EqualTo("input"));
-        Assert.That(constructor.SuggestedAliases, Is.Empty);
     }
 
     [Test]

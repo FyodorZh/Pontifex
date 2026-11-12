@@ -8,8 +8,8 @@ using Core = Pontifex.Factory.Registration;
 namespace Pontifex.Factory.Tests.Bootstrap.Harness
 {
     // Hand-written construction helpers for the bootstrap suite. No mocking
-    // library is used anywhere in this repository. Sibling suites do not share
-    // harness (Tests/RULES.md HARNESS-05), so the metadata helpers are local.
+    // library is used anywhere in this repository. Each suite keeps its own
+    // harness, so the metadata helpers are local.
     internal static class BootstrapTestData
     {
         public static readonly TransportType TypeA = TransportType.RawReliableAck;

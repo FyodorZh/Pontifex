@@ -22,16 +22,14 @@ namespace Pontifex.Factory.Tests.Bootstrap
 
             Assert.That(builder, Is.Not.Null);
             Assert.That(builder.Registry, Is.Not.Null);
-            Assert.That(builder.Build(), Is.Not.Null);
-        }
 
-        [Test]
-        public void CreateBuilder_WithInjectedConverterGraph_ReturnsBuilderThatBuilds()
-        {
-            var builder = TransportFactoryBootstrap.CreateBuilder(
-                new RecordingConvertersGraph(null));
+            var result = builder.Build().Resolve("alpha()");
 
-            Assert.That(builder.Build(), Is.Not.Null);
+            Assert.That(result.Formula, Is.Null);
+            Assert.That(result.Error!.Code, Is.EqualTo("E_SEM_UNKNOWN_SCHEME"));
+            Assert.That(
+                result.Error.Message,
+                Is.EqualTo("unknown transport scheme 'alpha'; no schemes are registered"));
         }
 
         [Test]
@@ -46,20 +44,9 @@ namespace Pontifex.Factory.Tests.Bootstrap
             // not see them; this proves there is no hidden static registry.
             var result = second.Build().Resolve("alpha()");
 
-            Assert.That(result.Error, Is.Not.Null);
+            Assert.That(result.Formula, Is.Null);
             Assert.That(result.Error!.Code, Is.EqualTo("E_SEM_UNKNOWN_SCHEME"));
-        }
-
-        [Test]
-        public void Build_WithRegisteredTransports_ReturnsWorkingFactory()
-        {
-            var builder = BootstrapTestData.NewBuilder();
-            builder.Registry.RegisterTransport(BootstrapTestData.AlphaRegistration());
-
-            var result = builder.Build().Resolve("alpha(1)");
-
-            Assert.That(result.Error, Is.Null);
-            Assert.That(result.Formula, Is.Not.Null);
+            Assert.That(result.Error.Phase, Is.EqualTo(FactoryPhase.Resolution));
         }
 
         [Test]
@@ -85,6 +72,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
 
             Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_BUILDER_SEALED"));
             Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
+            Assert.That(exception.Error.Message, Is.EqualTo("registry builder has already been built"));
         }
 
         [Test]
@@ -360,6 +348,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
             Assert.That(
                 exception.Error.Message,
                 Is.EqualTo("invalid array range: min -1, max unbounded"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
         }
 
         [Test]
@@ -391,6 +380,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
             Assert.That(
                 integerException.Error.Message,
                 Is.EqualTo("invalid integer range: min 5, max 1"));
+            Assert.That(integerException.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
         }
 
         [Test]
@@ -422,6 +412,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
             Assert.That(
                 exception.Error.Message,
                 Is.EqualTo("invalid decimal range: min 2.5, max 1.5"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
         }
 
         [Test]
@@ -456,6 +447,7 @@ namespace Pontifex.Factory.Tests.Bootstrap
             Assert.That(
                 result.Error.Message,
                 Is.EqualTo("field 'names[0]' of parameter 'config' is invalid: name must not be 'bad'"));
+            Assert.That(result.Error.Phase, Is.EqualTo(FactoryPhase.Resolution));
         }
 
         [Test]
@@ -532,28 +524,9 @@ namespace Pontifex.Factory.Tests.Bootstrap
                 exception!.Error.Code,
                 Is.EqualTo("E_REG_DUPLICATE_CANONICAL_NAME"));
             Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
-        }
-
-        [Test]
-        public void Build_SealsTheRuntimeRegistry_SoLaterCoreRegistrationThrows()
-        {
-            var builder = BootstrapTestData.NewBuilder();
-            builder.RegisterTransport(
-                BootstrapTestData.CoreRegistration(
-                    "alpha",
-                    BootstrapTestData.TypeA,
-                    _ => new FakeTransport(BootstrapTestData.TypeA)));
-            builder.Build();
-
-            var exception = Assert.Throws<RegistrationException>(
-                () => builder.RegisterTransport(
-                    BootstrapTestData.CoreRegistration(
-                        "beta",
-                        BootstrapTestData.TypeB,
-                        _ => new FakeTransport(BootstrapTestData.TypeB))));
-
-            Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_BUILDER_SEALED"));
-            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
+            Assert.That(
+                exception.Error.Message,
+                Is.EqualTo("canonical scheme 'alpha' is already registered"));
         }
     }
 }

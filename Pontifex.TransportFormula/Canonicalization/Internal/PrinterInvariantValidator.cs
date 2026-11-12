@@ -458,7 +458,7 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                             || integerValue.Value > integerField.Type.Max)
                         {
                             throw CanonicalizationErrorFactory.ValueOutOfRange(
-                                path,
+                                JoinPath(parameterName, path),
                                 integerValue.Value.ToString(CultureInfo.InvariantCulture));
                         }
 
@@ -480,7 +480,7 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                             || decimalValue.Value > decimalField.Type.Max)
                         {
                             throw CanonicalizationErrorFactory.ValueOutOfRange(
-                                path,
+                                JoinPath(parameterName, path),
                                 DecimalText.Format(decimalValue.Value));
                         }
 
@@ -601,7 +601,7 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                         || integerValue.Value > integerType.Max)
                     {
                         throw CanonicalizationErrorFactory.ValueOutOfRange(
-                            elementPath,
+                            JoinPath(parameterName, elementPath),
                             integerValue.Value.ToString(CultureInfo.InvariantCulture));
                     }
 
@@ -621,7 +621,7 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                         || decimalValue.Value > decimalType.Max)
                     {
                         throw CanonicalizationErrorFactory.ValueOutOfRange(
-                            elementPath,
+                            JoinPath(parameterName, elementPath),
                             DecimalText.Format(decimalValue.Value));
                     }
 

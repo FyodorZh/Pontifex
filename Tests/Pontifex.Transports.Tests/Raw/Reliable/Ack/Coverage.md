@@ -3,7 +3,7 @@
 `RawReliableAckConformanceTests` is the carrier-independent conformance suite for
 the RawReliableAck transport contract. Each implementation supplies a conformance
 adapter that creates linked server-client topologies. The suite exercises every
-normative requirement in the [RawReliableAck Specification](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Specification.md).
+normative requirement in the [RawReliableAck Specification](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Specification.md).
 
 ## Covered
 

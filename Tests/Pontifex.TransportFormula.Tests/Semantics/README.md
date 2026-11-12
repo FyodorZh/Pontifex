@@ -36,9 +36,6 @@ Paths below reflect the split layout: formula sources live under
   resolution (§7.8), determinism order (§7.9), the resolved tree (§8), offset
   rules (§12.2), error precedence (§12.3), semantic errors (§13.3), and the
   conformance matrix (§14.1-14.3).
-- [implementation-plan.md](../../../Pontifex.TransportFormula/implementation-plan.md) —
-  semantics milestone, component responsibilities, cast rules, resolution order,
-  and test expectations (§9).
 - Public contract and DTOs:
   [IResolver.cs](../../../Pontifex.TransportFormula/Semantics/IResolver.cs),
   [ResolvedDtos.cs](../../../Pontifex.TransportFormula/Semantics/ResolvedDtos.cs),
@@ -58,8 +55,6 @@ Paths below reflect the split layout: formula sources live under
   [SemanticAbort.cs](../../../Pontifex.TransportFormula/Semantics/Internal/SemanticAbort.cs).
 
 ## Layers
-
-This is a Test Suit with exactly one layer at the suite root.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
@@ -99,10 +94,7 @@ Semantics/
 
 ## Groups
 
-There are no groups. All test files live directly under `Tests/`. If grouping is
-added later, groups must be subfolders of `Tests/`; they are organisational
-folders, not layers, and they must not contain `Coverage.md` or `Harness/`. The
-root layer's `Coverage.md` covers every test in every group.
+There are no groups. All test files live directly under `Tests/`.
 
 ## Harness layout and sharing
 
@@ -139,15 +131,7 @@ branches the §14 table does not reach:
 - `arrays` — string, integer, and decimal array fields with count ranges;
 - `nestedArrays` — an array inside a nested struct field.
 
-There are no harness self-tests. Harness belongs to the root layer and is
-available to every test in this suite. Sibling suites do not share this harness;
-the registry and parsing suites have their own fixtures, as `Tests/RULES.md`
-requires. The repository does not use a mocking library; all doubles are
-hand-written. Harness types expose only the surface required by the tests and
-never private production state.
-
-If harness self-tests are added later, they live in `Harness/Tests/` and carry
-`TransportFormula.Semantics.Harness` instead of the suite root category.
+There are no harness self-tests. The harness is local to this suite.
 
 ## Coverage
 
@@ -182,8 +166,7 @@ dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Test
 1. Put the test under `Tests/`, or under a new group folder inside `Tests/` if the
    suite grows cohesive subgroups.
 2. Use `IResolver` for end-to-end behaviour and the internal component contracts
-   exposed by `InternalsVisibleTo` for unit-level behaviour; do not use reflection
-   or inspect private state.
+   exposed by `InternalsVisibleTo` for unit-level behaviour.
 3. For failures, assert the exact `FactoryError` code, message, phase
    `Resolution`, and offset. Use `SemanticsAssertions` so the zero-length span
    convention is checked consistently.
@@ -191,13 +174,12 @@ dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Test
    `parsing.md` §7.9 and §12.3.
 5. Keep registries deterministic and small; build metadata through
    `SemanticsTestData` rather than sharing state between tests.
-6. Update [Coverage.md](Coverage.md) in the same change.
+6. Record the test in [Coverage.md](Coverage.md).
 
 ## Adding a layer
 
-A Test Suit has exactly one layer. If the subject becomes an inheritance tree or
-requires genuinely separate layers, split this suite into multiple Test Suits or
-convert it to an Abstract Test Suit instead of adding a nested layer here.
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
 ## Contract notes
 

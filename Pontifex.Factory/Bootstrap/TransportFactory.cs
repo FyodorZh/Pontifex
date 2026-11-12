@@ -18,7 +18,7 @@ namespace Pontifex.Factory.Bootstrap
     // Public-facing facade over the composed pipeline. Resolve never throws for
     // user input; Canonicalize and Compile throw a FactoryException carrying the
     // stage's FactoryError. CreateCompiler binds the frozen runtime registry and
-    // converter graph. See implementation-plan.md §12.2-12.3.
+    // converter graph. See parsing.md §12.3.
     internal sealed class TransportFactory : ITransportFactory
     {
         private static readonly TransportTypeSet AnySet =

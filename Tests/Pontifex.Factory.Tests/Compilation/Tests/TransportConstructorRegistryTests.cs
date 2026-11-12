@@ -21,7 +21,7 @@ public sealed class TransportConstructorRegistryTests
     }
 
     [Test]
-    public void Register_WithUppercaseScheme_IsFoundByLowercase()
+    public void Register_WithUppercaseScheme_IsFoundByAnyCase()
     {
         var registry = new TransportConstructorRegistry();
         var registration = new RecordingRegistration("Alpha", CompilationTestData.TypeA);
