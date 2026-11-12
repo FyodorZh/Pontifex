@@ -1,17 +1,24 @@
 using System;
-using Pontifex;
+using Actuarius.Memory;
+using Pontifex.Converters;
+using Pontifex.Factory.Compilation;
+using Pontifex.Factory.Registration;
 using Pontifex.TransportFormula;
 using Pontifex.TransportFormula.Canonicalization;
 using Pontifex.TransportFormula.Compilation;
 using Pontifex.TransportFormula.Parsing;
 using Pontifex.TransportFormula.Registry;
 using Pontifex.TransportFormula.Semantics;
+using Scriba;
+using TransportTypeSet = Pontifex.TransportFormula.Registry.TransportTypeSet;
+using TransportTypeSetKind = Pontifex.TransportFormula.Registry.TransportTypeSetKind;
 
 namespace Pontifex.Factory.Bootstrap
 {
     // Public-facing facade over the composed pipeline. Resolve never throws for
     // user input; Canonicalize and Compile throw a FactoryException carrying the
-    // stage's FactoryError. See implementation-plan.md §12.2-12.3.
+    // stage's FactoryError. CreateCompiler binds the frozen runtime registry and
+    // converter graph. See implementation-plan.md §12.2-12.3.
     internal sealed class TransportFactory : ITransportFactory
     {
         private static readonly TransportTypeSet AnySet =
@@ -20,15 +27,21 @@ namespace Pontifex.Factory.Bootstrap
         private readonly IParser _parser;
         private readonly IResolver _resolver;
         private readonly ICanonicalizer _canonicalizer;
+        private readonly ITransportConstructorRegistry _constructors;
+        private readonly IConvertersGraph _converters;
 
         public TransportFactory(
             IParser parser,
             IResolver resolver,
-            ICanonicalizer canonicalizer)
+            ICanonicalizer canonicalizer,
+            ITransportConstructorRegistry constructors,
+            IConvertersGraph converters)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
             _canonicalizer = canonicalizer ?? throw new ArgumentNullException(nameof(canonicalizer));
+            _constructors = constructors ?? throw new ArgumentNullException(nameof(constructors));
+            _converters = converters ?? throw new ArgumentNullException(nameof(converters));
         }
 
         public FormulaResolveResult Resolve(
@@ -48,6 +61,32 @@ namespace Pontifex.Factory.Bootstrap
         {
             var resolved = ResolveOrThrow(formula, null);
             return _canonicalizer.Canonicalize(resolved);
+        }
+
+        public ITransportCompiler CreateCompiler(
+            TransportRole role,
+            ILogger logger,
+            IMemoryRental memory)
+        {
+            // The facade guards the build environment before handing it to the
+            // compiler. TransportCompiler applies the same guards, so direct
+            // construction retains its contract.
+            if (logger is null)
+            {
+                throw new ArgumentNullException(nameof(logger));
+            }
+
+            if (memory is null)
+            {
+                throw new ArgumentNullException(nameof(memory));
+            }
+
+            return new TransportCompiler(
+                _constructors,
+                _converters,
+                logger,
+                memory,
+                role);
         }
 
         public TOutput Compile<TOutput>(

@@ -5,9 +5,10 @@ suite proves that the only public entry point — `TransportFactoryBootstrap` �
 builds a frozen formula pipeline, exposes it through `ITransportFactory`, and
 translates each stage according to the documented result/exception policy:
 `Resolve` returns a result DTO, while `Canonicalize` and `Compile` throw
-`FactoryException` carrying the stage's `FactoryError`. After Milestone 6 the
-suite also covers registering core transport constructors and creating the direct
-`ITransportCompiler`.
+`FactoryException` carrying the stage's `FactoryError`. The suite also covers
+registering core transport constructors and creating the direct
+`ITransportCompiler`: one `RegisterTransport(ITransportRegistration)` call feeds
+both the formula metadata and the runtime constructor registry.
 
 ## Suite type
 
@@ -18,6 +19,7 @@ internal types plus the public creation seam:
 - `TransportFactoryBuilder`
 - `TransportFactory`
 - `FactoryComponentFactory` (exercised through `Build`)
+- `CoreRegistrationAdapter` (exercised through `RegisterTransport`)
 
 Root subject: the bootstrap wiring group above.
 
@@ -50,14 +52,18 @@ Paths below reflect the split layout: formula sources live under
   [ITransportRegistration.cs](../../../Pontifex/Factory/Registration/ITransportRegistration.cs),
   [ITransportBuildContext.cs](../../../Pontifex/Factory/Registration/ITransportBuildContext.cs),
   [TransportParameter.cs](../../../Pontifex/Factory/Registration/TransportParameter.cs).
-- Planned runtime compilation surface, added in Milestone 5:
-  `Pontifex.Factory/Compilation/ITransportCompiler.cs`,
-  `Pontifex.Factory/Compilation/TransportCompiler.cs`,
-  `Pontifex.Factory/ITransportConstructorRegistry.cs`.
+- Runtime compilation surface:
+  [ITransportCompiler.cs](../../../Pontifex.Factory/Compilation/ITransportCompiler.cs),
+  [TransportCompiler.cs](../../../Pontifex.Factory/Compilation/TransportCompiler.cs),
+  [ITransportConstructorRegistry.cs](../../../Pontifex.Factory/ITransportConstructorRegistry.cs),
+  [TransportConstructorRegistry.cs](../../../Pontifex.Factory/TransportConstructorRegistry.cs).
+- Converter contract:
+  [ConvertersGraph.cs](../../../Pontifex/Converters/ConvertersGraph.cs).
 - Internal subjects:
   [TransportFactoryBuilder.cs](../../../Pontifex.Factory/Bootstrap/TransportFactoryBuilder.cs),
   [TransportFactory.cs](../../../Pontifex.Factory/Bootstrap/TransportFactory.cs),
-  [FactoryComponentFactory.cs](../../../Pontifex.Factory/Bootstrap/FactoryComponentFactory.cs).
+  [FactoryComponentFactory.cs](../../../Pontifex.Factory/Bootstrap/FactoryComponentFactory.cs),
+  [CoreRegistrationAdapter.cs](../../../Pontifex.Factory/Bootstrap/CoreRegistrationAdapter.cs).
 
 ## Layers
 
@@ -65,7 +71,7 @@ This is a Test Suit with exactly one layer at the suite root.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
-| `Bootstrap` | Public seam, factory builder, factory facade, and component wiring | `Tests/Pontifex.Factory.Tests/Bootstrap` | — (root) | [`Coverage.md`](Coverage.md) |
+| `Bootstrap` | Public seam, factory builder, factory facade, registration adapter, and component wiring | `Tests/Pontifex.Factory.Tests/Bootstrap` | — (root) | [`Coverage.md`](Coverage.md) |
 
 ## Naming conventions
 
@@ -83,7 +89,10 @@ Bootstrap/
 ├── README.md
 ├── Coverage.md
 ├── Harness/
-│   └── BootstrapTestData.cs
+│   ├── BootstrapTestData.cs
+│   ├── FakeRawUnreliableNoAckClient.cs
+│   ├── FakeTransport.cs
+│   └── RecordingConvertersGraph.cs
 └── Tests/
     ├── TransportFactoryBuilderTests.cs
     └── TransportFactoryTests.cs
@@ -100,18 +109,24 @@ folders, not layers, and they must not contain `Coverage.md` or `Harness/`.
 
 ## Harness layout and sharing
 
-`Harness/` contains one test-only file:
+`Harness/` contains test-only helpers:
 
-- `BootstrapTestData` — hand-written registration helpers plus two compiler
-  doubles: a recording compiler and a compiler that throws a caller-supplied
-  exception.
+- `BootstrapTestData` — hand-written formula/core registration helpers plus two
+  compiler doubles: a recording compiler and a compiler that throws a
+  caller-supplied exception.
+- `FakeTransport` — a minimal live `ITransport` double used to identify the
+  exact instance a core constructor returned.
+- `RecordingConvertersGraph` — a converter-graph double that records
+  `TryConvert` arguments and returns a scripted conversion factory.
+- `FakeRawUnreliableNoAckClient` — a non-I/O raw-unreliable client used only to
+  exercise the built-in converter through the default graph.
 
 There are no harness self-tests. Harness belongs to the root layer and is
 available to every test in this suite. Sibling suites do not share harness
-(`Tests/RULES.md` HARNESS-05), so the metadata helpers are local even though
-they resemble the registry suite's fixtures. The repository does not use a
-mocking library; these doubles are hand-written. Harness types expose only the
-surface required by the tests and never private production state.
+(`Tests/RULES.md` HARNESS-05), so the metadata and transport doubles are local
+even though they resemble the compilation suite's fixtures. The repository does
+not use a mocking library; these doubles are hand-written. Harness types expose
+only the surface required by the tests and never private production state.
 
 If harness self-tests are added later, they live in `Harness/Tests/` and carry
 `Factory.Bootstrap.Harness` instead of the suite root category.
@@ -167,15 +182,16 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 - Parsing, registry, semantics, and canonicalization algorithms themselves; they
   are covered by their own suites. This suite asserts only wiring and stage
   translation.
-- `E_CMP_*` and `E_BLD_*` compiler invariants and direct compiler behaviour;
-  those belong to the `Factory.Compilation` suite. This suite proves only that
+- Compiler internals, `E_CMP_*` invariants, and the full `E_BLD_*` matrix; those
+  belong to the `Factory.Compilation` suite. This suite asserts only the
+  integration-level build error (`E_BLD_CONSTRUCTOR_NOT_FOUND`) and that
   compiler-raised exceptions pass through unchanged.
 - Thread safety of `Build`. The contract defines no concurrency guarantee.
 - Performance, allocation, and adversarial input limits.
 
-After Milestone 6 the runtime facade exposes `ITransport`, `ITransportCompiler`,
-logging, and memory types. The formula assembly must not reference them; that is
-a project-reference property verified by dependency review rather than by a
+The runtime facade exposes `ITransport`, `ITransportCompiler`, logging, and
+memory types. The formula assembly must not reference them; that is a
+project-reference property verified by dependency review rather than by a
 runtime test.
 
 ## Rules

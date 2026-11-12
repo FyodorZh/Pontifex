@@ -73,12 +73,9 @@ non-canonical names.
 
 ## Planned
 
-- **Bootstrap integration.** `RegisterTransport(ITransportRegistration)`,
-  `CreateCompiler` role binding, sealing after `Build`, and formula-only
-  registration reporting `E_BLD_CONSTRUCTOR_NOT_FOUND` through the facade are
-  owned by the Bootstrap suite, as implementation-plan §11.6 allows
-  ("either this suite or the Bootstrap suite but not both"). Scheduled with
-  Milestone 6.
+None. Bootstrap integration is covered by the `Factory.Bootstrap` suite, per
+implementation-plan §11.6 ("either this suite or the Bootstrap suite but not
+both").
 
 ## Deferred by design
 

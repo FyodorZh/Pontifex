@@ -3,6 +3,7 @@ using Pontifex;
 using Pontifex.TransportFormula.Compilation;
 using Pontifex.TransportFormula.Registry;
 using Pontifex.TransportFormula.Semantics;
+using Core = Pontifex.Factory.Registration;
 
 namespace Pontifex.Factory.Tests.Bootstrap.Harness
 {
@@ -59,6 +60,23 @@ namespace Pontifex.Factory.Tests.Bootstrap.Harness
         public static TransportTypeSet Exactly(TransportType type)
         {
             return new TransportTypeSet(TransportTypeSetKind.Exactly, new[] { type });
+        }
+
+        // Core registration helper: the name and metadata deliberately pass
+        // through unchanged so tests can assert the facade's normalization.
+        public static Core.TransportRegistration CoreRegistration(
+            string name,
+            TransportType type,
+            Func<Core.ITransportBuildContext, ITransport> create,
+            Core.TransportParameter[]? parameters = null,
+            string[]? aliases = null)
+        {
+            return new Core.TransportRegistration(
+                name,
+                type,
+                parameters ?? Array.Empty<Core.TransportParameter>(),
+                create,
+                aliases);
         }
     }
 

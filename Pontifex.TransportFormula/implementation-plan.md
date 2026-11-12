@@ -42,12 +42,12 @@ Implemented and covered by the existing suites:
 - core transport registration contract in `Pontifex/Factory/Registration`;
 - project decomposition into `Pontifex.TransportFormula` and `Pontifex.Factory`;
 - direct `ITransport` compiler and runtime constructor registry;
-- `Compilation` test suite (38 tests).
+- `Compilation` test suite (38 tests);
+- bootstrap integration (`RegisterTransport`, `CreateCompiler`,
+  `CoreRegistrationAdapter`, registry sealing).
 
 Not implemented yet:
 
-- bootstrap registration and compiler-creation wiring (`CoreRegistrationAdapter`,
-  `RegisterTransport(ITransportRegistration)`, `CreateCompiler`);
 - migration of concrete transport constructors to the core registration
   contract;
 - optional `TransportTypeId` decoupling and its binding layer.
@@ -1837,6 +1837,7 @@ Aim for:
 - Update the Bootstrap suite for registration, compiler creation, and compile
   integration.
 - Build/test passes.
+- **Status:** implemented and verified (42 Bootstrap tests; 612 total tests).
 
 ### Milestone 7 — Conformance and hardening
 
@@ -1979,7 +1980,7 @@ Execute in this order. Each step must leave `dotnet build` and the existing
   `Pontifex.Factory.Tests.Compilation`.
 - Update `Coverage.md` in the same change.
 
-### Step 4 — Integrate the bootstrap (next)
+### Step 4 — Integrate the bootstrap (done)
 
 - Add `ITransportFactoryBuilder.RegisterTransport(ITransportRegistration)`.
 - Add the internal `CoreRegistrationAdapter`.
@@ -1989,7 +1990,7 @@ Execute in this order. Each step must leave `dotnet build` and the existing
   `FactoryComponentFactory`.
 - Extend the Bootstrap suite with the integration cases in §12.4.
 
-### Step 5 — Prove one transport end to end
+### Step 5 — Prove one transport end to end (next)
 
 - Migrate one small transport registration first, preferably a direct or TCP
   constructor, to `ITransportRegistration`.
