@@ -587,7 +587,9 @@ are parse failures, not out-of-range values. A successfully parsed value outside
 never uses exponent notation, trims trailing zeros, and normalizes negative zero
 to `0`. Consequently `1.50` and `1.5` compare equal and both print as `1.5`.
 Quoted numeric scalars are accepted; the decoded text is parsed identically.
-Leading or trailing whitespace inside numeric text is not accepted.
+Leading or trailing whitespace inside numeric text is not accepted. Accepted
+forms include `+1`, `-0`, `.5`, `1.`, and zero with any exponent (for example
+`0e29` or `0e-1000001`); a zero coefficient makes the exponent irrelevant.
 
 ### 6.3 Type sets
 
@@ -697,11 +699,11 @@ sealed class StringType : SingleType
 ```
 
 Struct fields are named-only. There are no positional fields, no defaults, and no
-transport or list fields. Integer and decimal fields use the same exact parsing
-and range rules as parameters. Array fields are homogeneous and contain only
-string, integer, or decimal scalar leaves; nested arrays and struct elements are
-rejected. A `StringType` validator applies per element. `ArrayField` carries its
-own count range; there is no separate `ListRange` DTO.
+transport or transport-list fields. Integer and decimal fields use the same
+exact parsing and range rules as parameters. Array fields are homogeneous and
+contain only string, integer, or decimal scalar leaves; nested arrays and struct
+elements are rejected. A `StringType` validator applies per element. `ArrayField`
+carries its own count range; there is no separate `ListRange` DTO.
 
 ### 6.6 Type catalog
 
@@ -1249,9 +1251,9 @@ ResolveStruct(astStruct, schema, paramName, parentPath):
 ```
 
 `JoinPath(parentPath, name)` joins the segments with `.`; an empty parent path
-yields `name`. Struct values contain only strings, integers, decimals, and nested
-structs. A transport or list in a struct field is rejected by the
-scalar/struct shape checks.
+yields `name`. Struct values contain only strings, integers, decimals, arrays,
+and nested structs. A transport in a struct field, or a list in a non-array
+field, is rejected by the scalar/struct/array shape checks.
 
 ### 7.9 Resolution order and determinism
 
@@ -1833,6 +1835,12 @@ For every resolved tree `t` produced with `R` and `C`:
 ParseAndResolve(Print(t), R, C) == t
 ```
 
+Equality is the span-insensitive structural equality defined in §11.1, not
+default C# record equality: collection members such as `Provided`,
+`TransportListValue.Elements`, `StructValue.Fields`, and `ArrayValue.Elements`
+are compared element-wise, and decimal values compare numerically. Round-trip
+tests use a suite-local comparer that implements this definition.
+
 For every syntactically and semantically valid source `s`:
 
 ```text
@@ -2243,6 +2251,9 @@ These are outside the parser/printer contract but complete the boundary.
 binding layer is adopted. The former adapter-only codes
 `E_CMP_RESERVED_SCHEME` and `E_CMP_INVALID_CAST_TARGET` are removed from the
 compiler catalogue; `E_PRN_INVALID_CAST_TARGET` remains a printer error.
+`E_CMP_DUPLICATE_PARAM` and `E_CMP_UNKNOWN_PARAM` are catalogued but not
+implemented; the direct compiler consumes a resolver-produced tree and does not
+emit them for any tree.
 
 In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are resolved value
 kinds: `string`, `integer`, `decimal`, `transport`, `transport list`, `struct`,
@@ -2477,7 +2488,7 @@ declaration order.
 | `mixed(input=beta(x), flag=fast)` | `mixed(beta(x), flag=fast)` |
 | `opt(b=two)` | `opt(b=two)` |
 | `bag(items=[])` | `bag([])` |
-| `emptyStruct(config={})` | `emptyStruct({})` |
+| `emptyStruct(config={})` | `emptystruct({})` |
 | `single(item=[beta(x)])` | `single([beta(x)])` |
 | `numbers(count=5, ratio=1.50)` | `numbers(5, 1.5)` |
 | `numbers(count=+5, ratio=-0.0)` | `numbers(5, 0)` |

@@ -351,6 +351,26 @@ public sealed class StructValidatorTests
     }
 
     [Test]
+    public void Validate_ForStringArrayElementWithTransportShape_ReportsElementType()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], names=[beta()]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            "array element 'names[0]' of parameter 'config' expects a string, got transport");
+    }
+
+    [Test]
+    public void Validate_ForDecimalArrayElementWithTransportShape_ReportsElementType()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], ratios=[beta()]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            "array element 'ratios[0]' of parameter 'config' expects a decimal, got transport");
+    }
+
+    [Test]
     public void Validate_ForArrayElementWithScalarText_ReportsIntegerParseFailure()
     {
         SemanticsAssertions.ValidateStructError(

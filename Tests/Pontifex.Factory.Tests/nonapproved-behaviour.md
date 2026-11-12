@@ -191,16 +191,7 @@ reference until its entries are explicitly promoted.
 
 ## 5. Cross-cutting documentation inconsistencies
 
-### 5.1 `emptyStruct` printer-table spelling
-
-- **Test:** `Canonicalization/Tests/FormulaCanonicalizerTests.cs` —
-  `Canonicalize_ForParsingMdPrinterExamples_ProducesExpectedOutput`.
-- **Pinned behaviour:** `emptyStruct(config={})` prints as `emptystruct({})`.
-- **Contract status:** `parsing.md` §6.1 requires lowercase normalized scheme
-  names, while the §14.4 table literally shows `emptyStruct({})`.
-- **Recommendation:** correct §14.4 or add an explicit normalization note.
-
-### 5.2 Interface-level entry points
+### 5.1 Interface-level entry points
 
 - **Observation:** `Canonicalization`, `Semantics`, and `Registry` tests call the
   concrete internal implementations (`FormulaCanonicalizer`, `FormulaResolver`,

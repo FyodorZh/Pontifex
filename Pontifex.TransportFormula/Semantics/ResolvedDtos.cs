@@ -12,8 +12,8 @@ namespace Pontifex.TransportFormula.Semantics
     public sealed record ResolvedFormula(
         ResolvedExpr Root);
 
-    // Resolved values form two branches. DataValue is pure data (strings, structs,
-    // and later integers, decimals, and arrays). ResolvedExpr is the special
+    // Resolved values form two branches. DataValue is pure data (strings,
+    // integers, decimals, structs, and arrays). ResolvedExpr is the special
     // expression-value branch used where a transport expression is a value.
     public abstract record ResolvedValue;
 

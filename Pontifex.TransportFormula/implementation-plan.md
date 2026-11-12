@@ -42,7 +42,7 @@ Implemented and covered by the existing suites:
 - core transport registration contract in `Pontifex/Factory/Registration`;
 - project decomposition into `Pontifex.TransportFormula` and `Pontifex.Factory`;
 - direct `ITransport` compiler and runtime constructor registry;
-- `Compilation` test suite (38 tests);
+- `Compilation` test suite (54 tests);
 - bootstrap integration (`RegisterTransport`, `CreateCompiler`,
   `CoreRegistrationAdapter`, registry sealing).
 
@@ -133,8 +133,8 @@ These decisions are already reflected in `grammar.md` and `parsing.md`.
 ### Semantics
 
 - Resolved values have two branches: `DataValue` is pure data (strings, integers,
-  decimals, structs, and later arrays); `ResolvedExpr` is the expression-value
-  branch. Transport parameters store `ResolvedExpr` directly; struct fields store
+  decimals, structs, and arrays); `ResolvedExpr` is the expression-value branch.
+  Transport parameters store `ResolvedExpr` directly; struct fields store
   `DataValue`.
 - The top-level expected type set is `Any`.
 - A cast resolves its inner transport with `Any`; its output type is the cast
@@ -1042,8 +1042,9 @@ No public classes in `Pontifex.TransportFormula.Semantics`.
 - Maintains a dot-separated field path for diagnostics. Known schema segments
   are canonical lowercase; an unknown leaf uses raw input spelling. Nested
   errors report the full path and keep the top-level parameter name.
-- No transports or lists inside struct fields: the field kind check produces
-  the corresponding expected-shape error.
+- No transports or transport lists inside struct fields; array fields accept
+  homogeneous scalar lists. The field kind check produces the corresponding
+  expected-shape error.
 
 **`SemanticErrorFactory`**
 
@@ -1447,7 +1448,7 @@ pass.
 ### 11.6 Compilation tests
 
 The `Compilation` Test Suit is implemented under
-`Tests/Pontifex.Factory.Tests/Compilation/` with 38 tests. The shape and matrix
+`Tests/Pontifex.Factory.Tests/Compilation/` with 54 tests. The shape and matrix
 below are the coverage contract; keep them in sync when adding cases.
 
 Suite shape:
@@ -1460,6 +1461,7 @@ Compilation/
     CompilationTestData.cs
     FakeTransport.cs
     RecordingConvertersGraph.cs
+    RecordingRegistration.cs
   Tests/
     TransportCompilerTests.cs
     TransportConstructorRegistryTests.cs
@@ -1513,7 +1515,8 @@ Build context:
 - absent optional struct field returns `false`;
 - parameter and field lookup is by canonical lowercase name;
 - a wrong parameter kind reports `E_CMP_PARAM_KIND_MISMATCH` with resolved kinds
-  (`string`, `integer`, `decimal`, `transport`, `transport list`, `struct`).
+  (`string`, `integer`, `decimal`, `transport`, `transport list`, `struct`,
+  `array`).
 
 Failure paths:
 
@@ -1771,8 +1774,8 @@ phase, and message for compiler/build errors.
 ### 14.1 Test project structure
 
 The test project is not bare: `Parsing`, `Registry`, `Semantics`,
-`Canonicalization`, and `Bootstrap` suites exist. Before adding tests, follow
-`Tests/RULES.md`. The target layout is one suite per subsystem:
+`Canonicalization`, `Compilation`, and `Bootstrap` suites exist. Before adding
+tests, follow `Tests/RULES.md`. The target layout is one suite per subsystem:
 
 ```text
 Tests/Pontifex.Factory.Tests/
@@ -1807,9 +1810,8 @@ Each subsystem directory is its own suite root, so its `README.md` and
 `Coverage.md` are owned by that suite. The project root itself is not a suite
 unless a project-level suite is explicitly defined.
 
-The `Compilation` suite does not exist yet. `Tests/RULES.md` forbids an empty
-layer, so create its `README.md`, `Coverage.md`, `Harness/`, and `Tests/` in the
-same change as the first compiler test. The full case matrix is in §11.6.
+The `Compilation` suite is implemented; keep its matrix in sync with §11.6 when
+adding compiler cases.
 
 If a suite is not warranted yet, use loose test files outside suite directories;
 promote them when they become cohesive, as `Tests/RULES.md` requires.
@@ -1820,7 +1822,9 @@ promote them when they become cohesive, as `Tests/RULES.md` requires.
   `parsing.md`.
 - **Unit** — lexer, parser, registry validation, binder, validators, printer.
 - **Error catalogue** — every code, message template, and offset.
-- **Property** — parser never crashes; spans in range; round-trip stability.
+- **Property** — parser never crashes; spans in range; round-trip stability;
+  `Print(Resolve(Parse(Print(t)))) == Print(t)` over valid resolved trees using
+  span-insensitive structural equality; exact decimal parse/format round-trip.
 - **Component isolation** — parsing tests with no registry; registry tests with
   no parser; printer tests with hand-built resolved trees.
 - **Compiler** — direct `ITransport` compilation, context value access, lazy
@@ -1841,10 +1845,11 @@ Aim for:
 
 - all grammar productions;
 - all error codes;
-- all parameter kinds;
+- all parameter kinds, including integer, decimal, and array-field element kinds;
 - all alias/type-set combinations;
-- all canonicalization branches;
-- all compiler value kinds and build-context accessors;
+- all canonicalization branches, including numeric scalars and arrays;
+- all compiler value kinds and build-context accessors, including typed array
+  element access;
 - lazy nested transport factory behaviour;
 - cast identity, conversion, and failure paths;
 - all `E_BLD_*` and `E_CMP_*` compiler codes;
@@ -1908,7 +1913,7 @@ Aim for:
   `E_BLD_NO_CONVERSION_PATH`.
 - Add the `Compilation` Test Suit with the matrix in §11.6.
 - Build/test passes.
-- **Status:** implemented and verified (38 Compilation tests; 591 total tests).
+- **Status:** implemented and verified (54 Compilation tests; 863 total tests).
 
 ### Milestone 6 — Bootstrap integration
 
@@ -1923,7 +1928,8 @@ Aim for:
 - Update the Bootstrap suite for registration, compiler creation, and compile
   integration.
 - Build/test passes.
-- **Status:** implemented and verified (42 Bootstrap tests; 612 total tests).
+- **Status:** implemented and verified (Full Factory suite covers typed scalars,
+  exact decimals, generic lists, and arrays).
 
 ### Milestone 7 — Conformance and hardening
 
@@ -1932,6 +1938,8 @@ Aim for:
 - Verify no forbidden dependencies with project references and code review.
 - Verify `dotnet build` and `dotnet test` clean.
 - Update `README.md`/`Coverage.md` per `Tests/RULES.md`.
+- **Status:** implemented; the error catalogue, exact decimal cases, array
+  first-error order, and round-trip properties are covered.
 
 ---
 
@@ -1956,12 +1964,22 @@ Aim for:
 - Transport packages can register through
   `Pontifex.Factory.Registration.ITransportRegistration` while referencing only
   `Pontifex`.
-- All error codes from `parsing.md` are implemented and tested, including
-  `E_BLD_CONSTRUCTOR_NOT_FOUND`, `E_BLD_CONSTRUCTOR_FAILED`, and
-  `E_BLD_NO_CONVERSION_PATH`.
+- All error codes from `parsing.md` that a resolver-produced tree can reach are
+  implemented and tested, including `E_BLD_CONSTRUCTOR_NOT_FOUND`,
+  `E_BLD_CONSTRUCTOR_FAILED`, and `E_BLD_NO_CONVERSION_PATH`. The catalogued
+  but unimplemented compiler codes `E_CMP_DUPLICATE_PARAM` and
+  `E_CMP_UNKNOWN_PARAM` are not emitted for any tree; `Compilation/Coverage.md`
+  records that deferral.
 - The `Compilation` suite covers registry lookup, build-context accessors, lazy
   nested factories, casts, conversion failures, and compiler invariants.
-- Canonical round-trip properties pass.
+- Canonical round-trip properties pass, using span-insensitive structural
+  equality; decimal values compare numerically and arrays compare element-wise.
+- Metadata supports integer and decimal scalar parameters/fields and homogeneous
+  string, integer, and decimal arrays inside struct fields.
+- Decimal literals are parsed exactly; overflow, underflow, and precision loss
+  are parse failures; canonical decimal output has no exponent and trims trailing
+  zeros.
+- No `ArrayParam`, nested arrays, or `StructType` exists.
 - No implementation limits are introduced.
 - No `transport://`, comments, aliases in canonical output, default synthesis,
   schema overload, or converter tie-breaking exists.

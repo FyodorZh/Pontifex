@@ -203,8 +203,8 @@ convert it to an Abstract Test Suite instead of adding a nested layer here.
   plain canonical form: no exponent notation, trailing zeros trimmed, and
   negative zero normalized to `0`.
 - Scheme names are lowercased by registration. The §14 fixture name
-  `emptyStruct` therefore prints as `emptystruct`, and the §14 printer table is
-  applied through the real registry with that normalization.
+  `emptyStruct` therefore prints as `emptystruct`; §14.4 records that canonical
+  spelling, and the test applies it through the real registry.
 - `ResolvedTransport.Type` is derived from `Constructor.Type` in the current DTO,
   so a `constructor type mismatch` tree cannot be constructed without changing
   the resolved DTO. The validator keeps the documented check; the exact error

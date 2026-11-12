@@ -261,7 +261,10 @@ The grammar validates only shape and token structure. The following are
 - transport type names in casts;
 - expected transport types and type sets;
 - transport list minimum/maximum sizes, homogeneity, and element kinds;
-- array field minimum/maximum sizes, homogeneity, and element kinds;
+- array field minimum/maximum sizes, homogeneity, and element kinds: array
+  elements are scalar leaves only, so transport expressions and structs are
+  rejected semantically for an array field; nested arrays are a syntax error
+  (see §5);
 - struct field names, requiredness, and field kinds;
 - scalar validators;
 - whether an integer scalar parses as a signed 64-bit integer and lies within its

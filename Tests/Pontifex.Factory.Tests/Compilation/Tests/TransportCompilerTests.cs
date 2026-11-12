@@ -1000,6 +1000,44 @@ public sealed class TransportCompilerTests
     }
 
     [Test]
+    public void Compile_WhenStringParameterReceivesArray_ReportsArrayExpected()
+    {
+        var param = CompilationTestData.StringParam(
+            "path",
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            param);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            new[] { CompilationTestData.CoreStringParameter("path", required: true, positional: true) },
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetString("path", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    new ParamBinding(
+                        param,
+                        new ArrayValue(Array.Empty<DataValue>()))))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo(
+                "compiler expected value kind string for parameter 'path', got array"));
+    }
+
+    [Test]
     public void Compile_WhenIntegerFieldReceivesString_ThrowsInconsistentTree()
     {
         var field = CompilationTestData.IntegerField("count", 0, 10, required: true);
