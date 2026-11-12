@@ -161,6 +161,3 @@ The lexer and parser are tested without a registry, catalog, or transport type.
 ## Rules
 
 This suite follows [Tests/RULES.md](../../RULES.md).
-
-Known test assumptions that are not part of the normative contract are recorded in
-[nonapproved-behaviour.md](../Pontifex.Factory.Tests/nonapproved-behaviour.md).

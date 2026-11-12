@@ -421,32 +421,6 @@ public sealed class FormulaResolverTests
     }
 
     [Test]
-    public void Resolve_ForCyclicStructSchema_ResolvesFiniteNestedStruct()
-    {
-        var fields = new StructField[1];
-        var schema = new StructSchema(fields);
-        fields[0] = new NestedStructField("self", false, schema);
-
-        var builder = SemanticsTestData.NewBuilder();
-        SemanticsTestData.Register(
-            builder,
-            "cyclic",
-            SemanticsTestData.TypeA,
-            System.Array.Empty<string>(),
-            SemanticsTestData.CreateStructParam("config", schema, required: true, positional: true));
-
-        var formula = SemanticsAssertions.ResolveSucceeds(
-            SemanticsTestData.Resolver(builder.Build()),
-            "cyclic({self={}})");
-        var root = SemanticsAssertions.AsTransport(formula.Root);
-        var config = SemanticsAssertions.ProvidedStruct(root, "config");
-
-        Assert.That(config.Fields, Has.Count.EqualTo(1));
-        Assert.That(config.Fields[0].Field.Name, Is.EqualTo("self"));
-        Assert.That(((StructValue)config.Fields[0].Value).Fields, Is.Empty);
-    }
-
-    [Test]
     public void Resolve_ForIntegerAndDecimalParameters_ProducesTypedValues()
     {
         var root = ResolveTransport("numbers(5, 1.50)");

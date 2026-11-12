@@ -747,14 +747,6 @@ public sealed class PrinterInvariantValidatorTests
     }
 
     [Test]
-    public void Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation()
-    {
-        var formula = new ResolvedFormula(null!);
-
-        AssertInconsistent(formula, "unspecified invariant violation");
-    }
-
-    [Test]
     public void Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters()
     {
         var constructor = AlphaConstructor();

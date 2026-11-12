@@ -30,7 +30,7 @@
 | `TryLex_ForQuotedStringWithEscapes_DecodesQuoteAndBackslash` | `grammar.md` §4.2; `parsing.md` §3.3 | Only `\"` and `\\` decode; surrounding quotes are removed from `Text` but kept in `RawText`. | — |
 | `TryLex_ForQuotedStringWithSurrogatePair_PreservesBothCodeUnits` | `grammar.md` §2 | A valid surrogate pair is a scalar value and spans two code units. | — |
 | `TryLex_ForWordWithSurrogatePair_CountsBothCodeUnitsInSpan` | `grammar.md` §2 | A valid surrogate pair in a bare word is preserved and counted in the span. | — |
-| `TryLex_ForInputEndingInWhitespace_ReportsEndOfInputAtInputLength` | `parsing.md` §3.1 | EOF offset equals the input length even with trailing whitespace. | EOF `Text`/`RawText` emptiness is an implementation assumption; see `nonapproved-behaviour.md`. |
+| `TryLex_ForInputEndingInWhitespace_ReportsEndOfInputAtInputLength` | `parsing.md` §3.1 | EOF offset equals the input length even with trailing whitespace. | EOF token text is not asserted. |
 | `TryLex_WithRawLineFeedInsideQuotedString_ReturnsRawNewlineError` | `parsing.md` §3.3, §13.1 | A raw LF inside quotes is `E_LEX_RAW_NEWLINE_IN_STRING` at the newline. | Exact message asserted. |
 | `TryLex_WithRawCarriageReturnInsideQuotedString_ReturnsRawNewlineError` | `parsing.md` §3.3, §13.1 | A raw CR inside quotes is `E_LEX_RAW_NEWLINE_IN_STRING` at the carriage return. | — |
 | `TryLex_WithInvalidEscape_ReturnsInvalidEscapeAtBackslash` | `parsing.md` §3.3, §13.1 | An unsupported backslash sequence is rejected at the backslash with the escaped sequence rendered in the message. | Exact message asserted, including the escaped `\\q` sequence. |
@@ -159,5 +159,3 @@ The message column is the exact expected `FactoryError.Message`.
   zero-length in the current implementation; only the offset is normative.
 - The robustness test uses a fixed corpus and a fixed character alphabet, so its
   generated inputs are deterministic across runs.
-- Test assumptions that are not part of the normative contract are collected in
-  `nonapproved-behaviour.md`.

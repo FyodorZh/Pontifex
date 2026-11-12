@@ -10,10 +10,19 @@ namespace Pontifex.Factory
 {
     public interface ITransportFactory
     {
+        /// <summary>
+        /// Parses and resolves a formula. A null formula is treated as empty input
+        /// and reported as <c>E_SYN_EMPTY_INPUT</c> in the result.
+        /// </summary>
         FormulaResolveResult Resolve(
             string formula,
             TransportTypeSet? expected = null);
 
+        /// <summary>
+        /// Parses, resolves, and canonically prints a formula. A null formula is
+        /// treated as empty input and throws a
+        /// <see cref="Pontifex.TransportFormula.FactoryException"/>.
+        /// </summary>
         string Canonicalize(string formula);
 
         /// <summary>
@@ -26,6 +35,10 @@ namespace Pontifex.Factory
             ILogger logger,
             IMemoryRental memory);
 
+        /// <summary>
+        /// Parses and resolves a formula, then passes the resolved tree to the
+        /// caller-supplied compiler. A null formula is treated as empty input.
+        /// </summary>
         TOutput Compile<TOutput>(
             string formula,
             ICompiler<TOutput> compiler,

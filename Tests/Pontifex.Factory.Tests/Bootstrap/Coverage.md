@@ -48,7 +48,7 @@
 | `Resolve_WithValidFormula_ReturnsResolvedTransport` | implementation-plan §12.2 steps 1–4 | `Resolve` parses and resolves, returning a `ResolvedTransport` in the result DTO. | The resolved root type and constructor name are asserted through the public DTOs. |
 | `Resolve_WithParseError_ReturnsResultInsteadOfThrowing` | implementation-plan §12.3 | Parse errors are returned as `FormulaResolveResult.Error`, not thrown. | Phase is `Parsing` for `E_SYN_UNEXPECTED_TOKEN`. |
 | `Resolve_WithSemanticError_ReturnsResultInsteadOfThrowing` | implementation-plan §12.3 | Resolution errors are returned as `FormulaResolveResult.Error`, not thrown. | Phase is `Resolution`. |
-| `Resolve_WithNullFormula_ReturnsEmptyInputError` | nonapproved-behaviour §6.1 | A null formula is treated as empty input, consistent with the lexer contract. | Assumption is recorded in `nonapproved-behaviour.md`; the normative contract declares a non-null string. |
+| `Resolve_WithNullFormula_ReturnsEmptyInputError` | implementation-plan §12.3 | A null formula is treated as empty input. | Phase is `Parsing`; the facade result is `E_SYN_EMPTY_INPUT`. |
 | `Resolve_WithNullExpectedType_UsesAny` | implementation-plan §3 (top-level `Any`) | A null expected set is treated as `Any`. | — |
 | `Resolve_WithExpectedTypeThatExcludesTheCandidate_ReturnsNoVariantError` | `parsing.md` §7.3; implementation-plan §12.2 | The expected set is passed through to resolution unchanged. | `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE`, phase `Resolution`. |
 | `Resolve_WithMissingRequiredParameter_ReturnsMissingParameterError` | `parsing.md` §7.5 | Parameter binding and validation run inside `Resolve`. | `E_SEM_MISSING_REQUIRED_PARAM`, phase `Resolution`. |
@@ -58,7 +58,6 @@
 | `Compile_WithValidFormula_PassesResolvedTreeToTheCompiler` | implementation-plan §12.2 | `Compile` resolves once and hands the tree to the caller's compiler, returning its output. | The compiler is opaque; bootstrap does not inspect `TOutput`. |
 | `Compile_WithParseError_DoesNotInvokeTheCompiler` | implementation-plan §12.2–12.3 | The caller-supplied compiler is not called when parsing fails. | — |
 | `Compile_WithSemanticError_DoesNotInvokeTheCompiler` | implementation-plan §12.2–12.3 | The caller-supplied compiler is not called when resolution fails; phase is `Resolution`. | — |
-| `Compile_WithNullCompiler_ThrowsArgumentNullException` | nonapproved-behaviour §6.2 | A null compiler is rejected before parsing, by argument guard. | Assumption is recorded in `nonapproved-behaviour.md`. |
 | `Compile_WhenTheCompilerThrows_PropagatesTheExceptionUnchanged` | implementation-plan §12.2 (compiler boundary) | Bootstrap does not relabel or wrap exceptions raised by the caller-supplied compiler. | Proven with a `CompilerException`; the same instance is rethrown and its phase stays `Compilation`. |
 | `CreateCompiler_WithServerRole_ReturnsCompilerForThatRole` | implementation-plan §3.2 “per-compiler role”, §12.2 | `CreateCompiler` carries the requested server role into the compiler. | Role is compiler configuration, not formula data. |
 | `CreateCompiler_WithClientRole_ReturnsCompilerForThatRole` | implementation-plan §3.2 “per-compiler role”, §12.2 | `CreateCompiler` carries the requested client role into the compiler. | Confirms the role is not fixed by the factory. |

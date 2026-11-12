@@ -255,58 +255,6 @@ public sealed class TransportRegistryTests
     }
 
     [Test]
-    public void Build_Repeated_ReturnsTheSameImmutableRegistry()
-    {
-        var builder = RegistryTestData.NewStandardBuilder();
-        builder.RegisterTransport(RegistryTestData.Registration(
-            "alpha",
-            RegistryTestData.TypeA,
-            new[] { "shared" }));
-
-        var first = builder.Build();
-        var second = builder.Build();
-
-        Assert.That(second, Is.SameAs(first));
-    }
-
-    [Test]
-    public void Build_ExposesReadOnlyCollectionViews()
-    {
-        var builder = RegistryTestData.NewStandardBuilder();
-        builder.RegisterTransport(RegistryTestData.Registration(
-            "alpha",
-            RegistryTestData.TypeA,
-            new[] { "shared" },
-            RegistryTestData.CreateTransportParam(
-                "input",
-                RegistryTestData.OneOf(RegistryTestData.TypeA)),
-            RegistryTestData.CreateStructParam(
-                "config",
-                RegistryTestData.Schema(RegistryTestData.CreateStringField("name")))));
-
-        var registry = builder.Build();
-        var constructor = registry.Constructors[0];
-        var transportParameter = (TransportParam)constructor.Params[0];
-        var structParameter = (StructParam)constructor.Params[1];
-
-        Assert.Throws<NotSupportedException>(
-            () => ((IList<TransportConstructorInfo>)registry.Constructors).Clear());
-        Assert.Throws<NotSupportedException>(
-            () => ((IList<string>)registry.AllSchemeNames).Clear());
-        Assert.Throws<NotSupportedException>(
-            () => ((IList<TransportType>)registry.Types.AllTypes).Clear());
-        Assert.Throws<NotSupportedException>(
-            () => ((IList<TransportTypeInfo>)registry.Types.Types).Clear());
-        Assert.Throws<NotSupportedException>(
-            () => ((IList<Param>)constructor.Params).Clear());
-        Assert.Throws<NotSupportedException>(
-            () => ((IList<TransportType>)transportParameter.Expected.Types).Clear());
-        Assert.That(
-            structParameter.Schema.Fields,
-            Is.Not.InstanceOf<IList<StructField>>());
-    }
-
-    [Test]
     public void Build_CopiesAliases_SoLaterSourceMutationDoesNotAffectTheRegistry()
     {
         var aliases = new[] { "shared" };

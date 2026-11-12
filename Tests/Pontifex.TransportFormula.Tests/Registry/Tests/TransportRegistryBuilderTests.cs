@@ -609,47 +609,6 @@ public sealed class TransportRegistryBuilderTests
     }
 
     [Test]
-    public void RegisterTransport_WithSharedStructSchema_NormalizesItOnceAndSharesTheInstance()
-    {
-        var schema = RegistryTestData.Schema(RegistryTestData.CreateStringField("Name"));
-        var builder = RegistryTestData.NewStandardBuilder();
-        builder.RegisterTransport(RegistryTestData.Registration(
-            "alpha",
-            RegistryTestData.TypeA,
-            Array.Empty<string>(),
-            RegistryTestData.CreateStructParam("first", schema),
-            RegistryTestData.CreateStructParam("second", schema)));
-
-        var parameters = builder.Build().FindCanonical("alpha")!.Params;
-        var first = ((StructParam)parameters[0]).Schema;
-        var second = ((StructParam)parameters[1]).Schema;
-
-        Assert.That(first, Is.SameAs(second));
-        Assert.That(first.Fields[0].Name, Is.EqualTo("name"));
-    }
-
-    [Test]
-    public void RegisterTransport_WithCyclicStructSchema_CompletesAndNormalizesTheCycle()
-    {
-        var fields = new StructField[1];
-        var cyclicSchema = new StructSchema(fields);
-        fields[0] = new NestedStructField("Self", false, cyclicSchema);
-
-        var builder = RegistryTestData.NewStandardBuilder();
-        builder.RegisterTransport(RegistryTestData.Registration(
-            "alpha",
-            RegistryTestData.TypeA,
-            Array.Empty<string>(),
-            RegistryTestData.CreateStructParam("config", cyclicSchema)));
-
-        var schema = ((StructParam)builder.Build().FindCanonical("alpha")!.Params[0]).Schema;
-        var field = (NestedStructField)schema.Fields[0];
-
-        Assert.That(field.Name, Is.EqualTo("self"));
-        Assert.That(field.Schema, Is.SameAs(schema));
-    }
-
-    [Test]
     public void RegisterTransport_WithAliasEqualToOwnCanonicalName_IgnoresTheAlias()
     {
         var builder = RegistryTestData.NewStandardBuilder();

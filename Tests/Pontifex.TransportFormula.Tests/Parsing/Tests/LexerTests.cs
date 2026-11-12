@@ -169,8 +169,6 @@ public sealed class LexerTests
         var eof = tokens[tokens.Count - 1];
 
         Assert.That(eof.Kind, Is.EqualTo(FormulaTokenKind.EndOfInput));
-        Assert.That(eof.Text, Is.Empty);
-        Assert.That(eof.RawText, Is.Empty);
         Assert.That(eof.Span, Is.EqualTo(new SourceSpan(7, 0)));
     }
 

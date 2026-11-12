@@ -273,7 +273,6 @@ around `DataValue`, without adding new scalar or array kinds.
 - `parsing.md` §7.5, §7.8, §8, §10.3, §10.5, §11.1, §13.3, §13.5.
 - `implementation-plan.md` §3, §8.1, §9.1, §11.3.
 - Affected `Coverage.md` files.
-- `nonapproved-behaviour.md` if a test-pinned assumption changes.
 
 **Acceptance:**
 - Build and all Factory tests pass.
@@ -774,7 +773,8 @@ conformance pass.
 3. Update `implementation-plan.md` §3 (approved decisions), §8, §9, §10, §11,
    §12, §13, §14, §16.
 4. Update all suite `README.md`/`Coverage.md` files.
-5. Update `nonapproved-behaviour.md` with any new test-pinned assumptions.
+5. Record any new test-pinned assumptions in the owning suite's `README.md` or
+   `Coverage.md`.
 6. Add property/round-trip tests:
    - `Print(t)` is stable:
      `Print(Resolve(Parse(Print(t)))) == Print(t)`;
@@ -804,8 +804,8 @@ conformance pass.
   §9.1, §10.2, §10.3, §10.5, §11.1, §11.2, §12.2, §13.2, §13.3, §13.4,
   §13.5, §13.6, §14.
 - `implementation-plan.md`: §3, §7, §8, §9, §10, §11, §12, §13, §14, §16.
-- All `Tests/Pontifex.Factory.Tests/*/Coverage.md` files.
-- `Tests/Pontifex.Factory.Tests/nonapproved-behaviour.md`.
+- All `Tests/Pontifex.TransportFormula.Tests/*/Coverage.md` files and
+  `Tests/Pontifex.Factory.Tests/*/Coverage.md` files.
 
 **Acceptance:**
 - All documentation matches the implementation.
@@ -1025,7 +1025,6 @@ kind vocabulary.
 
 ### Step 5
 - All Factory suites’ `Coverage.md`
-- `nonapproved-behaviour.md`
 - Property/round-trip tests
 
 ## 9. Test strategy
@@ -1105,7 +1104,6 @@ For each step:
 - [ ] Run the full Factory suite.
 - [ ] Update `grammar.md` / `parsing.md` / `implementation-plan.md`.
 - [ ] Update the owning suite `README.md` / `Coverage.md`.
-- [ ] Update `nonapproved-behaviour.md` where needed.
 - [ ] Grep for removed type names and old kind literals; update every match or
       record why it is intentionally unchanged.
 - [ ] Verify exact decimal overflow/underflow/precision cases where Step 2 or

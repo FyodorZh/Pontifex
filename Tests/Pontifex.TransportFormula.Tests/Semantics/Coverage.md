@@ -45,7 +45,6 @@
 | `Resolve_ForIntegerAndDecimalStructFields_ProducesTypedValues` | `FormulaResolver` | §7.8, §8 | Struct validation yields typed integer and decimal field values. | — |
 | `Resolve_ForEmptyList_ProducesEmptyElementList` | `FormulaResolver` | §7.5 | An empty list is a valid `TransportListValue` when the range allows it. | Harness `bag` has `Min = 0`. |
 | `Resolve_ForEmptyStruct_ProducesEmptyFieldList` | `FormulaResolver` | §7.8 | An empty struct against an empty schema yields no field bindings. | — |
-| `Resolve_ForCyclicStructSchema_ResolvesFiniteNestedStruct` | `FormulaResolver` | §7.8 | A finite source against a cyclic optional schema terminates and resolves the provided nesting. | The cyclic schema is built through a mutable array; see `nonapproved-behaviour.md`. |
 | `Resolve_ForSingleElementList_ResolvesTheElement` | `FormulaResolver` | §7.5 | A one-element list satisfies `Min = 1, Max = 1`. | — |
 | `Resolve_ForNamedArgumentsInReverseOrder_StoresProvidedInDeclarationOrder` | `FormulaResolver` | §7.4, §8 | `Provided` follows declaration order, not source order. | — |
 | `Resolve_ForNamedOnlyBeforePositionalParameter_StoresProvidedInDeclarationOrder` | `FormulaResolver` | §7.4, §8 | A named-only parameter declared before a positional parameter stays first in `Provided`. | Harness `mixed` has `flag` before `input`. |
@@ -247,12 +246,10 @@ phase `Resolution`, offset, and zero-length span.
   same channel `FormulaResolver` converts into `FormulaResolveResult.Error`.
   `SelectError` and `BindError` assert phase `Resolution` and the zero-length
   span; `ValidateParamsError` and `ValidateStructError` currently assert code and
-  message only. The internal channel is recorded in
-  `nonapproved-behaviour.md`.
+  message only. This is the documented internal component-test seam for the
+  suite.
 - Parameterized methods count as one row in this table; their `TestCaseData`
   rows cover the individual error templates listed in the description.
 - The standard registry fixture is the `parsing.md` §14 registry plus named
   harness extensions documented in the suite README. Extensions exist only to
   reach contract branches the §14 table does not exercise.
-- Test assumptions that are not part of the normative contract are collected in
-  `nonapproved-behaviour.md`.

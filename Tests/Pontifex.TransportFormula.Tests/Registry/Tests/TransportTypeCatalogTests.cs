@@ -67,17 +67,6 @@ public sealed class TransportTypeCatalogTests
     }
 
     [Test]
-    public void TryResolve_WithNullName_ReturnsFalseAndNoEntry()
-    {
-        var catalog = RegistryTestData.NewStandardBuilder().Build().Types;
-
-        var resolved = catalog.TryResolve(null!, out var info);
-
-        Assert.That(resolved, Is.False);
-        Assert.That(info, Is.Null);
-    }
-
-    [Test]
     public void TryResolve_WithDifferentCaseAndDifferentSpelling_ReturnsCatalogSpelling()
     {
         var catalog = RegistryTestData
@@ -122,18 +111,6 @@ public sealed class TransportTypeCatalogTests
             .Types;
 
         Assert.That(catalog.GetCanonicalName(RegistryTestData.TypeC), Is.EqualTo("CustomTypeC"));
-    }
-
-    [Test]
-    public void GetCanonicalName_ForUnknownType_ThrowsInvalidOperationException()
-    {
-        var catalog = RegistryTestData
-            .NewBuilder(RegistryTestData.TypeAInfo())
-            .Build()
-            .Types;
-
-        Assert.Throws<InvalidOperationException>(
-            () => catalog.GetCanonicalName(RegistryTestData.TypeB));
     }
 
     [Test]

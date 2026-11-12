@@ -610,6 +610,9 @@ readonly struct TransportTypeSet
 - `OneOf(...)` contains the listed types; `Types` is the normalized list.
 - `OneOf(...)` MUST contain at least one type; duplicates are normalized away.
 - `OneOf()` with zero elements is a registration error.
+- An `Exactly` set with zero types is not constructible through the core helper,
+  but a malformed formula DTO that contains one is rejected with the same
+  `E_REG_EMPTY_TYPE_SET` error.
 
 ### 6.4 Validators
 
@@ -725,6 +728,7 @@ interface ITransportTypeCatalog
 - `canonicalName` is the exact spelling printed by the canonical printer.
 - Catalog names MUST be identifiers and MUST be unique case-insensitively.
 - `AllTypes` is the complete set of catalog types in canonical order.
+  Canonical order is the registration order, and `Types` uses the same order.
 - Every `TransportType` used by a registered constructor or in an
   `Expected`/`OneOf` set MUST have a canonical name in the catalog. Registration
   rejects a type that is absent from the catalog.
@@ -747,10 +751,10 @@ Rules:
 2. Validate canonical name, parameter names, and alias names as identifiers.
 3. Reject duplicate canonical names.
 4. Reject duplicate parameter names within a constructor.
-5. Normalize all `TransportTypeSet` values in declaration order; reject empty
-   `OneOf`. Then validate `IntegerParam`/`DecimalParam` ranges in declaration
-   order: `Min <= Max` (`E_REG_INVALID_INTEGER_RANGE`,
-   `E_REG_INVALID_DECIMAL_RANGE`).
+5. Normalize all `TransportTypeSet` values in declaration order; reject an empty
+   `OneOf` or an empty `Exactly` set as `E_REG_EMPTY_TYPE_SET`. Then validate
+   `IntegerParam`/`DecimalParam` ranges in declaration order: `Min <= Max`
+   (`E_REG_INVALID_INTEGER_RANGE`, `E_REG_INVALID_DECIMAL_RANGE`).
 6. Validate `TransportListParam`: `Min >= 0`; `Max == null` or `Max >= Min`.
 7. Validate struct schemas recursively: field names are valid identifiers and
    unique within their schema. Field kinds are constrained by the
@@ -769,10 +773,12 @@ Rules:
    constructor's `Type` for the same scheme; canonical preference resolves that
    overlap at resolution. An alias name may not be registered twice for the same
    `Type` by different constructors.
-10. `SuggestedAliases` are not automatically registered. A host MAY pass them (or
-    any other aliases) to `RegisterTransport`.
+10. `SuggestedAliases` are normalized to lowercase and are not automatically
+    registered. A host MAY pass them (or any other aliases) to
+    `RegisterTransport`.
 11. Reject a constructor `Type` or any `Expected` member that is absent from the
-    type catalog.
+    type catalog. Within this rule, the constructor type is checked first, then
+    each `Expected` member in parameter declaration order.
 12. Registration after `Build()` is forbidden. `RegisterType` and
     `RegisterTransport` throw `RegistrationException` with
     `E_REG_BUILDER_SEALED`; a built registry is immutable.
@@ -869,6 +875,11 @@ ParseAndResolve(input, registry, catalog)     -> ResolvedExpr
 `ParseAndResolve` is exactly `Resolve(Parse(input), registry, catalog)`.
 In the algorithms below, `span(x)` is `x.Span`, and `normalize(s)` is
 `ToLowerInvariant(s)` for identifiers.
+
+An `IParser` instance is reusable sequentially. Its implementation keeps a
+cursor as instance state, so it is not thread-safe; callers must either
+serialize calls to one instance or use a separate instance per concurrent
+operation.
 
 ### 7.1 Expected types
 
@@ -1598,13 +1609,17 @@ names, cast targets, and string printability. Generic invariant violations use
 
 Validation is depth-first over values. For a cast expression, identity and
 cast-target checks precede validation of the inner transport. Within each
-transport, provided values are visited in `Constructor.Params` declaration order,
-independent of print order. The check order is: required parameters in
-declaration order; unknown provided parameter; duplicate provided parameter;
-out-of-order provided parameter; `Type == Constructor.Type`; then each provided
-parameter in declaration order (value kind, integer/decimal range, expected-set
-membership, list arity/homogeneity, then struct fields in the order unknown →
-missing → duplicate → order → kind → range); then string printability.
+transport, the scheme name must be canonical before any other check. Then
+required parameters are visited in declaration order; unknown provided
+parameter; duplicate provided parameter; out-of-order provided parameter;
+`Type == Constructor.Type`; transport type present in the catalog. Then each
+provided parameter is visited in declaration order. For each parameter, its name
+must be canonical before its value kind, integer/decimal range, expected-set
+membership, list arity/homogeneity, or struct fields. Struct fields are visited
+in the order unknown → missing → duplicate → order; each provided field's name
+must be canonical before its kind and range. String printability is checked
+after the value's other checks. A non-canonical name therefore wins over a
+simultaneous value-kind mismatch.
 
 ### 10.1 Expression
 
@@ -2141,7 +2156,7 @@ Registration errors use `RegistrationException` and have no offset.
 | `E_REG_DUPLICATE_PARAM_NAME` | Duplicate parameter name in one constructor | `parameter '<name>' is declared more than once in scheme '<scheme>'` |
 | `E_REG_INVALID_ALIAS_NAME` | Alias is not an identifier | `invalid alias name '<name>'` |
 | `E_REG_DUPLICATE_ALIAS_FOR_TYPE` | Same alias name already registered for the same type by a different constructor | `alias '<name>' for transport type <type> is already registered` |
-| `E_REG_EMPTY_TYPE_SET` | `OneOf` has no types | `transport type set must contain at least one type` |
+| `E_REG_EMPTY_TYPE_SET` | `OneOf` or `Exactly` has no types | `transport type set must contain at least one type` |
 | `E_REG_INVALID_LIST_RANGE` | `Min < 0`, or `Max < Min` | `invalid transport list range: min <min>, max <max>` |
 | `E_REG_INVALID_INTEGER_RANGE` | Integer parameter, field, or array element type `Min > Max` | `invalid integer range: min <min>, max <max>` |
 | `E_REG_INVALID_DECIMAL_RANGE` | Decimal parameter, field, or array element type `Min > Max` | `invalid decimal range: min <min>, max <max>` |
@@ -2523,7 +2538,7 @@ In the `HTAB` row, `<HTAB>` denotes a literal U+0009 character.
 | Parameters `input` and `INPUT` | `E_REG_DUPLICATE_PARAM_NAME` |
 | Alias name `1alias` | `E_REG_INVALID_ALIAS_NAME` |
 | Alias `shared` registered twice for `TypeA` | `E_REG_DUPLICATE_ALIAS_FOR_TYPE` |
-| `OneOf()` with no types | `E_REG_EMPTY_TYPE_SET` |
+| `OneOf()` with no types, or an empty `Exactly` set | `E_REG_EMPTY_TYPE_SET` |
 | `TransportListParam` with `Min = -1` | `E_REG_INVALID_LIST_RANGE` |
 | `IntegerParam`, `IntegerField`, or an array element `IntegerType` with `Min > Max` | `E_REG_INVALID_INTEGER_RANGE` |
 | `DecimalParam`, `DecimalField`, or an array element `DecimalType` with `Min > Max` | `E_REG_INVALID_DECIMAL_RANGE` |

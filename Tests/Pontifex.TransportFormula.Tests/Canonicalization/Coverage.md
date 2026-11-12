@@ -119,8 +119,8 @@
 | `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference` | `PrinterInvariantValidator` | §10.2, §13.5 | A structurally equal but recreated parameter is unknown; matching is by reference. | — |
 | `Validate_WhenParameterIsProvidedTwice_ReportsDuplicateParam` | `PrinterInvariantValidator` | §10, §13.5 | A repeated parameter reference reports `E_PRN_DUPLICATE_PARAM`. | — |
 | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10, §13.5 | Out-of-order `Provided` reports detail `provided parameter order violation`. | — |
-| `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase scheme reports detail `non-canonical name`. | Precedence over simultaneous kind mismatch is not defined by §10; see `nonapproved-behaviour.md`. |
-| `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase provided parameter name reports `non-canonical name`. | Precedence over simultaneous kind mismatch is not defined by §10; see `nonapproved-behaviour.md`. |
+| `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10, §13.5 | A non-lowercase scheme reports detail `non-canonical name`. | Scheme name is checked before parameter values. |
+| `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10, §13.5 | A non-lowercase provided parameter name reports `non-canonical name`. | Parameter-name check precedes value-kind checks. |
 | `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree` | `PrinterInvariantValidator` | §10.2, §13.5 | A non-lowercase provided struct field name reports `non-canonical name`. | — |
 | `Validate_WhenStringParameterReceivesTransport_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport value for a string parameter reports actual `transport`, expected `string`. | — |
 | `Validate_WhenStringParameterReceivesList_ReportsKindMismatch` | `PrinterInvariantValidator` | §10, §13.5 | A transport list for a string parameter reports actual `transport list`, expected `string`. | — |
@@ -177,7 +177,6 @@
 | `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup` | `PrinterInvariantValidator` | §10.1, §13.5 | Identity casts report `identity cast node` before the target lookup. | The target is deliberately absent from the catalog. |
 | `Validate_WhenCastInnerIsInvalid_ValidatesInnerAfterCastTarget` | `PrinterInvariantValidator` | §10, §13.5 | A valid cast target is checked before the inner transport's own invariants. | — |
 | `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree` | `PrinterInvariantValidator` | §8, §10, §13.5 | A transport type absent from the catalog reports `transport type not in catalog`. | — |
-| `Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation` | `PrinterInvariantValidator` | §10, §13.5 | A malformed tree with no root reports `unspecified invariant violation`. | Hand-built null root; valid resolvers never produce it. See `nonapproved-behaviour.md`. |
 | `Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters` | `PrinterInvariantValidator` | §10, §13.5 | Required-parameter checks precede unknown-parameter checks. | — |
 | `Validate_ChecksDuplicateBeforeProvidedParameterOrder` | `PrinterInvariantValidator` | §10, §13.5 | Duplicate checks precede declaration-order checks. | The provided sequence contains both violations. |
 | `Validate_ChecksUnknownBeforeDuplicate` | `PrinterInvariantValidator` | §10, §13.5 | Unknown-parameter checks precede duplicate checks. | — |
@@ -217,7 +216,7 @@ phase `Printing`, and no span.
 
 | Code | Tests |
 |---|---|
-| `E_PRN_INCONSISTENT_TREE` | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree`, `Validate_ChecksProvidedOrderBeforeParameterKinds`, `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenTransportExpressionIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenListElementIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenStructFieldsAreOutOfSchemaOrder_ReportsStructOrderViolation`, `Validate_ChecksStructOrderBeforeFieldKinds`, `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup`, `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree`, `Validate_WhenRootIsMissing_ReportsUnspecifiedInvariantViolation`, `InconsistentTree_ForKnownDetail_FormatsTemplate` |
+| `E_PRN_INCONSISTENT_TREE` | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree`, `Validate_ChecksProvidedOrderBeforeParameterKinds`, `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenTransportExpressionIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenListElementIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenStructFieldsAreOutOfSchemaOrder_ReportsStructOrderViolation`, `Validate_ChecksStructOrderBeforeFieldKinds`, `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup`, `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree`, `InconsistentTree_ForKnownDetail_FormatsTemplate` |
 | `E_PRN_MISSING_REQUIRED_PARAM` | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam`, `Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder`, `Validate_WhenCastInnerIsInvalid_ValidatesInnerAfterCastTarget`, `Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters`, `MissingRequiredParam_FormatsTemplate` |
 | `E_PRN_UNKNOWN_PARAM` | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam`, `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference`, `Validate_ChecksUnknownBeforeDuplicate`, `UnknownParam_FormatsTemplate` |
 | `E_PRN_DUPLICATE_PARAM` | `Validate_WhenParameterIsProvidedTwice_ReportsDuplicateParam`, `Validate_ChecksDuplicateBeforeProvidedParameterOrder`, `DuplicateParam_FormatsTemplate` |
@@ -276,5 +275,3 @@ phase `Printing`, and no span.
 - Registration lowercases scheme names. The §14 name `emptyStruct` is therefore
   printed as `emptystruct`; the expected output reflects the normalized metadata
   view required by `parsing.md` §6.1 and §10.2.
-- Test assumptions that are not part of the normative contract are collected in
-  `nonapproved-behaviour.md`.

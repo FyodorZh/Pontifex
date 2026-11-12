@@ -238,8 +238,8 @@ cannot be implemented exactly as specified.
   preference remains a semantics concern.
 - `TransportTypeSet` is currently a `Kind + Types` DTO. Add internal
   `TypeSetOps.IsAny`, `Contains`, and formatting helpers, or extend the DTO with
-  equivalent members. Keep registration normalization (empty `OneOf` is invalid,
-  duplicates removed).
+  equivalent members. Keep registration normalization (empty `OneOf` or
+  `Exactly` is invalid, duplicates removed).
 - `TransportConstructorInfo` must be treated as the normalized metadata snapshot;
   the registry must not expose caller spelling.
 
@@ -775,7 +775,8 @@ No public classes in `Pontifex.TransportFormula.Registry`.
 - Stores:
   - canonical name → `TransportTypeInfo`;
   - `TransportType` → canonical name;
-  - `AllTypes` in canonical order.
+  - `AllTypes` in canonical order, which is registration order; `Types` uses
+    the same order.
 - Lookup is ASCII case-insensitive.
 - Supports name-to-type, type-to-canonical-name, and `AllTypes` lookup.
 - Canonical names are validated identifiers and unique.
@@ -856,18 +857,21 @@ Implement the numbered order from `parsing.md` §6.7 exactly:
    names in input order.
 3. Reject duplicate canonical names.
 4. Reject duplicate parameter names within a constructor.
-5. Normalize type sets for all parameters and reject empty `OneOf`; then check
-   integer and decimal parameter ranges in declaration order. A full type-set
-   pass precedes the full scalar-range pass.
+5. Normalize type sets for all parameters and reject an empty `OneOf` or an
+   empty `Exactly` set; then check integer and decimal parameter ranges in
+   declaration order. A full type-set pass precedes the full scalar-range pass.
 6. Validate transport-list ranges.
 7. Validate struct schemas recursively, in schema order, with a visited set:
    field name, duplicate, kind, array count range, array element scalar range,
    field range, then nested schema recursion.
 8. Normalize aliases; ignore duplicates within one registration and aliases
-   equal to the constructor's own canonical name.
+   equal to the constructor's own canonical name. `SuggestedAliases` are
+   normalized to lowercase.
 9. Enforce alias-to-type rules as described in §8.2.
 10. Leave `SuggestedAliases` unregistered unless supplied as aliases.
-11. Reject constructor or expected types absent from the catalog.
+11. Reject constructor or expected types absent from the catalog. The
+    constructor type is checked first, then expected members in parameter
+    declaration order.
 12. Reject registration after `Build()` with `E_REG_BUILDER_SEALED`; this
     lifecycle guard is evaluated before rule 0.
 
@@ -1170,18 +1174,18 @@ No public classes in `Pontifex.TransportFormula.Canonicalization`.
 **`PrinterInvariantValidator`**
 
 - Checks, in the order defined by `parsing.md` §10:
+  - scheme name is canonical;
   - all required parameters present;
   - every provided parameter belongs to the constructor, by reference identity;
   - no duplicate provided parameters;
   - `Provided` is in declaration order;
-  - `Type == Constructor.Type`;
-  - per parameter in declaration order: value kind, expected-type membership,
-    integer/decimal range, list arity/homogeneity, struct fields (unknown →
-    missing → duplicate → order → kind → range), array arity → element kind →
-    element range/printability;
-  - canonical scheme, parameter, and field names;
-  - cast target exists and differs from inner type;
-  - string printability.
+  - `Type == Constructor.Type` and the transport type is in the catalog;
+  - per parameter in declaration order: canonical parameter name, then value
+    kind, expected-type membership, integer/decimal range, list
+    arity/homogeneity, struct fields (unknown → missing → duplicate → order,
+    then canonical field name → kind → range), array arity → element kind →
+    element range, and string printability;
+  - cast target exists and differs from inner type.
 - Uses `DecimalText` for canonical decimal text and range messages.
 - Failures produce the matching `E_PRN_*` error, including
   `E_PRN_STRUCT_FIELD_DUPLICATE` and the `E_PRN_INCONSISTENT_TREE` detail set
@@ -1646,7 +1650,10 @@ BuildException
 
 - Implements `ITransportFactory`.
 - Holds the parser, resolver, canonicalizer, frozen runtime registry, converter
-  graph, and no mutable state.
+  graph, and a private synchronization gate.
+- The parser keeps a cursor as instance state. `Resolve`, `Canonicalize`, and the
+  parse/resolve part of `Compile` are serialized so concurrent facade calls are
+  safe. A caller-supplied compiler runs outside the gate.
 - `Resolve` and `Canonicalize` are unchanged from the formula pipeline.
 - `CreateCompiler(role, logger, memory)` returns
   `new TransportCompiler(runtimeRegistry, converters, logger, memory, role)`.
@@ -1674,13 +1681,17 @@ BuildException
 **`FactoryComponentFactory`**
 
 - Internal wiring helper.
-- Creates parser, resolver, canonicalizer, and compiler from built components.
+- Creates parser, resolver, and canonicalizer from built components. The
+  compiler is created per `CreateCompiler` call.
 - Does not leak concrete instances publicly.
 
 ### 12.3 Exception and result policy
 
 - Parser and resolver return result DTOs.
 - `Resolve` returns a result DTO.
+- A null formula is treated as empty input. `Resolve` reports
+  `E_SYN_EMPTY_INPUT` with phase `Parsing`; `Canonicalize` and `Compile` throw a
+  `FactoryException` carrying that same error.
 - `Canonicalize` and `Compile` throw `FactoryException` with the failing stage.
 - Registration throws `RegistrationException`.
 - Printing throws `PrinterException`.
@@ -2148,4 +2159,5 @@ Binding rules:
 - Run the full error catalogue for `E_BLD_*` and `E_CMP_*`.
 - Verify no formula assembly reference leaks into the runtime compiler tests.
 - Confirm the definition of done in §16.
-- Update `nonapproved-behaviour.md` with any new test-pinned assumptions.
+- Keep suite `README.md`/`Coverage.md` files current when test-pinned assumptions
+  change.

@@ -116,7 +116,7 @@ root layer's `Coverage.md` covers every test in every group.
   phase `Resolution`, offset, and zero-length span. Parameter- and struct-
   validator helpers currently assert code and message; their offset/span
   coverage comes from the end-to-end semantic error catalogue. The internal
-  `SemanticAbort` channel is recorded in `nonapproved-behaviour.md`.
+  `SemanticAbort` channel is the documented component-test seam for this suite.
 
 The standard registry mirrors `parsing.md` §14: `alpha`, `beta`, `gamma`, `outer`,
 `structy`, the `alpha`-as-alias-of-`beta` contract, and the additional fixture
@@ -241,6 +241,3 @@ convert it to an Abstract Test Suit instead of adding a nested layer here.
 ## Rules
 
 This suite follows [Tests/RULES.md](../../RULES.md).
-
-Known test assumptions that are not part of the normative contract are recorded in
-[nonapproved-behaviour.md](../Pontifex.Factory.Tests/nonapproved-behaviour.md).

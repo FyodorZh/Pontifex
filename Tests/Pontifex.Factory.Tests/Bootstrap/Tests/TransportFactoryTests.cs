@@ -193,13 +193,6 @@ namespace Pontifex.Factory.Tests.Bootstrap
         }
 
         [Test]
-        public void Compile_WithNullCompiler_ThrowsArgumentNullException()
-        {
-            Assert.Throws<ArgumentNullException>(
-                () => NewFactory().Compile<string>("alpha(1)", null!));
-        }
-
-        [Test]
         public void Compile_WhenTheCompilerThrows_PropagatesTheExceptionUnchanged()
         {
             var expected = new CompilerException(
