@@ -75,6 +75,11 @@ namespace Pontifex.TransportFormula
         {
         }
 
+        public BuildException(FactoryError error, Exception? innerException)
+            : base(WithPhase(error, FactoryPhase.Building), innerException)
+        {
+        }
+
         public BuildException(string code, string message)
             : base(new FactoryError(code, message, FactoryPhase.Building, null))
         {

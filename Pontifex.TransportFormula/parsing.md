@@ -1957,9 +1957,11 @@ In `E_CMP_PARAM_KIND_MISMATCH`, `<actual>` and `<expected>` are value kinds. In
 `E_CMP_INCONSISTENT_TREE`, `<detail>` uses the same closed set as
 `E_PRN_INCONSISTENT_TREE`. Elsewhere in compiler/build messages, `<scheme>` is
 canonical lowercase; `<name>` is canonical except in `E_CMP_UNKNOWN_PARAM`, where
-it is the stored parameter name; `<from>` and `<to>` are catalog canonical type
-names; `<id>` is a formula transport type id. Compiler invariant checks, if
-performed, follow the printer validation order defined in §10.
+it is the stored parameter name; `<from>` and `<to>` are core transport type
+names (`TransportType.ToString()`); a catalog-aware compiler may substitute the
+catalog canonical names; `<id>` is a formula transport type id. Compiler
+invariant checks, if performed, follow the printer validation order defined in
+§10.
 
 ---
 

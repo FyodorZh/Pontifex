@@ -1441,16 +1441,16 @@ Failure paths:
 - nested constructor failure -> parent failure with the nested exception as the
   inner exception;
 - converter throws -> `E_BLD_CONSTRUCTOR_FAILED` for the inner scheme;
-- no conversion path -> `E_BLD_NO_CONVERSION_PATH` with canonical type names;
+- no conversion path -> `E_BLD_NO_CONVERSION_PATH` with core transport type
+  names;
 - unknown resolved node -> `E_CMP_INCONSISTENT_TREE`.
 
 Casts:
 
 - identity cast returns the inner transport without invoking the converter;
 - changing cast invokes the converter;
-- converter receives the inner type, target type, a factory that produces the
-  inner transport, logger, and memory;
-- invoking the converter's inner factory twice creates two inner transports.
+- the converter receives the inner type, target type, a factory that returns the
+  compiled inner transport, logger, and memory;
 
 Bootstrap integration, covered in either this suite or the Bootstrap suite but
 not both:
