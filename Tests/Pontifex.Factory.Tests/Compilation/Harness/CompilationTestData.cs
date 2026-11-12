@@ -162,6 +162,16 @@ internal static class CompilationTestData
         return new Formula.DecimalField(name, required, new Formula.DecimalType(min, max));
     }
 
+    public static Formula.StructField ArrayField(
+        string name,
+        Formula.SingleType elementType,
+        int min = 0,
+        int? max = null,
+        bool required = false)
+    {
+        return new Formula.ArrayField(name, required, elementType, min, max);
+    }
+
     public static Formula.StructField NestedStructField(
         string name,
         Formula.StructSchema schema,
@@ -214,6 +224,16 @@ internal static class CompilationTestData
             required,
             positional,
             new Core.DecimalType(min, max));
+    }
+
+    public static Core.StructField CoreArrayField(
+        string name,
+        Core.SingleType elementType,
+        int min = 0,
+        int? max = null,
+        bool required = false)
+    {
+        return new Core.ArrayField(name, required, elementType, min, max);
     }
 
     public static Core.TransportParameter CoreNestedTransportParameter(
@@ -310,6 +330,13 @@ internal static class CompilationTestData
     public static StructFieldBinding DecimalText(Formula.StructField field, decimal value)
     {
         return new StructFieldBinding(field, new DecimalValue(value));
+    }
+
+    public static StructFieldBinding ArrayField(
+        Formula.StructField field,
+        params DataValue[] elements)
+    {
+        return new StructFieldBinding(field, new ArrayValue(elements));
     }
 
     public static StructFieldBinding NestedStruct(

@@ -184,6 +184,26 @@ internal static class RegistryTestData
         return new DecimalField(name, required, new DecimalType(min, max));
     }
 
+    public static StructField CreateArrayField(
+        string name,
+        SingleType elementType,
+        int min = 0,
+        int? max = null,
+        bool required = false)
+    {
+        return new ArrayField(name, required, elementType, min, max);
+    }
+
+    public static StructField CreateStringArrayField(
+        string name,
+        int min = 0,
+        int? max = null,
+        bool required = false,
+        ScalarValidator? validate = null)
+    {
+        return CreateArrayField(name, new StringType(validate), min, max, required);
+    }
+
     public static StructField CreateNestedField(
         string name,
         StructSchema schema,

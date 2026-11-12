@@ -215,6 +215,58 @@ internal static class SemanticsTestData
         return new DecimalField(name, required, new DecimalType(min, max));
     }
 
+    public static StructField CreateArrayField(
+        string name,
+        SingleType elementType,
+        int min = 0,
+        int? max = null,
+        bool required = false)
+    {
+        return new ArrayField(name, required, elementType, min, max);
+    }
+
+    public static StructField CreateStringArrayField(
+        string name,
+        int min = 0,
+        int? max = null,
+        bool required = false,
+        ScalarValidator? validate = null)
+    {
+        return CreateArrayField(name, new StringType(validate), min, max, required);
+    }
+
+    public static StructField CreateIntegerArrayField(
+        string name,
+        long elementMin,
+        long elementMax,
+        int min = 0,
+        int? max = null,
+        bool required = false)
+    {
+        return CreateArrayField(
+            name,
+            new IntegerType(elementMin, elementMax),
+            min,
+            max,
+            required);
+    }
+
+    public static StructField CreateDecimalArrayField(
+        string name,
+        decimal elementMin,
+        decimal elementMax,
+        int min = 0,
+        int? max = null,
+        bool required = false)
+    {
+        return CreateArrayField(
+            name,
+            new DecimalType(elementMin, elementMax),
+            min,
+            max,
+            required);
+    }
+
     public static StructField CreateNestedField(
         string name,
         StructSchema schema,
@@ -479,6 +531,55 @@ internal static class SemanticsTestData
                     CreateNestedField(
                         "nested",
                         Schema(CreateIntegerField("value", -1, 1)))),
+                required: true,
+                positional: true));
+
+        // Harness extension: homogeneous string, integer, and decimal arrays.
+        Register(
+            builder,
+            "arrays",
+            TypeA,
+            Array.Empty<string>(),
+            CreateStructParam(
+                "config",
+                Schema(
+                    CreateStringArrayField(
+                        "names",
+                        min: 0,
+                        max: 2,
+                        validate: NotBadFieldValidator),
+                    CreateIntegerArrayField(
+                        "counts",
+                        -1,
+                        1,
+                        min: 1,
+                        max: 3,
+                        required: true),
+                    CreateDecimalArrayField(
+                        "ratios",
+                        -1.5m,
+                        1.5m)),
+                required: true,
+                positional: true));
+
+        // Harness extension: an array nested inside a struct field.
+        Register(
+            builder,
+            "nestedArrays",
+            TypeA,
+            Array.Empty<string>(),
+            CreateStructParam(
+                "config",
+                Schema(
+                    CreateNestedField(
+                        "nested",
+                        Schema(CreateIntegerArrayField(
+                            "values",
+                            0,
+                            1,
+                            min: 1,
+                            required: true)),
+                        required: true)),
                 required: true,
                 positional: true));
 

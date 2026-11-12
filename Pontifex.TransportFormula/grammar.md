@@ -193,6 +193,8 @@ Notes:
   quoted strings, or bare scalars. Nested lists are not valid list elements. An
   empty list `[]` is syntactically valid. The list shape is shared by transport
   lists and data arrays; the parameter or field kind decides which is required.
+  Arrays are allowed only as struct field values; a top-level array is not a
+  valid input.
 - A single transport is never implicitly treated as a one-element list, and a
   list is never implicitly treated as a single transport. Brackets are
   significant: `[alpha()]` and `alpha()` are different shapes.
@@ -259,6 +261,7 @@ The grammar validates only shape and token structure. The following are
 - transport type names in casts;
 - expected transport types and type sets;
 - transport list minimum/maximum sizes, homogeneity, and element kinds;
+- array field minimum/maximum sizes, homogeneity, and element kinds;
 - struct field names, requiredness, and field kinds;
 - scalar validators;
 - whether an integer scalar parses as a signed 64-bit integer and lies within its
@@ -311,6 +314,7 @@ alpha(beta(), gamma(x=1))
 alpha([beta(), gamma(), delta()])
 alpha([beta(), 1, {p=2}])
 alpha({p=1, q={r=2}})
+alpha({values=[1, 2, 3], names=["a, b", c]})
 alpha() as TypeA
 alpha(beta() as TypeA)
 alpha([beta() as TypeA, gamma()])

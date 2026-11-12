@@ -54,6 +54,12 @@
 | `RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange` | §6.5, §6.7 rule 7, §13.4 | Decimal field ranges are validated in schema order. | Exact message asserted. |
 | `RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst` | §6.7 rules 5, 7 | Parameter scalar ranges are validated before struct schemas. | Cross-pass order. |
 | `RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst` | §6.7 rules 5-6 | A full scalar-range pass precedes the transport-list-range pass. | Later scalar error wins over an earlier list error. |
+| `RegisterTransport_NormalizesArrayFieldMetadata` | §6.5, §6.7 rule 7 | Array fields keep names, order, count ranges, element types, and element ranges. | `StringType` validators are preserved. |
+| `RegisterTransport_WithNegativeArrayMinimum_ThrowsInvalidArrayRange` | §6.5, §6.7 rule 7, §13.4 | A negative array minimum is rejected with the unbounded maximum spelling. | Exact message asserted. |
+| `RegisterTransport_WithArrayMaximumBelowMinimum_ThrowsInvalidArrayRange` | §6.5, §6.7 rule 7, §13.4 | `Max < Min` for an array field is rejected with both bounds. | Exact message asserted. |
+| `RegisterTransport_WithUnsortedIntegerArrayElementRange_ThrowsInvalidIntegerRange` | §6.5, §6.7 rule 7, §13.4 | Unsorted integer array element bounds reach `E_REG_INVALID_INTEGER_RANGE`. | Exact message asserted. |
+| `RegisterTransport_WithUnsortedDecimalArrayElementRange_ThrowsInvalidDecimalRange` | §6.5, §6.7 rule 7, §13.4 | Unsorted decimal array element bounds use canonical decimal text. | Exact message asserted. |
+| `RegisterTransport_WithInvalidArrayRangeAndElementRange_ReportsArrayRangeFirst` | §6.7 rule 7 | Array count range is validated before the element scalar range. | First-error order asserted. |
 | `RegisterTransport_WithInvalidStructFieldName_ThrowsInvalidStructFieldName` | §6.5, §6.7 rule 7, §13.4 | Illegal struct-field names are rejected and the message preserves caller spelling. | Parameterized: `1name`, `na me`, empty. |
 | `RegisterTransport_WithInvalidNestedStructFieldName_ThrowsInvalidStructFieldName` | §6.7 rule 7 | Struct validation recurses into nested schemas. | — |
 | `RegisterTransport_WithTwoInvalidStructFieldNames_ReportsFirstInSchemaOrder` | §6.7 rule 7, §13.4 | Struct field names are validated in schema order. | First-failure order asserted. |
@@ -116,8 +122,9 @@ phase `Registration`, and no span.
 | `E_REG_DUPLICATE_ALIAS_FOR_TYPE` | `RegisterTransport_WithSameAliasForSameType_ThrowsDuplicateAliasForType` |
 | `E_REG_EMPTY_TYPE_SET` | `RegisterTransport_WithEmptyOneOfTypeSet_ThrowsEmptyTypeSet` |
 | `E_REG_INVALID_LIST_RANGE` | `RegisterTransport_WithNegativeMinimum_ThrowsInvalidListRangeWithUnboundedMaximum`, `RegisterTransport_WithMaximumBelowMinimum_ThrowsInvalidListRange` |
-| `E_REG_INVALID_INTEGER_RANGE` | `RegisterTransport_WithInvertedIntegerParameterRange_ThrowsInvalidIntegerRange`, `RegisterTransport_WithInvertedIntegerFieldRange_ThrowsInvalidIntegerRange`, `RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst`, `RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst` |
-| `E_REG_INVALID_DECIMAL_RANGE` | `RegisterTransport_WithInvertedDecimalParameterRange_FormatsCanonicalBounds`, `RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange` |
+| `E_REG_INVALID_INTEGER_RANGE` | `RegisterTransport_WithInvertedIntegerParameterRange_ThrowsInvalidIntegerRange`, `RegisterTransport_WithInvertedIntegerFieldRange_ThrowsInvalidIntegerRange`, `RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst`, `RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst`, `RegisterTransport_WithUnsortedIntegerArrayElementRange_ThrowsInvalidIntegerRange` |
+| `E_REG_INVALID_DECIMAL_RANGE` | `RegisterTransport_WithInvertedDecimalParameterRange_FormatsCanonicalBounds`, `RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange`, `RegisterTransport_WithUnsortedDecimalArrayElementRange_ThrowsInvalidDecimalRange` |
+| `E_REG_INVALID_ARRAY_RANGE` | `RegisterTransport_WithNegativeArrayMinimum_ThrowsInvalidArrayRange`, `RegisterTransport_WithArrayMaximumBelowMinimum_ThrowsInvalidArrayRange`, `RegisterTransport_WithInvalidArrayRangeAndElementRange_ReportsArrayRangeFirst` |
 | `E_REG_DUPLICATE_STRUCT_FIELD` | `RegisterTransport_WithDuplicateStructFieldsDifferentCase_ThrowsDuplicateStructField` |
 | `E_REG_INVALID_STRUCT_FIELD_NAME` | `RegisterTransport_WithInvalidStructFieldName_ThrowsInvalidStructFieldName` |
 | `E_REG_INVALID_TYPE_NAME` | `RegisterType_WithInvalidName_ThrowsInvalidTypeName` |

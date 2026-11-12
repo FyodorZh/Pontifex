@@ -39,18 +39,35 @@ namespace Pontifex.TransportFormula.Registry
     public delegate string? ScalarValidator(string value);
 
     /// <summary>
+    /// The closed hierarchy of scalar element types allowed in an array field.
+    /// The constructor is internal so the hierarchy stays closed.
+    /// </summary>
+    public abstract record SingleType
+    {
+        internal SingleType()
+        {
+        }
+    }
+
+    /// <summary>
+    /// A string array element with an optional per-element validator.
+    /// </summary>
+    public sealed record StringType(
+        ScalarValidator? Validate) : SingleType;
+
+    /// <summary>
     /// The inclusive range of an integer parameter or field.
     /// </summary>
     public sealed record IntegerType(
         long Min,
-        long Max);
+        long Max) : SingleType;
 
     /// <summary>
     /// The inclusive range of a decimal parameter or field.
     /// </summary>
     public sealed record DecimalType(
         decimal Min,
-        decimal Max);
+        decimal Max) : SingleType;
 
     public abstract record Param(
         string Name,
@@ -117,6 +134,13 @@ namespace Pontifex.TransportFormula.Registry
         string Name,
         bool Required,
         DecimalType Type) : StructField(Name, Required);
+
+    public sealed record ArrayField(
+        string Name,
+        bool Required,
+        SingleType ElementType,
+        int Min,
+        int? Max) : StructField(Name, Required);
 
     public sealed record NestedStructField(
         string Name,

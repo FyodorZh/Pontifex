@@ -118,8 +118,9 @@ before a positional one), `opt` (two optional positionals for prefix gaps), `bag
 (empty and unbounded list), `emptyStruct` (empty struct schema), `single`
 (one-element bounded list), `deep` (three-level nested struct), `numeric`
 (integer and decimal parameters), `numericStruct` (integer and decimal struct
-fields), `wide` (full-range decimal), `numbers` (§14 numeric parameters), and
-`numberStruct` (§14 numeric struct fields).
+fields), `wide` (full-range decimal), `numbers` (§14 numeric parameters),
+`numberStruct` (§14 numeric struct fields), `arrays` (string, integer, and
+decimal array fields), and `nestedArrays` (an array inside a nested struct).
 
 There are no harness self-tests. Harness belongs to the root layer and is
 available to every test in this suite. Sibling suites do not share this harness;

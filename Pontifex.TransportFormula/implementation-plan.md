@@ -123,11 +123,12 @@ These decisions are already reflected in `grammar.md` and `parsing.md`.
 - An alias may map to multiple constructors only if their types differ.
 - Canonical preference applies after expected-type filtering.
 - Type sets are `Any`, `Exactly`, and `OneOf`.
-- Struct schemas contain only string fields, integer fields, decimal fields, and
-  nested struct fields.
-- Integer and decimal ranges are validated by the formula registry, not by core
-  DTO constructors, so `E_REG_INVALID_INTEGER_RANGE` and
-  `E_REG_INVALID_DECIMAL_RANGE` are reachable through `CoreRegistrationAdapter`.
+- Struct schemas contain only string fields, integer fields, decimal fields,
+  array fields, and nested struct fields.
+- Integer, decimal, and array ranges are validated by the formula registry, not
+  by core DTO constructors, so `E_REG_INVALID_INTEGER_RANGE`,
+  `E_REG_INVALID_DECIMAL_RANGE`, and `E_REG_INVALID_ARRAY_RANGE` are reachable
+  through `CoreRegistrationAdapter`.
 
 ### Semantics
 
@@ -751,11 +752,11 @@ DTOs:
 
 - `TransportTypeSet`, `TransportTypeSetKind`
 - `ScalarValidator`
-- `IntegerType`, `DecimalType`
+- `SingleType`, `StringType`, `IntegerType`, `DecimalType`
 - `Param`, `StringParam`, `IntegerParam`, `DecimalParam`, `TransportParam`,
   `TransportListParam`, `StructParam`
 - `StructSchema`, `StructField`, `StringField`, `IntegerField`, `DecimalField`,
-  `NestedStructField`
+  `ArrayField`, `NestedStructField`
 - `TransportTypeInfo`
 - `TransportConstructorInfo`
 - `TransportRegistration`
@@ -818,6 +819,7 @@ No public classes in `Pontifex.TransportFormula.Registry`.
 - Struct schema validation:
   - unique and valid field names;
   - supported field kinds;
+  - array count ranges and element scalar ranges;
   - integer and decimal field ranges have `Min <= Max`;
   - recursive validation with a visited set, allowing shared/cyclic schema
     references without revalidation.
@@ -855,7 +857,8 @@ Implement the numbered order from `parsing.md` §6.7 exactly:
    pass precedes the full scalar-range pass.
 6. Validate transport-list ranges.
 7. Validate struct schemas recursively, in schema order, with a visited set:
-   field name, duplicate, kind, field range, then nested schema recursion.
+   field name, duplicate, kind, array count range, array element scalar range,
+   field range, then nested schema recursion.
 8. Normalize aliases; ignore duplicates within one registration and aliases
    equal to the constructor's own canonical name.
 9. Enforce alias-to-type rules as described in §8.2.
@@ -897,6 +900,7 @@ Registration rules follow `parsing.md` §6.7 rule 9 exactly:
 - invalid parameter names;
 - invalid list ranges;
 - integer and decimal parameter and field ranges, including validation order;
+- array field count ranges, element scalar ranges, and schema order;
 - empty type sets;
 - struct schema duplicates, invalid names, nested/shared schemas;
 - alias normalization, collisions, same-type duplicates, and canonical overlap;
@@ -935,7 +939,8 @@ DTOs:
 - `ResolvedExpr`, `ResolvedTransport`, `ResolvedCast`
 - `ParamBinding`
 - `ResolvedValue`, `DataValue`, `ResolvedExpr`, `ScalarValue`, `StringValue`,
-  `IntegerValue`, `DecimalValue`, `TransportListValue`, `StructValue`
+  `IntegerValue`, `DecimalValue`, `TransportListValue`, `StructValue`,
+  `ArrayValue`
 - `StructFieldBinding`
 
 `ResolvedExpr` exposes `TransportType Type` for every node. `ResolvedTransport`
@@ -1030,6 +1035,8 @@ No public classes in `Pontifex.TransportFormula.Semantics`.
   - `IntegerField` requires scalar, parses exactly as `Int64`, and checks range;
   - `DecimalField` requires scalar, parses exactly as `decimal`, and checks
     range;
+  - `ArrayField` requires a list, checks count, then validates every element in
+    index order: shape, then string/integer/decimal value and range;
   - `NestedStructField` requires struct and recurses.
 - Produces `StructValue` fields in schema order.
 - Maintains a dot-separated field path for diagnostics. Known schema segments
@@ -1088,6 +1095,8 @@ No error recovery, no multiple errors, no backtracking.
 - integer parsing, range, and overflow cases;
 - decimal exact parsing, canonical forms, underflow, overflow, precision loss,
   and range cases;
+- array count, element kind, indexed field paths, and string/integer/decimal
+  element cases;
 - expected scalar/transport/list/struct shape errors;
 - list min, max, element type, homogeneity;
 - struct unknown, duplicate, missing, nested, field validators, field kinds;
@@ -1163,7 +1172,8 @@ No public classes in `Pontifex.TransportFormula.Canonicalization`.
   - `Type == Constructor.Type`;
   - per parameter in declaration order: value kind, expected-type membership,
     integer/decimal range, list arity/homogeneity, struct fields (unknown →
-    missing → duplicate → order → kind → range);
+    missing → duplicate → order → kind → range), array arity → element kind →
+    element range/printability;
   - canonical scheme, parameter, and field names;
   - cast target exists and differs from inner type;
   - string printability.
@@ -1200,6 +1210,7 @@ PrintValue:
   string → ScalarFormatter
   integer → invariant Int64 text
   decimal → canonical plain decimal text
+  array → "[" + join(elements, ", ") + "]"
   ResolvedExpr → PrintExpr
   list → "[" + join(elements, ", ") + "]"
   struct → "{" + schema-ordered fields + "}"
@@ -1218,6 +1229,8 @@ No prefix, no trailing comma, no trailing whitespace, no newline.
 - integer canonical text: no leading `+`, no leading zeros, no exponent;
 - decimal canonical text: trailing zeros trimmed, negative zero as `0`, no
   exponent, decimal min/max and the smallest scale in plain form;
+- arrays: empty, string quoting, integer/decimal canonical elements, count,
+  element kind, and indexed paths in errors;
 - `DecimalText` exact parsing, underflow/rounding rejection, and round-trip;
 - lists and nested structs;
 - identity casts absent;
@@ -1326,6 +1339,9 @@ ITransportBuildContext
     bool TryGetStruct(string name, out ITransportStructValue value)
 ```
 
+`ITransportStructValue` also exposes `TryGetArray`; `ITransportArrayValue`
+exposes `Count` and indexed `TryGetString`/`TryGetInt64`/`TryGetDecimal`.
+
 Parameter DTOs:
 
 - `StringParameter`
@@ -1335,8 +1351,8 @@ Parameter DTOs:
 - `TransportListParameter`
 - `StructParameter`
 - `TransportTypeSet` (`Any`, `Exactly`, `OneOf`)
-- `IntegerType`, `DecimalType`
-- `StructSchema`, `StringField`, `IntegerField`, `DecimalField`,
+- `SingleType`, `StringType`, `IntegerType`, `DecimalType`
+- `StructSchema`, `StringField`, `IntegerField`, `DecimalField`, `ArrayField`,
   `NestedStructField`
 - `ScalarValidator`
 
@@ -1349,8 +1365,8 @@ Rules:
   invocation compiles the corresponding resolved subtree into a fresh transport.
 - `TryGetTransportList` preserves element order and returns one factory per
   element.
-- Struct values expose only string fields, integer fields, decimal fields, and
-  nested structs.
+- Struct values expose only string fields, integer fields, decimal fields, array
+  fields, and nested structs.
 - The constructor owns every nested transport it creates; on failure it must
   stop or discard partially created transports before rethrowing.
 - `Create` is called exactly once per resolved transport expression.
@@ -1492,7 +1508,8 @@ Build context:
 - invoking the nested factory creates a transport;
 - invoking it twice creates two independent transports;
 - transport list returns factories in source order;
-- struct returns string, integer, and decimal fields and nested structs;
+- struct returns string, integer, and decimal fields, arrays, and nested structs;
+- array fields expose `Count` and typed indexed accessors; empty arrays are valid;
 - absent optional struct field returns `false`;
 - parameter and field lookup is by canonical lowercase name;
 - a wrong parameter kind reports `E_CMP_PARAM_KIND_MISMATCH` with resolved kinds
@@ -1633,7 +1650,11 @@ BuildException
 
 - Internal.
 - Maps `Pontifex.Factory.Registration` DTOs to formula `Param`,
-  `TransportTypeSet`, `StructSchema`, and `TransportRegistration`.
+  `TransportTypeSet`, `StructSchema`, `SingleType`, `StringType`, `ArrayField`,
+  and `TransportRegistration`.
+- Maps `StringType.Validate` per element and `ArrayField` count ranges; it does
+  not re-validate integer, decimal, or array ranges, so the formula registry's
+  `E_REG_*` codes remain reachable through the adapter.
 - Maps core `Aliases` to formula `TransportRegistration.Aliases`; the
   `SuggestedAliases` hint list is left empty because the host explicitly
   registered them.
@@ -1671,6 +1692,10 @@ Existing tests remain valid with updated paths. Add:
 - `RegisterTransport` normalizes the scheme;
 - `RegisterTransport` maps core integer and decimal parameters and fields to
   formula metadata, and unsorted core bounds reach `E_REG_INVALID_*`;
+- `RegisterTransport` maps array fields and their element types, including
+  `StringType` validators, and unsorted array/element bounds reach
+  `E_REG_INVALID_ARRAY_RANGE`/`E_REG_INVALID_INTEGER_RANGE`/
+  `E_REG_INVALID_DECIMAL_RANGE`;
 - formula-only registration resolves but compilation reports
   `E_BLD_CONSTRUCTOR_NOT_FOUND`;
 - `CreateCompiler` returns the requested role;

@@ -1444,6 +1444,259 @@ public sealed class PrinterInvariantValidatorTests
             "resolved value for 'nested.value' is out of range: 2");
     }
 
+    [Test]
+    public void Validate_WhenArrayFieldHasNonArrayValue_ReportsKindMismatchExpectedArray()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            1,
+            2,
+            required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(values),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "arrays",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(values, CanonicalizationTestData.Scalar("x"))))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
+            "field 'values' of struct parameter 'config' has value kind string, expected array");
+    }
+
+    [Test]
+    public void Validate_WhenArrayHasWrongArity_ReportsArrayArity()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            1,
+            2,
+            required: true);
+        var formula = ArrayFormula(values, CanonicalizationTestData.ArrayValue());
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_ARRAY_ARITY",
+            "resolved array field 'values' of parameter 'config' has 0 element(s), expected 1..2");
+    }
+
+    [Test]
+    public void Validate_WhenArrayElementHasWrongKind_ReportsArrayElementType()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            1,
+            2,
+            required: true);
+        var formula = ArrayFormula(
+            values,
+            CanonicalizationTestData.ArrayValue(CanonicalizationTestData.Scalar("x")));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_ARRAY_ELEMENT_TYPE",
+            "resolved array element 'values[0]' of parameter 'config' expects integer, got string");
+    }
+
+    [Test]
+    public void Validate_WhenIntegerArrayElementIsOutOfRange_ReportsIndexedPath()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            1,
+            2,
+            required: true);
+        var formula = ArrayFormula(
+            values,
+            CanonicalizationTestData.ArrayValue(CanonicalizationTestData.Integer(2)));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'values[0]' is out of range: 2");
+    }
+
+    [Test]
+    public void Validate_WhenDecimalArrayElementIsOutOfRange_ReportsCanonicalValue()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new DecimalType(-1.5m, 1.5m),
+            1,
+            2,
+            required: true);
+        var formula = ArrayFormula(
+            values,
+            CanonicalizationTestData.ArrayValue(CanonicalizationTestData.Decimal(1.60m)));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'values[0]' is out of range: 1.6");
+    }
+
+    [Test]
+    public void Validate_WhenStringArrayElementContainsCr_ReportsInvalidScalar()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new StringType(null),
+            1,
+            2,
+            required: true);
+        var formula = ArrayFormula(
+            values,
+            CanonicalizationTestData.ArrayValue(CanonicalizationTestData.Scalar("a\rb")));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_INVALID_SCALAR",
+            "scalar value contains a character that cannot be printed: U+000D");
+    }
+
+    [Test]
+    public void Validate_ChecksArrayArityBeforeElementKinds()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            3,
+            4,
+            required: true);
+        var formula = ArrayFormula(
+            values,
+            CanonicalizationTestData.ArrayValue(
+                CanonicalizationTestData.Scalar("x"),
+                CanonicalizationTestData.Scalar("y")));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_ARRAY_ARITY",
+            "resolved array field 'values' of parameter 'config' has 2 element(s), expected 3..4");
+    }
+
+    [Test]
+    public void Validate_ChecksArrayElementKindBeforeRange()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            1,
+            2,
+            required: true);
+        var formula = ArrayFormula(
+            values,
+            CanonicalizationTestData.ArrayValue(
+                CanonicalizationTestData.Decimal(1.5m),
+                CanonicalizationTestData.Integer(2)));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_ARRAY_ELEMENT_TYPE",
+            "resolved array element 'values[0]' of parameter 'config' expects integer, got decimal");
+    }
+
+    [Test]
+    public void Validate_WhenArrayElementIsAnArray_ReportsArrayElementType()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            1,
+            2,
+            required: true);
+        var formula = ArrayFormula(
+            values,
+            CanonicalizationTestData.ArrayValue(
+                CanonicalizationTestData.ArrayValue()));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_ARRAY_ELEMENT_TYPE",
+            "resolved array element 'values[0]' of parameter 'config' expects integer, got array");
+    }
+
+    [Test]
+    public void Validate_WhenNestedArrayElementIsOutOfRange_ReportsFullPath()
+    {
+        var values = CanonicalizationTestData.ArrayField(
+            "values",
+            new IntegerType(0, 1),
+            1,
+            2,
+            required: true);
+        var nested = CanonicalizationTestData.NestedField(
+            "nested",
+            CanonicalizationTestData.Schema(values),
+            required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(nested),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "nestedarrays",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            nested,
+                            CanonicalizationTestData.NestedValue(
+                                CanonicalizationTestData.Field(
+                                    values,
+                                    CanonicalizationTestData.ArrayValue(
+                                        CanonicalizationTestData.Integer(0),
+                                        CanonicalizationTestData.Integer(2)))))))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_VALUE_OUT_OF_RANGE",
+            "resolved value for 'nested.values[1]' is out of range: 2");
+    }
+
+    private static ResolvedFormula ArrayFormula(StructField values, ArrayValue array)
+    {
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(values),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "arrays",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        return CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(values, array)))));
+    }
+
     private static void AssertInconsistent(ResolvedFormula formula, string detail)
     {
         AssertPrinterError(

@@ -268,6 +268,188 @@ public sealed class StructValidatorTests
             "field 'ratio' expects a scalar value, got transport");
     }
 
+    [Test]
+    public void Validate_ForIntegerDecimalAndStringArrays_ProducesTypedArrayValues()
+    {
+        var fields = SemanticsAssertions.ValidateStruct(
+            "{names=[a, b], counts=[-1, 1], ratios=[1.50, -0.5]}",
+            ArraysSchema());
+
+        var names = (ArrayValue)fields[0].Value;
+        Assert.That(names.Elements.Count, Is.EqualTo(2));
+        Assert.That(((StringValue)names.Elements[0]).Text, Is.EqualTo("a"));
+        Assert.That(((StringValue)names.Elements[1]).Text, Is.EqualTo("b"));
+
+        var counts = (ArrayValue)fields[1].Value;
+        Assert.That(((IntegerValue)counts.Elements[0]).Value, Is.EqualTo(-1L));
+        Assert.That(((IntegerValue)counts.Elements[1]).Value, Is.EqualTo(1L));
+
+        var ratios = (ArrayValue)fields[2].Value;
+        Assert.That(((DecimalValue)ratios.Elements[0]).Value, Is.EqualTo(1.5m));
+        Assert.That(((DecimalValue)ratios.Elements[1]).Value, Is.EqualTo(-0.5m));
+    }
+
+    [Test]
+    public void Validate_ForEmptyOptionalArrays_AcceptsEmptyArrays()
+    {
+        var fields = SemanticsAssertions.ValidateStruct(
+            "{names=[], counts=[0], ratios=[]}",
+            ArraysSchema());
+
+        Assert.That(((ArrayValue)fields[0].Value).Elements, Is.Empty);
+        Assert.That(((ArrayValue)fields[2].Value).Elements, Is.Empty);
+    }
+
+    [Test]
+    public void Validate_ForArrayBelowMinimum_ReportsArrayMin()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_MIN",
+            "array field 'counts' of parameter 'config' requires at least 1 element(s), got 0");
+    }
+
+    [Test]
+    public void Validate_ForArrayAboveMaximum_ReportsArrayMax()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0, 0, 0, 0]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_MAX",
+            "array field 'counts' of parameter 'config' requires at most 3 element(s), got 4");
+    }
+
+    [Test]
+    public void Validate_ForNonListArrayField_ReportsExpectedArray()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=1}",
+            ArraysSchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_ARRAY",
+            "field 'counts' expects an array, got scalar");
+    }
+
+    [Test]
+    public void Validate_ForArrayElementWithTransportShape_ReportsElementType()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[beta()]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            "array element 'counts[0]' of parameter 'config' expects an integer, got transport");
+    }
+
+    [Test]
+    public void Validate_ForArrayElementWithStructShape_ReportsElementType()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[{}]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            "array element 'counts[0]' of parameter 'config' expects an integer, got struct");
+    }
+
+    [Test]
+    public void Validate_ForArrayElementWithScalarText_ReportsIntegerParseFailure()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[x]}",
+            ArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'counts[0]' of parameter 'config' is invalid: expected an integer");
+    }
+
+    [Test]
+    public void Validate_ForIntegerArrayElementOutOfRange_ReportsIndexedPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[2]}",
+            ArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'counts[0]' of parameter 'config' is invalid: out of range [-1, 1]");
+    }
+
+    [Test]
+    public void Validate_ForDecimalArrayElementOutOfRange_ReportsIndexedPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], ratios=[1.6]}",
+            ArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'ratios[0]' of parameter 'config' is invalid: out of range [-1.5, 1.5]");
+    }
+
+    [Test]
+    public void Validate_ForDecimalArrayElementUnderflow_ReportsIndexedPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], ratios=[1e-29]}",
+            ArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'ratios[0]' of parameter 'config' is invalid: expected a decimal");
+    }
+
+    [Test]
+    public void Validate_ForDecimalArrayElementPrecisionLoss_ReportsIndexedPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], ratios=[0.12345678901234567890123456789]}",
+            ArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'ratios[0]' of parameter 'config' is invalid: expected a decimal");
+    }
+
+    [Test]
+    public void Validate_ForStringArrayElementValidatorFailure_ReportsIndexedPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], names=[bad]}",
+            ArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'names[0]' of parameter 'config' is invalid: field must not be 'bad'");
+    }
+
+    [Test]
+    public void Validate_ForNestedArrayElementOutOfRange_ReportsFullPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{nested={values=[0, 2]}}",
+            NestedArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'nested.values[1]' of parameter 'config' is invalid: out of range [0, 1]");
+    }
+
+    [Test]
+    public void Validate_ChecksArrayArityBeforeElementShapes()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[beta(), 0, 0, 0]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_MAX",
+            "array field 'counts' of parameter 'config' requires at most 3 element(s), got 4");
+    }
+
+    [Test]
+    public void Validate_ChecksArrayElementsInIndexOrder()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[beta(), x]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            "array element 'counts[0]' of parameter 'config' expects an integer, got transport");
+    }
+
+    private static StructSchema ArraysSchema()
+    {
+        return SchemaOf("arrays");
+    }
+
+    private static StructSchema NestedArraysSchema()
+    {
+        return SchemaOf("nestedArrays");
+    }
+
     private static StructSchema NumberStructSchema()
     {
         return SchemaOf("numberStruct");

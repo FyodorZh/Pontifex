@@ -194,6 +194,26 @@ internal static class CanonicalizationAssertions
                 return;
             }
 
+            case ArrayValue expectedArray:
+            {
+                Assert.That(actual, Is.InstanceOf<ArrayValue>(), path + ": expected an array");
+                var actualArray = (ArrayValue)actual;
+                Assert.That(
+                    actualArray.Elements.Count,
+                    Is.EqualTo(expectedArray.Elements.Count),
+                    path + ".count");
+
+                for (var i = 0; i < expectedArray.Elements.Count; i++)
+                {
+                    AssertValue(
+                        expectedArray.Elements[i],
+                        actualArray.Elements[i],
+                        path + "[" + i + "]");
+                }
+
+                return;
+            }
+
             default:
                 Assert.Fail(path + ": unsupported expected value kind");
                 return;
@@ -267,6 +287,29 @@ internal static class CanonicalizationAssertions
                         ((StructValue)actualField.Value).Fields,
                         fieldPath);
                     break;
+
+                case ArrayValue expectedArray:
+                {
+                    Assert.That(
+                        actualField.Value,
+                        Is.InstanceOf<ArrayValue>(),
+                        fieldPath + ": expected an array field");
+                    var actualArray = (ArrayValue)actualField.Value;
+                    Assert.That(
+                        actualArray.Elements.Count,
+                        Is.EqualTo(expectedArray.Elements.Count),
+                        fieldPath + ".count");
+
+                    for (var elementIndex = 0; elementIndex < expectedArray.Elements.Count; elementIndex++)
+                    {
+                        AssertValue(
+                            expectedArray.Elements[elementIndex],
+                            actualArray.Elements[elementIndex],
+                            fieldPath + "[" + elementIndex + "]");
+                    }
+
+                    break;
+                }
 
                 default:
                     Assert.Fail(fieldPath + ": unsupported expected struct field value");

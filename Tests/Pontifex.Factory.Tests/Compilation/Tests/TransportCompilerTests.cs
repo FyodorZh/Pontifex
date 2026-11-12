@@ -505,6 +505,282 @@ public sealed class TransportCompilerTests
     }
 
     [Test]
+    public void Compile_WithStructArrayFields_ExposesTypedElements()
+    {
+        var names = CompilationTestData.ArrayField(
+            "names",
+            new Formula.StringType(null),
+            0,
+            2);
+        var counts = CompilationTestData.ArrayField(
+            "counts",
+            new Formula.IntegerType(-1, 1),
+            1,
+            3,
+            required: true);
+        var ratios = CompilationTestData.ArrayField(
+            "ratios",
+            new Formula.DecimalType(-1.5m, 1.5m),
+            0);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(names, counts, ratios),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Struct(
+                    configParam,
+                    CompilationTestData.ArrayField(
+                        names,
+                        new StringValue("a"),
+                        new StringValue("b")),
+                    CompilationTestData.ArrayField(
+                        counts,
+                        new IntegerValue(-1),
+                        new IntegerValue(1)),
+                    CompilationTestData.ArrayField(
+                        ratios,
+                        new DecimalValue(1.5m))))));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetStruct("config", out var value), Is.True);
+
+        Assert.That(value!.TryGetArray("names", out var namesValue), Is.True);
+        Assert.That(namesValue!.Count, Is.EqualTo(2));
+        Assert.That(namesValue.TryGetString(0, out var name), Is.True);
+        Assert.That(name, Is.EqualTo("a"));
+
+        Assert.That(value.TryGetArray("counts", out var countsValue), Is.True);
+        Assert.That(countsValue!.TryGetInt64(0, out var count), Is.True);
+        Assert.That(count, Is.EqualTo(-1L));
+
+        Assert.That(value.TryGetArray("ratios", out var ratiosValue), Is.True);
+        Assert.That(ratiosValue!.TryGetDecimal(0, out var ratio), Is.True);
+        Assert.That(ratio, Is.EqualTo(1.5m));
+    }
+
+    [Test]
+    public void Compile_WithAbsentOptionalArray_ReturnsFalse()
+    {
+        var values = CompilationTestData.ArrayField(
+            "values",
+            new Formula.IntegerType(0, 1),
+            0);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(values),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Struct(configParam))));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetStruct("config", out var value), Is.True);
+        Assert.That(value!.TryGetArray("values", out _), Is.False);
+    }
+
+    [Test]
+    public void Compile_WithEmptyArray_ReturnsZeroCount()
+    {
+        var values = CompilationTestData.ArrayField(
+            "values",
+            new Formula.IntegerType(0, 1),
+            0);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(values),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Struct(
+                    configParam,
+                    CompilationTestData.ArrayField(values)))));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetStruct("config", out var value), Is.True);
+        Assert.That(value!.TryGetArray("values", out var array), Is.True);
+        Assert.That(array!.Count, Is.Zero);
+    }
+
+    [Test]
+    public void Compile_WhenArrayElementHasWrongKind_ReturnsFalse()
+    {
+        var values = CompilationTestData.ArrayField(
+            "values",
+            new Formula.IntegerType(0, 1),
+            1);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(values),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Struct(
+                    configParam,
+                    CompilationTestData.ArrayField(
+                        values,
+                        new DecimalValue(1.5m))))));
+
+        var context = registration.LastContext!;
+        context.TryGetStruct("config", out var value);
+        Assert.That(value!.TryGetArray("values", out var array), Is.True);
+        Assert.That(array!.TryGetInt64(0, out _), Is.False);
+    }
+
+    [Test]
+    public void Compile_WhenArrayIndexIsOutOfRange_ThrowsArgumentOutOfRangeException()
+    {
+        var values = CompilationTestData.ArrayField(
+            "values",
+            new Formula.IntegerType(0, 1),
+            1);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(values),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Struct(
+                    configParam,
+                    CompilationTestData.ArrayField(
+                        values,
+                        new IntegerValue(1))))));
+
+        var context = registration.LastContext!;
+        context.TryGetStruct("config", out var value);
+        value!.TryGetArray("values", out var array);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => array!.TryGetInt64(1, out _));
+        Assert.Throws<ArgumentOutOfRangeException>(() => array!.TryGetString(-1, out _));
+    }
+
+    [Test]
+    public void Compile_WhenArrayFieldHasNonArrayValue_ThrowsInconsistentTree()
+    {
+        var values = CompilationTestData.ArrayField(
+            "values",
+            new Formula.IntegerType(0, 1),
+            0);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(values),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            Array.Empty<Core.TransportParameter>(),
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetStruct("config", out var value);
+                value!.TryGetArray("values", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Struct(
+                        configParam,
+                        CompilationTestData.Text(values, "x"))))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
+    }
+
+    [Test]
+    public void Compile_WhenNonArrayFieldHasArrayValue_ThrowsInconsistentTree()
+    {
+        var valueField = CompilationTestData.StringField("value", required: true);
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(valueField),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration(
+            "alpha",
+            CompilationTestData.TypeA,
+            Array.Empty<Core.TransportParameter>(),
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetStruct("config", out var value);
+                value!.TryGetArray("value", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "alpha");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Struct(
+                        configParam,
+                        CompilationTestData.ArrayField(
+                            valueField,
+                            new StringValue("x")))))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_INCONSISTENT_TREE"));
+        Assert.That(exception.Error.Message, Is.EqualTo(InconsistentTreeMessage));
+    }
+
+    [Test]
     public void Compile_WithAbsentOptionalStructField_ReturnsFalse()
     {
         var nameField = CompilationTestData.StringField("name");

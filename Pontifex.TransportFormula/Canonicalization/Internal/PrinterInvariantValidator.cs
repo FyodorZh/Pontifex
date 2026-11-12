@@ -487,6 +487,48 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                         break;
                     }
 
+                    case ArrayField arrayField:
+                    {
+                        if (binding.Value is not ArrayValue arrayValue)
+                        {
+                            throw CanonicalizationErrorFactory.StructFieldKindMismatch(
+                                path,
+                                parameterName,
+                                ValueKind(binding.Value),
+                                "array");
+                        }
+
+                        var elements = arrayValue.Elements;
+                        if (elements is null)
+                        {
+                            throw CanonicalizationErrorFactory.InconsistentTree(
+                                CanonicalizationErrorFactory.UnspecifiedInvariantViolation);
+                        }
+
+                        if (elements.Count < arrayField.Min
+                            || (arrayField.Max.HasValue && elements.Count > arrayField.Max.Value))
+                        {
+                            throw CanonicalizationErrorFactory.ArrayArity(
+                                path,
+                                parameterName,
+                                elements.Count,
+                                arrayField.Min,
+                                arrayField.Max);
+                        }
+
+                        for (var elementIndex = 0; elementIndex < elements.Count; elementIndex++)
+                        {
+                            ValidateArrayElement(
+                                path,
+                                parameterName,
+                                elementIndex,
+                                arrayField.ElementType,
+                                elements[elementIndex]);
+                        }
+
+                        break;
+                    }
+
                     case NestedStructField nestedField:
                     {
                         if (binding.Value is not StructValue nestedValue)
@@ -521,6 +563,76 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
             }
         }
 
+        private static void ValidateArrayElement(
+            string path,
+            string parameterName,
+            int index,
+            SingleType elementType,
+            DataValue element)
+        {
+            var elementPath = path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]";
+
+            switch (elementType)
+            {
+                case StringType:
+                    if (element is not StringValue stringValue)
+                    {
+                        throw CanonicalizationErrorFactory.ArrayElementType(
+                            elementPath,
+                            parameterName,
+                            "string",
+                            ValueKind(element));
+                    }
+
+                    ScalarFormatter.EnsurePrintable(stringValue.Text);
+                    return;
+
+                case IntegerType integerType:
+                    if (element is not IntegerValue integerValue)
+                    {
+                        throw CanonicalizationErrorFactory.ArrayElementType(
+                            elementPath,
+                            parameterName,
+                            "integer",
+                            ValueKind(element));
+                    }
+
+                    if (integerValue.Value < integerType.Min
+                        || integerValue.Value > integerType.Max)
+                    {
+                        throw CanonicalizationErrorFactory.ValueOutOfRange(
+                            elementPath,
+                            integerValue.Value.ToString(CultureInfo.InvariantCulture));
+                    }
+
+                    return;
+
+                case DecimalType decimalType:
+                    if (element is not DecimalValue decimalValue)
+                    {
+                        throw CanonicalizationErrorFactory.ArrayElementType(
+                            elementPath,
+                            parameterName,
+                            "decimal",
+                            ValueKind(element));
+                    }
+
+                    if (decimalValue.Value < decimalType.Min
+                        || decimalValue.Value > decimalType.Max)
+                    {
+                        throw CanonicalizationErrorFactory.ValueOutOfRange(
+                            elementPath,
+                            DecimalText.Format(decimalValue.Value));
+                    }
+
+                    return;
+
+                default:
+                    throw CanonicalizationErrorFactory.InconsistentTree(
+                        CanonicalizationErrorFactory.UnspecifiedInvariantViolation);
+            }
+        }
+
         private static void EnsureCanonicalName(string? name)
         {
             if (name is null
@@ -540,6 +652,7 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                 IntegerValue => "integer",
                 DecimalValue => "decimal",
                 StructValue => "struct",
+                ArrayValue => "array",
                 TransportListValue => "transport list",
                 ResolvedExpr => "transport",
                 _ => throw CanonicalizationErrorFactory.InconsistentTree(

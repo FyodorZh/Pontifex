@@ -157,6 +157,16 @@ internal static class CanonicalizationTestData
         return new DecimalField(name, required, new DecimalType(min, max));
     }
 
+    public static StructField ArrayField(
+        string name,
+        SingleType elementType,
+        int min = 0,
+        int? max = null,
+        bool required = false)
+    {
+        return new ArrayField(name, required, elementType, min, max);
+    }
+
     public static StructField NestedField(
         string name,
         StructSchema schema,
@@ -195,6 +205,11 @@ internal static class CanonicalizationTestData
     public static DecimalValue Decimal(decimal value)
     {
         return new DecimalValue(value);
+    }
+
+    public static ArrayValue ArrayValue(params DataValue[] elements)
+    {
+        return new ArrayValue(elements);
     }
 
     // A transport parameter value stores the resolved expression directly.
@@ -430,6 +445,39 @@ internal static class CanonicalizationTestData
                 Schema(
                     IntegerField("count", 0, 10, required: true),
                     DecimalField("ratio", -1.5m, 1.5m)),
+                required: true,
+                positional: true));
+
+        Register(
+            builder,
+            "arrays",
+            TypeA,
+            Array.Empty<string>(),
+            StructParam(
+                "config",
+                Schema(
+                    ArrayField("names", new StringType(null), 0, 2),
+                    ArrayField("counts", new IntegerType(-1, 1), 1, 3, required: true),
+                    ArrayField("ratios", new DecimalType(-1.5m, 1.5m), 0)),
+                required: true,
+                positional: true));
+
+        Register(
+            builder,
+            "nestedArrays",
+            TypeA,
+            Array.Empty<string>(),
+            StructParam(
+                "config",
+                Schema(NestedField(
+                    "nested",
+                    Schema(ArrayField(
+                        "values",
+                        new IntegerType(0, 1),
+                        1,
+                        null,
+                        required: true)),
+                    required: true)),
                 required: true,
                 positional: true));
 

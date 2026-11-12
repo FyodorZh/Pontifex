@@ -135,7 +135,9 @@ branches the §14 table does not reach:
   scalar validators for parameters and struct fields;
 - `numbers` — integer and decimal parameters with narrow ranges;
 - `numberStruct` — integer and decimal struct fields, including a nested integer
-  field.
+  field;
+- `arrays` — string, integer, and decimal array fields with count ranges;
+- `nestedArrays` — an array inside a nested struct field.
 
 There are no harness self-tests. Harness belongs to the root layer and is
 available to every test in this suite. Sibling suites do not share this harness;

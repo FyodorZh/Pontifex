@@ -193,6 +193,13 @@ namespace Pontifex.Factory.Bootstrap
                         name,
                         decimalField.Required,
                         AdaptDecimalType(decimalField.Type));
+                case Core.ArrayField arrayField:
+                    return new Formula.ArrayField(
+                        name,
+                        arrayField.Required,
+                        AdaptSingleType(arrayField.ElementType),
+                        arrayField.Min,
+                        arrayField.Max);
                 case Core.NestedStructField nestedField:
                     return new Formula.NestedStructField(
                         name,
@@ -260,6 +267,30 @@ namespace Pontifex.Factory.Bootstrap
             }
 
             return new Formula.DecimalType(type.Min, type.Max);
+        }
+
+        private static Formula.SingleType AdaptSingleType(Core.SingleType type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentException(
+                    "An array element type cannot be null.",
+                    "registration");
+            }
+
+            switch (type)
+            {
+                case Core.StringType stringType:
+                    return new Formula.StringType(AdaptValidator(stringType.Validate));
+                case Core.IntegerType integerType:
+                    return AdaptIntegerType(integerType);
+                case Core.DecimalType decimalType:
+                    return AdaptDecimalType(decimalType);
+                default:
+                    throw new ArgumentException(
+                        "Unsupported array element type: " + type.GetType().FullName,
+                        "registration");
+            }
         }
     }
 }

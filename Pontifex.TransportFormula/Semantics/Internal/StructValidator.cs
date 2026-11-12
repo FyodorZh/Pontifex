@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Pontifex.TransportFormula.Internal;
 using Pontifex.TransportFormula.Parsing;
@@ -170,6 +171,124 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                         break;
                     }
 
+                    case ArrayField arrayField:
+                    {
+                        if (value is not AstList list)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.StructFieldExpectedArray(
+                                path,
+                                ParameterValidator.Shape(value),
+                                value.Span.Start));
+                        }
+
+                        var count = list.Elements.Count;
+                        if (count < arrayField.Min)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ArrayMin(
+                                path,
+                                paramName,
+                                arrayField.Min,
+                                count,
+                                list.OpenOffset));
+                        }
+
+                        if (arrayField.Max.HasValue && count > arrayField.Max.Value)
+                        {
+                            throw new SemanticAbort(SemanticErrorFactory.ArrayMax(
+                                path,
+                                paramName,
+                                arrayField.Max.Value,
+                                count,
+                                list.OpenOffset));
+                        }
+
+                        var elements = new List<DataValue>(count);
+                        for (var elementIndex = 0; elementIndex < count; elementIndex++)
+                        {
+                            var element = list.Elements[elementIndex];
+                            var elementPath = path + "[" + elementIndex.ToString(CultureInfo.InvariantCulture) + "]";
+
+                            if (element is not AstScalar scalar)
+                            {
+                                throw new SemanticAbort(SemanticErrorFactory.ArrayElementType(
+                                    elementPath,
+                                    paramName,
+                                    ExpectedElementType(arrayField.ElementType),
+                                    ParameterValidator.Shape(element),
+                                    element.Span.Start));
+                            }
+
+                            switch (arrayField.ElementType)
+                            {
+                                case StringType stringType:
+                                {
+                                    var reason = ParameterValidator.InvokeValidator(
+                                        stringType.Validate,
+                                        scalar.Text);
+                                    if (reason is not null)
+                                    {
+                                        throw new SemanticAbort(SemanticErrorFactory.ValidatorFailedField(
+                                            elementPath,
+                                            paramName,
+                                            reason,
+                                            element.Span.Start));
+                                    }
+
+                                    elements.Add(new StringValue(scalar.Text));
+                                    break;
+                                }
+
+                                case IntegerType integerType:
+                                {
+                                    var reason = ParameterValidator.ParseInteger(
+                                        scalar.Text,
+                                        integerType,
+                                        out var parsed);
+                                    if (reason is not null)
+                                    {
+                                        throw new SemanticAbort(SemanticErrorFactory.ValidatorFailedField(
+                                            elementPath,
+                                            paramName,
+                                            reason,
+                                            element.Span.Start));
+                                    }
+
+                                    elements.Add(new IntegerValue(parsed));
+                                    break;
+                                }
+
+                                case DecimalType decimalType:
+                                {
+                                    var reason = ParameterValidator.ParseDecimal(
+                                        scalar.Text,
+                                        decimalType,
+                                        out var parsed);
+                                    if (reason is not null)
+                                    {
+                                        throw new SemanticAbort(SemanticErrorFactory.ValidatorFailedField(
+                                            elementPath,
+                                            paramName,
+                                            reason,
+                                            element.Span.Start));
+                                    }
+
+                                    elements.Add(new DecimalValue(parsed));
+                                    break;
+                                }
+
+                                default:
+                                    throw new ArgumentException(
+                                        "Unsupported array element type: "
+                                        + arrayField.ElementType.GetType().FullName,
+                                        nameof(schema));
+                            }
+                        }
+
+                        result.Add(new StructFieldBinding(
+                            arrayField,
+                            new ArrayValue(elements.AsReadOnly())));
+                        break;
+                    }
                     case NestedStructField nestedField:
                     {
                         if (value is not AstStruct nestedStruct)
@@ -211,6 +330,23 @@ namespace Pontifex.TransportFormula.Semantics.Internal
             }
 
             return null;
+        }
+
+        private static string ExpectedElementType(SingleType elementType)
+        {
+            switch (elementType)
+            {
+                case StringType:
+                    return "a string";
+                case IntegerType:
+                    return "an integer";
+                case DecimalType:
+                    return "a decimal";
+                default:
+                    throw new ArgumentException(
+                        "Unsupported array element type: " + elementType.GetType().FullName,
+                        nameof(elementType));
+            }
         }
 
         private static string JoinPath(string parentPath, string name)

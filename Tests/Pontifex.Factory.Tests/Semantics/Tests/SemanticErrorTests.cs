@@ -348,6 +348,48 @@ public sealed class SemanticErrorTests
             "field 'count' expects a scalar value, got transport");
 
         yield return Case(
+            "ArrayExpectedForNonList",
+            "arrays({counts=1})",
+            "E_SEM_STRUCT_FIELD_EXPECTED_ARRAY",
+            15,
+            "field 'counts' expects an array, got scalar");
+
+        yield return Case(
+            "ArrayMinimum",
+            "arrays({counts=[]})",
+            "E_SEM_ARRAY_MIN",
+            15,
+            "array field 'counts' of parameter 'config' requires at least 1 element(s), got 0");
+
+        yield return Case(
+            "ArrayMaximum",
+            "arrays({counts=[0, 0, 0, 0]})",
+            "E_SEM_ARRAY_MAX",
+            15,
+            "array field 'counts' of parameter 'config' requires at most 3 element(s), got 4");
+
+        yield return Case(
+            "ArrayElementType",
+            "arrays({counts=[beta()]})",
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            16,
+            "array element 'counts[0]' of parameter 'config' expects an integer, got transport");
+
+        yield return Case(
+            "ArrayElementRange",
+            "arrays({counts=[2]})",
+            "E_SEM_VALIDATOR_FAILED",
+            16,
+            "field 'counts[0]' of parameter 'config' is invalid: out of range [-1, 1]");
+
+        yield return Case(
+            "NestedArrayElementRange",
+            "nestedArrays({nested={values=[0, 2]}})",
+            "E_SEM_VALIDATOR_FAILED",
+            33,
+            "field 'nested.values[1]' of parameter 'config' is invalid: out of range [0, 1]");
+
+        yield return Case(
             "UnknownStructField",
             "structy({name=x, extra=1})",
             "E_SEM_UNKNOWN_STRUCT_FIELD",

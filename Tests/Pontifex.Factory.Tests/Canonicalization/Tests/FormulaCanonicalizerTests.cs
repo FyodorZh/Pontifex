@@ -317,6 +317,12 @@ public sealed class FormulaCanonicalizerTests
         yield return Case(
             "numberStruct(config={count=5, ratio=1.50})",
             "numberstruct({count=5, ratio=1.5})");
+        yield return Case(
+            "arrays(config={counts=[-1, 1], ratios=[1.50]})",
+            "arrays({counts=[-1, 1], ratios=[1.5]})");
+        yield return Case(
+            "arrays(config={counts=[0], names=[]})",
+            "arrays({names=[], counts=[0]})");
     }
 
     #endregion
@@ -511,6 +517,23 @@ public sealed class FormulaCanonicalizerTests
             Is.EqualTo("numericstruct({count=5, ratio=1.5})"));
     }
 
+    [Test]
+    public void Canonicalize_ForArrays_PrintsCanonicalElementsInSchemaOrder()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize(
+                "arrays({counts=[-1, 1], ratios=[1.50, -0.5], names=[\"a, b\", c]})"),
+            Is.EqualTo("arrays({names=[\"a, b\", c], counts=[-1, 1], ratios=[1.5, -0.5]})"));
+    }
+
+    [Test]
+    public void Canonicalize_ForEmptyArrays_PrintsEmptyBrackets()
+    {
+        Assert.That(
+            CanonicalizationTestData.Canonicalize("arrays({counts=[0], names=[], ratios=[]})"),
+            Is.EqualTo("arrays({names=[], counts=[0], ratios=[]})"));
+    }
+
     private static System.Collections.Generic.IEnumerable<TestCaseData> RoundTripSources()
     {
         foreach (var source in new[]
@@ -543,7 +566,10 @@ public sealed class FormulaCanonicalizerTests
                      "wide(1e-28)",
                      "wide(1.50)",
                      "wide(-0.0)",
-                     "wide(79228162514264337593543950335)"
+                     "wide(79228162514264337593543950335)",
+                     "arrays({counts=[-1, 1], ratios=[1.5], names=[a, b]})",
+                     "arrays({counts=[0], names=[], ratios=[]})",
+                     "nestedArrays({nested={values=[0, 1]}})"
                  })
         {
             yield return new TestCaseData(source).SetName("RoundTrip_" + source);

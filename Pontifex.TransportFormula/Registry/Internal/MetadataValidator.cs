@@ -340,6 +340,38 @@ namespace Pontifex.TransportFormula.Registry.Internal
             }
         }
 
+        private static void ValidateArrayRange(int min, int? max)
+        {
+            if (min < 0 || (max.HasValue && max.Value < min))
+            {
+                throw RegistryErrorFactory.InvalidArrayRange(min, max);
+            }
+        }
+
+        private static void ValidateSingleTypeRange(SingleType type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentNullException(nameof(type));
+            }
+
+            switch (type)
+            {
+                case StringType:
+                    return;
+                case IntegerType integerType:
+                    ValidateIntegerRange(integerType);
+                    return;
+                case DecimalType decimalType:
+                    ValidateDecimalRange(decimalType);
+                    return;
+                default:
+                    throw new ArgumentException(
+                        "Unsupported single type: " + type.GetType().FullName,
+                        nameof(type));
+            }
+        }
+
         private static StructSchema NormalizeStructSchema(
             StructSchema schema,
             Dictionary<StructSchema, StructSchema> normalizedSchemas)
@@ -381,6 +413,16 @@ namespace Pontifex.TransportFormula.Registry.Internal
                     case DecimalField decimalField:
                         ValidateDecimalRange(decimalField.Type);
                         fields.Add(new DecimalField(name, decimalField.Required, decimalField.Type));
+                        break;
+                    case ArrayField arrayField:
+                        ValidateArrayRange(arrayField.Min, arrayField.Max);
+                        ValidateSingleTypeRange(arrayField.ElementType);
+                        fields.Add(new ArrayField(
+                            name,
+                            arrayField.Required,
+                            arrayField.ElementType,
+                            arrayField.Min,
+                            arrayField.Max));
                         break;
                     case NestedStructField nestedField:
                         fields.Add(new NestedStructField(

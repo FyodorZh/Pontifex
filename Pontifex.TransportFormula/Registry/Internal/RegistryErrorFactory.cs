@@ -78,6 +78,13 @@ namespace Pontifex.TransportFormula.Registry.Internal
                 + ", max " + DecimalText.Format(max));
         }
 
+        public static RegistrationException InvalidArrayRange(int min, int? max)
+        {
+            return Create(
+                "E_REG_INVALID_ARRAY_RANGE",
+                "invalid array range: min " + min + ", max " + FormatMax(max));
+        }
+
         public static RegistrationException DuplicateStructField(string name)
         {
             return Create(

@@ -87,6 +87,43 @@ public sealed class CanonicalizationErrorFactoryTests
     }
 
     [Test]
+    public void ArrayArity_WithMaximum_FormatsClosedRange()
+    {
+        var exception = CanonicalizationErrorFactory.ArrayArity("values", "config", 4, 1, 2);
+
+        CanonicalizationAssertions.AssertError(
+            exception.Error,
+            "E_PRN_ARRAY_ARITY",
+            "resolved array field 'values' of parameter 'config' has 4 element(s), expected 1..2");
+    }
+
+    [Test]
+    public void ArrayArity_WithoutMaximum_FormatsAtLeastRange()
+    {
+        var exception = CanonicalizationErrorFactory.ArrayArity("values", "config", 0, 1, null);
+
+        CanonicalizationAssertions.AssertError(
+            exception.Error,
+            "E_PRN_ARRAY_ARITY",
+            "resolved array field 'values' of parameter 'config' has 0 element(s), expected at least 1");
+    }
+
+    [Test]
+    public void ArrayElementType_FormatsTemplate()
+    {
+        var exception = CanonicalizationErrorFactory.ArrayElementType(
+            "values[2]",
+            "config",
+            "integer",
+            "string");
+
+        CanonicalizationAssertions.AssertError(
+            exception.Error,
+            "E_PRN_ARRAY_ELEMENT_TYPE",
+            "resolved array element 'values[2]' of parameter 'config' expects integer, got string");
+    }
+
+    [Test]
     public void ListArity_WithMaximum_FormatsClosedRange()
     {
         var exception = CanonicalizationErrorFactory.ListArity("items", "gamma", 4, 2, 3);

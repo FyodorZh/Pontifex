@@ -215,6 +215,58 @@ namespace Pontifex.TransportFormula.Semantics.Internal
                 offset);
         }
 
+        public static FactoryError StructFieldExpectedArray(string path, string shape, int offset)
+        {
+            return Create(
+                "E_SEM_STRUCT_FIELD_EXPECTED_ARRAY",
+                "field '" + path + "' expects an array, got " + shape,
+                offset);
+        }
+
+        public static FactoryError ArrayElementType(
+            string path,
+            string paramName,
+            string expected,
+            string actual,
+            int offset)
+        {
+            return Create(
+                "E_SEM_ARRAY_ELEMENT_TYPE",
+                "array element '" + path + "' of parameter '" + paramName
+                + "' expects " + expected + ", got " + actual,
+                offset);
+        }
+
+        public static FactoryError ArrayMin(
+            string path,
+            string paramName,
+            int min,
+            int count,
+            int offset)
+        {
+            return Create(
+                "E_SEM_ARRAY_MIN",
+                "array field '" + path + "' of parameter '" + paramName
+                + "' requires at least " + FormatNumber(min)
+                + " element(s), got " + FormatNumber(count),
+                offset);
+        }
+
+        public static FactoryError ArrayMax(
+            string path,
+            string paramName,
+            int max,
+            int count,
+            int offset)
+        {
+            return Create(
+                "E_SEM_ARRAY_MAX",
+                "array field '" + path + "' of parameter '" + paramName
+                + "' requires at most " + FormatNumber(max)
+                + " element(s), got " + FormatNumber(count),
+                offset);
+        }
+
         public static FactoryError UnknownTransportType(
             string rawName,
             int offset,

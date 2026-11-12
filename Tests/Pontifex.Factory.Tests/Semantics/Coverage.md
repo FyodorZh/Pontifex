@@ -147,6 +147,22 @@
 | `Validate_ForExactSmallestScaleDecimalField_AcceptsIt` | `StructValidator` | §6.2, §7.8 | A decimal field accepts the smallest representable scale. | — |
 | `Validate_ForIntegerFieldReceivingTransport_ReportsExpectedScalar` | `StructValidator` | §7.8, §13.3 | An integer field keeps the existing scalar shape error for transports. | — |
 | `Validate_ForDecimalFieldReceivingTransport_ReportsExpectedScalar` | `StructValidator` | §7.8, §13.3 | A decimal field keeps the existing scalar shape error for transports. | — |
+| `Validate_ForIntegerDecimalAndStringArrays_ProducesTypedArrayValues` | `StructValidator` | §6.5, §7.8 | String, integer, and decimal arrays produce homogeneous `ArrayValue` elements with typed scalar values. | — |
+| `Validate_ForEmptyOptionalArrays_AcceptsEmptyArrays` | `StructValidator` | §6.5, §7.8 | Empty optional arrays are valid. | — |
+| `Validate_ForArrayBelowMinimum_ReportsArrayMin` | `StructValidator` | §7.8, §13.3 | A short array reports `E_SEM_ARRAY_MIN` before elements are inspected. | — |
+| `Validate_ForArrayAboveMaximum_ReportsArrayMax` | `StructValidator` | §7.8, §13.3 | A long array reports `E_SEM_ARRAY_MAX` before elements are inspected. | — |
+| `Validate_ForNonListArrayField_ReportsExpectedArray` | `StructValidator` | §7.8, §13.3 | A non-list value for an array field reports `E_SEM_STRUCT_FIELD_EXPECTED_ARRAY`. | — |
+| `Validate_ForArrayElementWithTransportShape_ReportsElementType` | `StructValidator` | §7.8, §13.3 | A transport element reports `E_SEM_ARRAY_ELEMENT_TYPE` with expected element kind and AST shape. | — |
+| `Validate_ForArrayElementWithStructShape_ReportsElementType` | `StructValidator` | §7.8, §13.3 | A struct element reports `E_SEM_ARRAY_ELEMENT_TYPE` with AST shape `struct`. | — |
+| `Validate_ForArrayElementWithScalarText_ReportsIntegerParseFailure` | `StructValidator` | §7.8, §13.3 | A non-integer element reports the indexed field form of `E_SEM_VALIDATOR_FAILED`. | — |
+| `Validate_ForIntegerArrayElementOutOfRange_ReportsIndexedPath` | `StructValidator` | §7.8, §13.3 | An out-of-range integer element reports `values[index]`. | — |
+| `Validate_ForDecimalArrayElementOutOfRange_ReportsIndexedPath` | `StructValidator` | §7.8, §13.3 | An out-of-range decimal element reports its indexed path and canonical range. | — |
+| `Validate_ForDecimalArrayElementUnderflow_ReportsIndexedPath` | `StructValidator` | §6.2, §7.8 | Exact decimal parsing applies inside arrays. | — |
+| `Validate_ForDecimalArrayElementPrecisionLoss_ReportsIndexedPath` | `StructValidator` | §6.2, §7.8 | Decimal precision loss inside an array is a parse failure, not rounding. | — |
+| `Validate_ForStringArrayElementValidatorFailure_ReportsIndexedPath` | `StructValidator` | §6.5, §7.8 | A `StringType` validator applies per element with the indexed path. | — |
+| `Validate_ForNestedArrayElementOutOfRange_ReportsFullPath` | `StructValidator` | §7.8, §13.3 | Nested array paths are full dot paths with the index appended. | — |
+| `Validate_ChecksArrayArityBeforeElementShapes` | `StructValidator` | §7.8, §7.9 | Array count is checked before element shapes. | — |
+| `Validate_ChecksArrayElementsInIndexOrder` | `StructValidator` | §7.8, §7.9 | The first failing element in index order wins. | — |
 | `Validate_BindsFieldsToSchemaFieldInstances` | `StructValidator` | §8 | Struct field bindings are reference-equal to schema fields. | Reference identity, not structural equality. |
 | `Validate_ForCaseInsensitiveFieldName_UsesCanonicalSchemaField` | `StructValidator` | §7.8, §8 | Field lookup is case-insensitive and stores the canonical schema field. | — |
 | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` | `SemanticErrorFactory` | §13.3, §14.3 | Parameterized catalogue of semantic errors with exact code, offset, and message. | Cases cover the §14.3 matrix, including integer/decimal parse and range failures; `E_SEM_UNKNOWN_SCHEME` has dedicated tests. |
@@ -187,9 +203,13 @@ phase `Resolution`, offset, and zero-length span.
 | `E_SEM_MISSING_REQUIRED_STRUCT_FIELD` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`MissingRequiredStructField`, `MissingRequiredNestedStructField`, `MissingRequiredFieldCheckedBeforeFieldKinds`) |
 | `E_SEM_STRUCT_FIELD_EXPECTED_SCALAR` | `Validate_ForStringFieldReceivingList_ReportsExpectedScalarWithListShape`, `Validate_ForIntegerFieldReceivingTransport_ReportsExpectedScalar`, `Validate_ForDecimalFieldReceivingTransport_ReportsExpectedScalar`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`StructFieldExpectedScalarFromTransport`, `StructFieldExpectedScalarFromStruct`, `NestedStructFieldExpectedScalar`, `NumericStructFieldExpectedScalar`) |
 | `E_SEM_STRUCT_FIELD_EXPECTED_STRUCT` | `Validate_ForNestedStructFieldReceivingTransport_ReportsExpectedStruct`, `Validate_ForNestedStructFieldReceivingList_ReportsExpectedStruct`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`StructFieldExpectedStruct`) |
+| `E_SEM_STRUCT_FIELD_EXPECTED_ARRAY` | `Validate_ForNonListArrayField_ReportsExpectedArray`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ArrayExpectedForNonList`) |
+| `E_SEM_ARRAY_ELEMENT_TYPE` | `Validate_ForArrayElementWithTransportShape_ReportsElementType`, `Validate_ForArrayElementWithStructShape_ReportsElementType`, `Validate_ChecksArrayElementsInIndexOrder`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ArrayElementType`) |
+| `E_SEM_ARRAY_MIN` | `Validate_ForArrayBelowMinimum_ReportsArrayMin`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ArrayMinimum`) |
+| `E_SEM_ARRAY_MAX` | `Validate_ForArrayAboveMaximum_ReportsArrayMax`, `Validate_ChecksArrayArityBeforeElementShapes`, `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ArrayMaximum`) |
 | `E_SEM_UNKNOWN_TRANSPORT_TYPE` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`UnknownTransportType`, `UnknownTransportTypePreservesRawSpelling`), `Resolve_ForUnknownTransportType_ReportsSortedKnownTypes`, `Resolve_ForUnknownTransportTypeWhenNoTypesAreRegistered_ReportsEmptyCatalog`, `Resolve_ChecksUnknownCastTargetBeforeExpectedMismatch` |
 | `E_SEM_CAST_TYPE_MISMATCH` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`CastTypeMismatch`, `CastTypeMismatchUnderExactly`, `CastTypeMismatchUnderOneOf`), `Resolve_ChecksCastExpectedMismatchBeforeResolvingInnerTransport` |
-| `E_SEM_VALIDATOR_FAILED` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ParameterValidatorFailed`, `ParameterValidatorThrew`, `ParameterValidatorReturnedEmptyReason`, `IntegerParameterOutOfRange`, `IntegerParameterParseFailure`, `DecimalParameterUnderflow`, `NumericStructFieldParseFailure`, `NumericStructFieldOutOfRange`, `StructFieldValidatorFailed`, `StructFieldValidatorThrew`, `NestedStructFieldValidatorReturnedEmptyReason`) |
+| `E_SEM_VALIDATOR_FAILED` | `Resolve_ForSemanticError_ReturnsExactCodeOffsetAndMessage` (`ParameterValidatorFailed`, `ParameterValidatorThrew`, `ParameterValidatorReturnedEmptyReason`, `IntegerParameterOutOfRange`, `IntegerParameterParseFailure`, `DecimalParameterUnderflow`, `NumericStructFieldParseFailure`, `NumericStructFieldOutOfRange`, `ArrayElementRange`, `NestedArrayElementRange`, `StructFieldValidatorFailed`, `StructFieldValidatorThrew`, `NestedStructFieldValidatorReturnedEmptyReason`) |
 
 ## Planned
 

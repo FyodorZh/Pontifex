@@ -350,6 +350,159 @@ public sealed class TransportRegistryBuilderTests
     }
 
     [Test]
+    public void RegisterTransport_NormalizesArrayFieldMetadata()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+        builder.RegisterTransport(RegistryTestData.Registration(
+            "alpha",
+            RegistryTestData.TypeA,
+            Array.Empty<string>(),
+            RegistryTestData.CreateStructParam(
+                "Config",
+                RegistryTestData.Schema(
+                    RegistryTestData.CreateStringArrayField("Names", 0, 2, validate: value => null),
+                    RegistryTestData.CreateArrayField(
+                        "Counts",
+                        new IntegerType(-1, 1),
+                        1,
+                        3,
+                        required: true),
+                    RegistryTestData.CreateArrayField(
+                        "Ratios",
+                        new DecimalType(-1.5m, 1.5m),
+                        0,
+                        null)))));
+
+        var schema = ((StructParam)builder.Build().FindCanonical("alpha")!.Params[0]).Schema;
+
+        Assert.That(schema.Fields.Select(f => f.Name), Is.EqualTo(new[] { "names", "counts", "ratios" }));
+        var names = (ArrayField)schema.Fields[0];
+        Assert.That(names.ElementType, Is.InstanceOf<StringType>());
+        Assert.That(names.Min, Is.EqualTo(0));
+        Assert.That(names.Max, Is.EqualTo(2));
+        Assert.That(((StringType)names.ElementType).Validate, Is.Not.Null);
+
+        var counts = (ArrayField)schema.Fields[1];
+        Assert.That(counts.ElementType, Is.InstanceOf<IntegerType>());
+        Assert.That(((IntegerType)counts.ElementType).Min, Is.EqualTo(-1L));
+        Assert.That(((IntegerType)counts.ElementType).Max, Is.EqualTo(1L));
+        Assert.That(counts.Min, Is.EqualTo(1));
+        Assert.That(counts.Max, Is.EqualTo(3));
+
+        var ratios = (ArrayField)schema.Fields[2];
+        Assert.That(ratios.ElementType, Is.InstanceOf<DecimalType>());
+        Assert.That(((DecimalType)ratios.ElementType).Min, Is.EqualTo(-1.5m));
+        Assert.That(((DecimalType)ratios.ElementType).Max, Is.EqualTo(1.5m));
+        Assert.That(ratios.Max, Is.Null);
+    }
+
+    [Test]
+    public void RegisterTransport_WithNegativeArrayMinimum_ThrowsInvalidArrayRange()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(
+                        RegistryTestData.CreateArrayField(
+                            "values",
+                            new IntegerType(0, 1),
+                            min: -1))))),
+            "E_REG_INVALID_ARRAY_RANGE",
+            "invalid array range: min -1, max unbounded");
+    }
+
+    [Test]
+    public void RegisterTransport_WithArrayMaximumBelowMinimum_ThrowsInvalidArrayRange()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(
+                        RegistryTestData.CreateArrayField(
+                            "values",
+                            new IntegerType(0, 1),
+                            min: 2,
+                            max: 1))))),
+            "E_REG_INVALID_ARRAY_RANGE",
+            "invalid array range: min 2, max 1");
+    }
+
+    [Test]
+    public void RegisterTransport_WithUnsortedIntegerArrayElementRange_ThrowsInvalidIntegerRange()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(
+                        RegistryTestData.CreateArrayField(
+                            "values",
+                            new IntegerType(5, 1),
+                            min: 0))))),
+            "E_REG_INVALID_INTEGER_RANGE",
+            "invalid integer range: min 5, max 1");
+    }
+
+    [Test]
+    public void RegisterTransport_WithUnsortedDecimalArrayElementRange_ThrowsInvalidDecimalRange()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(
+                        RegistryTestData.CreateArrayField(
+                            "values",
+                            new DecimalType(2.5m, 1.5m),
+                            min: 0))))),
+            "E_REG_INVALID_DECIMAL_RANGE",
+            "invalid decimal range: min 2.5, max 1.5");
+    }
+
+    [Test]
+    public void RegisterTransport_WithInvalidArrayRangeAndElementRange_ReportsArrayRangeFirst()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateStructParam(
+                    "config",
+                    RegistryTestData.Schema(
+                        RegistryTestData.CreateArrayField(
+                            "values",
+                            new IntegerType(5, 1),
+                            min: -1))))),
+            "E_REG_INVALID_ARRAY_RANGE",
+            "invalid array range: min -1, max unbounded");
+    }
+
+    [Test]
     public void RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst()
     {
         var builder = RegistryTestData.NewStandardBuilder();

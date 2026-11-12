@@ -111,6 +111,10 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                     builder.Append(DecimalText.Format(decimalValue.Value));
                     return;
 
+                case ArrayValue arrayValue:
+                    PrintArray(arrayValue, builder);
+                    return;
+
                 case ResolvedExpr expression:
                     PrintExpression(expression, builder);
                     return;
@@ -171,6 +175,10 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                         builder.Append(DecimalText.Format(decimalValue.Value));
                         break;
 
+                    case ArrayValue arrayValue:
+                        PrintArray(arrayValue, builder);
+                        break;
+
                     case StructValue nestedValue:
                         builder.Append('{');
                         PrintStructFields(nestedValue.Fields, builder);
@@ -181,6 +189,44 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                         throw CanonicalizationErrorFactory.InconsistentTree(
                             CanonicalizationErrorFactory.UnspecifiedInvariantViolation);
                 }
+            }
+        }
+
+        private static void PrintArray(ArrayValue arrayValue, StringBuilder builder)
+        {
+            builder.Append('[');
+            for (var i = 0; i < arrayValue.Elements.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(", ");
+                }
+
+                PrintDataValue(arrayValue.Elements[i], builder);
+            }
+
+            builder.Append(']');
+        }
+
+        private static void PrintDataValue(DataValue value, StringBuilder builder)
+        {
+            switch (value)
+            {
+                case StringValue stringValue:
+                    builder.Append(ScalarFormatter.Format(stringValue.Text));
+                    return;
+
+                case IntegerValue integerValue:
+                    builder.Append(integerValue.Value.ToString(CultureInfo.InvariantCulture));
+                    return;
+
+                case DecimalValue decimalValue:
+                    builder.Append(DecimalText.Format(decimalValue.Value));
+                    return;
+
+                default:
+                    throw CanonicalizationErrorFactory.InconsistentTree(
+                        CanonicalizationErrorFactory.UnspecifiedInvariantViolation);
             }
         }
     }

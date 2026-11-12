@@ -98,6 +98,34 @@ namespace Pontifex.Factory.Registration
     }
 
     /// <summary>
+    /// A field whose value is a homogeneous array of scalar elements.
+    /// Constructors accept unsorted bounds; the formula registry owns range
+    /// validation so that <c>E_REG_INVALID_ARRAY_RANGE</c> is reachable through
+    /// the core registration adapter.
+    /// </summary>
+    public sealed class ArrayField : StructField
+    {
+        public ArrayField(
+            string name,
+            bool required,
+            SingleType elementType,
+            int min,
+            int? max = null)
+            : base(name, required)
+        {
+            ElementType = elementType ?? throw new ArgumentNullException(nameof(elementType));
+            Min = min;
+            Max = max;
+        }
+
+        public SingleType ElementType { get; }
+
+        public int Min { get; }
+
+        public int? Max { get; }
+    }
+
+    /// <summary>
     /// A field whose value is another struct.
     /// </summary>
     public sealed class NestedStructField : StructField

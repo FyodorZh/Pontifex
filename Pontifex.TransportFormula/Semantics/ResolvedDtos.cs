@@ -33,6 +33,9 @@ namespace Pontifex.TransportFormula.Semantics
     public sealed record StructValue(
         IReadOnlyList<StructFieldBinding> Fields) : DataValue;
 
+    public sealed record ArrayValue(
+        IReadOnlyList<DataValue> Elements) : DataValue;
+
     public abstract record ResolvedExpr(SourceSpan Span) : ResolvedValue
     {
         public abstract TransportType Type { get; }

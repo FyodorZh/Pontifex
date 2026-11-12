@@ -27,7 +27,8 @@ namespace Pontifex.Factory.Registration
     /// Build-time input for a transport constructor. Parameters are addressed by
     /// their canonical, lowercase names. A <c>TryGet</c> method returns
     /// <c>false</c> when the parameter is absent; required parameters are
-    /// guaranteed by resolution.
+    /// guaranteed by resolution. Struct fields may contain scalar arrays, but not
+    /// transports or transport lists.
     /// </summary>
     public interface ITransportBuildContext
     {
@@ -54,8 +55,8 @@ namespace Pontifex.Factory.Registration
 
     /// <summary>
     /// A resolved struct value. Fields are addressed by their canonical,
-    /// lowercase names. Nested structs are exposed recursively; structs cannot
-    /// contain transports or lists.
+    /// lowercase names. Nested structs and arrays are exposed recursively;
+    /// structs cannot contain transports or transport lists.
     /// </summary>
     public interface ITransportStructValue
     {
@@ -66,5 +67,25 @@ namespace Pontifex.Factory.Registration
         bool TryGetDecimal(string fieldName, out decimal value);
 
         bool TryGetStruct(string fieldName, out ITransportStructValue value);
+
+        bool TryGetArray(string fieldName, out ITransportArrayValue value);
+    }
+
+    /// <summary>
+    /// A resolved homogeneous scalar array. An empty array has
+    /// <see cref="Count"/> zero and is valid. Element accessors return
+    /// <c>false</c> when the element has a different kind. An index below zero
+    /// or at least <see cref="Count"/> is a programmer error and throws
+    /// <see cref="ArgumentOutOfRangeException"/>.
+    /// </summary>
+    public interface ITransportArrayValue
+    {
+        int Count { get; }
+
+        bool TryGetString(int index, out string value);
+
+        bool TryGetInt64(int index, out long value);
+
+        bool TryGetDecimal(int index, out decimal value);
     }
 }

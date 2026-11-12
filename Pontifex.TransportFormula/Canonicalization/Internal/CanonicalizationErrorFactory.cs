@@ -64,6 +64,35 @@ namespace Pontifex.TransportFormula.Canonicalization.Internal
                 "resolved value for '" + path + "' is out of range: " + value);
         }
 
+        public static PrinterException ArrayArity(
+            string path,
+            string parameterName,
+            int count,
+            int min,
+            int? max)
+        {
+            var range = max.HasValue
+                ? FormatNumber(min) + ".." + FormatNumber(max.Value)
+                : "at least " + FormatNumber(min);
+
+            return new PrinterException(
+                "E_PRN_ARRAY_ARITY",
+                "resolved array field '" + path + "' of parameter '" + parameterName
+                + "' has " + FormatNumber(count) + " element(s), expected " + range);
+        }
+
+        public static PrinterException ArrayElementType(
+            string path,
+            string parameterName,
+            string expected,
+            string actual)
+        {
+            return new PrinterException(
+                "E_PRN_ARRAY_ELEMENT_TYPE",
+                "resolved array element '" + path + "' of parameter '" + parameterName
+                + "' expects " + expected + ", got " + actual);
+        }
+
         public static PrinterException ListArity(
             string name,
             string scheme,

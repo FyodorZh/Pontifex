@@ -281,6 +281,184 @@ namespace Pontifex.Factory.Tests.Bootstrap
         }
 
         [Test]
+        public void RegisterTransport_WithCoreRegistration_MapsArrayFieldMetadata()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+            builder.RegisterTransport(
+                BootstrapTestData.CoreRegistration(
+                    "alpha",
+                    BootstrapTestData.TypeA,
+                    _ => new FakeTransport(BootstrapTestData.TypeA),
+                    parameters: new Core.TransportParameter[]
+                    {
+                        new Core.StructParameter(
+                            "config",
+                            required: true,
+                            positional: true,
+                            new Core.StructSchema(new Core.StructField[]
+                            {
+                                BootstrapTestData.CoreArrayField(
+                                    "Names",
+                                    new Core.StringType(value => null),
+                                    0,
+                                    2),
+                                BootstrapTestData.CoreArrayField(
+                                    "Counts",
+                                    new Core.IntegerType(-1, 1),
+                                    1,
+                                    3,
+                                    required: true),
+                                BootstrapTestData.CoreArrayField(
+                                    "Ratios",
+                                    new Core.DecimalType(-1.5m, 1.5m))
+                            }))
+                    }));
+
+            var factory = builder.Build();
+            var result = factory.Resolve(
+                "alpha({names=[a, b], counts=[-1, 1], ratios=[1.50]})");
+
+            Assert.That(result.Error, Is.Null);
+            var resolved = (ResolvedTransport)result.Formula!.Root;
+            var config = (StructValue)resolved.Provided[0].Value;
+
+            var names = (ArrayValue)config.Fields[0].Value;
+            Assert.That(((StringValue)names.Elements[0]).Text, Is.EqualTo("a"));
+            var counts = (ArrayValue)config.Fields[1].Value;
+            Assert.That(((IntegerValue)counts.Elements[0]).Value, Is.EqualTo(-1L));
+            var ratios = (ArrayValue)config.Fields[2].Value;
+            Assert.That(((DecimalValue)ratios.Elements[0]).Value, Is.EqualTo(1.5m));
+        }
+
+        [Test]
+        public void RegisterTransport_WithUnsortedCoreArrayRange_ThrowsInvalidArrayRange()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+
+            var exception = Assert.Throws<RegistrationException>(
+                () => builder.RegisterTransport(
+                    BootstrapTestData.CoreRegistration(
+                        "alpha",
+                        BootstrapTestData.TypeA,
+                        _ => new FakeTransport(BootstrapTestData.TypeA),
+                        parameters: new Core.TransportParameter[]
+                        {
+                            new Core.StructParameter(
+                                "config",
+                                required: true,
+                                positional: true,
+                                new Core.StructSchema(new Core.StructField[]
+                                {
+                                    BootstrapTestData.CoreArrayField(
+                                        "values",
+                                        new Core.IntegerType(0, 1),
+                                        min: -1)
+                                }))
+                        })));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_INVALID_ARRAY_RANGE"));
+            Assert.That(
+                exception.Error.Message,
+                Is.EqualTo("invalid array range: min -1, max unbounded"));
+        }
+
+        [Test]
+        public void RegisterTransport_WithUnsortedCoreArrayElementRange_ThrowsInvalidIntegerRange()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+
+            var integerException = Assert.Throws<RegistrationException>(
+                () => builder.RegisterTransport(
+                    BootstrapTestData.CoreRegistration(
+                        "alpha",
+                        BootstrapTestData.TypeA,
+                        _ => new FakeTransport(BootstrapTestData.TypeA),
+                        parameters: new Core.TransportParameter[]
+                        {
+                            new Core.StructParameter(
+                                "config",
+                                required: true,
+                                positional: true,
+                                new Core.StructSchema(new Core.StructField[]
+                                {
+                                    BootstrapTestData.CoreArrayField(
+                                        "values",
+                                        new Core.IntegerType(5, 1))
+                                }))
+                        })));
+
+            Assert.That(integerException!.Error.Code, Is.EqualTo("E_REG_INVALID_INTEGER_RANGE"));
+            Assert.That(
+                integerException.Error.Message,
+                Is.EqualTo("invalid integer range: min 5, max 1"));
+        }
+
+        [Test]
+        public void RegisterTransport_WithUnsortedCoreDecimalArrayElementRange_ThrowsInvalidDecimalRange()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+
+            var exception = Assert.Throws<RegistrationException>(
+                () => builder.RegisterTransport(
+                    BootstrapTestData.CoreRegistration(
+                        "alpha",
+                        BootstrapTestData.TypeA,
+                        _ => new FakeTransport(BootstrapTestData.TypeA),
+                        parameters: new Core.TransportParameter[]
+                        {
+                            new Core.StructParameter(
+                                "config",
+                                required: true,
+                                positional: true,
+                                new Core.StructSchema(new Core.StructField[]
+                                {
+                                    BootstrapTestData.CoreArrayField(
+                                        "values",
+                                        new Core.DecimalType(2.5m, 1.5m))
+                                }))
+                        })));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_INVALID_DECIMAL_RANGE"));
+            Assert.That(
+                exception.Error.Message,
+                Is.EqualTo("invalid decimal range: min 2.5, max 1.5"));
+        }
+
+        [Test]
+        public void RegisterTransport_WithCoreRegistration_PreservesArrayStringValidator()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+            builder.RegisterTransport(
+                BootstrapTestData.CoreRegistration(
+                    "alpha",
+                    BootstrapTestData.TypeA,
+                    _ => new FakeTransport(BootstrapTestData.TypeA),
+                    parameters: new Core.TransportParameter[]
+                    {
+                        new Core.StructParameter(
+                            "config",
+                            required: true,
+                            positional: true,
+                            new Core.StructSchema(new Core.StructField[]
+                            {
+                                BootstrapTestData.CoreArrayField(
+                                    "names",
+                                    new Core.StringType(
+                                        value => value == "bad" ? "name must not be 'bad'" : null))
+                            }))
+                    }));
+
+            var factory = builder.Build();
+            var result = factory.Resolve("alpha({names=[bad]})");
+
+            Assert.That(result.Error, Is.Not.Null);
+            Assert.That(result.Error!.Code, Is.EqualTo("E_SEM_VALIDATOR_FAILED"));
+            Assert.That(
+                result.Error.Message,
+                Is.EqualTo("field 'names[0]' of parameter 'config' is invalid: name must not be 'bad'"));
+        }
+
+        [Test]
         public void RegisterTransport_WithUnsortedCoreIntegerRange_ThrowsInvalidIntegerRange()
         {
             var builder = BootstrapTestData.NewBuilder();

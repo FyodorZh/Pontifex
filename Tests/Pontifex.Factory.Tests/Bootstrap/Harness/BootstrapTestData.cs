@@ -108,6 +108,16 @@ namespace Pontifex.Factory.Tests.Bootstrap.Harness
             return new Core.DecimalField(name, required, new Core.DecimalType(min, max));
         }
 
+        public static Core.StructField CoreArrayField(
+            string name,
+            Core.SingleType elementType,
+            int min = 0,
+            int? max = null,
+            bool required = false)
+        {
+            return new Core.ArrayField(name, required, elementType, min, max);
+        }
+
         // Core registration helper: the name and metadata deliberately pass
         // through unchanged so tests can assert the facade's normalization.
         public static Core.TransportRegistration CoreRegistration(
