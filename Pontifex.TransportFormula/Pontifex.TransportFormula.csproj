@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>Pontifex.TransportFormula</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Pontifex\Pontifex.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The runtime factory assembly wires the formula pipeline together; its
+         component factory constructs the internal formula implementations. -->
+    <InternalsVisibleTo Include="Pontifex.Factory" />
+    <InternalsVisibleTo Include="Pontifex.Factory.Tests" />
+    <InternalsVisibleTo Include="Pontifex.TransportFormula.Tests" />
+  </ItemGroup>
+</Project>

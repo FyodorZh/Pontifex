@@ -5,8 +5,7 @@ Deterministic and loopback tests for the internal `LowLevelTcpSocket` transport 
 
 ## Suite type
 
-**Test Suit.** The suite covers the single concrete internal `LowLevelTcpSocket` type. It has
-exactly one root layer; the `Tests/` groups organise its tests and are not layers.
+**Test Suit.** The suite covers the single concrete internal `LowLevelTcpSocket` type.
 
 Root subject: `Pontifex.NetSockets.Tcp.LowLevelTcpSocket`.
 
@@ -36,14 +35,10 @@ file.
 |---|---|---|---|
 | `LowLevelTcpSocket` | `Pontifex.NetSockets.Tcp.LowLevelTcpSocket` | `Tests/Pontifex.Transport.Net.Tests/LowLevelTcpSocket` | [`Coverage.md`](Coverage.md) |
 
-A Test Suit has exactly one layer, placed at the suite root. The `Tests/` groups are not layers:
-they must not contain `Coverage.md` or `Harness/`.
-
 ## Groups
 
 The single layer contains these `Tests/` subfolders: `Construction`, `Sending`, `Receiving`,
-`Draining`, `Completion`, `Teardown`, `Ownership`, `Policies`, `Composition`, and `Probes`. They
-organise tests only; they are not layers and do not have their own `Coverage.md` or `Harness/`.
+`Draining`, `Completion`, `Teardown`, `Ownership`, `Policies`, `Composition`, and `Probes`.
 
 ## Layout
 
@@ -112,14 +107,12 @@ deferred by design. This README does not duplicate volatile coverage status.
 ## Naming and structure conventions
 
 - Layer name = subject type name.
-- One cohesive contract per fixture, one fixture per file, file name = class name (`<Subject>Tests`).
+- One cohesive contract per fixture; file name = class name (`<Subject>Tests`).
 - Groups follow the connection lifecycle — construction → sending → receiving → draining →
   completion → teardown — with cross-cutting concerns (ownership, policies, composition, probes)
-  as separate groups. A fixture belongs to exactly one group. Groups are `Tests/` subfolders, are
-  not layers, and do not get their own `Coverage.md` or `Harness/`.
-- Harness types are internal, live under `Harness/`, and are never used by production code. Tests of
-  the harness itself live in `Harness/Tests/`, share the Harness namespace, and carry only
-  `LowLevelTcpSocket.Harness`.
+  as separate groups. A fixture belongs to exactly one group.
+- Harness types are internal and live under `Harness/`. Tests of the harness itself live in
+  `Harness/Tests/`, share the Harness namespace, and carry only `LowLevelTcpSocket.Harness`.
 - Test method names are descriptive sentences.
 - Class summaries describe the contract the fixture pins.
 
@@ -309,10 +302,8 @@ returns `TestSocketAsyncEventArgs` (writes the transfer count into the private b
 
 ## Harness layout and catalog
 
-Harness is test-only: it contains no production code and no mocking library. This suite has one
-layer, so all harness belongs to the root layer's `Harness/`; there are no sibling layers to share
-between. If the suite is ever split, shared harness moves to the nearest common ancestor layer.
-Harness self-tests are optional and live in `Harness/Tests/`.
+Harness contains test-only helpers. The harness is local to this suite. Harness self-tests live
+in `Harness/Tests/`.
 
 All in `Harness/` (tests of the harness live in `Harness/Tests/`):
 
@@ -379,13 +370,12 @@ exact byte figures are environment-specific, not universal budgets.
 
 ## Adding a layer and tests
 
-A Test Suit has exactly one layer, so adding a layer is not applicable. If the suite starts needing
-nested layers, split it into multiple Test Suits or convert it to an Abstract Test Suit.
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
-To add a test, place it in the `Tests/<Group>/` file that owns the contract, keep one fixture per
-file named `<Subject>Tests`, tag non-harness fixtures with `[LowLevelTcpSocketSuite]`, and update
-[`Coverage.md`](Coverage.md) in the same change. New groups are subfolders of `Tests/`; they are not
-layers and must not contain `Coverage.md` or `Harness/`. Harness self-tests go under
+To add a test, place it in the `Tests/<Group>/` file that owns the contract, use the
+`<Subject>Tests` file and fixture name, tag non-harness fixtures with `[LowLevelTcpSocketSuite]`,
+and record the test in [`Coverage.md`](Coverage.md). Harness self-tests go under
 `Harness/Tests/`, carry `[LowLevelTcpSocketHarnessSuite]`, and are also recorded in `Coverage.md`.
 
 ## Out of scope

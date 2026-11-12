@@ -5,8 +5,9 @@ Normative rules for test suites in this repository.
 ## 0. Scope
 
 - **RULES-01** These rules apply to every **Test Suit** and **Abstract Test Suit**.
-- **RULES-02** `Tests/Pontifex.Transports.Tests/Raw/` is out of scope until its dedicated
-  suite type is defined. Do not apply these rules to it.
+- **RULES-02** A suite that follows a documented conformance model other than the Test
+  Suit or Abstract Test Suit model is out of scope until a dedicated suite type is defined
+  for it. These rules do not apply to it.
 - **RULES-03** Loose test files are allowed. They are not suites and do not require a suite
   directory, `README.md`, or `Coverage.md`.
 - **RULES-04** Normative words: **MUST** = required, **SHOULD** = default with a documented
@@ -49,7 +50,9 @@ Normative rules for test suites in this repository.
   tightly coupled group of non-abstract types.
 - **TYPE-02** Use an **Abstract Test Suit** when the subject is an inheritance tree of
   abstract types.
-- **TYPE-03** A suite MUST have exactly one type.
+- **TYPE-03** A suite MUST have exactly one suite subject: one non-abstract type,
+  one small tightly coupled group of non-abstract types (TERM-01), or one
+  abstract-type inheritance tree (TERM-02).
 - **TYPE-04** A Test Suit that starts requiring nested layers MUST be split into multiple
   Test Suits or converted to an Abstract Test Suit.
 - **TYPE-05** An Abstract Test Suit MUST NOT contain a layer whose subject is a non-abstract
@@ -152,7 +155,7 @@ Normative rules for test suites in this repository.
   folders, groups (for a Test Suit, their `Tests/` subfolders), and harness directories
   (`Harness/` and, when present, `Harness/Tests/`).
 - **README-09** `README.md` MUST describe the harness layout, including `Harness/Tests/` when
-  harness self-tests exist, and the harness-sharing rule.
+  harness self-tests exist.
 - **README-10** `README.md` MUST link the root `Coverage.md` and explain that coverage is
   recorded per layer.
 - **README-11** `README.md` MUST declare the suite root category, every additional filtering
@@ -166,7 +169,7 @@ Normative rules for test suites in this repository.
 - **README-16** `README.md` MUST NOT contain volatile coverage status. Status belongs in
   `Coverage.md`.
 - **README-17** For a Test Suit, `README.md` MUST list the groups and their `Tests/`
-  subfolders and state that groups are not layers.
+  subfolders.
 - **README-18** `README.md` MAY contain any additional information relevant to the particular
   suite, such as contract summaries, dependency-specific behaviour, profiling notes, or
   suite-specific conventions. Additional information MUST NOT contradict these rules, replace
@@ -298,7 +301,7 @@ Normative rules for test suites in this repository.
 
 ## 12. Compliance checklist
 
-- **CHECK-01** The suite has one type and one root layer.
+- **CHECK-01** The suite has one suite subject and one root layer.
 - **CHECK-02** The suite root has `README.md`; every layer has `Coverage.md`.
 - **CHECK-03** The README layer table declares every layer path and inheritance parent.
 - **CHECK-04** No layer is empty; missing layers are recorded as planned in an ancestor’s

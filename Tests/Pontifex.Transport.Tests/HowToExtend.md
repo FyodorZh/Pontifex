@@ -19,9 +19,9 @@ Five layers work together:
 | Layer | File(s) | Role |
 |-------|---------|------|
 | **Stack** | `Core/Stacks/ITransportStack.cs`, `StaticTransportStack.cs`, `DynamicTransportStack.cs` | Interface + implementations describing one transport configuration |
-| **Factory** | `Core/TransportFactory.cs` | Holds parsed `IDescription`, calls `TransportBuilder.BuildServer/Client` |
+| **Factory** | `Core/TransportFactory.cs` | Holds server/client formulas and compiles them through `ITransportFactory` |
 | **Catalog** | `TransportStacks/*.cs` | Per-type files. Each class implements `IEnumerable<ITransportStack>` and serves as both the catalog and the NUnit `[TestFixtureSource]`. |
-| **Registry** | `Core/TransportRegistry.cs` | Shared `TransportBuilder` with all constructors registered. Static class with eager init. |
+| **Registry** | `Core/TransportRegistry.cs` | Shared `ITransportFactory` with the type catalog and transport bindings registered. Static class with eager init. |
 | **Harness** | `Core/TestHarness.cs` | Builds transports, wires `ClientSideApi`/`ServerSideApiFactory`, starts both, exposes API instances. |
 
 The flow:
@@ -29,7 +29,7 @@ The flow:
 1. NUnit discovers a `[TestFixtureSource]` and calls the source class (e.g. `RawReliableAckStacks`)
 2. For each `ITransportStack`, NUnit instantiates the test fixture
 3. The fixture constructor stores the stack; each `[Test]` method creates a harness or uses `_stack.GetTransportFactory()`
-4. `TransportFactory` uses `TransportRegistry.Builder` to build server + client transports from the stack's description
+4. `TransportFactory` compiles the stack's server and client formulas through `TransportRegistry.Factory`
 5. `TestHarness` wires API handlers, starts transports, and returns control to the test
 6. The test exercises the API, then disposes the harness
 
@@ -39,25 +39,33 @@ The flow:
 
 When a new transport (e.g. WebSocket) or wrapper (e.g. encryption) is created, three steps integrate it into the test system.
 
-### Step A: Register the Constructor
+### Step A: Register the Binding
 
-In `Core/TransportRegistry.cs`, add the constructor to the static initializer:
+In `Core/TransportRegistry.cs`, add the binding and its transport type to the static initializer:
 
 ```csharp
 static TransportRegistry()
 {
     Memory = MemoryRental.Shared;
-    Builder = new TransportBuilder(ConvertersGraph.Default);
 
-    Builder.RegisterTransport(new RawReliableAckDirectConstructor());
-    Builder.RegisterTransport(new RawReliableAckTcpConstructor());
-    Builder.RegisterTransport(new RawUnreliableNoAckDirectConstructor());
-    Builder.RegisterTransport(new RawNoAckUdpConstructor());
-    Builder.RegisterTransport(new MyNewWebSocketConstructor());  // ← ADD
+    var builder = TransportFactoryBootstrap.CreateBuilder();
+    foreach (TransportType type in Enum.GetValues(typeof(TransportType)))
+    {
+        builder.Registry.RegisterType(
+            new FormulaRegistry.TransportTypeInfo(type, type.ToString()));
+    }
+
+    builder.RegisterTransport(RawReliableAckDirectBinding.CreateRegistration());
+    builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
+    builder.RegisterTransport(RawUnreliableNoAckDirectBinding.CreateRegistration());
+    builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
+    builder.RegisterTransport(MyNewWebSocketBinding.CreateRegistration());  // ← ADD
+
+    Factory = builder.Build();
 }
 ```
 
-The `TransportBuilder` now knows how to construct this transport from a URI.
+The factory now knows how to compile this transport's formula.
 
 ### Step B: Add Stacks to the Catalog
 
@@ -76,17 +84,17 @@ public class RawReliableAckStacks : IEnumerable<ITransportStack>
     public IEnumerator<ITransportStack> GetEnumerator()
     {
         yield return new DynamicTransportStack("direct",
-            () => $"transport://direct|srv-{Guid.NewGuid()}");
+            (100, 100), (5000, 100),
+            () => $"direct(\"srv-{Guid.NewGuid()}\")");
 
         yield return new DynamicTransportStack("tcp",
-            () => $"transport://tcp|127.0.0.1:{DynamicPortAllocator.GetRandomPort()}/60");
+            (10, 10), (1000, 50),
+            () => $"tcp(\"127.0.0.1\", {DynamicPortAllocator.GetRandomPort()}, disconnection_timeout = 60)");
 
         // NEW:
         yield return new DynamicTransportStack("ws",
-            () => $"transport://ws|127.0.0.1:{DynamicPortAllocator.GetRandomPort()}");
-
-        yield return new DynamicTransportStack("tcp+encrypt",
-            () => $"transport://encrypt|tcp|127.0.0.1:{DynamicPortAllocator.GetRandomPort()}/60");
+            (10, 10), (1000, 50),
+            () => $"ws(\"127.0.0.1\", {DynamicPortAllocator.GetRandomPort()})");
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -94,8 +102,8 @@ public class RawReliableAckStacks : IEnumerable<ITransportStack>
 ```
 
 Two stack implementations are available:
-- **`DynamicTransportStack`** — takes a `Func<string>` URI provider; the URI is parsed fresh each time `GetTransportFactory()` is called. Use this when the URI contains a runtime value (e.g. a dynamic port).
-- **`StaticTransportStack`** — takes a fixed URI string; parsed once at construction. Use this for URIs that do not change.
+- **`DynamicTransportStack`** — takes a `Func<string>` formula provider; the formula is compiled fresh each time `GetTransportFactory()` is called. Use this when the formula contains a runtime value (e.g. a dynamic port).
+- **`StaticTransportStack`** — takes a fixed formula string. Use this for formulas that do not change.
 
 If the new transport produces a different `TransportType` (e.g. `RawUnreliableNoAck`), create a new file `TransportStacks/RawUnreliableNoAckStacks.cs` with its own class.
 
@@ -518,12 +526,12 @@ Interface in `Core/Stacks/ITransportStack.cs`:
 | `GetTransportFactory()` | `TransportFactory` | Returns a factory that builds client/server transports |
 
 Two implementations:
-- **`StaticTransportStack(string id, string transportUri)`** — Parses the URI once at construction. Use for fixed URIs.
-- **`DynamicTransportStack(string id, Func<string> uriProvider)`** — Parses the URI each time `GetTransportFactory()` is called. Use when the URI contains runtime values like dynamic ports.
+- **`StaticTransportStack(string id, string transportFormula)`** — Uses the formula once. Use for fixed formulas.
+- **`DynamicTransportStack(string id, ...)`** — Invokes the formula provider each time `GetTransportFactory()` is called. Use when the formula contains runtime values like dynamic ports.
 
 ### TransportFactory
 
-`Core/TransportFactory.cs`. Created by a stack, wraps `IDescription` and exposes:
+`Core/TransportFactory.cs`. Created by a stack, holds the server/client formulas and exposes:
 - `BuildServer()` → `ITransport`
 - `BuildClient()` → `ITransport`
 
@@ -535,8 +543,7 @@ Per-type files in `TransportStacks/`. Each file contains a class implementing `I
 
 Static class in `Core/TransportRegistry.cs`. Exposes:
 - `TransportRegistry.Memory` — `IMemoryRental` singleton (`MemoryRental.Shared`)
-- `TransportRegistry.Builder` — `TransportBuilder` with all constructors registered
-- `TransportRegistry.DescriptionFactory` — for parsing URIs to descriptions
+- `TransportRegistry.Factory` — `ITransportFactory` with the type catalog and bindings registered
 - `TransportRegistry.GetLogger(bool failIfError)` — creates a new `ILogger`; when `failIfError` is true, any error-severity message fails the test
 
 ### ApiTestHarness<TClientApi, TServerApi>
@@ -575,12 +582,12 @@ Tests/Pontifex.Transport.Tests/
 ├── Core/                                    # Test infrastructure
 │   ├── DynamicPortAllocator.cs              # Random port helper
 │   ├── TestHarness.cs                       # ApiTestHarness + TestServerSideApiInstance
-│   ├── TransportFactory.cs                  # Builds client/server transports from IDescription
-│   ├── TransportRegistry.cs                 # Shared TransportBuilder, Memory, GetLogger()
+│   ├── TransportFactory.cs                  # Builds client/server transports from formulas
+│   ├── TransportRegistry.cs                 # Shared ITransportFactory, Memory, GetLogger()
 │   └── Stacks/                              # Stack interface + implementations
 │       ├── ITransportStack.cs               # Interface (Id + GetTransportFactory)
-│       ├── StaticTransportStack.cs          # Fixed URI, parsed once
-│       └── DynamicTransportStack.cs         # URI from provider function, parsed per call
+│       ├── StaticTransportStack.cs          # Fixed formula
+│       └── DynamicTransportStack.cs         # Formula from provider function, compiled per call
 ├── TransportStacks/                         # Per-type stack catalogs (also NUnit sources)
 │   └── RawReliableAckStacks.cs
 ├── TestPlans/                               # All test plans
@@ -595,24 +602,22 @@ Tests/Pontifex.Transport.Tests/
 
 ---
 
-## 7. Transport URI Format Reference
+## 7. Transport Formula Reference
 
-All URIs follow the pattern `transport://<scheme>|<params>`. The `DescriptionFactory` parses these recursively for nested wrappers.
+Formulas follow the grammar in `Pontifex.TransportFormula/grammar.md`. Wrappers nest as expressions.
 
-| Transport | URI Example | Notes |
-|-----------|-------------|-------|
-| Direct | `transport://direct\|server-name` | Server name is arbitrary; client uses same name to connect |
-| TCP | `transport://tcp\|127.0.0.1:9000/60` | `/60` = disconnect timeout in seconds |
-| Convert | `transport://convert\|RawReliableAck:udp\|127.0.0.1:9000` | Builds an inner RawUnreliableNoAck (e.g. Udp) transport and converts it via ConvertersGraph |
-| Zip wrapper | `transport://zip\|9:direct\|srv` | `9` = compression level (optional; default 9) |
-| Log wrapper | `transport://log\|direct\|srv` | Wraps inner transport with logging |
-| Reconnectable | `transport://reconnectable\|30:direct\|srv` | `30` = reconnect timeout in seconds |
+| Transport | Formula Example | Notes |
+|-----------|-----------------|-------|
+| Direct | `direct("server-name")` | Server name is arbitrary; client uses same name to connect |
+| TCP | `tcp("127.0.0.1", 9000, disconnection_timeout = 60)` | `disconnection_timeout` is optional, in seconds |
+| Convert | `udp("127.0.0.1", 9000) as RawReliableAck` | The cast uses `ConvertersGraph` |
+| Zip wrapper | `zip(direct("srv"), compression_level = 9)` | `compression_level` is optional; default 9 |
+| Log wrapper | `log(direct("srv"))` | Wraps the inner transport with logging |
+| Reconnectable | `reconnectable(30, direct("srv"))` | First argument is the reconnect timeout in seconds |
 
-Wrapper URIs nest recursively:
+Wrapper formulas nest recursively:
 ```
-transport://log|zip|tcp|127.0.0.1:9000/60
-                ↑    ↑    ↑
-                log  zip  tcp (innermost)
+log(zip(tcp("127.0.0.1", 9000, disconnection_timeout = 60)))
 ```
 
 ---

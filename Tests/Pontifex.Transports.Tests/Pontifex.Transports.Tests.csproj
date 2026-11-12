@@ -2,9 +2,10 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
+        <LangVersion>14</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
@@ -22,8 +23,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
+        <ProjectReference Include="..\..\Pontifex.Factory\Pontifex.Factory.csproj" />
         <ProjectReference Include="..\..\Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
         <ProjectReference Include="..\..\Transports\Pontifex.Transport.Net\Pontifex.Transport.Net.csproj" />
+        <ProjectReference Include="..\..\Protocols\Pontifex.Protocol.Zip\Pontifex.Protocol.Zip.csproj" />
+        <ProjectReference Include="..\..\Protocols\Pontifex.Protocol.Reconnectable\Pontifex.Protocol.Reconnectable.csproj" />
     </ItemGroup>
 
 </Project>

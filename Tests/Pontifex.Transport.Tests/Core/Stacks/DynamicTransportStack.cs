@@ -6,24 +6,24 @@ namespace Pontifex.Tests
         private readonly int _smallConcurrency;
         private readonly int _bigTestSize;
         private readonly int _bigConcurrency;
-        private readonly Func<string> _uriProvider;
+        private readonly Func<string> _formulaProvider;
 
         public string Id { get; }
         
         public DynamicTransportStack(string id, 
             (int smallTestSize, int smallConcurrency) small, (int bigTestSize, int bigConcurrency) big, 
-            Func<string> uriProvider)
+            Func<string> formulaProvider)
         {
             (_smallTestSize, _smallConcurrency) = small;
             (_bigTestSize, _bigConcurrency) = big;
-            _uriProvider = uriProvider;
+            _formulaProvider = formulaProvider;
             Id = id;
         }
 
         public TransportFactory GetTransportFactory(bool failIfError = true)
         {
-            var desc = TransportRegistry.DescriptionFactory.FromUri(_uriProvider());
-            return new(desc, desc, failIfError);
+            var formula = _formulaProvider();
+            return new(formula, formula, failIfError);
         }
         
         public (int size, int concurrency) GetSmallTestSize()

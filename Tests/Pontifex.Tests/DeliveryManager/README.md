@@ -6,8 +6,7 @@ chunking, serialization, deduplication, ordering, retry, and acknowledgement.
 
 ## Suite type
 
-**Test Suit.** Every subject is a concrete type, so the suite has exactly one root layer. There
-are no nested layers and no inheritance tree to model.
+**Test Suit.** Every subject is a concrete type.
 
 Root subject group (tightly coupled by composition):
 
@@ -61,10 +60,6 @@ coverage file.
 |---|---|---|---|
 | `DeliveryManager` | `Pontifex.Delivery` delivery subsystem (eleven concrete types centered on `DeliveryManager`) | `Tests/Pontifex.Tests/DeliveryManager` | [`Coverage.md`](Coverage.md) |
 
-A Test Suit has exactly one layer, placed at the suite root. Test files live under `Tests/`.
-Groups, if added later, are `Tests/` subfolders, are not layers, and do not get their own
-`Coverage.md` or `Harness/`.
-
 ## Naming conventions
 
 - Layer name = the subsystem name, `DeliveryManager`.
@@ -99,13 +94,12 @@ DeliveryManager/
     └── RetryDeliverySchedulerTests.cs
 ```
 
-There are currently no groups under `Tests/`. Any future groups are subfolders of `Tests/` and
-are not layers.
+There are currently no groups under `Tests/`.
 
 ## Harness layout and sharing
 
-Harness is test-only: stubs, recording doubles, test buffers, and manual drivers. It contains no
-production code and no mocking library is used; doubles are hand-written.
+Harness contains stubs, recording doubles, test buffers, and manual drivers. The doubles are
+hand-written.
 
 - `Harness/TrackedResources.cs` wraps the per-test byte-array and collectable pools and attaches a
   `MultiRefResourceMonitor` to every rented resource. `TrackedFixture` creates it per test and
@@ -119,8 +113,6 @@ production code and no mocking library is used; doubles are hand-written.
   `TrackedFixture`.
 - When new shared test-only helpers are needed, add them under `Harness/` with the
   `Pontifex.Tests.Delivery.Harness` namespace.
-- A Test Suit has no nested layers, so harness is never shared between sibling layers. If the
-  suite is ever split, shared harness moves to the nearest common ancestor layer.
 
 ## Coverage
 
@@ -131,9 +123,6 @@ planned gaps, and gaps deferred by design. The README does not duplicate coverag
 
 - Suite root category: `DeliveryManager`. Every fixture carries it.
 - Additional filtering categories: none currently.
-
-Any non-default facet (real I/O, concurrency stress, timing, load) must go into a separate group
-or suite with its own declared category, not the default suite run.
 
 ## Running
 
@@ -151,9 +140,8 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Del
 
 ## Adding a layer
 
-A Test Suit has exactly one layer, so adding a layer is not applicable. If the suite ever needs
-nested layers, or if the subject becomes an inheritance tree, split it into multiple Test Suits
-or convert it to an Abstract Test Suit as required by [Tests/RULES.md](../../RULES.md).
+This suite has one layer; adding a layer is not applicable. If the subject
+changes shape, see [Tests/RULES.md](../../RULES.md).
 
 To add coverage for another concrete component of the same subsystem, add a
 `<Subject>Tests.cs` file under `Tests/` (or a group subfolder of `Tests/`), give it one
@@ -162,14 +150,13 @@ To add coverage for another concrete component of the same subsystem, add a
 ## Adding tests
 
 1. Put the test in the file of the component whose contract it proves under `Tests/`.
-2. Exercise the public or internal contract only; do not inspect private state or use reflection.
-3. Pass explicit `DateTime` values into scheduling entry points; never sleep or depend on the
-   wall clock for a pass/fail decision.
-4. Assert observable results: return values, event callbacks, captured wire messages, ordering,
-   counts, and contract-visible buffer state.
+2. Exercise the public or internal contract of `Pontifex.Delivery`.
+3. Pass explicit `DateTime` values into scheduling entry points.
+4. Assert return values, event callbacks, captured wire messages, ordering, counts, and
+   contract-visible buffer state.
 5. Derive pool-using fixtures from `TrackedFixture`, register manager `Clear` methods with
-   `AddCleanup`, and let the fixture verify release; update [`Coverage.md`](Coverage.md) in the
-   same change.
+   `AddCleanup`, and let the fixture verify release; record the test in
+   [`Coverage.md`](Coverage.md).
 
 ## Out of scope
 

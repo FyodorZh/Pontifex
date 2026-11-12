@@ -5,6 +5,7 @@
         <LangVersion>14</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
         <IsPackable>false</IsPackable>
         <RootNamespace>Pontifex.Tests</RootNamespace>
     </PropertyGroup>
