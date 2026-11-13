@@ -727,10 +727,22 @@ public sealed class RawReliableServerTransportTests
         Assert.That(transport.IsStoppingDuringStopCarrier, Is.True);
         Assert.That(transport.ActiveSessionsDuringStopCarrier, Is.Zero);
         Assert.That(transport.Driver.StopCalls, Is.EqualTo(1));
+        Assert.That(transport.Driver.FinishCalls, Is.EqualTo(1));
         Assert.That(transport.Driver.IsRunning, Is.False);
         Assert.That(callbackReason, Is.SameAs(reason));
         Assert.That(transport.IsStarted, Is.False);
         Assert.That(transport.IsValid, Is.True);
+    }
+
+    [Test]
+    public void Stop_WhenStarted_FinishesDriverSoAThreadBasedDriverCanReleaseItsThread()
+    {
+        var transport = Create();
+        InitializeAndStart(transport);
+
+        Assert.That(transport.Stop(Reason()), Is.True);
+
+        Assert.That(transport.Driver.FinishCalls, Is.EqualTo(1));
     }
 
     [Test]
@@ -788,6 +800,7 @@ public sealed class RawReliableServerTransportTests
         Assert.That(transport.Stop(Reason()), Is.True);
 
         Assert.That(transport.StopCarrierCalls, Is.Zero);
+        Assert.That(transport.Driver.FinishCalls, Is.Zero);
         Assert.That(transport.IsValid, Is.True);
         Assert.That(transport.IsStarted, Is.False);
 
@@ -824,6 +837,7 @@ public sealed class RawReliableServerTransportTests
         Assert.That(transport.StopCarrierCalls, Is.EqualTo(1));
         Assert.That(transport.LastStopCarrierReason, Is.SameAs(reason));
         Assert.That(transport.Driver.StopCalls, Is.EqualTo(1));
+        Assert.That(transport.Driver.FinishCalls, Is.EqualTo(1));
         Assert.That(transport.OnSessionStoppedCalls, Is.EqualTo(1));
         Assert.That(fixture.Handler.StoppedReason, Is.SameAs(reason));
         Assert.That(transport.ExposedActiveSessions, Is.Zero);

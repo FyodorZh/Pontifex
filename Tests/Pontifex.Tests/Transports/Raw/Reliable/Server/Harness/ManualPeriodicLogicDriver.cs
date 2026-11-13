@@ -24,6 +24,8 @@ internal sealed class ManualPeriodicLogicDriver : ILogicDriver<IPeriodicLogicDri
 
     public int StopCalls { get; private set; }
 
+    public int FinishCalls { get; private set; }
+
     public bool IsRunning { get; private set; }
 
     public event Action<ILogic<IPeriodicLogicDriverCtl>>? LogicStopped;
@@ -62,6 +64,7 @@ internal sealed class ManualPeriodicLogicDriver : ILogicDriver<IPeriodicLogicDri
 
     public Task Finish()
     {
+        FinishCalls++;
         return Task.CompletedTask;
     }
 
