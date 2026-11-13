@@ -73,7 +73,7 @@ layer table above.
 - Layer name = subject type name.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
 - Test methods = `Scenario_ExpectedResult`, for example
-  `ConnectionFinished_WhenActionThrows_FailsTransportWithoutConnecting`.
+  `Start_WhenBeginConnectReturnsFalse_DestroysAndNotifiesStopped`.
 - Namespace = `Pontifex.Tests.Transports` for every file in the suite, including harness files.
 - Every fixture carries `[Category("Transports")]`.
 
@@ -214,34 +214,32 @@ message-handling behavior.
 
 ### `RawReliableClientTransport<TClientHandler>` contract matrix
 
-The client transport owns a small state machine (`Constructed`, `Initialized`, `Connecting`,
-`Connected`, `Disconnected`) and the endpoint hand-off. This layer covers that delta; the
+The client transport owns a small lifecycle (`Constructed`, `Initialized`, `Connecting`,
+`Disconnected`) plus the endpoint hand-off. It keeps no connected state of its own: connectivity
+and connection callbacks belong to the attached endpoint. This layer covers that delta; the
 inherited `AnyTransport` lifecycle and the `RawTransport`/`RawReliableTransport` facades are not
 repeated.
 
 - **Init**: from `Constructed`, `Init` runs `SetupHandler`, stores the returned handler, and moves
   to `Initialized`; a null handler, a null `SetupHandler` result, a wrong state, or an already
   started transport fails and invalidates. A second `Init` fails but keeps the first handler.
-  `Init` after a failed start does not call `SetupHandler`; `Init` while connecting or connected
-  fails and drives the stop path (handler `OnStopped`, or `OnDisconnected` then `OnStopped`).
+  `Init` after a failed start does not call `SetupHandler`; `Init` while connecting fails and
+  drives the stop path, where the transport notifies the handler `OnStopped` when it owns the
+  notification (see the stop notification matrix). The transport never calls `OnDisconnected`.
 - **Start / connect**: `Start` works only from `Initialized`; it calls `BeginConnect` and, while
   the state is still `Initialized`, moves to `Connecting`; `OnStarted` invokes
   `OnReadyToConnect`. A `false` from `BeginConnect` fails, destroys, and notifies the handler
   `OnStopped`; a `BeginConnect` that stops the transport synchronously makes `Start` return
   `false` without `OnReadyToConnect`.
-- **ConnectionFinished / ConnectionFailed**: `ConnectionFinished` is legal only from `Connecting`;
-  it invokes the supplied action with the stored handler *before* setting `Connected`. If the
-  action stops or fails the transport synchronously, the state is not overwritten back to
-  `Connected`. If the action throws, the transport fails with an `ExceptionFail` carrying that
-  exception and does not become connected. `ConnectionFailed` is legal only from `Connecting` and
-  fails with a `TextFail` whose text is `Connection failed`. From any other state both methods
-  call `Stop` with a `TextFail`; while `Constructed` or `Initialized` that stop is a no-op and a
-  later `Init`/`Start` can still succeed.
-- **IsConnected**: without an attached endpoint it mirrors the internal state (`Connected` only)
-  and is already `false` during `OnDisconnected`, during `OnStopped`, and inside
-  `DestroyTransport`. With an attached endpoint it delegates to `endpoint.IsConnected` until the
-  base detaches, so a still-connected attached endpoint can report `true` inside
-  `DestroyTransport`.
+- **Connection ownership**: a `BeginConnect` that returns `true` must attach exactly one endpoint
+  through `AttachEndpoint`. The endpoint is the single source of truth for connectivity and delivers
+  `OnConnected`, `OnDisconnected`, and `OnStopped` to the user handler once the transport enters
+  `Connecting`; the transport keeps no connected state of its own and offers no
+  connection-completion hook. A `BeginConnect` that fails leaves the transport `Initialized` and
+  the terminal notification with the transport, even when it already attached an endpoint.
+- **IsConnected**: mirrors the attached endpoint and is `false` when no endpoint is attached.
+  Without an endpoint it stays `false` after `Start`; with an attached endpoint it follows that
+  endpoint, so it can be `true` inside `DestroyTransport` until the base detaches.
 - **Endpoint attach / detach ownership**: `AttachEndpoint` rejects `null` and a second endpoint
   (the first stays attached); an attached endpoint's terminal `Stopped` event stops the transport
   with the same reason instance. The base class owns detachment: `DestroyTransport` can still read
@@ -249,13 +247,14 @@ repeated.
   `DetachEndpoint` is **private**; implementations must not detach.
 - **Stop notification matrix**: stopping after `Init` but before `Start` is a no-op that keeps the
   `Initialized` state and still allows a later `Start`. While `Connecting` the order is
-  `handler.OnStopped`, `DestroyTransport`, detach, start callback. While `Connected` it is
-  `handler.OnDisconnected`, `handler.OnStopped`, `DestroyTransport`, detach, start callback. While
-  `Initialized` it is `DestroyTransport`, detach, `handler.OnStopped`. With an attached endpoint the
-  transport skips its own handler notifications because the endpoint owns them.
-- **Handler exception isolation**: exceptions from `OnDisconnected` or `OnStopped` are caught,
-  logged, and swallowed at this layer; the remaining notifications, `DestroyTransport`, detach, and
-  the start callback still run, and the transport ends in the disconnected state.
+  `handler.OnStopped`, `DestroyTransport`, detach, start callback when no endpoint is attached;
+  when an endpoint is attached the transport skips its own notification and the endpoint owns it.
+  While `Initialized` it is `DestroyTransport`, detach, `handler.OnStopped` — this also covers a
+  failed `BeginConnect` that already attached an endpoint. The transport never calls
+  `OnDisconnected`; endpoint-owned transports deliver both connection callbacks from the endpoint.
+- **Handler exception isolation**: exceptions from `OnStopped` are caught, logged, and swallowed at
+  this layer; `DestroyTransport`, detach, and the start callback still run, and the transport ends in
+  the disconnected state.
 
 ### `RawReliableServerTransport<TServerHandler>` contract matrix
 
@@ -310,8 +309,8 @@ the `RawTransport`/`RawReliableTransport` facades are not repeated.
 
 `RawReliableAckClientTransport` is a facade over
 `RawReliableClientTransport<IRawReliableAckClientHandler>`. It only fixes `Type` to
-`RawReliableAck` and exposes `IRawReliableAckClient`; the inherited init, connect state machine,
-endpoint ownership, connectivity, and terminal notifications are covered by the
+`RawReliableAck` and exposes `IRawReliableAckClient`; the inherited init, start/connect handoff,
+endpoint ownership, connectivity, and failed-start notifications are covered by the
 `RawReliableClientTransport` layer and are not repeated.
 
 - **Interface exposure**: `IRawReliableAckClient`,
@@ -373,12 +372,12 @@ never use reflection. Only these are asserted:
 - `TestRawReliableClientTransport : RawReliableClientTransport<IRawReliableClientHandler>` supplies
   the abstract `Type`, `MessageMaxByteSize`, `BeginConnect`, `OnReadyToConnect`, and
   `DestroyTransport` members. It records hook calls, lets each test choose the `BeginConnect`
-  result and the `SetupHandler` transformation, exposes the protected `AttachedEndpoint`, and
+  result and the `SetupHandler` transformation, exposes `AttachedEndpoint` and `AttachEndpoint`, and
   records the endpoint and `IsConnected` observed inside `DestroyTransport`.
 - `RecordingRawReliableClientHandler : IRawReliableClientHandler, IDisposable` records
-  `Received`/`Disconnected`/`Stopped` counts and reasons, can throw a configured exception from
-  any callback, and optionally appends callback names to the shared event log. `OnReceived` does
-  not release the delivered buffer; the test owns it (buffers still alive at `Dispose` are
+  `Received`/`Disconnected`/`Stopped` counts and the stop reason, can throw a configured exception
+  from `OnStopped`, and optionally appends callback names to the shared event log. `OnReceived`
+  does not release the delivered buffer; the test owns it (buffers still alive at `Dispose` are
   released as a safety net).
 - `TestRawReliableServerTransport : RawReliableServerTransport<IRawReliableServerHandler>`
   supplies the abstract `Type`, `MessageMaxByteSize`, `StartCarrier`, and `StopCarrier` members,

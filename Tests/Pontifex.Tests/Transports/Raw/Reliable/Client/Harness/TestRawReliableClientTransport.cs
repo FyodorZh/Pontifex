@@ -8,9 +8,10 @@ namespace Pontifex.Tests.Transports;
 
 /// <summary>
 /// Test double for <see cref="RawReliableClientTransport{TClientHandler}"/>. It implements the
-/// protected connection hooks, records their invocations, and exposes the protected state and
-/// transitions the test-set needs. The double never detaches the attached endpoint: the base class
-/// owns detachment after <see cref="DestroyTransport"/> completes.
+/// protected transport hooks, records their invocations, and exposes the attached-endpoint surface
+/// the test-set needs. The double never attaches or detaches endpoints on its own: tests drive
+/// attachment explicitly and the base class owns detachment after <see cref="DestroyTransport"/>
+/// completes.
 /// </summary>
 internal sealed class TestRawReliableClientTransport : RawReliableClientTransport<IRawReliableClientHandler>
 {
@@ -85,16 +86,6 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
     public new IRawReliableClientHandler? Handler => base.Handler;
 
     public RawReliableClientEndpoint? ExposedAttachedEndpoint => AttachedEndpoint;
-
-    public void ExposedConnectionFinished(Action<IRawReliableClientHandler> endpointConstructor)
-    {
-        ConnectionFinished(endpointConstructor);
-    }
-
-    public void ExposedConnectionFailed()
-    {
-        ConnectionFailed();
-    }
 
     public void ExposedAttachEndpoint(RawReliableClientEndpoint endpoint)
     {

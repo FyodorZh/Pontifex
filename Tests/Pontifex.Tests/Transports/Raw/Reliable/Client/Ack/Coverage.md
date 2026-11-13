@@ -25,7 +25,7 @@
 
 | Gap | Reason |
 |---|---|
-| Inherited init, connect state machine, endpoint ownership, and terminal notifications. | Covered once by `RawReliableClientTransportTests`; not repeated here. |
+| Inherited init, start/connect handoff, endpoint ownership, connectivity, and failed-start notifications. | Covered once by `RawReliableClientTransportTests`; not repeated here. |
 | Conformance controls. | The conformance subsystem is out of scope and planned for a rewrite. |
 | Acknowledger hand-off and Ack-response handling. | Those belong to the Ack endpoint/server layers and the `Endpoints` suite. |
 
