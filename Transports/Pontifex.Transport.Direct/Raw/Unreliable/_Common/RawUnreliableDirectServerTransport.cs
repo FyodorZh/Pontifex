@@ -49,7 +49,7 @@ namespace Pontifex.Raw.Unreliable.Direct
                 pair => pair.Item2.Release());
             _callbackQueue.ExceptionHandler += ex => Log.wtf(ex);
 
-            if (!DirectTransportManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
+            if (!ChannelManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
             {
                 Log.e("Failed to register server '{0}'. Name already in use.", _serverEp);
                 _callbackQueue.Dispose();
@@ -61,7 +61,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         protected override void StopCarrier(StopReason reason)
         {
-            DirectTransportManager.Instance.UnregisterServer(_serverEp);
+            ChannelManager.Instance.UnregisterServer(_serverEp);
             foreach (var channel in _channels.Values)
             {
                 channel.Dispose();

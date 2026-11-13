@@ -3,7 +3,7 @@ using System.Threading;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 
-namespace Pontifex.Raw.Unreliable.Direct
+namespace Pontifex
 {
     public sealed class Channel : IDisposable
     {

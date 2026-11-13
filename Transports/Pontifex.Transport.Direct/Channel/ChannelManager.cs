@@ -1,16 +1,16 @@
 using System;
 using System.Collections.Concurrent;
 
-namespace Pontifex.Raw.Unreliable.Direct
+namespace Pontifex
 {
-    internal sealed class DirectTransportManager
+    internal sealed class ChannelManager
     {
-        public static readonly DirectTransportManager Instance = new DirectTransportManager();
+        public static readonly ChannelManager Instance = new ChannelManager();
 
         private readonly ConcurrentDictionary<IEndPoint, ServerEntry> _servers =
             new ConcurrentDictionary<IEndPoint, ServerEntry>();
 
-        private DirectTransportManager()
+        private ChannelManager()
         {
         }
 
