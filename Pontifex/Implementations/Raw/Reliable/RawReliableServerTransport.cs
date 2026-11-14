@@ -103,16 +103,18 @@ namespace Pontifex.Raw.Reliable
         protected bool IsStopping => _stopping;
 
         /// <summary>
-        /// Gets a value indicating whether the transport needs the shared periodic session ticker.
+        /// Gets a value indicating whether the transport needs periodic checks for disconnection by timeout.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: Carriers without an idle-session timeout can override this to
+        /// <item><description><b>Other notes</b>: When <see langword="true"/>, the base transport starts the
+        /// shared session ticker, which calls <see cref="RawReliableServerEndpoint.PeriodicTick"/> for every
+        /// active session. Carriers without an idle-session timeout can override this to
         /// <see langword="false"/> to avoid a dedicated ticker thread. The default is
         /// <see langword="true"/>.</description></item>
         /// </list>
         /// </remarks>
-        protected virtual bool UsesSessionTicker => true;
+        protected virtual bool DisconnectionByTimeoutCheck => true;
 
         /// <summary>
         /// Gets the number of currently admitted sessions.
@@ -343,7 +345,7 @@ namespace Pontifex.Raw.Reliable
 
         protected override void OnStarted()
         {
-            if (!UsesSessionTicker)
+            if (!DisconnectionByTimeoutCheck)
             {
                 return;
             }

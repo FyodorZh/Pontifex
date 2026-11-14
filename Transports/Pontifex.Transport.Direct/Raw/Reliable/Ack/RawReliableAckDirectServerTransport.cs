@@ -71,7 +71,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             _bufferCapacityBytes = bufferCapacityBytes ?? DirectInfo.DefaultBufferCapacity;
         }
 
-        protected override bool UsesSessionTicker => false;
+        protected override bool DisconnectionByTimeoutCheck => false;
 
         protected override bool StartCarrier()
         {
