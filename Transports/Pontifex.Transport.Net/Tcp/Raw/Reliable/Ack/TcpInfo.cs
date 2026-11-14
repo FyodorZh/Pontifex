@@ -1,5 +1,4 @@
 ﻿using System;
-using Actuarius.Memory;
 
 namespace Pontifex.Raw.Reliable.Ack.Tcp
 {
@@ -10,8 +9,5 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         public const long DefaultBufferCapacity = 1024 * 1024 * 100;
         public const int ServerConnectionsLimit = 20000;
         public static readonly TimeSpan DefaultDisconnectTimeout = TimeSpan.FromSeconds(180);
-
-        public static readonly IMultiRefReadOnlyByteArray AckRequest = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("AckTcp"));
-        public static readonly IMultiRefReadOnlyByteArray AckOKResponse = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("AckTcp-OK"));
     }
 }
