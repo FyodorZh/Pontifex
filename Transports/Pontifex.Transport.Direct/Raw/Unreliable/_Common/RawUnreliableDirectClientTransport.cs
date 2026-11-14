@@ -76,7 +76,7 @@ namespace Pontifex.Raw.Unreliable.Direct
                 _channel = null;
                 channel.SetClientDeliverySystem(new PerfectDeliverySystem());
                 channel.SetServerDeliverySystem(new PerfectDeliverySystem());
-                DirectTransportManager.Instance.Disconnect(_serverEp, _clientEp);
+                ChannelManager.Instance.Disconnect(_serverEp, _clientEp);
             }
             _callbackQueue?.Dispose();
             _callbackQueue = null;
@@ -92,7 +92,7 @@ namespace Pontifex.Raw.Unreliable.Direct
                     channel = _channel;
                     if (channel == null)
                     {
-                        channel = DirectTransportManager.Instance.Connect(_serverEp, _clientEp);
+                        channel = ChannelManager.Instance.Connect(_serverEp, _clientEp);
                         if (channel == null)
                         {
                             message.Release();

@@ -33,12 +33,12 @@ public sealed class DirectRawReliableAckConformanceAdapter : IRawReliableAckConf
         private readonly string _serverName;
 
         public Fixture(string serverName, ILogger logger, IMemoryRental memory)
-            : base(new RawReliableAckDirectServer(serverName, logger, memory), logger, memory)
+            : base(new RawReliableAckDirectServerTransport(serverName, logger, memory), logger, memory)
         {
             _serverName = serverName;
         }
 
         protected override IRawReliableAckClient CreateClientCore()
-            => new RawReliableAckDirectClient(_serverName, Logger, Memory);
+            => new RawReliableAckDirectClientTransport(_serverName, Logger, Memory);
     }
 }

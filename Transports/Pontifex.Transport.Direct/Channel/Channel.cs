@@ -3,7 +3,7 @@ using System.Threading;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 
-namespace Pontifex.Raw.Unreliable.Direct
+namespace Pontifex
 {
     public sealed class Channel : IDisposable
     {
@@ -13,7 +13,14 @@ namespace Pontifex.Raw.Unreliable.Direct
         private volatile Action<IEndPoint, UnionDataList>? _serverHandler;
         private volatile IDeliverySystem _clientDeliverySystem;
         private volatile IDeliverySystem _serverDeliverySystem;
-        private volatile bool _disposed;
+        private int _disposed;
+
+        /// <summary>
+        /// Raised exactly once when the channel is disposed. Both peers share this channel instance, so
+        /// the event notifies both sides. The notification carries no reason: a channel dispose is equivalent
+        /// to closing a socket.
+        /// </summary>
+        public event Action? Disposed;
 
         public Channel(IEndPoint clientEp, IEndPoint serverEp)
         {
@@ -21,9 +28,13 @@ namespace Pontifex.Raw.Unreliable.Direct
             _serverEp = serverEp;
             _clientDeliverySystem = new PerfectDeliverySystem();
             _serverDeliverySystem = new PerfectDeliverySystem();
+            _clientDeliverySystem.Delivered += OnClientDeliveredMessage;
+            _serverDeliverySystem.Delivered += OnServerDeliveredMessage;
         }
 
         public IEndPoint ClientEp => _clientEp;
+
+        public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
         public Action<UnionDataList>? ClientHandler
         {
@@ -87,7 +98,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         public SendResult SendToClient(UnionDataList message)
         {
-            if (_disposed)
+            if (IsDisposed)
             {
                 message.Release();
                 return SendResult.NotConnected;
@@ -99,7 +110,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         public SendResult SendToServer(UnionDataList message)
         {
-            if (_disposed)
+            if (IsDisposed)
             {
                 message.Release();
                 return SendResult.NotConnected;
@@ -111,8 +122,10 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
 
             var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, new PerfectDeliverySystem());
             oldClient.Delivered -= OnClientDeliveredMessage;
@@ -124,6 +137,27 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             _clientHandler = null;
             _serverHandler = null;
+
+            var disposed = Disposed;
+            Disposed = null;
+
+            if (disposed == null)
+            {
+                return;
+            }
+
+            // Teardown must complete even when a subscriber misbehaves. The channel has no logger, so
+            // failures are swallowed, but every subscriber still receives its notification.
+            foreach (var subscriber in disposed.GetInvocationList())
+            {
+                try
+                {
+                    ((Action)subscriber)();
+                }
+                catch (Exception)
+                {
+                }
+            }
         }
     }
 }
