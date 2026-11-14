@@ -38,7 +38,6 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
         private readonly Action _onChannelDisposed;
 
         private Channel? _channel;
-        private UnionDataList? _pendingAckData;
 
         internal RawReliableAckDirectServerEndpoint(
             string transportName,
@@ -54,7 +53,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 NoIdleTimeout)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
-            _pendingAckData = pendingAckData ?? throw new ArgumentNullException(nameof(pendingAckData));
+            SetPendingAckData(pendingAckData ?? throw new ArgumentNullException(nameof(pendingAckData)));
             _onChannelDisposed = OnChannelDisposed;
         }
 
@@ -88,17 +87,6 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 Log.wtf(ex);
                 Stop(new ExceptionFail(TransportName, ex, "Failed to open server endpoint"), false);
                 FinishConnect(ReleasePendingAckData);
-            }
-        }
-
-        protected override void OnConnected()
-        {
-            base.OnConnected();
-
-            var ackData = Interlocked.Exchange(ref _pendingAckData, null);
-            if (ackData != null)
-            {
-                base.ProcessInboundMessage(MessageType.AckRequestMessage, ackData);
             }
         }
 
@@ -167,12 +155,6 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             channel.Disposed -= _onChannelDisposed;
             channel.ServerHandler = null;
             channel.Dispose();
-        }
-
-        private void ReleasePendingAckData()
-        {
-            var ackData = Interlocked.Exchange(ref _pendingAckData, null);
-            ackData?.Release();
         }
 
         public override string ToString()

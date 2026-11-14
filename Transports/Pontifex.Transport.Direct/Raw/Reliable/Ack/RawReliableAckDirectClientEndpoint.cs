@@ -19,16 +19,13 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
     /// peers.</description></item>
     /// </list>
     /// </remarks>
-    internal sealed class RawReliableAckDirectClientEndpoint : RawReliableAckClientEndpoint, IRawReliableEndpoint
+    internal sealed class RawReliableAckDirectClientEndpoint : RawReliableAckClientEndpoint
     {
         private readonly IEndPoint _serverEndPoint;
         private readonly IEndPoint _clientEndPoint;
-        private readonly object _startGate = new();
         private readonly Action _onChannelDisposed;
 
         private Channel? _channel;
-        private bool _deferStopUntilStarted = true;
-        private StopReason? _pendingStopReason;
 
         internal RawReliableAckDirectClientEndpoint(
             string transportName,
@@ -54,7 +51,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 Channel? channel = ChannelManager.Instance.Connect(_serverEndPoint, _clientEndPoint);
                 if (channel == null)
                 {
-                    RequestStop(new TextFail(TransportName, $"Direct server '{_serverEndPoint}' is not available"));
+                    Stop(new TextFail(TransportName, $"Direct server '{_serverEndPoint}' is not available"), false);
                     FinishConnect(() => { });
                     return;
                 }
@@ -67,7 +64,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 // chance to subscribe to the channel.
                 if (channel.IsDisposed)
                 {
-                    RequestStop(new UnknownRemoteIntention(TransportName));
+                    Stop(new UnknownRemoteIntention(TransportName), false);
                     FinishConnect(CleanupChannel);
                     return;
                 }
@@ -77,49 +74,8 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                RequestStop(new ExceptionFail(TransportName, ex, "Failed to connect"));
+                Stop(new ExceptionFail(TransportName, ex, "Failed to connect"), false);
                 FinishConnect(CleanupChannel);
-            }
-        }
-
-        protected override void OnConnected()
-        {
-            // When the connection already failed, do not run the acknowledgement handshake: the handler
-            // supplied no ack data and the start will be stopped from the ready-to-connect step.
-            lock (_startGate)
-            {
-                if (_pendingStopReason != null)
-                {
-                    return;
-                }
-            }
-
-            base.OnConnected();
-        }
-
-        /// <summary>
-        /// Takes the failure that was observed while the endpoint was still starting, without ending the
-        /// start-time stop deferral.
-        /// </summary>
-        internal StopReason? TakePendingStopReason()
-        {
-            lock (_startGate)
-            {
-                var reason = _pendingStopReason;
-                _pendingStopReason = null;
-                return reason;
-            }
-        }
-
-        /// <summary>
-        /// Ends the start-time stop deferral. Failures observed from now on stop the endpoint
-        /// immediately.
-        /// </summary>
-        internal void FinishTransportStart()
-        {
-            lock (_startGate)
-            {
-                _deferStopUntilStarted = false;
             }
         }
 
@@ -144,7 +100,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             if ((byte)messageType == RawReliableAckDirectServerEndpoint.RejectMessageType)
             {
                 message.Release();
-                RequestStop(new AckRejected(TransportName));
+                Stop(new AckRejected(TransportName), false);
                 return true;
             }
 
@@ -184,40 +140,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
         private void OnChannelDisposed()
         {
-            RequestStop(new UnknownRemoteIntention(TransportName));
-        }
-
-        /// <summary>
-        /// Requests a logical disconnect, deferring it while the transport start transition is still running.
-        /// </summary>
-        /// <remarks>
-        /// In-process delivery is fully synchronous, so application protocol code can disconnect the endpoint
-        /// while the synchronous start is still inside the endpoint's connect completion. Deferring the stop
-        /// keeps the transport start successful and reports the failure through the handler's
-        /// <c>OnStopped</c>, matching the asynchronous TCP carrier.
-        /// </remarks>
-        bool IRawReliableEndpoint.Disconnect(StopReason reason)
-        {
-            RequestStop(reason);
-            return true;
-        }
-
-        private void RequestStop(StopReason reason)
-        {
-            lock (_startGate)
-            {
-                if (_deferStopUntilStarted)
-                {
-                    if (_pendingStopReason == null)
-                    {
-                        _pendingStopReason = reason;
-                    }
-
-                    return;
-                }
-            }
-
-            Stop(reason, false);
+            Stop(new UnknownRemoteIntention(TransportName), false);
         }
 
         private void CleanupChannel()

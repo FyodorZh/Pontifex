@@ -185,83 +185,25 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         }
 
         /// <summary>
-        /// Creates the endpoint and starts its asynchronous connection attempt.
+        /// Creates the TCP client endpoint for one connection attempt.
         /// </summary>
-        /// <returns><see langword="true"/> when the endpoint accepted the start request; otherwise
-        /// <see langword="false"/>.</returns>
-        protected override bool BeginConnect()
+        protected override RawReliableAckClientEndpoint CreateEndpoint(IRawReliableAckClientHandler handler)
         {
-            var handler = Handler;
-            if (handler == null)
-            {
-                Log.e("Transport handler is not set");
-                return false;
-            }
-
-            try
-            {
-                var endpoint = new RawReliableAckTcpClientEndpoint(
-                    Name,
-                    _managedRemoteEndPoint,
-                    handler,
-                    _messageMaxByteSize,
-                    _bufferCapacityBytes,
-                    Memory,
-                    Log,
-                    BuildPingOptions(),
-                    _remoteHalfClosePolicy,
-                    _receiveBufferSize,
-                    _messagePartMaxSize,
-                    _connectTimeout,
-                    _gracefulShutdownDeadline,
-                    _sendSourceInitialCapacity);
-
-                AttachEndpoint(endpoint);
-
-                if (!endpoint.Start())
-                {
-                    Log.e("Failed to start the client endpoint");
-                    return false;
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// The endpoint starts connecting asynchronously from <see cref="BeginConnect"/>; there is no
-        /// additional ready step.
-        /// </summary>
-        protected override void OnReadyToConnect()
-        {
-        }
-
-        /// <summary>
-        /// Stops the endpoint. A direct transport stop is always a hard stop; a gentle logical disconnect
-        /// is requested through <see cref="IRawReliableEndpoint.Disconnect"/> on the connected endpoint.
-        /// The base class detaches the endpoint after this method returns.
-        /// </summary>
-        protected override void DestroyTransport(StopReason reason)
-        {
-            var endpoint = AttachedEndpoint;
-            if (endpoint == null)
-            {
-                return;
-            }
-
-            try
-            {
-                endpoint.Stop(reason, false);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-            }
+            return new RawReliableAckTcpClientEndpoint(
+                Name,
+                _managedRemoteEndPoint,
+                handler,
+                _messageMaxByteSize,
+                _bufferCapacityBytes,
+                Memory,
+                Log,
+                BuildPingOptions(),
+                _remoteHalfClosePolicy,
+                _receiveBufferSize,
+                _messagePartMaxSize,
+                _connectTimeout,
+                _gracefulShutdownDeadline,
+                _sendSourceInitialCapacity);
         }
 
         private RawReliableClientEndpoint.PingOptions? BuildPingOptions()

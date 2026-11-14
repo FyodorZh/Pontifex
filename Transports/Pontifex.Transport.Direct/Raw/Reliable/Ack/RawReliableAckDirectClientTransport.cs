@@ -1,7 +1,6 @@
 using System;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
-using Pontifex.StopReasons;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack.Direct
@@ -25,8 +24,6 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
         private readonly GuidEndPoint _clientEndPoint;
         private readonly int _messageMaxByteSize;
         private readonly long _bufferCapacityBytes;
-
-        private StopReason? _pendingFailure;
 
         public override int MessageMaxByteSize => _messageMaxByteSize;
 
@@ -69,84 +66,17 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             _bufferCapacityBytes = bufferCapacityBytes ?? DirectInfo.DefaultBufferCapacity;
         }
 
-        protected override bool BeginConnect()
+        protected override RawReliableAckClientEndpoint CreateEndpoint(IRawReliableAckClientHandler handler)
         {
-            var handler = Handler;
-            if (handler == null)
-            {
-                Log.e("Transport handler is not set");
-                return false;
-            }
-
-            try
-            {
-                var endpoint = new RawReliableAckDirectClientEndpoint(
-                    Name,
-                    _serverEndPoint,
-                    _clientEndPoint,
-                    handler,
-                    _messageMaxByteSize,
-                    _bufferCapacityBytes,
-                    Memory,
-                    Log);
-
-                AttachEndpoint(endpoint);
-
-                if (!endpoint.Start())
-                {
-                    endpoint.FinishTransportStart();
-                    Log.e("Failed to start the client endpoint");
-                    return false;
-                }
-
-                _pendingFailure = endpoint.TakePendingStopReason();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-                return false;
-            }
-        }
-
-        protected override void OnReadyToConnect()
-        {
-            var failure = _pendingFailure;
-            _pendingFailure = null;
-
-            if (AttachedEndpoint is RawReliableAckDirectClientEndpoint endpoint)
-            {
-                failure ??= endpoint.TakePendingStopReason();
-                endpoint.FinishTransportStart();
-
-                // A failure may have been reported between the first observation and the deferral end.
-                failure ??= endpoint.TakePendingStopReason();
-            }
-
-            if (failure != null)
-            {
-                // A synchronous connection failure must not turn the start into a failure. Report it after
-                // the start transition has been accepted instead, like the asynchronous TCP carrier.
-                Stop(failure);
-            }
-        }
-
-        protected override void DestroyTransport(StopReason reason)
-        {
-            var endpoint = AttachedEndpoint;
-            if (endpoint == null)
-            {
-                return;
-            }
-
-            try
-            {
-                endpoint.Stop(reason, false);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-            }
+            return new RawReliableAckDirectClientEndpoint(
+                Name,
+                _serverEndPoint,
+                _clientEndPoint,
+                handler,
+                _messageMaxByteSize,
+                _bufferCapacityBytes,
+                Memory,
+                Log);
         }
 
         public override string ToString()

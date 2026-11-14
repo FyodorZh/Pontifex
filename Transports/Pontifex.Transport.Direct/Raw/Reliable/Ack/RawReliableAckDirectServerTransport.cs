@@ -29,7 +29,6 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
         private readonly long _bufferCapacityBytes;
 
         private readonly object _channelsLock = new();
-        private readonly object _acknowledgeLock = new();
         private readonly Dictionary<IEndPoint, HandshakeEntry> _channels = new();
 
         public override int MessageMaxByteSize => _messageMaxByteSize;
@@ -72,10 +71,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             _bufferCapacityBytes = bufferCapacityBytes ?? DirectInfo.DefaultBufferCapacity;
         }
 
-        protected override void OnStarted()
-        {
-            // Direct has no idle timeout and no keep-alive, so the shared session ticker is not needed.
-        }
+        protected override bool UsesSessionTicker => false;
 
         protected override bool StartCarrier()
         {
@@ -121,15 +117,8 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 return;
             }
 
-            if (!TryReserveSession())
+            if (!TryBeginAdmission())
             {
-                RejectChannel(channel);
-                return;
-            }
-
-            if (!TryBeginHandshake())
-            {
-                ReleaseSession();
                 RejectChannel(channel);
                 return;
             }
@@ -153,8 +142,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             {
                 channel.Disposed -= entry.OnDisposed;
                 channel.ServerHandler = null;
-                EndHandshake();
-                ReleaseSession();
+                AbandonAdmission();
                 RejectChannel(channel);
                 return;
             }
@@ -197,19 +185,14 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
                 ackData = message;
 
-                IRawReliableAckServerHandler? handler;
-                lock (_acknowledgeLock)
-                {
-                    handler = TryAcknowledge(clientEp, ackData);
-                }
+                IRawReliableAckServerHandler? handler = TryAcknowledge(clientEp, ackData);
 
                 if (handler == null)
                 {
                     ackData.Release();
                     ackData = null;
 
-                    EndHandshake();
-                    ReleaseSession();
+                    AbandonAdmission();
                     try
                     {
                         SendRejection(entry.Channel);
@@ -255,11 +238,9 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                     Log.d("The direct channel was already detached from the server registry");
                 }
 
-                EndHandshake();
-
                 try
                 {
-                    if (!TryStartAndRegisterSession(endpoint))
+                    if (!CompleteAdmission(endpoint))
                     {
                         Log.w("Failed to start or register a direct session");
                     }
@@ -293,15 +274,13 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             }
 
             RemoveEntry(entry, true);
-            EndHandshake();
-            ReleaseSession();
+            AbandonAdmission();
             RejectChannel(entry.Channel);
         }
 
         private void RejectHandshake(HandshakeEntry entry)
         {
-            EndHandshake();
-            ReleaseSession();
+            AbandonAdmission();
             RejectChannel(entry.Channel);
         }
 

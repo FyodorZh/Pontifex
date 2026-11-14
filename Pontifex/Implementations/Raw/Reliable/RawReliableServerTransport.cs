@@ -103,6 +103,18 @@ namespace Pontifex.Raw.Reliable
         protected bool IsStopping => _stopping;
 
         /// <summary>
+        /// Gets a value indicating whether the transport needs the shared periodic session ticker.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Carriers without an idle-session timeout can override this to
+        /// <see langword="false"/> to avoid a dedicated ticker thread. The default is
+        /// <see langword="true"/>.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual bool UsesSessionTicker => true;
+
+        /// <summary>
         /// Gets the number of currently admitted sessions.
         /// </summary>
         protected int ActiveSessions => Volatile.Read(ref _activeSessions);
@@ -331,6 +343,11 @@ namespace Pontifex.Raw.Reliable
 
         protected override void OnStarted()
         {
+            if (!UsesSessionTicker)
+            {
+                return;
+            }
+
             var ticker = new SessionTicker(TickSessions, LogicDriverFactory, Log);
             _ticker = ticker;
             ticker.Start();
