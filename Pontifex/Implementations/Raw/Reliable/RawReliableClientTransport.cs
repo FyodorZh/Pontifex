@@ -6,6 +6,25 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable
 {
+    /// <summary>
+    /// Base class for reliable client transports. Connection establishment, connectivity, and the
+    /// user handler's connection lifecycle are owned by a <see cref="RawReliableClientEndpoint"/>
+    /// attached during <see cref="BeginConnect"/>.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><b>Connection ownership</b>: an implementation that returns
+    /// <see langword="true"/> from <see cref="BeginConnect"/> must attach exactly one endpoint with
+    /// <see cref="AttachEndpoint"/>. The endpoint is the single source of truth for
+    /// <see cref="IsConnected"/> and delivers <c>OnConnected</c>, <c>OnDisconnected</c>, and
+    /// <c>OnStopped</c> to the user handler; the transport does not track a connected state of its
+    /// own.</description></item>
+    /// <item><description><b>Handler fallback notifications</b>: the transport owns the terminal stop
+    /// notification until a <see cref="BeginConnect"/> succeeds and the lifecycle moves to connecting.
+    /// It therefore notifies its handler itself when no endpoint is attached or when the start attempt
+    /// failed, even if that attempt already attached an endpoint.</description></item>
+    /// </list>
+    /// </remarks>
     public abstract class RawReliableClientTransport<TClientHandler> : RawReliableTransport, IRawReliableClientTransport<TClientHandler>
         where TClientHandler : class, IRawReliableClientHandler
     {
@@ -14,7 +33,6 @@ namespace Pontifex.Raw.Reliable
             Constructed,
             Initialized,
             Connecting,
-            Connected,
             Disconnected
         }
 
@@ -24,22 +42,18 @@ namespace Pontifex.Raw.Reliable
 
         private RawReliableClientEndpoint? _attachedEndpoint;
 
-        public bool IsConnected
-        {
-            get
-            {
-                var endpoint = Volatile.Read(ref _attachedEndpoint);
-                if (endpoint != null)
-                {
-                    return endpoint.IsConnected;
-                }
-
-                lock (_locker)
-                {
-                    return _state == State.Connected;
-                }
-            }
-        }
+        /// <summary>
+        /// Gets whether the attached endpoint is logically connected. A transport that has no
+        /// attached endpoint is never connected.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: Connectivity is owned by the endpoint; the
+        /// transport's own lifecycle state does not participate.</description></item>
+        /// </list>
+        /// </remarks>
+        public bool IsConnected => Volatile.Read(ref _attachedEndpoint)?.IsConnected ?? false;
         
         /// <summary>
         /// Gets the initialized client handler, or <see langword="null"/> before <see cref="Init"/>
@@ -67,11 +81,12 @@ namespace Pontifex.Raw.Reliable
         /// <param name="reason">The reason the transport is stopping.</param>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: For the connecting and connected states the handler
-        /// notifications run first; for the initialized state this method runs before the handler stop
-        /// notification. The attached endpoint, when present, is available through
-        /// <see cref="AttachedEndpoint"/>. The base class detaches it after this method returns;
-        /// implementations must not detach it themselves.</description></item>
+        /// <item><description><b>Other notes</b>: For the connecting state the handler stop
+        /// notification runs first when the transport owns it (no attached endpoint); for the
+        /// initialized state this method runs before the handler stop notification. The attached
+        /// endpoint, when present, is available through <see cref="AttachedEndpoint"/>. The base class
+        /// detaches it after this method returns; implementations must not detach it
+        /// themselves.</description></item>
         /// </list>
         /// </remarks>
         protected abstract void DestroyTransport(StopReason reason);
@@ -142,6 +157,8 @@ namespace Pontifex.Raw.Reliable
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Safe to call from the transport lifecycle thread. Only one
         /// endpoint may be attached per transport.</description></item>
+        /// <item><description><b>Connection ownership</b>: an implementation must attach exactly one
+        /// endpoint from <see cref="BeginConnect"/> when it returns <see langword="true"/>.</description></item>
         /// <item><description><b>Other notes</b>: Subscribes to the endpoint's terminal
         /// <see cref="RawEndpoint.Stopped"/> notification so the transport stops with it.</description></item>
         /// </list>
@@ -197,33 +214,17 @@ namespace Pontifex.Raw.Reliable
 
         protected sealed override void OnStopped(StopReason reason)
         {
-            bool notifyHandler = AttachedEndpoint == null;
-            bool wasConnected = _state == State.Connected;
-            bool wasActive = wasConnected || _state == State.Connecting;
-
-            if (wasActive)
+            if (_state == State.Connecting)
             {
-                // The transport is no longer connected before any application callback runs, so
-                // IsConnected remains false during OnDisconnected and OnStopped.
                 _state = State.Disconnected;
 
-                if (notifyHandler && _handler != null)
+                // Reaching Connecting means BeginConnect succeeded and handed the lifecycle to the
+                // attached endpoint, if any.
+                if (AttachedEndpoint == null && _handler != null)
                 {
-                    if (wasConnected)
-                    {
-                        try
-                        {
-                            _handler.OnDisconnected(reason);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.wtf(ex);
-                        }
-                    }
-
                     try
                     {
-                        _handler.OnStopped(reason: reason);
+                        _handler.OnStopped(reason);
                     }
                     catch (Exception ex)
                     {
@@ -253,7 +254,8 @@ namespace Pontifex.Raw.Reliable
                     DetachEndpoint();
                 }
 
-                if (notifyHandler && _handler != null)
+                // A failed start never hands the lifecycle to an endpoint, even if it attached one.
+                if (_handler != null)
                 {
                     try
                     {
@@ -263,52 +265,6 @@ namespace Pontifex.Raw.Reliable
                     {
                         Log.wtf(ex);
                     }
-                }
-            }
-        }
-
-        protected void ConnectionFailed()
-        {
-            lock (_locker)
-            {
-                if (_state == State.Connecting)
-                {
-                    Fail("ConnectionFinished", "Connection failed");
-                }
-                else
-                {
-                    Stop(new StopReasons.TextFail(Name, "Transport has wrong state '{0}' instead of 'Connecting'", _state));
-                }
-            }
-        }
-
-        protected void ConnectionFinished(Action<TClientHandler> endpointConstructor)
-        {
-            lock (_locker)
-            {
-                if (_state == State.Connecting)
-                {
-                    try
-                    {
-                        endpointConstructor.Invoke(_handler!);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
-                        Fail(new StopReasons.ExceptionFail(Name, ex, "ConnectionFinished action failed"));
-                        return;
-                    }
-
-                    // The action may synchronously stop or fail the transport. Do not resurrect a
-                    // transport that has already moved out of Connecting in that case.
-                    if (_state == State.Connecting)
-                    {
-                        _state = State.Connected;
-                    }
-                }
-                else
-                {
-                    Stop(new StopReasons.TextFail(Name, "Transport has wrong state '{0}' instead of 'Connecting'", _state));
                 }
             }
         }

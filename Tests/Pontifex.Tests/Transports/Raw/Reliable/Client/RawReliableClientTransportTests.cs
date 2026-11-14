@@ -9,8 +9,8 @@ namespace Pontifex.Tests.Transports;
 /// <summary>
 /// Black-box contract tests for <see cref="RawReliableClientTransport{TClientHandler}"/>, exercised
 /// through the extended public + protected surface exposed by <see cref="TestRawReliableClientTransport"/>.
-/// Covers initialization, the connect/finish state machine, connectivity, endpoint ownership, the
-/// terminal notification matrix, and handler exception isolation.
+/// Covers initialization, the start/connect handoff, endpoint ownership and connectivity, the
+/// failed-start notification path, and handler exception isolation.
 /// </summary>
 [Category("Transports")]
 public sealed class RawReliableClientTransportTests
@@ -31,17 +31,6 @@ public sealed class RawReliableClientTransportTests
     private static UserIntention Reason(string source = "test")
     {
         return new UserIntention(source);
-    }
-
-    private static void InitAndConnect(
-        TestRawReliableClientTransport transport,
-        RecordingRawReliableClientHandler handler,
-        Action<StopReason> onStopped)
-    {
-        Assert.That(transport.Init(handler), Is.True);
-        Assert.That(transport.Start(onStopped), Is.True);
-        transport.ExposedConnectionFinished(_ => { });
-        Assert.That(transport.IsConnected, Is.True);
     }
 
     #region Init
@@ -176,36 +165,6 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void Init_WhenConnected_FailsAndNotifiesDisconnectThenStop()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        StopReason? callbackReason = null;
-        InitAndConnect(transport, handler, r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        });
-
-        Assert.That(transport.Init(handler), Is.False);
-
-        Assert.That(transport.IsValid, Is.False);
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        var reason = (TextFail)handler.StoppedReason!;
-        Assert.That(reason.Source, Is.EqualTo(transport.Name));
-        Assert.That(reason.Text, Does.Contain("Wrong transport state"));
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
-        Assert.That(callbackReason, Is.SameAs(handler.DisconnectedReason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "handlerDisconnected", "handlerStopped", "destroyTransport",
-            "startCallback"
-        }));
-    }
-
-    [Test]
     public void Init_AfterCompletedStop_FailsWithoutAdditionalNotification()
     {
         var transport = Create();
@@ -311,6 +270,41 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
+    public void Start_WhenBeginConnectAttachesEndpointAndReturnsFalse_NotifiesHandlerAndDetaches()
+    {
+        var transport = Create();
+        using var handler = CreateHandler(transport);
+        using var endpointHandler = CreateHandler();
+        using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
+        Assert.That(transport.Init(handler), Is.True);
+        transport.BeginConnectBehavior = () =>
+        {
+            transport.ExposedAttachEndpoint(endpoint);
+            return false;
+        };
+        StopReason? callbackReason = null;
+
+        Assert.That(transport.Start(r =>
+        {
+            callbackReason = r;
+            transport.EventLog.Add("startCallback");
+        }), Is.False);
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
+        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
+        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
+        Assert.That(transport.EndpointDuringDestroy, Is.SameAs(endpoint));
+        Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
+        Assert.That(transport.IsConnected, Is.False);
+        Assert.That(transport.EventLog, Is.EqualTo(new[]
+        {
+            "beginConnect", "destroyTransport", "handlerStopped", "startCallback"
+        }));
+    }
+
+    [Test]
     public void Start_WhenBeginConnectReturnsFalseAndOnStoppedThrows_StillDestroys()
     {
         var transport = Create();
@@ -401,364 +395,7 @@ public sealed class RawReliableClientTransportTests
 
     #endregion
 
-    #region Connection completion and failure
-
-    [Test]
-    public void ConnectionFinished_WhenConnecting_InvokesActionWithHandlerAndConnects()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-        Assert.That(transport.Start(_ => { }), Is.True);
-        IRawReliableClientHandler? actionHandler = null;
-        bool connectedInsideAction = true;
-
-        transport.ExposedConnectionFinished(h =>
-        {
-            actionHandler = h;
-            connectedInsideAction = transport.IsConnected;
-            transport.EventLog.Add("connectionFinished");
-        });
-
-        Assert.That(actionHandler, Is.SameAs(handler));
-        Assert.That(connectedInsideAction, Is.False);
-        Assert.That(transport.IsConnected, Is.True);
-        Assert.That(transport.DestroyTransportCalls, Is.Zero);
-        Assert.That(handler.DisconnectedCount, Is.Zero);
-        Assert.That(handler.StoppedCount, Is.Zero);
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "connectionFinished"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFinished_WhenAlreadyConnected_StopsWithTextFailWithoutInvokingAction()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        StopReason? callbackReason = null;
-        InitAndConnect(transport, handler, r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        });
-        bool actionCalled = false;
-
-        transport.ExposedConnectionFinished(_ => actionCalled = true);
-
-        Assert.That(actionCalled, Is.False);
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
-        var reason = (TextFail)handler.StoppedReason!;
-        Assert.That(reason.Source, Is.EqualTo(transport.Name));
-        Assert.That(reason.Text, Does.Contain("Connected"));
-        Assert.That(reason.Text, Does.Contain("Connecting"));
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "handlerDisconnected", "handlerStopped", "destroyTransport",
-            "startCallback"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFinished_WhenInitialized_IsIgnoredAndStartStillWorks()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-        bool actionCalled = false;
-
-        transport.ExposedConnectionFinished(_ => actionCalled = true);
-
-        Assert.That(actionCalled, Is.False);
-        Assert.That(transport.DestroyTransportCalls, Is.Zero);
-        Assert.That(handler.StoppedCount, Is.Zero);
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-
-        Assert.That(transport.Start(_ => { }), Is.True);
-        Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.IsConnected, Is.False);
-    }
-
-    [Test]
-    public void ConnectionFinished_WhenActionStopsTransport_DoesNotResurrectConnected()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-        var reason = Reason();
-        StopReason? callbackReason = null;
-        Assert.That(transport.Start(r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        }), Is.True);
-
-        transport.ExposedConnectionFinished(_ =>
-        {
-            transport.EventLog.Add("connectionFinished");
-            transport.Stop(reason);
-        });
-
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.IsStarted, Is.False);
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedReason, Is.SameAs(reason));
-        Assert.That(callbackReason, Is.SameAs(reason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "connectionFinished", "handlerStopped", "destroyTransport",
-            "startCallback"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFinished_WhenActionFailsTransport_DoesNotResurrectConnected()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-        var failReason = new TextFail(transport.Name, "action failure");
-        StopReason? callbackReason = null;
-        Assert.That(transport.Start(r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        }), Is.True);
-
-        transport.ExposedConnectionFinished(_ =>
-        {
-            transport.EventLog.Add("connectionFinished");
-            transport.Fail(failReason);
-        });
-
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.IsStarted, Is.False);
-        Assert.That(transport.IsValid, Is.False);
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedReason, Is.SameAs(failReason));
-        Assert.That(callbackReason, Is.SameAs(failReason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.LastDestroyReason, Is.SameAs(failReason));
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "connectionFinished", "handlerStopped", "destroyTransport",
-            "startCallback"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFinished_WhenActionThrows_FailsTransportWithoutConnecting()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-        StopReason? callbackReason = null;
-        Assert.That(transport.Start(r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        }), Is.True);
-        var exception = new InvalidOperationException("constructor failure");
-
-        Assert.DoesNotThrow(() =>
-            transport.ExposedConnectionFinished(_ =>
-            {
-                transport.EventLog.Add("connectionFinished");
-                throw exception;
-            }));
-
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.IsStarted, Is.False);
-        Assert.That(transport.IsValid, Is.False);
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
-        Assert.That(((ExceptionFail)handler.StoppedReason!).Exception, Is.SameAs(exception));
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "connectionFinished", "handlerStopped", "destroyTransport",
-            "startCallback"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFinished_WhenActionAttachesConnectedEndpoint_IsConnectedDuringAction()
-    {
-        var transport = Create();
-        using var transportHandler = CreateHandler(transport);
-        using var endpointHandler = CreateHandler();
-        using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
-        Assert.That(transport.Init(transportHandler), Is.True);
-        Assert.That(transport.Start(_ => { }), Is.True);
-        endpoint.ConnectAndComplete();
-        bool? connectedInsideAction = null;
-
-        transport.ExposedConnectionFinished(_ =>
-        {
-            transport.ExposedAttachEndpoint(endpoint);
-            connectedInsideAction = transport.IsConnected;
-            transport.EventLog.Add("connectionFinished");
-        });
-
-        Assert.That(connectedInsideAction, Is.True);
-        Assert.That(transport.IsConnected, Is.True);
-        Assert.That(transport.ExposedAttachedEndpoint, Is.SameAs(endpoint));
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "connectionFinished"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFinished_WhenConstructed_IsIgnoredAndInitStillWorks()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        bool actionCalled = false;
-
-        transport.ExposedConnectionFinished(_ => actionCalled = true);
-
-        Assert.That(actionCalled, Is.False);
-        Assert.That(transport.DestroyTransportCalls, Is.Zero);
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.Init(handler), Is.True);
-        Assert.That(transport.Start(_ => { }), Is.True);
-        Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void ConnectionFailed_WhenConstructed_IsIgnoredAndInitStillWorks()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-
-        transport.ExposedConnectionFailed();
-
-        Assert.That(transport.DestroyTransportCalls, Is.Zero);
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.Init(handler), Is.True);
-        Assert.That(transport.Start(_ => { }), Is.True);
-        Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void ConnectionFailed_WhenConnecting_FailsAndNotifiesStopped()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-        StopReason? callbackReason = null;
-        Assert.That(transport.Start(r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        }), Is.True);
-
-        transport.ExposedConnectionFailed();
-
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.DisconnectedCount, Is.Zero);
-        var reason = (TextFail)handler.StoppedReason!;
-        Assert.That(reason.Text, Is.EqualTo("Connection failed"));
-        Assert.That(reason.Source, Is.EqualTo(transport.Name));
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.IsValid, Is.False);
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "handlerStopped", "destroyTransport", "startCallback"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFailed_WhenConnected_StopsWithTextFailAndNotifiesDisconnect()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        StopReason? callbackReason = null;
-        InitAndConnect(transport, handler, r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        });
-
-        transport.ExposedConnectionFailed();
-
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        var reason = (TextFail)handler.StoppedReason!;
-        Assert.That(reason.Source, Is.EqualTo(transport.Name));
-        Assert.That(reason.Text, Does.Contain("Connected"));
-        Assert.That(reason.Text, Does.Contain("Connecting"));
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
-        Assert.That(callbackReason, Is.SameAs(handler.DisconnectedReason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "handlerDisconnected", "handlerStopped", "destroyTransport",
-            "startCallback"
-        }));
-    }
-
-    [Test]
-    public void ConnectionFailed_WhenInitialized_IsIgnoredAndStartStillWorks()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-
-        transport.ExposedConnectionFailed();
-
-        Assert.That(transport.DestroyTransportCalls, Is.Zero);
-        Assert.That(handler.StoppedCount, Is.Zero);
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-
-        Assert.That(transport.Start(_ => { }), Is.True);
-        Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.IsConnected, Is.False);
-    }
-
-    #endregion
-
     #region IsConnected
-
-    [Test]
-    public void IsConnected_TracksTransportStateWithoutEndpoint()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.Init(handler), Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.Start(_ => { }), Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-        transport.ExposedConnectionFinished(_ => { });
-        Assert.That(transport.IsConnected, Is.True);
-
-        Assert.That(transport.Stop(Reason()), Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-    }
 
     [Test]
     public void IsConnected_WithAttachedEndpoint_DelegatesToEndpoint()
@@ -767,7 +404,8 @@ public sealed class RawReliableClientTransportTests
         using var transportHandler = CreateHandler(transport);
         using var endpointHandler = CreateHandler();
         using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
-        InitAndConnect(transport, transportHandler, _ => { });
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(_ => { }), Is.True);
         transport.ExposedAttachEndpoint(endpoint);
 
         Assert.That(transport.IsConnected, Is.False);
@@ -778,28 +416,15 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void IsConnected_IsFalseDuringOnDisconnected()
+    public void IsConnected_IsFalseDuringOnStopped_WhenStartFails()
     {
         var transport = Create();
         using var handler = CreateHandler(transport);
         handler.IsConnectedProbe = () => transport.IsConnected;
-        InitAndConnect(transport, handler, _ => { });
+        Assert.That(transport.Init(handler), Is.True);
+        transport.BeginConnectBehavior = static () => false;
 
-        Assert.That(transport.Stop(Reason()), Is.True);
-
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.IsConnectedDuringDisconnected, Is.False);
-    }
-
-    [Test]
-    public void IsConnected_IsFalseDuringOnStopped()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        handler.IsConnectedProbe = () => transport.IsConnected;
-        InitAndConnect(transport, handler, _ => { });
-
-        Assert.That(transport.Stop(Reason()), Is.True);
+        Assert.That(transport.Start(_ => { }), Is.False);
 
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
         Assert.That(handler.IsConnectedDuringStopped, Is.False);
@@ -809,8 +434,12 @@ public sealed class RawReliableClientTransportTests
     public void IsConnected_IsFalseInsideDestroyTransport()
     {
         var transport = Create();
-        using var handler = CreateHandler(transport);
-        InitAndConnect(transport, handler, _ => { });
+        using var transportHandler = CreateHandler(transport);
+        using var endpointHandler = CreateHandler();
+        using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(_ => { }), Is.True);
+        transport.ExposedAttachEndpoint(endpoint);
 
         Assert.That(transport.Stop(Reason()), Is.True);
 
@@ -855,7 +484,8 @@ public sealed class RawReliableClientTransportTests
         using var endpointHandler = CreateHandler();
         using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
         StopReason? callbackReason = null;
-        InitAndConnect(transport, transportHandler, r => callbackReason = r);
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(r => callbackReason = r), Is.True);
         transport.ExposedAttachEndpoint(endpoint);
         endpoint.ConnectAndComplete();
         var reason = Reason();
@@ -873,15 +503,17 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void Stop_WhileConnected_DetachesEndpointAfterDestroy()
+    public void Stop_WhileEndpointConnected_DetachesEndpointAfterDestroy()
     {
         var transport = Create();
         using var transportHandler = CreateHandler(transport);
         using var endpointHandler = CreateHandler();
         using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
         StopReason? callbackReason = null;
-        InitAndConnect(transport, transportHandler, r => callbackReason = r);
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(r => callbackReason = r), Is.True);
         transport.ExposedAttachEndpoint(endpoint);
+        endpoint.ConnectAndComplete();
         var reason = Reason();
 
         Assert.That(transport.Stop(reason), Is.True);
@@ -901,9 +533,10 @@ public sealed class RawReliableClientTransportTests
         using var transportHandler = CreateHandler(transport);
         using var endpointHandler = CreateHandler();
         using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
-        InitAndConnect(transport, transportHandler, _ => { });
-        endpoint.ConnectAndComplete();
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(_ => { }), Is.True);
         transport.ExposedAttachEndpoint(endpoint);
+        endpoint.ConnectAndComplete();
         Assert.That(transport.IsConnected, Is.True);
 
         Assert.That(transport.Stop(Reason()), Is.True);
@@ -973,90 +606,39 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void Stop_WhileConnected_NotifiesDisconnectedThenStoppedThenDestroys()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        StopReason? callbackReason = null;
-        InitAndConnect(transport, handler, r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        });
-        var reason = Reason();
-
-        Assert.That(transport.Stop(reason), Is.True);
-
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.DisconnectedReason, Is.SameAs(reason));
-        Assert.That(handler.StoppedReason, Is.SameAs(reason));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
-        Assert.That(callbackReason, Is.SameAs(reason));
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "readyToConnect", "handlerDisconnected", "handlerStopped", "destroyTransport",
-            "startCallback"
-        }));
-    }
-
-    [Test]
-    public void Stop_WhileConnected_WhenOnDisconnectedThrows_StillCallsOnStoppedAndDestroys()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        var exception = new InvalidOperationException("disconnected failure");
-        handler.DisconnectedException = exception;
-        InitAndConnect(transport, handler, _ => { });
-        var reason = Reason();
-
-        Assert.DoesNotThrow(() => transport.Stop(reason));
-
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.ThrownDisconnectedException, Is.SameAs(exception));
-        Assert.That(handler.ThrownStoppedException, Is.Null);
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.IsValid, Is.True);
-    }
-
-    [Test]
-    public void Stop_WhileConnected_WhenOnStoppedThrows_StillDestroys()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        var exception = new InvalidOperationException("stopped failure");
-        handler.StoppedException = exception;
-        InitAndConnect(transport, handler, _ => { });
-        var reason = Reason();
-
-        Assert.DoesNotThrow(() => transport.Stop(reason));
-
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.ThrownStoppedException, Is.SameAs(exception));
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
-        Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.IsValid, Is.True);
-    }
-
-    [Test]
-    public void Stop_WhileConnected_WhenDestroyThrows_StillDetachesAndNotifiesStartCallback()
+    public void Stop_WhileConnectingWithAttachedEndpoint_SkipsHandlerNotification()
     {
         var transport = Create();
         using var transportHandler = CreateHandler(transport);
         using var endpointHandler = CreateHandler();
         using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
         StopReason? callbackReason = null;
-        InitAndConnect(transport, transportHandler, r => callbackReason = r);
-        endpoint.ConnectAndComplete();
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(r => callbackReason = r), Is.True);
         transport.ExposedAttachEndpoint(endpoint);
+        var reason = Reason();
+
+        Assert.That(transport.Stop(reason), Is.True);
+
+        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
+        Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
+        Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
+        Assert.That(transportHandler.StoppedCount, Is.Zero);
+        Assert.That(callbackReason, Is.SameAs(reason));
+    }
+
+    [Test]
+    public void Stop_WhileEndpointConnected_WhenDestroyThrows_StillDetachesAndNotifiesStartCallback()
+    {
+        var transport = Create();
+        using var transportHandler = CreateHandler(transport);
+        using var endpointHandler = CreateHandler();
+        using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
+        StopReason? callbackReason = null;
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(r => callbackReason = r), Is.True);
+        transport.ExposedAttachEndpoint(endpoint);
+        endpoint.ConnectAndComplete();
         transport.DestroyException = new InvalidOperationException("destroy failure");
         var reason = Reason();
         bool stopped = false;
@@ -1100,15 +682,17 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void Stop_WhileConnectedWithAttachedEndpoint_SkipsHandlerNotifications()
+    public void Stop_WhileEndpointConnected_SkipsHandlerNotifications()
     {
         var transport = Create();
         using var transportHandler = CreateHandler(transport);
         using var endpointHandler = CreateHandler();
         using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
         StopReason? callbackReason = null;
-        InitAndConnect(transport, transportHandler, r => callbackReason = r);
+        Assert.That(transport.Init(transportHandler), Is.True);
+        Assert.That(transport.Start(r => callbackReason = r), Is.True);
         transport.ExposedAttachEndpoint(endpoint);
+        endpoint.ConnectAndComplete();
         var reason = Reason();
 
         Assert.That(transport.Stop(reason), Is.True);

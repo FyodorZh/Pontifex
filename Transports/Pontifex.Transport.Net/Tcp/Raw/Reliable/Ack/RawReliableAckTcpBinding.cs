@@ -40,7 +40,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             }
 
             return context.Role == TransportRole.Server
-                ? new RawReliableAckTcpServer(
+                ? new RawReliableAckTcpServerTransport(
                     ipAddress,
                     port,
                     TcpInfo.ServerConnectionsLimit,
@@ -48,7 +48,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                     null,
                     context.Logger,
                     context.Memory)
-                : new RawReliableAckTcpClient(
+                : new RawReliableAckTcpClientTransport(
                     ipAddress,
                     port,
                     disconnectTimeout,

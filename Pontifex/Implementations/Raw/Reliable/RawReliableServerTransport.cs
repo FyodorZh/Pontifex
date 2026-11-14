@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.StopReasons;
@@ -330,7 +331,7 @@ namespace Pontifex.Raw.Reliable
 
         protected override void OnStarted()
         {
-            var ticker = new SessionTicker(TickSessions, LogicDriverFactory);
+            var ticker = new SessionTicker(TickSessions, LogicDriverFactory, Log);
             _ticker = ticker;
             ticker.Start();
         }
@@ -508,14 +509,16 @@ namespace Pontifex.Raw.Reliable
         {
             private readonly Action _tick;
             private readonly Func<ILogicDriver<IPeriodicLogicDriverCtl>> _logicDriverFactory;
+            private readonly ILogger _log;
 
             private ILogicDriver<IPeriodicLogicDriverCtl>? _driver;
             private volatile IPeriodicLogicDriverCtl? _driverCtl;
 
-            public SessionTicker(Action tick, Func<ILogicDriver<IPeriodicLogicDriverCtl>> logicDriverFactory)
+            public SessionTicker(Action tick, Func<ILogicDriver<IPeriodicLogicDriverCtl>> logicDriverFactory, ILogger log)
             {
                 _tick = tick;
                 _logicDriverFactory = logicDriverFactory;
+                _log = log;
             }
 
             public void Start()
@@ -526,7 +529,34 @@ namespace Pontifex.Raw.Reliable
 
             public void Stop()
             {
+                var driver = _driver;
+                _driver = null;
+
                 _driverCtl?.Stop();
+
+                if (driver == null)
+                {
+                    return;
+                }
+
+                // Stopping the per-logic control only asks the logic to stop. A thread-based driver owns a
+                // dedicated thread that outlives that request, so the driver itself must be finished as well,
+                // otherwise the thread keeps ticking forever after the transport stops.
+                // Finish() is deliberately not awaited: stop runs under the transport lock, and waiting for the
+                // ticker thread would deadlock if it is currently acquiring the same lock to observe IsStarted.
+                try
+                {
+                    Task finish = driver.Finish();
+                    finish.ContinueWith(
+                        t => _log.wtf(t.Exception!),
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
+                catch (Exception ex)
+                {
+                    _log.wtf(ex);
+                }
             }
 
             bool ILogic<IPeriodicLogicDriverCtl>.LogicStarted(IPeriodicLogicDriverCtl driver)
