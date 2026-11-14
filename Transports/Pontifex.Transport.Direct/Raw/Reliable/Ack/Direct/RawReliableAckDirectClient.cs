@@ -28,7 +28,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
         
         private readonly RawReliableAckClientControl _transportControl;
 
-        public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
+        public override int MessageMaxByteSize => DirectInfo.DefaultMessageMaxSize;
 
         public RawReliableAckDirectClient(string serverName, ILogger logger, IMemoryRental memory)
             : base(DirectInfo.TransportName, logger, memory)

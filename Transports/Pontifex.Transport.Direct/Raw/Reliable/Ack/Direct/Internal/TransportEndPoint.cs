@@ -87,7 +87,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
         bool IRawReliableEndpoint.IsConnected => _other != null;
 
-        int IRawEndpoint.MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
+        int IRawEndpoint.MessageMaxByteSize => DirectInfo.DefaultMessageMaxSize;
 
         public SendResult Send(UnionDataList bufferToSend)
         {

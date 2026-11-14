@@ -67,7 +67,7 @@ namespace Pontifex.Raw
         /// the lifetime of the endpoint, including after a stop.</description></item>
         /// </list>
         /// </remarks>
-        public IEndPoint? RemoteEndPoint { get; }
+        public IEndPoint RemoteEndPoint { get; }
 
         /// <summary>
         /// Gets the maximum message size in bytes supported by the transport. It is an inclusive maximum for

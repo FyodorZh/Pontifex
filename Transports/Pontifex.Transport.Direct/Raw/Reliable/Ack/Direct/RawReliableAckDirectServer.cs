@@ -10,7 +10,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
         private readonly StringEndPoint _localEp;
         private DirectServer? _server;
 
-        public override int MessageMaxByteSize => DirectInfo.MessageMaxByteSize;
+        public override int MessageMaxByteSize => DirectInfo.DefaultMessageMaxSize;
 
         public RawReliableAckDirectServer(string serverName, ILogger logger, IMemoryRental memory)
             : base(DirectInfo.TransportName, logger, memory)

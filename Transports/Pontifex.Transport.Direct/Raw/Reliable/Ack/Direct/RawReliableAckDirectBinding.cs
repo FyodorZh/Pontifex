@@ -31,8 +31,8 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             }
 
             return context.Role == TransportRole.Server
-                ? new RawReliableAckDirectServer(id, context.Logger, context.Memory)
-                : new RawReliableAckDirectClient(id, context.Logger, context.Memory);
+                ? new RawReliableAckDirectServerTransport(id, context.Logger, context.Memory)
+                : new RawReliableAckDirectClientTransport(id, context.Logger, context.Memory);
         }
     }
 }
