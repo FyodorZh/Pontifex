@@ -175,7 +175,6 @@ namespace Pontifex.Raw.Reliable.Ack
         private UnionDataListCompositor? _receiveCompositor;
         private LowLevelTcpSocket? _lowLevel;
         private Socket? _socket;
-        private UnionDataList? _pendingAckData;
 
         private int _teardownStarted;
         private int _finishDisconnectIssued;
@@ -228,7 +227,7 @@ namespace Pontifex.Raw.Reliable.Ack
             _sendSourceInitialCapacity = sendSourceInitialCapacity;
 
             _socket = socket;
-            _pendingAckData = pendingAckData;
+            SetPendingAckData(pendingAckData);
         }
 
         /// <summary>
@@ -498,12 +497,6 @@ namespace Pontifex.Raw.Reliable.Ack
 
             base.OnConnected();
 
-            var ack = Interlocked.Exchange(ref _pendingAckData, null);
-            if (ack != null)
-            {
-                base.ProcessInboundMessage(MessageType.AckRequestMessage, ack);
-            }
-
             try
             {
                 lowLevel.Receiver.Start();
@@ -553,7 +546,6 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </summary>
         protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
         {
-            ReleasePendingAckData();
             base.BeginDisconnect(reason, tryBeGentle);
 
             if (_lowLevel == null)
@@ -581,8 +573,6 @@ namespace Pontifex.Raw.Reliable.Ack
             {
                 _failedHard = true;
             }
-
-            ReleasePendingAckData();
 
             try
             {
@@ -830,15 +820,6 @@ namespace Pontifex.Raw.Reliable.Ack
             finally
             {
                 DisposeReceiveCompositor();
-            }
-        }
-
-        private void ReleasePendingAckData()
-        {
-            var ackData = Interlocked.Exchange(ref _pendingAckData, null);
-            if (ackData != null)
-            {
-                ackData.Release();
             }
         }
 

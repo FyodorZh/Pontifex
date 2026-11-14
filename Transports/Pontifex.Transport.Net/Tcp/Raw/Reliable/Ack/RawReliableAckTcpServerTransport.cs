@@ -309,15 +309,8 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 return;
             }
 
-            if (!TryBeginHandshake())
+            if (!TryBeginAdmission())
             {
-                RejectSocket(socket);
-                return;
-            }
-
-            if (!TryReserveSession())
-            {
-                EndHandshake();
                 RejectSocket(socket);
                 return;
             }
@@ -337,8 +330,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             {
                 Log.wtf(ex);
                 UntrackHandshakeSocket(socket);
-                EndHandshake();
-                ReleaseSession();
+                AbandonAdmission();
                 RejectSocket(socket);
             }
         }
@@ -346,15 +338,14 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         private void OnHandshakeCompleted(Socket socket, AckAcceptResult result)
         {
             UntrackHandshakeSocket(socket);
-            EndHandshake();
 
             if (result.Status == AckAcceptStatus.Accepted)
             {
-                TryStartAndRegisterSession(result.Endpoint!);
+                CompleteAdmission(result.Endpoint!);
                 return;
             }
 
-            ReleaseSession();
+            AbandonAdmission();
 
             if (result.Status == AckAcceptStatus.Faulted && result.Error != null)
             {

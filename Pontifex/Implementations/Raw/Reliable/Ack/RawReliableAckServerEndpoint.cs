@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
@@ -46,6 +47,43 @@ namespace Pontifex.Raw.Reliable.Ack
         }
 
         private volatile State _stage;
+
+        private UnionDataList? _pendingAckData;
+
+        /// <summary>
+        /// Stores the acknowledgement request that was read from the carrier before the endpoint started.
+        /// </summary>
+        /// <param name="pendingAckData">The acknowledgement request without its frame-type byte. Ownership
+        /// transfers to the endpoint.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called at most once, typically from
+        /// the concrete endpoint's constructor.</description></item>
+        /// <item><description><b>Other notes</b>: The buffered request is processed automatically from the
+        /// first <see cref="OnConnected"/> transition.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void SetPendingAckData(UnionDataList pendingAckData)
+        {
+            if (pendingAckData == null)
+            {
+                throw new ArgumentNullException(nameof(pendingAckData));
+            }
+
+            if (Interlocked.CompareExchange(ref _pendingAckData, pendingAckData, null) != null)
+            {
+                throw new InvalidOperationException("The pending acknowledgement request is already set.");
+            }
+        }
+
+        /// <summary>
+        /// Releases the buffered acknowledgement request when it has not been processed yet.
+        /// </summary>
+        protected void ReleasePendingAckData()
+        {
+            var ackData = Interlocked.Exchange(ref _pendingAckData, null);
+            ackData?.Release();
+        }
 
         /// <summary>
         /// Initializes a new reliable server endpoint that performs an acknowledgement handshake, with the given
@@ -113,6 +151,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </remarks>
         protected override void FailHard(StopReason reason)
         {
+            ReleasePendingAckData();
+
             if (_stage == State.LogicallyConnected)
             {
                 _stage = State.LogicallyDisconnected;
@@ -128,6 +168,21 @@ namespace Pontifex.Raw.Reliable.Ack
             _stage = State.LogicallyDisconnected;
 
             base.FailHard(reason);
+        }
+
+        /// <summary>
+        /// Starts the inherited watchdog and processes a buffered acknowledgement request once the endpoint is
+        /// connected.
+        /// </summary>
+        protected override void OnConnected()
+        {
+            base.OnConnected();
+
+            var ackData = Interlocked.Exchange(ref _pendingAckData, null);
+            if (ackData != null)
+            {
+                ProcessInboundMessage(MessageType.AckRequestMessage, ackData);
+            }
         }
         
         private void FinishAckConnect(UnionDataList message)
@@ -266,6 +321,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </remarks>
         protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
         {
+            ReleasePendingAckData();
+
             if (_stage == State.LogicallyConnected)
             {
                 _stage = State.LogicallyDisconnected;

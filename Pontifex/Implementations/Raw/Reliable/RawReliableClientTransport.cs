@@ -42,6 +42,10 @@ namespace Pontifex.Raw.Reliable
 
         private RawReliableClientEndpoint? _attachedEndpoint;
 
+        private bool _startInProgress;
+
+        private StopReason? _pendingEndpointStopReason;
+
         /// <summary>
         /// Gets whether the attached endpoint is logically connected. A transport that has no
         /// attached endpoint is never connected.
@@ -128,7 +132,18 @@ namespace Pontifex.Raw.Reliable
         {
             if (_state == State.Initialized)
             {
-                if (BeginConnect())
+                bool started;
+                Volatile.Write(ref _startInProgress, true);
+                try
+                {
+                    started = BeginConnect();
+                }
+                finally
+                {
+                    Volatile.Write(ref _startInProgress, false);
+                }
+
+                if (started)
                 {
                     if (_state == State.Initialized)
                     {
@@ -136,6 +151,8 @@ namespace Pontifex.Raw.Reliable
                     }
                     return true;
                 }
+
+                Interlocked.Exchange(ref _pendingEndpointStopReason, null);
                 Fail("TryStart", "Transport implementation failed to begin connection process");
                 return false;
             }
@@ -145,7 +162,16 @@ namespace Pontifex.Raw.Reliable
 
         protected sealed override void OnStarted()
         {
+            var pendingStopReason = Interlocked.Exchange(ref _pendingEndpointStopReason, null);
             OnReadyToConnect();
+
+            if (pendingStopReason != null)
+            {
+                // An endpoint may fail synchronously while BeginConnect is still running. Stopping the
+                // transport at that moment would turn the start into a failure. Report the endpoint's
+                // terminal reason only after the start transition has been accepted instead.
+                Stop(pendingStopReason);
+            }
         }
         
         /// <summary>
@@ -209,6 +235,12 @@ namespace Pontifex.Raw.Reliable
 
         private void OnAttachedEndpointStopped(StopReason reason)
         {
+            if (Volatile.Read(ref _startInProgress))
+            {
+                Interlocked.CompareExchange(ref _pendingEndpointStopReason, reason, null);
+                return;
+            }
+
             Stop(reason);
         }
 

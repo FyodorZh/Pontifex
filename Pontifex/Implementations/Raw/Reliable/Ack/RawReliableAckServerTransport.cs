@@ -24,6 +24,7 @@ namespace Pontifex.Raw.Reliable.Ack
         : RawReliableServerTransport<IRawReliableAckServerHandler>, IRawReliableAckServer
     {
         private readonly object _initLock = new();
+        private readonly object _acknowledgeLock = new();
 
         private bool _initAttempted;
         private IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>? _acknowledger;
@@ -118,15 +119,83 @@ namespace Pontifex.Raw.Reliable.Ack
                 return null;
             }
 
-            try
+            // The contract guarantees that TryAck calls never overlap for one server transport.
+            lock (_acknowledgeLock)
             {
-                return acknowledger.TryAck(remote, ackData.Acquire());
+                try
+                {
+                    return acknowledger.TryAck(remote, ackData.Acquire());
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                    return null;
+                }
             }
-            catch (Exception ex)
+        }
+
+        /// <summary>
+        /// Reserves one admission for a new connection: one active-session slot and one concurrent-handshake
+        /// slot.
+        /// </summary>
+        /// <returns><see langword="true"/> when both slots were reserved; otherwise
+        /// <see langword="false"/> with no slots held.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from the carrier's accept callback.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: A successful caller must eventually call
+        /// either <see cref="CompleteAdmission"/> or <see cref="AbandonAdmission"/> exactly once.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool TryBeginAdmission()
+        {
+            if (!TryReserveSession())
             {
-                Log.wtf(ex);
-                return null;
+                return false;
             }
+
+            if (!TryBeginHandshake())
+            {
+                ReleaseSession();
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Converts a successful admission into a registered session.
+        /// </summary>
+        /// <param name="session">The non-started session endpoint. Must be non-null.</param>
+        /// <returns><see langword="true"/> when the session was registered; otherwise
+        /// <see langword="false"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
+        /// reserved by <see cref="TryBeginAdmission"/>. The session slot is released by the base transport when
+        /// the session ends, or by this method when registration fails.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool CompleteAdmission(RawReliableServerEndpoint session)
+        {
+            EndHandshake();
+            return TryStartAndRegisterSession(session);
+        }
+
+        /// <summary>
+        /// Releases an admission that will not become a session.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
+        /// reserved by <see cref="TryBeginAdmission"/> that is being rejected, timed out, or aborted. Must not
+        /// be called after <see cref="CompleteAdmission"/>.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void AbandonAdmission()
+        {
+            EndHandshake();
+            ReleaseSession();
         }
     }
 }

@@ -393,6 +393,35 @@ public sealed class RawReliableClientTransportTests
         }));
     }
 
+    [Test]
+    public void Start_WhenAttachedEndpointStopsDuringBeginConnect_ReturnsTrueAndStopsAfterReady()
+    {
+        var transport = Create();
+        using var handler = CreateHandler(transport);
+        using var endpointHandler = CreateHandler();
+        using var endpoint = new TestRawReliableClientEndpoint(endpointHandler);
+        Assert.That(transport.Init(handler), Is.True);
+        var reason = Reason();
+        transport.BeginConnectBehavior = () =>
+        {
+            transport.ExposedAttachEndpoint(endpoint);
+            endpoint.StopAndComplete(reason, tryBeGentle: false);
+            return true;
+        };
+        StopReason? callbackReason = null;
+
+        Assert.That(transport.Start(r => callbackReason = r), Is.True);
+
+        Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
+        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
+        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
+        Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(callbackReason, Is.SameAs(reason));
+        Assert.That(transport.IsValid, Is.True);
+        Assert.That(transport.IsConnected, Is.False);
+    }
+
     #endregion
 
     #region IsConnected
