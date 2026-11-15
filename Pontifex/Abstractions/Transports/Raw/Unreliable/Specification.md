@@ -202,12 +202,13 @@ failed initialization, a failed start, or an unrecoverable transport failure.
 
 ### 6.3 Client endpoint startup
 
-After `client.Start` has successfully returned true, the client **MUST** make
-its single endpoint valid and invoke `handler.OnStarted(endpoint)`. The
-endpoint is usable from `OnStarted`. The client **MUST NOT** deliver an
-`OnReceived` callback before `OnStarted` returns successfully.
+After `client.Start` has successfully returned true, the client transport
+creates its single endpoint and starts it. The endpoint's start completion
+makes it valid and invokes `handler.OnStarted(endpoint)`; the endpoint is
+usable from `OnStarted`. The client **MUST NOT** deliver an `OnReceived`
+callback before `OnStarted` returns successfully.
 
-If client `OnStarted` throws, the transport **MUST** catch and log the
+If client `OnStarted` throws, the implementation **MUST** catch and log the
 exception, invalidate the client endpoint, stop the client transport, and
 invoke the transport-level `onStopped` callback exactly once. The throwing
 handler **MUST NOT** receive `OnStopped`. This is a stop after successful
@@ -289,9 +290,12 @@ triggering message. Route creation is atomic for equal sources: concurrent
 first messages from one equal source **MUST NOT** cause multiple concurrent
 factory calls or multiple endpoints. If the factory returns a handler, the
 server creates one endpoint for the route, whose `RemoteEndPoint` compares
-equal to the `IEndPoint` supplied to the factory. The server then invokes
-`handler.OnStarted(endpoint)` and, after it returns successfully, delivers the
-triggering message through `handler.OnReceived`.
+equal to the `IEndPoint` supplied to the factory. The triggering message is
+placed in the new endpoint's inbox ahead of every later message, then the
+route is published, and then the endpoint is started. The endpoint itself
+invokes `handler.OnStarted(endpoint)` when its start completes and, after that
+notification returns successfully, delivers the triggering message through
+`handler.OnReceived`.
 
 While the factory or `OnStarted` is in progress for a source route, the server
 **MUST** queue later valid inbound messages from that same equal source. It
@@ -313,13 +317,13 @@ source. A later valid message from that source is eligible to invoke the
 factory again. Pending messages from the same route **MUST** be processed in
 turn as later source messages.
 
-If a newly created server handler throws from `OnStarted`, the server **MUST**
-catch and log the exception, invalidate that newly created endpoint, and
-release and drop the triggering message. It **MUST NOT** invoke `OnStopped`
-for that handler, stop or invalidate the server, or retain the failed route
-binding. A later valid message from the same source is eligible to create a
-new endpoint and handler. Pending messages from the same route **MUST** be
-processed in turn as later source messages.
+If a newly created server handler throws from `OnStarted`, the implementation
+**MUST** catch and log the exception, invalidate that newly created endpoint,
+and release and drop the triggering message. It **MUST NOT** invoke
+`OnStopped` for that handler, stop or invalidate the server, or retain the
+failed route binding. A later valid message from the same source is eligible
+to create a new endpoint and handler. Pending messages from the same route
+**MUST** be processed in turn as later source messages.
 
 After a valid server endpoint stops or is internally invalidated, the server
 **MUST** remove its route binding. A later valid message from the same source
@@ -561,16 +565,18 @@ ICheckPointCtl BeforeHandlerStartedGate { get; }
 bool TryMakeReliable();
 ```
 
-`BeforeHandlerFactoryGate` is hit once immediately before each server
-`handlerFactory` invocation. It is not hit for malformed, oversized, stopped,
-or otherwise discarded inbound data. It is not hit for a client transport. The
-gate participates in the global factory serialization rule.
+`BeforeHandlerFactoryGate` is hit by the server transport once, under its
+admission lock, immediately before each server `handlerFactory` invocation. It
+is not hit for malformed, oversized, stopped, or otherwise discarded inbound
+data. It is not hit for a client transport. The gate participates in the
+global factory serialization rule.
 
-`BeforeHandlerStartedGate` is hit once immediately before an endpoint's
-`handler.OnStarted(endpoint)` invocation. It is hit for both client and server
-endpoints after the endpoint has become valid, but before application callback
-execution. It is not hit when no handler is selected or when no endpoint is
-created.
+`BeforeHandlerStartedGate` is hit by the server transport once for each
+created server endpoint, after route publication and before the endpoint is
+asked to start. The endpoint's own start completion raises
+`handler.OnStarted(endpoint)` after that hit. The gate is not hit when no
+handler is selected or when no endpoint is created. Client endpoints do not
+hit it: the client transport start is the client lifecycle entry.
 
 `TryMakeReliable()` is a transport-wide test mode and MUST be called before
 `Start`. Calling it after starting begins is unsupported. When it returns true,
@@ -601,26 +607,33 @@ ICheckPointCtl AfterSendCommitGate { get; }
 ICheckPointCtl AfterReceivedGate { get; }
 ```
 
-`BeforeEndpointStopStateTransitionGate` is hit when a valid endpoint is about
-to transition to invalid, whether the cause is endpoint `Stop`, endpoint-local
-failure, or owning-transport stop. The checkpoint occurs before that transition
-becomes visible to a concurrent `IsValid` read.
+`BeforeEndpointStopStateTransitionGate` is hit when an endpoint's stop
+transition begins, whether the cause is endpoint `Stop`, endpoint-local
+failure, or owning-transport stop. The endpoint is already invalid when this
+checkpoint is hit: the stop latch and `IsValid` have turned over, so
+conformance code that observes the gate already sees an invalidated endpoint.
+The checkpoint precedes the completion of the stop transition and the handler
+stop notification.
 
-`BeforeHandlerStoppedGate` is hit once immediately before the endpoint invokes
-`handler.OnStopped`. The endpoint has already become invalid at this point. It
-is not hit for a handler whose `OnStarted` threw and therefore receives no
-`OnStopped` callback.
+`BeforeHandlerStoppedGate` is hit once in the endpoint's stop transition,
+immediately before the stop completes and the endpoint invokes
+`handler.OnStopped`. The endpoint has already become invalid at this point,
+and the handler notification is still pending. It is not hit for a handler
+whose `OnStarted` threw and therefore receives no `OnStopped` callback.
 
-`BeforeSendCommitGate` is hit when a message accepted from this endpoint is
-about to reach an underlying IO commit attempt. Synchronously rejected
-messages and accepted messages discarded before a commit attempt do not hit
-this gate. `AfterSendCommitGate` is hit after that endpoint message completes
-an underlying IO commit attempt.
+`BeforeSendCommitGate` is hit by the concrete endpoint when a message accepted
+from this endpoint is about to reach an underlying IO commit attempt. It runs
+on the endpoint's commit path, which for an in-process carrier is a dedicated
+serialized commit worker rather than the caller's `Send` thread. Synchronously
+rejected messages and accepted messages discarded before a commit attempt do
+not hit this gate. `AfterSendCommitGate` is hit after that endpoint message
+completes an underlying IO commit attempt.
 
-`AfterReceivedGate` is hit once per impending `OnReceived` invocation for this
-endpoint, immediately before it begins. It is not hit for malformed,
-oversized, stopped, discarded, pending-startup, or undeliverable messages. It
-is not hit for `OnStarted` or `OnStopped`.
+`AfterReceivedGate` is hit once per impending `OnReceived` delivery for this
+endpoint, before the delivery begins. The checkpoint may run before the
+delivery is scheduled, so a held gate prevents the callback from starting. It
+is not hit for malformed, oversized, stopped, discarded, pending-startup, or
+undeliverable messages. It is not hit for `OnStarted` or `OnStopped`.
 
 Each variant names its endpoint control type: `IRawUnreliableNoAckEndpointConformanceControl`
 and `IRawUnreliableAckEndpointConformanceControl` both extend

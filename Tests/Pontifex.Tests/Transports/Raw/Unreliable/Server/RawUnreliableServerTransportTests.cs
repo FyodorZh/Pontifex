@@ -342,6 +342,33 @@ public sealed class RawUnreliableServerTransportTests
     }
 
     [Test]
+    public void OnCarrierInbound_WhenCreateEndpointDeclines_ReleasesTriggerAndPublishesNoRoute()
+    {
+        var logConsumer = new RecordingLogConsumer();
+        using var transport = Create(logger: new Logger([logConsumer]));
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        transport.CreateEndpointReturnsNull = true;
+        StartWithFactory(transport, (source, trigger) => handler, out _);
+        UnionDataList first = TestBuffers.WithByte(Memory, 1);
+        UnionDataList second = TestBuffers.WithByte(Memory, 2);
+
+        transport.ExposedOnCarrierInbound(new StringEndPoint("source"), first);
+        transport.ExposedOnCarrierInbound(new StringEndPoint("source"), second);
+
+        Assert.Multiple(() =>
+        {
+            // A decline is not retried automatically: only the two explicit inbound messages reached the
+            // factory, and each new message is eligible again because the decline is not cached.
+            Assert.That(transport.InvokeFactoryCalls, Is.EqualTo(2));
+            Assert.That(transport.CreateEndpointCalls, Is.EqualTo(2));
+            Assert.That(transport.ExposedRouteCount, Is.Zero);
+            Assert.That(first.IsAlive, Is.False);
+            Assert.That(second.IsAlive, Is.False);
+            Assert.That(logConsumer.Messages, Is.Empty);
+        });
+    }
+
+    [Test]
     public void OnCarrierInbound_WithNullArguments_Throws()
     {
         using var transport = Create();

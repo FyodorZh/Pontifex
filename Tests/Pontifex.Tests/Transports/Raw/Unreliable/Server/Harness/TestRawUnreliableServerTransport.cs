@@ -57,6 +57,12 @@ internal sealed class TestRawUnreliableServerTransport
     /// </summary>
     public Exception? CreateEndpointException { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether <see cref="CreateEndpoint"/> declines the route by returning
+    /// <see langword="null"/> after recording the call.
+    /// </summary>
+    public bool CreateEndpointReturnsNull { get; set; }
+
     public Func<bool> StartCarrierBehavior { get; set; } = static () => true;
 
     public Exception? StartCarrierException { get; set; }
@@ -155,13 +161,18 @@ internal sealed class TestRawUnreliableServerTransport
         return FactoryBehavior != null ? FactoryBehavior(source, trigger) : factory(source, trigger);
     }
 
-    protected override RawUnreliableServerEndpoint CreateEndpoint(IRawUnreliableHandler handler,
+    protected override RawUnreliableServerEndpoint? CreateEndpoint(IRawUnreliableHandler handler,
         IEndPoint source, UnionDataList trigger)
     {
         CreateEndpointCalls++;
         CreatedHandlers.Add(handler);
         CreatedSources.Add(source);
         CreatedTriggers.Add(trigger);
+
+        if (CreateEndpointReturnsNull)
+        {
+            return null;
+        }
 
         SendBudget budget = SharedSendBudget
                             ?? throw new InvalidOperationException("The shared send budget is missing.");

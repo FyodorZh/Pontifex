@@ -142,6 +142,34 @@ public sealed class RawUnreliableEndpointTests
     }
 
     [Test]
+    public void Deliver_WhenOnReceivedThrows_KeepsEndpointRunningAndDeliversLaterMessages()
+    {
+        using var handler = new ThrowingOnReceivedHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+
+        ep.Deliver(TestBuffers.WithByte(Memory, 1));
+        ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.AttemptedCount, Is.EqualTo(1));
+            Assert.That(ep.IsRunning, Is.True);
+        });
+
+        ep.Deliver(TestBuffers.WithByte(Memory, 2));
+        ep.DrainAll();
+
+        // An unreliable handler exception abandons only that delivery. The endpoint and the transport stay
+        // running, and later deliveries are still eligible.
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.AttemptedCount, Is.EqualTo(2));
+            Assert.That(ep.IsRunning, Is.True);
+        });
+    }
+
+    [Test]
     public void Deliver_BetweenFinishStartAndFlush_StaysBehindBufferedMessages()
     {
         using var handler = new RecordingRawUnreliableHandler(Memory);
@@ -537,4 +565,26 @@ public sealed class RawUnreliableEndpointTests
     }
 
     #endregion
+
+    private sealed class ThrowingOnReceivedHandler : RecordingRawUnreliableHandler
+    {
+        public ThrowingOnReceivedHandler(IMemoryRental memory) : base(memory)
+        {
+        }
+
+        public int AttemptedCount { get; private set; }
+
+        public override void OnReceived(UnionDataList receivedBuffer)
+        {
+            AttemptedCount++;
+            try
+            {
+                throw new InvalidOperationException("Expected conformance test exception.");
+            }
+            finally
+            {
+                receivedBuffer.Release();
+            }
+        }
+    }
 }

@@ -33,8 +33,9 @@ public interface IRawUnreliableNoAckServer : IRawUnreliableTransport
 
 The NoAck server factory receives only the source route. It **MUST NOT**
 receive or observe the triggering message; the triggering message remains
-owned by the transport and, after a successful `handler.OnStarted`, is
-delivered through `handler.OnReceived` as specified in Common §7.3.
+owned by the transport until the new endpoint adopts it as its first inbox
+element, and, after a successful `handler.OnStarted`, is delivered through
+`handler.OnReceived` as specified in Common §7.3.
 
 ## 4. Initialization
 

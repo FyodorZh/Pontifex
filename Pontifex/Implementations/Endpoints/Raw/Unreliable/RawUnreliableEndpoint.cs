@@ -146,7 +146,7 @@ namespace Pontifex.Raw.Unreliable
             long inboxCapacityBytes,
             IMemoryRental memory,
             ILogger log)
-            : this(new HandlerGate(handler), handler, transportName, remoteEndPoint, messageMaxByteSize,
+            : this(new HandlerGate(handler, log), handler, transportName, remoteEndPoint, messageMaxByteSize,
                 bufferCapacityBytes, inboxCapacityMessages, inboxCapacityBytes, memory, log)
         {
         }
@@ -591,17 +591,20 @@ namespace Pontifex.Raw.Unreliable
         private sealed class HandlerGate : IRawHandler
         {
             private readonly IRawUnreliableHandler _handler;
+            private readonly ILogger _log;
             private int _startCompleted;
 
             /// <summary>
             /// Initializes a new gate that forwards to the given handler.
             /// </summary>
             /// <param name="handler">The handler to forward to; must not be null.</param>
+            /// <param name="log">The logging system used to isolate handler failures.</param>
             /// <exception cref="ArgumentNullException"><paramref name="handler"/> is
             /// <see langword="null"/>.</exception>
-            public HandlerGate(IRawUnreliableHandler handler)
+            public HandlerGate(IRawUnreliableHandler handler, ILogger log)
             {
                 _handler = handler ?? throw new ArgumentNullException(nameof(handler));
+                _log = log;
             }
 
             /// <summary>
@@ -620,9 +623,23 @@ namespace Pontifex.Raw.Unreliable
             }
 
             /// <inheritdoc/>
+            /// <remarks>
+            /// <list type="bullet">
+            /// <item><description><b>Other notes</b>: Handler exceptions are caught and logged here so the
+            /// underlying raw endpoint never sees them. An unreliable handler that throws must not stop or
+            /// invalidate its endpoint; the throw only abandons that delivery.</description></item>
+            /// </list>
+            /// </remarks>
             public void OnReceived(UnionDataList receivedBuffer)
             {
-                _handler.OnReceived(receivedBuffer);
+                try
+                {
+                    _handler.OnReceived(receivedBuffer);
+                }
+                catch (Exception ex)
+                {
+                    _log.wtf(ex);
+                }
             }
 
             /// <inheritdoc/>

@@ -545,18 +545,18 @@ Files:
 - `.../RawUnreliableAckDirectInfo.cs`, `.../RawUnreliableNoAckDirectInfo.cs` (budget constants)
 
 Tasks:
-- [ ] Client transport: configuration only; `CreateEndpoint` returns the client endpoint. Delete
+- [x] Client transport: configuration only; `CreateEndpoint` returns the client endpoint. Delete
       `_callbackQueue` and lazy-connect logic from the transport (moves into the endpoint).
-- [ ] Keep `SetDeliverySystem` state on the transport and pass the effective client/server delivery
+- [x] Keep `SetDeliverySystem` state on the transport and pass the effective client/server delivery
       systems (honouring `_askedForReliableDelivery`) to `CreateEndpoint`; the endpoint applies them
       when it creates the channel. `TryMakeReliableForDebug` keeps its current rule
       (`IsStarted == false`).
-- [ ] Client endpoint: owns the `Channel`, lazy connect inside `DoSendRaw`, missing server → drop,
+- [x] Client endpoint: owns the `Channel`, lazy connect inside `DoSendRaw`, missing server → drop,
       channel disposal → `Stop`.
-- [ ] Server transport: keep the channel registry; `CreateEndpoint(handler, source)` passes the
+- [x] Server transport: keep the channel registry; `CreateEndpoint(handler, source)` passes the
       channel; `SendToCarrier` hook replaced by the endpoint's `DoSendRaw`. If the channel is no
       longer registered, `CreateEndpoint` declines (trigger released, no route published).
-- [ ] Leaves derive from the new bases; client `Init` removed from leaves.
+- [x] Leaves derive from the new bases; client `Init` removed from leaves.
 
 **5b — UDP carrier**
 Files:
@@ -568,23 +568,23 @@ Files:
 - `.../Ack/RawUnreliableAckUdpClient.cs`, `.../Server.cs`, NoAck equivalents (base types)
 
 Tasks:
-- [ ] Client: socket moves into the endpoint; bind in `BeginStart`; failure → base
+- [x] Client: socket moves into the endpoint; bind in `BeginStart`; failure → base
       `Stop(reason, false)` + `FinishStart(...)`; receiver filters the configured remote endpoint.
-- [ ] Server: transport keeps socket/receiver/sender and the route → `IpEndPoint` map;
+- [x] Server: transport keeps socket/receiver/sender and the route → `IpEndPoint` map;
       `CreateEndpoint` builds a `UdpSessionChannel` and a server endpoint.
-- [ ] `DoSendRaw` per endpoint; remove the transport-level `SendToCarrier`/`OnCarrierInbound` plumbing.
-- [ ] `TryMakeReliableForDebug` implemented through `IRawUnreliableDebugReliability` in all four
+- [x] `DoSendRaw` per endpoint; remove the transport-level `SendToCarrier`/`OnCarrierInbound` plumbing.
+- [x] `TryMakeReliableForDebug` implemented through `IRawUnreliableDebugReliability` in all four
       carriers; the legacy abstract member is no longer overridden.
 
 **5c — Conformance and calibration**
-- [ ] Apply every §8.3 delta in this stage.
-- [ ] Review `Pontifex/Abstractions/Transports/Raw/Unreliable/Specification.md` and the
+- [x] Apply every §8.3 delta in this stage.
+- [x] Review `Pontifex/Abstractions/Transports/Raw/Unreliable/Specification.md` and the
       `Ack`/`NoAck` variant specs against the new architecture; update wording that names the actor
       (transport vs endpoint) and the §12 gate placement. Do not weaken §11 or the
       §6.3/§7.1/§7.3 MUST-NOT rules — the implementation preserves them.
-- [ ] Update `Tests/Pontifex.Transports.Tests/Raw/Unreliable/Coverage.md` and the
+- [x] Update `Tests/Pontifex.Transports.Tests/Raw/Unreliable/Coverage.md` and the
       `Ack`/`NoAck` variant coverage files (renamed tests, changed expectations, silent drops).
-- [ ] Calibrate §6.1 budget caps against `ConcurrentTrySend_DeliversEveryAcceptedMessage` (32 sends,
+- [x] Calibrate §6.1 budget caps against `ConcurrentTrySend_DeliversEveryAcceptedMessage` (32 sends,
       all `Ok`) and `ReliableLink_AcceptsAndDeliversMessageAtExactSizeLimit`.
 
 **Exit:** all four adapters green on the new architecture; no carrier derives from `Legacy*`;

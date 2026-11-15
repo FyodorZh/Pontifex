@@ -40,8 +40,17 @@ namespace Pontifex.Raw.Unreliable
         where TFactory : Delegate
     {
         /// <summary>
-        /// The default message cap of the shared send budget.
+        /// The fallback message cap of the shared send budget, used only by a carrier that does not override
+        /// <see cref="SendBudgetMessages"/>.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Every in-repo unreliable carrier overrides
+        /// <see cref="SendBudgetBytes"/> and <see cref="SendBudgetMessages"/> from its variant <c>*Info</c>
+        /// constants, so this 100-message value is only the base fallback. The Stage-4 layer test pins the
+        /// default derivation for carriers that keep it.</description></item>
+        /// </list>
+        /// </remarks>
         protected const int DefaultSendBudgetMessages = 100;
 
         private readonly object _admissionLock = new object();
@@ -103,10 +112,10 @@ namespace Pontifex.Raw.Unreliable
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The default is
+        /// <item><description><b>Other notes</b>: The fallback is
         /// <see cref="IRawTransport.MessageMaxByteSize"/> times
-        /// <see cref="DefaultSendBudgetMessages"/>. A carrier overrides this together with
-        /// <see cref="SendBudgetMessages"/> to derive the caps from its queue capacity, and must configure
+        /// <see cref="DefaultSendBudgetMessages"/>. Every in-repo carrier overrides this together with
+        /// <see cref="SendBudgetMessages"/> from its variant <c>*Info</c> constants, and must configure
         /// each endpoint's local byte budget with this value so that the shared budget binds
         /// first.</description></item>
         /// </list>
@@ -118,9 +127,9 @@ namespace Pontifex.Raw.Unreliable
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The default is
-        /// <see cref="DefaultSendBudgetMessages"/>. A carrier overrides this to its queue
-        /// capacity.</description></item>
+        /// <item><description><b>Other notes</b>: The fallback is
+        /// <see cref="DefaultSendBudgetMessages"/>, for a carrier that does not override. Every in-repo
+        /// carrier overrides it from its variant <c>*Info.SendBudgetMessages</c> constant.</description></item>
         /// </list>
         /// </remarks>
         protected virtual int SendBudgetMessages => DefaultSendBudgetMessages;
@@ -205,7 +214,8 @@ namespace Pontifex.Raw.Unreliable
         /// <param name="trigger">The triggering message. Ownership transfers to the endpoint and it must
         /// become the endpoint's first inbox element, so it is delivered before any message the published
         /// route can receive.</param>
-        /// <returns>The non-started server endpoint.</returns>
+        /// <returns>The non-started server endpoint, or <see langword="null"/> to decline the route while the
+        /// carrier cannot serve it. A declined route publishes nothing and releases the trigger.</returns>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Called under the admission lock, which also serializes
@@ -213,10 +223,12 @@ namespace Pontifex.Raw.Unreliable
         /// <item><description><b>Preconditions/Postconditions</b>: The implementation must not start the
         /// endpoint. It must configure the endpoint's local byte budget with at least
         /// <see cref="SendBudgetBytes"/> and pass <see cref="SharedSendBudget"/> to it. A throwing
-        /// implementation is logged, releases the trigger, and publishes no route.</description></item>
+        /// implementation is logged, releases the trigger, and publishes no route. Returning
+        /// <see langword="null"/> declines the route without logging, releases the trigger, and publishes no
+        /// route.</description></item>
         /// </list>
         /// </remarks>
-        protected abstract RawUnreliableServerEndpoint CreateEndpoint(IRawUnreliableHandler handler,
+        protected abstract RawUnreliableServerEndpoint? CreateEndpoint(IRawUnreliableHandler handler,
             IEndPoint source, UnionDataList trigger);
 
         /// <summary>
@@ -376,16 +388,21 @@ namespace Pontifex.Raw.Unreliable
                     {
                         try
                         {
-                            RawUnreliableServerEndpoint endpoint = CreateEndpoint(handler, source, trigger);
-                            if (endpoint == null!)
+                            RawUnreliableServerEndpoint? endpoint = CreateEndpoint(handler, source, trigger);
+                            if (endpoint == null)
                             {
-                                throw new InvalidOperationException("The carrier returned no endpoint.");
+                                // The carrier declined the route, for example because its transport-level
+                                // carrier state disappeared between admission and creation. No route is
+                                // published and the trigger is released below.
+                                releaseTrigger = true;
                             }
-
-                            var entry = new RouteEntry(this, source, endpoint);
-                            _routes[source] = entry;
-                            endpoint.Stopped += entry.OnStopped;
-                            created = entry;
+                            else
+                            {
+                                var entry = new RouteEntry(this, source, endpoint);
+                                _routes[source] = entry;
+                                endpoint.Stopped += entry.OnStopped;
+                                created = entry;
+                            }
                         }
                         catch (Exception ex)
                         {

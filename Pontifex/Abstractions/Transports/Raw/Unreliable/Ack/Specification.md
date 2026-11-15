@@ -51,11 +51,13 @@ the source route and the triggering message.
 The triggering message is owned by the transport for the entire source-route
 selection and endpoint-startup sequence. The factory MAY inspect it to decide
 acceptance, but it **MUST NOT** acquire an additional reference, retain it
-beyond the call, mutate it, or release it. If the factory returns a handler
-and `handler.OnStarted` returns successfully, the transport delivers the same
-logical triggering message through `handler.OnReceived`. If the factory
-returns null, throws, or `handler.OnStarted` throws, the transport releases
-the triggering message and otherwise follows Common §7.3.
+beyond the call, mutate it, or release it. When the factory returns a handler,
+the transport transfers the triggering message to the new endpoint as its
+first inbox element; the endpoint then delivers the same logical triggering
+message through `handler.OnReceived` after `handler.OnStarted` returns
+successfully. If the factory returns null, throws, or `handler.OnStarted`
+throws, the message is released (by the transport when no endpoint adopted it,
+otherwise by the endpoint) and Common §7.3 otherwise applies.
 
 ## 6. Connectionless model and message path
 
