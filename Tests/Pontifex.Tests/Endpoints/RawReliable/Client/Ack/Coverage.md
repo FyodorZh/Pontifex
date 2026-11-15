@@ -4,7 +4,7 @@
 - **Subject:** `Pontifex.Raw.Reliable.Ack.RawReliableAckClientEndpoint`
 - **Directory:** `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Ack`
 - **Inheritance parent:** `Pontifex.Raw.Reliable.RawReliableClientEndpoint`
-- **Contract:** [RawReliableAckClientEndpoint.cs](../../../../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckClientEndpoint.cs),
+- **Contract:** [RawReliableAckClientEndpoint.cs](../../../../../../Pontifex/Implementations/Endpoints/Raw/Reliable/Ack/RawReliableAckClientEndpoint.cs),
   [RawReliableAckInfo.cs](../../../../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckInfo.cs),
   [IRawReliableAckClientHandler.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Client/IRawReliableAckClientHandler.cs)
 

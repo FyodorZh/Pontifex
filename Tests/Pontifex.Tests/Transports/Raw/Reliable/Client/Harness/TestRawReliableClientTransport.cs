@@ -69,7 +69,7 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
     /// Gets the endpoint observed through <see cref="AttachedEndpoint"/> inside
     /// <see cref="DestroyTransport"/>, before the base class detaches it.
     /// </summary>
-    public RawReliableClientEndpoint? EndpointDuringDestroy { get; private set; }
+    public IRawReliableClientEndpointImp? EndpointDuringDestroy { get; private set; }
 
     /// <summary>
     /// Gets the value of <see cref="RawReliableClientTransport{TClientHandler}.IsConnected"/> observed
@@ -85,9 +85,9 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
 
     public new IRawReliableClientHandler? Handler => base.Handler;
 
-    public RawReliableClientEndpoint? ExposedAttachedEndpoint => AttachedEndpoint;
+    public IRawReliableClientEndpointImp? ExposedAttachedEndpoint => AttachedEndpoint;
 
-    public void ExposedAttachEndpoint(RawReliableClientEndpoint endpoint)
+    public void ExposedAttachEndpoint(IRawReliableClientEndpointImp endpoint)
     {
         AttachEndpoint(endpoint);
     }

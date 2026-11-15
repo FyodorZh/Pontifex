@@ -66,7 +66,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             _bufferCapacityBytes = bufferCapacityBytes ?? DirectInfo.DefaultBufferCapacity;
         }
 
-        protected override RawReliableAckClientEndpoint CreateEndpoint(IRawReliableAckClientHandler handler)
+        protected override IRawReliableAckClientEndpointImp CreateEndpoint(IRawReliableAckClientHandler handler)
         {
             return new RawReliableAckDirectClientEndpoint(
                 Name,

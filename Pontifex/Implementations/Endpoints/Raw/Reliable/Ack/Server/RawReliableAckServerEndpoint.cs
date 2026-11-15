@@ -7,24 +7,14 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable.Ack
 {
-    /// <summary>
-    /// Abstract base class for a reliable server endpoint that completes the acknowledgement handshake before
-    /// the logical connection is established. Extends <see cref="RawReliableServerEndpoint"/> with a logical
-    /// stage that answers the client's ack request with an ack response.
-    /// </summary>
+    /// <inheritdoc cref="IRawReliableAckServerEndpointImp"/>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Thread safety</b>: All public and protected instance members are safe to call
-    /// concurrently from any thread. The ack stage is volatile, and the handshake completion and handler
-    /// notifications are marshalled onto the serial action queue.</description></item>
     /// <item><description><b>Other notes</b>: The concrete transport must override BeginDisconnect, call the
-    /// base implementation, and then call FinishDisconnect to complete teardown. An ack request received
-    /// outside the expected stage is treated as a fatal protocol violation. The client's acknowledgement data
-    /// is released by this endpoint; validating it is the responsibility of the caller that created the
-    /// session handler.</description></item>
+    /// base implementation, and then call FinishDisconnect to complete teardown.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawReliableAckServerEndpoint : RawReliableServerEndpoint, IRawReliableAckEndpoint
+    public abstract class RawReliableAckServerEndpoint : RawReliableServerEndpoint, IRawReliableAckServerEndpointImp
     {
         private readonly IRawReliableAckServerHandler _handler;
 

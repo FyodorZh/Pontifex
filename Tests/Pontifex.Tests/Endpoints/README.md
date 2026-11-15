@@ -24,17 +24,17 @@ RawEndpoint
 
 ## Contract references
 
-- [RawEndpoint.cs](../../../Pontifex/Implementations/Raw/RawEndpoint.cs)
+- [RawEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/RawEndpoint.cs)
 - [IRawEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/IRawEndpoint.cs)
 - [IBaseEndpoint.cs](../../../Pontifex/Abstractions/Transports/IBaseEndpoint.cs)
 - [IRawHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/IRawHandler.cs)
-- [RawReliableEndpoint.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableEndpoint.cs)
+- [RawReliableEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableEndpoint.cs)
 - [IRawReliableEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableEndpoint.cs)
-- [RawReliableClientEndpoint.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableClientEndpoint.cs)
-- [RawReliableServerEndpoint.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableServerEndpoint.cs)
-- [RawReliableAckClientEndpoint.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckClientEndpoint.cs)
+- [RawReliableClientEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableClientEndpoint.cs)
+- [RawReliableServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableServerEndpoint.cs)
+- [RawReliableAckClientEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/Ack/RawReliableAckClientEndpoint.cs)
 - [IRawReliableAckClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Client/IRawReliableAckClientHandler.cs)
-- [RawReliableAckServerEndpoint.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckServerEndpoint.cs)
+- [RawReliableAckServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/Ack/RawReliableAckServerEndpoint.cs)
 - [IRawReliableAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerHandler.cs)
 - [RawReliableAckInfo.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckInfo.cs)
 

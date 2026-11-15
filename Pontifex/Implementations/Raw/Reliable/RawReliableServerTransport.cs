@@ -46,7 +46,7 @@ namespace Pontifex.Raw.Reliable
         private int _activeSessions;
         private SessionTicker? _ticker;
 
-        private RawReliableServerEndpoint[] _tickSnapshot = Array.Empty<RawReliableServerEndpoint>();
+        private IRawReliableServerEndpointImp[] _tickSnapshot = Array.Empty<IRawReliableServerEndpointImp>();
 
         /// <summary>
         /// Initializes the shared server transport machinery.
@@ -241,7 +241,7 @@ namespace Pontifex.Raw.Reliable
         /// registered.</description></item>
         /// </list>
         /// </remarks>
-        protected bool TryStartAndRegisterSession(RawReliableServerEndpoint session)
+        protected bool TryStartAndRegisterSession(IRawReliableServerEndpointImp session)
         {
             if (session == null)
             {
@@ -319,7 +319,7 @@ namespace Pontifex.Raw.Reliable
         /// invoked.</description></item>
         /// </list>
         /// </remarks>
-        protected virtual void OnSessionStopped(RawReliableServerEndpoint session, StopReason reason)
+        protected virtual void OnSessionStopped(IRawReliableServerEndpointImp session, StopReason reason)
         {
         }
 
@@ -357,7 +357,7 @@ namespace Pontifex.Raw.Reliable
 
         protected override void OnStopped(StopReason reason)
         {
-            RawReliableServerEndpoint[] snapshot;
+            IRawReliableServerEndpointImp[] snapshot;
             lock (_sessionsLock)
             {
                 _stopping = true;
@@ -386,7 +386,7 @@ namespace Pontifex.Raw.Reliable
             }
         }
 
-        private void TryStartThenStop(RawReliableServerEndpoint session, StopReason reason)
+        private void TryStartThenStop(IRawReliableServerEndpointImp session, StopReason reason)
         {
             try
             {
@@ -447,7 +447,7 @@ namespace Pontifex.Raw.Reliable
 
                 if (_tickSnapshot.Length < count)
                 {
-                    _tickSnapshot = new RawReliableServerEndpoint[count];
+                    _tickSnapshot = new IRawReliableServerEndpointImp[count];
                 }
 
                 int i = 0;
@@ -472,14 +472,14 @@ namespace Pontifex.Raw.Reliable
             Array.Clear(_tickSnapshot, 0, count);
         }
 
-        private RawReliableServerEndpoint[] SnapshotSessions()
+        private IRawReliableServerEndpointImp[] SnapshotSessions()
         {
             if (_sessions.Count == 0)
             {
-                return Array.Empty<RawReliableServerEndpoint>();
+                return Array.Empty<IRawReliableServerEndpointImp>();
             }
 
-            var snapshot = new RawReliableServerEndpoint[_sessions.Count];
+            var snapshot = new IRawReliableServerEndpointImp[_sessions.Count];
             int i = 0;
             foreach (var entry in _sessions)
             {
@@ -509,10 +509,10 @@ namespace Pontifex.Raw.Reliable
         {
             private readonly RawReliableServerTransport<TServerHandler> _owner;
 
-            public readonly RawReliableServerEndpoint Endpoint;
+            public readonly IRawReliableServerEndpointImp Endpoint;
             public bool Ended;
 
-            public SessionEntry(RawReliableServerTransport<TServerHandler> owner, RawReliableServerEndpoint endpoint)
+            public SessionEntry(RawReliableServerTransport<TServerHandler> owner, IRawReliableServerEndpointImp endpoint)
             {
                 _owner = owner;
                 Endpoint = endpoint;
