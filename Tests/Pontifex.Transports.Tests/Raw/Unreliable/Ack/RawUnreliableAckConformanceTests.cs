@@ -26,8 +26,8 @@ public abstract class RawUnreliableAckConformanceTests : RawUnreliableConformanc
             return serverHandler;
         }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
@@ -57,8 +57,8 @@ public abstract class RawUnreliableAckConformanceTests : RawUnreliableConformanc
                 : serverHandler;
         }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);

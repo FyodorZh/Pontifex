@@ -616,16 +616,16 @@ Tasks:
 ### Stage 7 — Contract docs and final conformance sweep
 
 Tasks:
-- [ ] XML docs: `IRawUnreliableEndpoint` (`Stop`, `IsValid`), `IRawUnreliableHandler.OnStarted`,
+- [x] XML docs: `IRawUnreliableEndpoint` (`Stop`, `IsValid`), `IRawUnreliableHandler.OnStarted`,
       `IRawUnreliableTransport` (start/failure semantics), `IRawUnreliableClient`/`Server` `Init`.
-- [ ] Update `Tests/Pontifex.Transports.Tests/Raw/Unreliable/Coverage.md` and the `Ack`/`NoAck`
+- [x] Update `Tests/Pontifex.Transports.Tests/Raw/Unreliable/Coverage.md` and the `Ack`/`NoAck`
       variant coverage files for the final behaviour (silent drops, per-session serialization,
       budget scope). There is no suite `README.md` in `Tests/Pontifex.Transports.Tests`; do not add
       one.
-- [ ] `Pontifex/TODO.md`: tick the conversion, add follow-ups (empty-message count cap if desired,
+- [x] `Pontifex/TODO.md`: tick the conversion, add follow-ups (empty-message count cap if desired,
       D8 option E if a third variant appears).
-- [ ] Full verification run; record counts; confirm no `Assert.Ignore`.
-- [ ] Grep for leftovers: global serialization claims, "separate concrete hierarchy" wording in
+- [x] Full verification run; record counts; confirm no `Assert.Ignore`.
+- [x] Grep for leftovers: global serialization claims, "separate concrete hierarchy" wording in
       `Endpoints/README.md`, stale `QueueCapacity` references, and `Specification.md` /
       `Ack/Specification.md` / `NoAck/Specification.md` statements that name the deleted
       dispatcher or the old gate placement.
@@ -666,3 +666,9 @@ Tasks:
 | Budget caps | `MessageMaxByteSize * QueueCapacity` bytes, `QueueCapacity` messages; calibrated in Stage 5 |
 | Conformance staging | Carrier conversion is one stage: the conformance fixture is shared by four adapters, so a per-carrier intermediate state cannot be green |
 | Stage granularity | Stages 0–7; Stages 1–4 individually verifiable; Stage 5 is one verified behaviour flip |
+
+**Final results (2026-11-16):** build 21 warnings / 0 errors (all pre-existing UI warnings);
+`Pontifex.Tests` 698 / 0 skipped; `Pontifex.Transports.Tests` 242 passed / 67 skipped (309;
+the skips are the unrelated Reliable/Ack suite), `--filter Unreliable` 230 / 0 skipped;
+`Pontifex.Transport.Direct.Tests` 52; `Pontifex.Transport.Net.Tests` 283;
+`Pontifex.Factory.Tests` 99. No `Assert.Ignore` remains in the unreliable suite.

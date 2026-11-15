@@ -27,16 +27,16 @@
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| Concrete server endpoints (`RawUnreliableDirectServerEndpoint`, `RawUnreliableUdpServerEndpoint`). | Child layers of this Abstract Test Suit | Those types do not exist yet; they arrive with the carrier conversion. |
-| Cross-session budget sharing through two endpoints of one transport. | This layer | The transport that owns and shares the budget does not exist yet; a manually shared `SendBudget` is the current stand-in. |
-| Budget behaviour under concurrent senders. | Deferred suite layer | The default suite is deterministic; concurrency belongs to the transport conformance suite. |
+| Cross-session budget behaviour under concurrent senders. | Deferred suite layer | The default suite is deterministic; concurrency belongs to the transport conformance suite. |
 
 ## Deferred by design
 
 | Gap | Reason |
 |---|---|
+| Concrete server endpoints (`RawUnreliableDirectServerEndpoint`, `RawUnreliableUdpServerEndpoint`). | Internal to their carrier assemblies; carrier behaviour and gate placement are covered by `Tests/Pontifex.Transports.Tests/Raw/Unreliable`. |
+| Cross-session budget sharing through two endpoints of one transport. | Owned by the transport layer: `SharedSendBudget_IsPassedToEveryEndpointWithTheConfiguredLocalCap` proves that every session receives the same budget instance and the configured local cap. |
 | Route publication and factory invocation. | Transport responsibilities, covered by the transport suite. |
-| Carrier-level sends and the send-commit gates. | Belong to the concrete `DoSendRaw` introduced with the carriers. |
+| Carrier-level sends and the send-commit gates. | Belong to the concrete `DoSendRaw`, which is internal to the carrier assemblies. |
 
 ## Notes
 

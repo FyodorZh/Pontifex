@@ -15,8 +15,11 @@ Ack-specific triggering-message factory tests below.
 - Declining a source route (null factory result, a throwing factory, or a carrier that can no longer serve
   the route) releases the triggering message silently. Only factory and handler exceptions are logged; a
   declined trigger is not a logged drop.
-- Server callbacks are serialized per endpoint. The Ack variant adds no cross-endpoint ordering or
-  serialization; the shared suite asserts only per-handler serialization.
+- Server callbacks are serialized per endpoint (one server session). The Ack variant adds no cross-endpoint
+  ordering or serialization; different server endpoints may run callbacks concurrently, the shared suite asserts
+  only the per-handler serialization bound.
+- The client-local byte budget versus the server-shared budget, and silent carrier drops, are the same as in the
+  shared coverage notes.
 
 ## Deferred By Design
 

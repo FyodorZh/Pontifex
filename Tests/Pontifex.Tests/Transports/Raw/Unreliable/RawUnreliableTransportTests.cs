@@ -54,4 +54,15 @@ public sealed class RawUnreliableTransportTests
         Assert.That(transport.ExposedConformance.TryMakeReliable(), Is.False);
         Assert.That(transport.ReliableForDebugCalls, Is.EqualTo(2));
     }
+
+    [Test]
+    public void TryMakeReliable_WhenOwnerLacksDebugReliability_ReturnsFalse()
+    {
+        var transport = new TestRawUnreliableTransportWithoutDebugReliability();
+
+        bool? result = null;
+        Assert.DoesNotThrow(() => result = transport.ExposedConformance.TryMakeReliable());
+
+        Assert.That(result, Is.False);
+    }
 }

@@ -15,7 +15,8 @@
 |---|---|---|---|
 | `RawUnreliableTransport_ExposesUnreliableRawTransportContract` | `RawUnreliableTransport` is an `IRawUnreliableTransport` and an `IRawTransport`. | The unreliable marker contract is exposed by the marker facade. | The class adds no lifecycle, carrier, or message-handling behaviour, so only its delta is asserted. |
 | `GetControls_ExposesRawUnreliableTransportConformanceControl` | The conformance control published by `GetControls` is the typed unreliable transport control. | Exactly one control is added and it is the same instance the typed `Conformance` property returns; the public control interface is implemented. | The control is inspected but never armed, and no failure is injected: the suite does not use the conformance subsystem as a test mechanism. |
-| `TryMakeReliable_WhenOwnerImplementsDebugReliability_DelegatesToIt` | The conformance control forwards to `IRawUnreliableDebugReliability` on the transport instance. | `TryMakeReliable` returns the carrier's answer and calls it once per invocation. | The double implements the interface, so this pins the forwarding branch. An owner without the interface is declined with `false` by design; every production carrier implements it. |
+| `TryMakeReliable_WhenOwnerImplementsDebugReliability_DelegatesToIt` | The conformance control forwards to `IRawUnreliableDebugReliability` on the transport instance. | `TryMakeReliable` returns the carrier's answer and calls it once per invocation. | The double implements the interface, so this pins the forwarding branch. |
+| `TryMakeReliable_WhenOwnerLacksDebugReliability_ReturnsFalse` | An owner without debug-reliability support is declined, not treated as an error. | The call returns `false` and throws nothing. | The second double deliberately omits the interface. The owner is bound by `AnyTransport` during construction, so the branch is reachable without adding production surface. |
 
 ## Planned
 
@@ -34,9 +35,11 @@
 ## Notes
 
 - `RawUnreliableTransport` is a marker facade over `RawTransport`. This layer intentionally records only
-  the marker interface, the typed conformance-control view, and the preferred debug-reliability lookup.
+  the marker interface, the typed conformance-control view, and both debug-reliability lookup branches.
 - `TestRawUnreliableTransport : RawUnreliableTransport, IRawUnreliableDebugReliability` supplies the
-  inherited abstract members and the debug switch; the transport constructor is called with the default
-  conformance control.
-- The root layer's conformance assertion is the only place in this suite that touches the conformance
-  control, and it neither arms nor injects.
+  inherited abstract members and the debug switch, while
+  `TestRawUnreliableTransportWithoutDebugReliability` supplies the same members without the interface.
+  Both call the transport constructor with the default conformance control, which `AnyTransport` binds to
+  the instance.
+- The three conformance-control tests are the only place in this suite that touch the conformance control,
+  and none of them arms or injects; `TryMakeReliable` is a debug-mode request, not a checkpoint.
