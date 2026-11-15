@@ -18,6 +18,17 @@ namespace Pontifex.Raw.Unreliable
 
         public ICheckPointCtl BeforeHandlerStartedGate => _beforeHandlerStartedGate;
 
-        public bool TryMakeReliable() => ((LegacyRawUnreliableTransport)_owner).TryMakeReliableForDebug();
+        public bool TryMakeReliable()
+        {
+            // Stage 4 keeps both lookup paths: the carriers still implement the legacy protected internal
+            // member, while the new architecture extracts it into IRawUnreliableDebugReliability. The
+            // legacy fallback is deleted in Stage 6.
+            if (_owner is IRawUnreliableDebugReliability debugReliability)
+            {
+                return debugReliability.TryMakeReliableForDebug();
+            }
+
+            return ((LegacyRawUnreliableTransport)_owner).TryMakeReliableForDebug();
+        }
     }
 }

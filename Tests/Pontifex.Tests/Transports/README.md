@@ -3,9 +3,10 @@
 Black-box contract tests for the abstract transport class hierarchy in `Pontifex`.
 
 The suite lives under `Tests/Pontifex.Tests/Transports/` and tests the transport classes
-directly, without carriers, sockets, threads, timers, or wall-clock time. It is the
-transport-level counterpart of the `Endpoints` suite: the same deterministic,
-public-plus-protected-contract approach, applied one layer up.
+directly, without carriers, sockets, timers, or wall-clock time. It is the transport-level
+counterpart of the `Endpoints` suite: the same deterministic, public-plus-protected-contract
+approach, applied one layer up. One categorised test uses gated, joined threads to prove the
+admission lock's single-factory-call invariant; see [Categories](#categories).
 
 ## Suite type
 
@@ -24,7 +25,13 @@ AnyTransport
     │   │   └── RawReliableAckClientTransport
     │   └── RawReliableServerTransport<TServerHandler>
     │       └── RawReliableAckServerTransport
+    └── RawUnreliableTransport
+        ├── RawUnreliableClientTransport
+        └── RawUnreliableServerTransport<TFactory>
 ```
+
+The four concrete unreliable carriers (Ack/NoAck × Direct/UDP) live in the `Transports` projects
+and are out of scope for this suite, like the reliable carriers.
 
 Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md`.
 
@@ -49,6 +56,18 @@ Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md
 - [IRawReliableAckServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServer.cs)
 - [IRawReliableAckServerAcknowledger.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerAcknowledger.cs)
 - [IRawReliableAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerHandler.cs)
+- [RawUnreliableTransport.cs](../../../Pontifex/Implementations/Raw/Unreliable/RawUnreliableTransport.cs)
+- [IRawUnreliableTransport.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableTransport.cs)
+- [IRawUnreliableDebugReliability.cs](../../../Pontifex/Implementations/Raw/Unreliable/IRawUnreliableDebugReliability.cs)
+- [RawUnreliableTransportConformanceControl.cs](../../../Pontifex/Implementations/Raw/Unreliable/RawUnreliableTransportConformanceControl.cs)
+- [RawUnreliableClientTransport.cs](../../../Pontifex/Implementations/Raw/Unreliable/RawUnreliableClientTransport.cs)
+- [IRawUnreliableClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableClient.cs)
+- [IRawUnreliableHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableHandler.cs)
+- [RawUnreliableServerTransport.cs](../../../Pontifex/Implementations/Raw/Unreliable/RawUnreliableServerTransport.cs)
+- [IRawUnreliableEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableEndpoint.cs)
+- [RawUnreliableServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/RawUnreliableServerEndpoint.cs)
+- [SendBudget.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/SendBudget.cs)
+- [Unreliable Specification.md](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/Specification.md)
 
 ## Layers
 
@@ -64,6 +83,9 @@ inheritance parent, and coverage file.
 | `RawReliableServerTransport` | `Pontifex.Raw.Reliable.RawReliableServerTransport<TServerHandler>` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server` | `RawReliableTransport` | [`Raw/Reliable/Server/Coverage.md`](Raw/Reliable/Server/Coverage.md) |
 | `RawReliableAckClientTransport` | `Pontifex.Raw.Reliable.Ack.RawReliableAckClientTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client/Ack` | `RawReliableClientTransport<TClientHandler>` | [`Raw/Reliable/Client/Ack/Coverage.md`](Raw/Reliable/Client/Ack/Coverage.md) |
 | `RawReliableAckServerTransport` | `Pontifex.Raw.Reliable.Ack.RawReliableAckServerTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack` | `RawReliableServerTransport<TServerHandler>` | [`Raw/Reliable/Server/Ack/Coverage.md`](Raw/Reliable/Server/Ack/Coverage.md) |
+| `RawUnreliableTransport` | `Pontifex.Raw.Unreliable.RawUnreliableTransport` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable` | `RawTransport` | [`Raw/Unreliable/Coverage.md`](Raw/Unreliable/Coverage.md) |
+| `RawUnreliableClientTransport` | `Pontifex.Raw.Unreliable.RawUnreliableClientTransport` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable/Client` | `RawUnreliableTransport` | [`Raw/Unreliable/Client/Coverage.md`](Raw/Unreliable/Client/Coverage.md) |
+| `RawUnreliableServerTransport` | `Pontifex.Raw.Unreliable.RawUnreliableServerTransport<TFactory>` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable/Server` | `RawUnreliableTransport` | [`Raw/Unreliable/Server/Coverage.md`](Raw/Unreliable/Server/Coverage.md) |
 
 Directory nesting does not imply inheritance. The inheritance parent is the one declared in the
 layer table above.
@@ -91,36 +113,52 @@ Transports/
     ├── RawTransportTests.cs
     ├── Harness/
     │   └── TestRawTransport.cs
-    └── Reliable/                                    RawReliableTransport layer
+    ├── Reliable/                                    RawReliableTransport layer
+    │   ├── Coverage.md
+    │   ├── RawReliableTransportTests.cs
+    │   ├── Harness/
+    │   │   └── TestRawReliableTransport.cs
+    │   ├── Client/                                  RawReliableClientTransport layer
+    │   │   ├── Coverage.md
+    │   │   ├── RawReliableClientTransportTests.cs
+    │   │   ├── Harness/
+    │   │   │   ├── RecordingRawReliableClientHandler.cs
+    │   │   │   └── TestRawReliableClientTransport.cs
+    │   │   └── Ack/                                 RawReliableAckClientTransport layer
+    │   │       ├── Coverage.md
+    │   │       ├── RawReliableAckClientTransportTests.cs
+    │   │       └── Harness/
+    │   │           └── TestRawReliableAckClientTransport.cs
+    │   └── Server/                                  RawReliableServerTransport layer
+    │       ├── Coverage.md
+    │       ├── RawReliableServerTransportTests.cs
+    │       ├── Harness/
+    │       │   ├── ManualPeriodicLogicDriver.cs
+    │       │   ├── ScriptedSerialActionQueue.cs
+    │       │   ├── TestRawReliableServerSession.cs
+    │       │   └── TestRawReliableServerTransport.cs
+    │       └── Ack/                                 RawReliableAckServerTransport layer
+    │           ├── Coverage.md
+    │           ├── RawReliableAckServerTransportTests.cs
+    │           └── Harness/
+    │               ├── RecordingRawReliableAckServerAcknowledger.cs
+    │               └── TestRawReliableAckServerTransport.cs
+    └── Unreliable/                                  RawUnreliableTransport layer
         ├── Coverage.md
-        ├── RawReliableTransportTests.cs
+        ├── RawUnreliableTransportTests.cs
         ├── Harness/
-        │   └── TestRawReliableTransport.cs
-        ├── Client/                                  RawReliableClientTransport layer
+        │   └── TestRawUnreliableTransport.cs
+        ├── Client/                                  RawUnreliableClientTransport layer
         │   ├── Coverage.md
-        │   ├── RawReliableClientTransportTests.cs
-        │   ├── Harness/
-        │   │   ├── RecordingRawReliableClientHandler.cs
-        │   │   └── TestRawReliableClientTransport.cs
-        │   └── Ack/                                 RawReliableAckClientTransport layer
-        │       ├── Coverage.md
-        │       ├── RawReliableAckClientTransportTests.cs
-        │       └── Harness/
-        │           └── TestRawReliableAckClientTransport.cs
-        └── Server/                                  RawReliableServerTransport layer
+        │   ├── RawUnreliableClientTransportTests.cs
+        │   └── Harness/
+        │       ├── StopDuringStartEndpoint.cs
+        │       └── TestRawUnreliableClientTransport.cs
+        └── Server/                                  RawUnreliableServerTransport layer
             ├── Coverage.md
-            ├── RawReliableServerTransportTests.cs
-            ├── Harness/
-            │   ├── ManualPeriodicLogicDriver.cs
-            │   ├── ScriptedSerialActionQueue.cs
-            │   ├── TestRawReliableServerSession.cs
-            │   └── TestRawReliableServerTransport.cs
-            └── Ack/                                 RawReliableAckServerTransport layer
-                ├── Coverage.md
-                ├── RawReliableAckServerTransportTests.cs
-                └── Harness/
-                    ├── RecordingRawReliableAckServerAcknowledger.cs
-                    └── TestRawReliableAckServerTransport.cs
+            ├── RawUnreliableServerTransportTests.cs
+            └── Harness/
+                └── TestRawUnreliableServerTransport.cs
 ```
 
 ## Harness layout and sharing
@@ -138,6 +176,16 @@ drivers.
 - The client layer reuses the endpoint double from
   `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness`. Both suites live in the same test
   assembly and the endpoint double is covered by the `Endpoints` suite.
+- `Raw/Unreliable/Harness/` holds `TestRawUnreliableTransport`.
+- `Raw/Unreliable/Client/Harness/` holds `TestRawUnreliableClientTransport` and the dedicated
+  `StopDuringStartEndpoint`. The client layer also reuses `TestRawUnreliableEndpoint`,
+  `RecordingRawUnreliableHandler`, `RecordingLogConsumer`, and `TestBuffers` from
+  `Tests/Pontifex.Tests/Endpoints/RawUnreliable/Harness` and `Tests/Pontifex.Tests/Endpoints/Harness`.
+  Both suites live in the same test assembly and those doubles are covered by the `Endpoints` suite;
+  they are not copied here.
+- `Raw/Unreliable/Server/Harness/` holds `TestRawUnreliableServerTransport`, which builds
+  `TestRawUnreliableServerEndpoint` sessions from the `Endpoints` suite and reuses the same recording
+  handler and log consumer.
 
 ## Coverage
 
@@ -150,6 +198,9 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`Raw/Reliable/Server/Coverage.md`](Raw/Reliable/Server/Coverage.md) — `RawReliableServerTransport`
 - [`Raw/Reliable/Client/Ack/Coverage.md`](Raw/Reliable/Client/Ack/Coverage.md) — `RawReliableAckClientTransport`
 - [`Raw/Reliable/Server/Ack/Coverage.md`](Raw/Reliable/Server/Ack/Coverage.md) — `RawReliableAckServerTransport`
+- [`Raw/Unreliable/Coverage.md`](Raw/Unreliable/Coverage.md) — `RawUnreliableTransport`
+- [`Raw/Unreliable/Client/Coverage.md`](Raw/Unreliable/Client/Coverage.md) — `RawUnreliableClientTransport`
+- [`Raw/Unreliable/Server/Coverage.md`](Raw/Unreliable/Server/Coverage.md) — `RawUnreliableServerTransport`
 
 Each layer covers only the contract delta and invariants introduced by its subject. Ancestor
 behaviour is not repeated. A layer's `Coverage.md` lists the current covered tests, planned
@@ -158,10 +209,14 @@ gaps, and deferred-by-design gaps for that layer.
 ## Categories
 
 - Suite root category: `Transports`. Every fixture carries it.
-- Additional filtering categories: none currently.
+- Additional filtering categories: `Transports.Concurrency`.
 
-Any future non-default facet (real I/O, load, timing stress) must go into a separate layer or
-group with its own declared category, not the default suite run.
+`Transports.Concurrency` marks the one server-layer test that uses real threads to prove the
+single-factory-call invariant of the admission lock. The threads are controlled by gates, joined with
+bounded timeouts, and the gates are always released in `finally`; no test sleeps or polls. The test
+still runs in the default suite because it is deterministic and fast. Any future non-default facet
+(real I/O, load, timing stress) must go into a separate layer or group with its own declared
+category, not the default suite run.
 
 ## Contract summaries
 
@@ -342,6 +397,83 @@ ticker behavior is covered by the `RawReliableServerTransport` layer and is not 
 - **Ownership**: the caller's buffer remains alive with its original reference count after the
   acknowledger releases; mutations made through the shared list are visible to the caller.
 
+### `RawUnreliableTransport` contract matrix
+
+`RawUnreliableTransport` is a thin marker facade over `RawTransport`, like the reliable marker, and adds
+no lifecycle or carrier behavior. Unlike the legacy unreliable base, it exposes the unreliable transport
+contract.
+
+- **Interface exposure**: an instance is assignable to `IRawUnreliableTransport` and `IRawTransport`.
+- **Conformance control**: `GetControls` publishes one `RawUnreliableTransportConformanceControl`, and the
+  typed `Conformance` property returns the same instance through
+  `IRawUnreliableTransportConformanceControl`.
+- **Debug reliability**: the control's `TryMakeReliable` prefers
+  `IRawUnreliableDebugReliability.TryMakeReliableForDebug` on the transport and returns its result. The
+  legacy `LegacyRawUnreliableTransport` cast remains a fallback until the carriers are converted.
+
+### `RawUnreliableClientTransport` contract matrix
+
+The client transport owns a small lifecycle (`Constructed`, `Initialized`, `Started`, `Stopped`), the
+carrier hooks, and the hand-off to one endpoint. It tracks no connectivity of its own. This layer covers
+that delta; the inherited `AnyTransport` lifecycle and the unreliable marker facade are not repeated.
+
+- **Init**: from `Constructed`, `Init` binds the handler and moves to `Initialized`; the call is one-shot
+  and later calls return `false` without invalidating the transport. A null handler throws
+  `ArgumentNullException` and leaves the transport untouched. `Init` after a start attempt (successful or
+  not) returns `false` and does not bind the handler.
+- **Start**: works only after `Init`. The sequence is `StartCarrier`, `CreateEndpoint`, attachment
+  (subscription to the endpoint's terminal notification), then `endpoint.Start`; a second `Start` does
+  nothing. A rejected or throwing `StartCarrier` fails the start, stops the carrier once, and — because no
+  endpoint exists — notifies the handler with a `TextFail` or `ExceptionFail`; the start callback receives
+  the same reason.
+- **Endpoint factory failure**: a throwing `CreateEndpoint` is logged, the handler receives an
+  `ExceptionFail` carrying the exception, `StopCarrier` runs once, and `Start` returns `false`. This is the
+  reachable "no endpoint created" fallback path: the transport owns the handler stop notification exactly
+  while no endpoint exists.
+- **Start/stop race**: an endpoint terminal notification observed while the start is still in progress is
+  latched (the first reason only) and replayed from `OnStarted`. The transport is never stopped from inside
+  `TryStart`, so `Start` returns `true` and the transport ends stopped with the endpoint's reason. The
+  endpoint's own handler gate decides whether the handler sees `OnStopped`.
+- **Endpoint terminal notification**: after a successful start, the attached endpoint stopping stops the
+  transport with the same reason instance. The transport detaches the endpoint and does not duplicate the
+  handler notification: the endpoint owns it.
+- **Stop ordering**: `Stop` asks the attached endpoint to stop through the one-shot
+  `IRawUnreliableEndpoint.Stop`, then calls `StopCarrier`, then detaches. The endpoint comes first because
+  it owns the carrier resources. A second one-shot endpoint stop inside `StopCarrier` therefore returns
+  `false`.
+
+### `RawUnreliableServerTransport<TFactory>` contract matrix
+
+The server transport owns the carrier hooks, the admission lock, the source-route registry, and the shared
+send budget. This layer covers that delta; the inherited `AnyTransport` lifecycle and the unreliable marker
+facade are not repeated.
+
+- **Initialization**: `TryInitializeServer` binds the variant factory once. Later calls, calls after a start
+  attempt, and calls on an invalid transport return `false` and keep the first factory. A null factory is
+  accepted and makes every new route a silent rejection.
+- **Start**: requires initialization. It creates the shared `SendBudget` from `SendBudgetBytes` and
+  `SendBudgetMessages`, then starts the carrier. A rejected or throwing carrier start drops the budget,
+  returns `false`, and does not call `StopCarrier`. The default limits are
+  `MessageMaxByteSize * 100` bytes and 100 messages; carriers override the two properties to derive the
+  caps from their queue capacity and configure each endpoint's local budget with the byte cap.
+- **Admission**: `OnCarrierInbound` requires a non-null source and trigger. A message for an existing route
+  is delivered to that endpoint outside the lock. For an unknown route, one admission lock serializes the
+  `BeforeHandlerFactoryGate`, factory invocation, endpoint construction, and route publication. A null
+  factory, a null handler, or a throwing factory releases the trigger exactly once, publishes no route, and
+  logs only the exception. A throwing endpoint constructor behaves the same.
+- **Creation order**: factory, endpoint construction with the trigger as its first inbox element, route
+  publication, `BeforeHandlerStartedGate`, then `endpoint.Start`. After the lock is released the transport
+  re-checks `IsStopping`/`IsStarted`; if it has started stopping, the route is removed and the endpoint is
+  stopped unstarted, which releases the trigger without ever raising `OnStarted`.
+- **Route removal**: a session endpoint's terminal notification removes only its own route, compared by
+  reference. A stopped route can be recreated by the next trigger for the same source; other routes are
+  unaffected.
+- **Stop**: the admission is closed and the routes are cleared under the admission lock before
+  `StopCarrier` runs. The carrier stops first, then every removed endpoint is stopped with the transport
+  reason through the one-shot entry. Every session handler observes the same reason instance.
+- **Concurrency**: factory invocation and route publication are serialized for one source; concurrent
+  triggers for the same unknown source produce exactly one factory call, one endpoint, and one route.
+
 ## How it works
 
 ### Black-box boundary
@@ -398,6 +530,18 @@ never use reflection. Only these are asserted:
 - `RecordingRawReliableAckServerAcknowledger` records the remote endpoint, the acknowledgement
   buffer, and its reference count around a configurable behavior. The behavior owns the additional
   reference; the recorder releases it as a safety net if the behavior does not.
+- `TestRawUnreliableTransport : RawUnreliableTransport, IRawUnreliableDebugReliability` supplies the
+  inherited abstract members, exposes the typed conformance control, and records the debug-reliability
+  call.
+- `TestRawUnreliableClientTransport : RawUnreliableClientTransport` supplies the carrier hooks and the
+  endpoint factory, records their calls and stop ordering, and lets a test make the factory or the
+  carrier fail. It reuses the endpoint-suite recording handler and manual-queue endpoint.
+- `StopDuringStartEndpoint : RawUnreliableEndpoint` uses the production inline queue and stops itself in
+  an action scheduled after its own flush, so its terminal notification arrives synchronously inside
+  `endpoint.Start()` while the client transport's start is in progress.
+- `TestRawUnreliableServerTransport : RawUnreliableServerTransport<Func<IEndPoint, UnionDataList,
+  IRawUnreliableHandler?>>` implements the carrier hooks, the factory, and the endpoint constructor,
+  records what the transport hands it, and exposes the admission entry point and the route count.
 - A trivial `RawReliableConformanceControl` is passed only because the production constructor
   requires one. It is never armed, inspected, or asserted.
 
@@ -427,9 +571,11 @@ and assert the observable result.
 - Test methods: `Scenario_ExpectedResult`.
 - Hand-written fakes only.
 - Add `[Category("Transports")]` to each test class.
-- **Do not use the conformance subsystem in this suite.** Do not obtain it through
-  `GetControls`, do not inject a conformance control, do not arm gates, and do not call
-  `FailNextStart`/`InjectUnrecoverableFailure`.
+- **Do not use the conformance subsystem as a test mechanism.** Do not arm gates, and do not call
+  `FailNextStart`/`InjectUnrecoverableFailure`. Do not inject a conformance control into a transport
+  double. The single exception is the `RawUnreliableTransport` root layer, which asserts that
+  `GetControls` publishes the transport's conformance control and that `TryMakeReliable` delegates to
+  `IRawUnreliableDebugReliability`; it neither arms nor injects.
 - If a test allocates `UnionDataList` or byte arrays, add
   `[TearDown] public void TearDown() => GC.Collect();`.
 
@@ -467,18 +613,30 @@ Filter to this suite:
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports
 ```
 
+Filter to the concurrency-tagged tests:
+
+```
+dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.Concurrency
+```
+
 ## Out of scope
 
 - Endpoint behavior: `RawReliableEndpoint` and the raw-reliable endpoint family are covered by
   the `Endpoints` suite.
+- `RawUnreliableEndpoint`, `RawUnreliableServerEndpoint`, and the endpoint-owned architecture of the
+  unreliable path: the pre-start inbox, the one-shot stop, the local and shared budgets, and the carrier
+  resource ownership are covered by the `Endpoints` suite.
 - Carrier behavior: delivery, ordering, socket handling, and end-to-end topology behavior belong
   to the conformance suite in `Tests/Pontifex.Transports.Tests`.
 - Concrete carrier transports in the `Transports` projects (Direct, TCP, UDP).
-- The conformance subsystem: `IConformanceControl`, gates, failure injection, and the
-  conformance role of `GetControls`.
+- The legacy unreliable hierarchy (`LegacyRawUnreliableTransport` and its children) and its dispatcher:
+  it is a temporary shim deleted in Stage 6 of the conversion plan.
+- Arming the conformance subsystem (gates and failure injection). The unreliable root layer only
+  asserts that the control object is published and that the debug-reliability lookup is preferred.
 - The public `Stopped` event on transports, where it is raised independently of the handler
   callbacks.
-- Real time, threads, timers, and wall-clock scheduling.
+- Real time, threads, timers, and wall-clock scheduling, except the gated, joined, deterministic
+  `Transports.Concurrency` test.
 
 ## Rules
 

@@ -20,11 +20,8 @@
 
 | Missing layer or test | Owner | Reason |
 |---|---|---|
-| `RawUnreliableTransport` layer | This layer | Abstract descendant of `RawTransport` with no layer yet; the nearest existing ancestor is this layer. |
-| `RawUnreliableClientTransport` layer | This layer | Abstract descendant of `RawUnreliableTransport`; parent layer does not exist yet. |
-| `RawUnreliableServerTransport<TFactory>` layer | This layer | Abstract descendant of `RawUnreliableTransport`; parent layer does not exist yet. |
-| `RawUnreliableAckServerTransport` layer | This layer | Abstract descendant of `RawUnreliableServerTransport<TFactory>`; parent layer does not exist yet. |
-| `RawUnreliableNoAckServerTransport` layer | This layer | Abstract descendant of `RawUnreliableServerTransport<TFactory>`; parent layer does not exist yet. |
+| `RawUnreliableAckServerTransport` layer | This layer | Dead abstract legacy base; it derives from `LegacyRawUnreliableServerTransport<TFactory>` and is deleted in Stage 6 of the conversion plan. |
+| `RawUnreliableNoAckServerTransport` layer | This layer | Dead abstract legacy base; it derives from `LegacyRawUnreliableServerTransport<TFactory>` and is deleted in Stage 6 of the conversion plan. |
 
 ## Deferred by design
 
@@ -41,3 +38,6 @@
 - `TestRawTransport : RawTransport` supplies the abstract `MessageMaxByteSize`, `Type`, and
   lifecycle hooks. It passes a trivial conformance control only because the production
   constructor requires one; the control is never armed, inspected, or asserted.
+- The three unreliable bases that used to be missing layers now have their own layers under
+  `Raw/Unreliable`: `RawUnreliableTransport`, `RawUnreliableClientTransport`, and
+  `RawUnreliableServerTransport<TFactory>`.

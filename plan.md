@@ -496,10 +496,10 @@ Tests/Pontifex.Tests/Transports/Raw/Unreliable/Server/Harness/...
 Tests/Pontifex.Tests/Transports/README.md                                   (tree, layer table, layout)
 ```
 Tasks:
-- [ ] Declare `RawUnreliableTransport : RawTransport, IRawUnreliableTransport`. The legacy class omits
+- [x] Declare `RawUnreliableTransport : RawTransport, IRawUnreliableTransport`. The legacy class omits
       the interface; the new marker must expose it, because the layer test asserts the assignability
       that `RawReliableTransport` has (`RawReliableTransport.cs:6`).
-- [ ] Client base: `Init`, `TryStart` (init gate → `StartCarrier` → `CreateEndpoint` → attach →
+- [x] Client base: `Init`, `TryStart` (init gate → `StartCarrier` → `CreateEndpoint` → attach →
       `endpoint.Start`) with a start-in-progress latch and a latched pending stop reason, mirroring
       `RawReliableClientTransport`; `OnStarted` only replays a latched stop; `Stopped` → transport
       `Stop`; detach and fallback `handler.OnStopped` when no endpoint was created; carrier stop
@@ -508,20 +508,20 @@ Tasks:
       "no endpoint created" path for the fallback coverage item. Creating the endpoint in
       `OnStarted` is forbidden: `AnyTransport.Start` has no `try/catch` around `OnStarted`, so a
       throw there would leave the transport half-started.
-- [ ] Server base: `TryInitializeServer`, `TryStart`, route registry with admission lock and
+- [x] Server base: `TryInitializeServer`, `TryStart`, route registry with admission lock and
       published ready slot (creation order per §6.2), factory null/throw handling, gate placement,
       trigger hand-off, stop cascade, `Stopped` → unroute, global `SendBudget` ownership and limits
       hook. After the admission lock is released and before `Start()`, re-check
       `IsStopping`/`IsStarted`; if the transport is stopping, remove the slot and stop the new
       endpoint so the trigger is released.
-- [ ] `IRawUnreliableDebugReliability` is public with a public `bool TryMakeReliableForDebug()`.
+- [x] `IRawUnreliableDebugReliability` is public with a public `bool TryMakeReliableForDebug()`.
       Stage 4 keeps **both** lookup paths in `RawUnreliableTransportConformanceControl`
       (`_owner is IRawUnreliableDebugReliability d ? d.TryMakeReliableForDebug() :
       ((LegacyRawUnreliableTransport)_owner).TryMakeReliableForDebug()`), because the four carriers
       still implement the legacy `protected internal` abstract member. The fallback is deleted in
       Stage 6. Without the dual path every `EnableReliable(...)` call throws `InvalidCastException`
       for all four adapters in Stage 4.
-- [ ] Transport tests and coverage as in §8.2; update `Tests/Pontifex.Tests/Transports/README.md`
+- [x] Transport tests and coverage as in §8.2; update `Tests/Pontifex.Tests/Transports/README.md`
       and `Tests/Pontifex.Tests/Transports/Raw/Coverage.md`.
 
 **Exit:** build green; new transport layers green; legacy carriers untouched and all suites green.
