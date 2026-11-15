@@ -176,7 +176,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// the session ends, or by this method when registration fails.</description></item>
         /// </list>
         /// </remarks>
-        protected bool CompleteAdmission(RawReliableServerEndpoint session)
+        protected bool CompleteAdmission(IRawReliableServerEndpointImp session)
         {
             EndHandshake();
             return TryStartAndRegisterSession(session);

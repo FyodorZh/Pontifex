@@ -24,7 +24,7 @@ namespace Pontifex.Raw.Reliable.Ack
     /// session handler.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawReliableAckServerEndpoint : RawReliableServerEndpoint, IRawReliableAckEndpoint
+    public abstract class RawReliableAckServerEndpoint : RawReliableServerEndpoint, IRawReliableAckServerEndpointImp
     {
         private readonly IRawReliableAckServerHandler _handler;
 

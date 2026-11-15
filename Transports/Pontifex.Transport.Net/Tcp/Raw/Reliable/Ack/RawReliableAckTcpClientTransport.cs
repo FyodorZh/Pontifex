@@ -187,7 +187,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         /// <summary>
         /// Creates the TCP client endpoint for one connection attempt.
         /// </summary>
-        protected override RawReliableAckClientEndpoint CreateEndpoint(IRawReliableAckClientHandler handler)
+        protected override IRawReliableAckClientEndpointImp CreateEndpoint(IRawReliableAckClientHandler handler)
         {
             return new RawReliableAckTcpClientEndpoint(
                 Name,

@@ -40,7 +40,7 @@ namespace Pontifex.Raw.Reliable
 
         private volatile TClientHandler? _handler;
 
-        private RawReliableClientEndpoint? _attachedEndpoint;
+        private IRawReliableClientEndpointImp? _attachedEndpoint;
 
         private bool _startInProgress;
 
@@ -189,7 +189,7 @@ namespace Pontifex.Raw.Reliable
         /// <see cref="RawEndpoint.Stopped"/> notification so the transport stops with it.</description></item>
         /// </list>
         /// </remarks>
-        protected void AttachEndpoint(RawReliableClientEndpoint endpoint)
+        protected void AttachEndpoint(IRawReliableClientEndpointImp endpoint)
         {
             if (endpoint == null)
             {
@@ -216,13 +216,13 @@ namespace Pontifex.Raw.Reliable
         /// not detach it themselves.</description></item>
         /// </list>
         /// </remarks>
-        protected RawReliableClientEndpoint? AttachedEndpoint => Volatile.Read(ref _attachedEndpoint);
+        protected IRawReliableClientEndpointImp? AttachedEndpoint => Volatile.Read(ref _attachedEndpoint);
 
         /// <summary>
         /// Detaches the current endpoint, if any, and unsubscribes from its terminal notification.
         /// </summary>
         /// <returns>The detached endpoint, or <see langword="null"/> when none was attached.</returns>
-        private RawReliableClientEndpoint? DetachEndpoint()
+        private IRawReliableClientEndpointImp? DetachEndpoint()
         {
             var endpoint = Interlocked.Exchange(ref _attachedEndpoint, null);
             if (endpoint != null)

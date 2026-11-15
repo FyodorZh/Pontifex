@@ -22,7 +22,7 @@ internal sealed class TestRawReliableAckClientTransport : RawReliableAckClientTr
 
     public override int MessageMaxByteSize => 1024;
 
-    protected override RawReliableAckClientEndpoint CreateEndpoint(IRawReliableAckClientHandler handler)
+    protected override IRawReliableAckClientEndpointImp CreateEndpoint(IRawReliableAckClientHandler handler)
     {
         return new TestRawReliableAckClientEndpoint(
             handler,

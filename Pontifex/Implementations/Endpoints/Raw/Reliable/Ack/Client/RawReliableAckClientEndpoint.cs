@@ -22,7 +22,7 @@ namespace Pontifex.Raw.Reliable.Ack
     /// outside the expected stage is treated as a fatal protocol violation.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawReliableAckClientEndpoint : RawReliableClientEndpoint, IRawReliableAckEndpoint
+    public abstract class RawReliableAckClientEndpoint : RawReliableClientEndpoint, IRawReliableAckClientEndpointImp
     {
         private readonly IRawReliableAckClientHandler _handler;
 
@@ -42,7 +42,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// lifecycle.</description></item>
         /// </list>
         /// </remarks>
-        public event Action<IRawReliableAckEndpoint>? Acknowledged;
+        public event Action<IRawReliableAckClientEndpointImp>? Acknowledged;
 
         private enum State
         {

@@ -22,7 +22,7 @@ namespace Pontifex.Raw.Reliable
     /// disconnect work and must drive completion through FinishConnect and FinishDisconnect.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawReliableEndpoint : RawEndpoint, IRawReliableEndpoint
+    public abstract class RawReliableEndpoint : RawEndpoint, IRawReliableEndpointImp
     {
         /// <summary>
         /// Identifies the leading control byte that frames every inbound and outbound message.

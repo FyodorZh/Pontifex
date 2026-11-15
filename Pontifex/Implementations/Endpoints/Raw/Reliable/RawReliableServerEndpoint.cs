@@ -24,7 +24,7 @@ namespace Pontifex.Raw.Reliable
     /// base implementation to keep the watchdog working.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawReliableServerEndpoint : RawReliableEndpoint
+    public abstract class RawReliableServerEndpoint : RawReliableEndpoint, IRawReliableServerEndpointImp
     {
         private readonly TimeSpan _disconnectTimeout;
         private readonly AtomicBox<DateTime> _lastInboundMessage = new();

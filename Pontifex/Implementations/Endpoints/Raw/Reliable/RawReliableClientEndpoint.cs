@@ -23,7 +23,7 @@ namespace Pontifex.Raw.Reliable
     /// to keep the keep-alive timestamp current.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawReliableClientEndpoint : RawReliableEndpoint
+    public abstract class RawReliableClientEndpoint : RawReliableEndpoint, IRawReliableClientEndpointImp
     {
         private const int KeepAlivePollPeriodMs = 100;
 

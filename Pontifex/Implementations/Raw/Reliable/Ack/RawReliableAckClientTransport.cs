@@ -38,7 +38,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// the start.</description></item>
         /// </list>
         /// </remarks>
-        protected abstract RawReliableAckClientEndpoint CreateEndpoint(IRawReliableAckClientHandler handler);
+        protected abstract IRawReliableAckClientEndpointImp CreateEndpoint(IRawReliableAckClientHandler handler);
 
         protected sealed override bool BeginConnect()
         {

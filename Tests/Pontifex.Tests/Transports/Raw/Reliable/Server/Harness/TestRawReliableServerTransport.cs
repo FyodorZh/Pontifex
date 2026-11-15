@@ -63,7 +63,7 @@ internal sealed class TestRawReliableServerTransport
 
     public int OnSessionStoppedCalls { get; private set; }
 
-    public RawReliableServerEndpoint? LastSessionStopped { get; private set; }
+    public IRawReliableServerEndpointImp? LastSessionStopped { get; private set; }
 
     public StopReason? LastSessionStoppedReason { get; private set; }
 
@@ -89,7 +89,7 @@ internal sealed class TestRawReliableServerTransport
 
     public void ExposedReleaseSession() => ReleaseSession();
 
-    public bool ExposedTryStartAndRegisterSession(RawReliableServerEndpoint session)
+    public bool ExposedTryStartAndRegisterSession(IRawReliableServerEndpointImp session)
     {
         return TryStartAndRegisterSession(session);
     }
@@ -123,7 +123,7 @@ internal sealed class TestRawReliableServerTransport
         EventLog.Add("stopCarrier");
     }
 
-    protected override void OnSessionStopped(RawReliableServerEndpoint session, StopReason reason)
+    protected override void OnSessionStopped(IRawReliableServerEndpointImp session, StopReason reason)
     {
         OnSessionStoppedCalls++;
         LastSessionStopped = session;

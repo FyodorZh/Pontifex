@@ -27,7 +27,7 @@ namespace Pontifex.Raw
     /// then transitions the stage to Stopped; derived classes override it to release resources.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawEndpoint : IRawEndpoint
+    public abstract class RawEndpoint : IRawEndpointImp
     {
         private readonly long _bufferCapacityBytes;
         private readonly IRawHandler _handler;
