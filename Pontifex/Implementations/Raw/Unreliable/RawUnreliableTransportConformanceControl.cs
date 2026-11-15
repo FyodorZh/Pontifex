@@ -18,17 +18,22 @@ namespace Pontifex.Raw.Unreliable
 
         public ICheckPointCtl BeforeHandlerStartedGate => _beforeHandlerStartedGate;
 
+        /// <summary>
+        /// Enables transport-wide reliable debug mode by forwarding the request to the carrier.
+        /// </summary>
+        /// <returns>The carrier's answer, or <see langword="false"/> when the owner does not implement
+        /// <see cref="IRawUnreliableDebugReliability"/> and therefore has no debug reliability mode.
+        /// </returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: An owner without the interface is not an error; the
+        /// request is declined instead of throwing.</description></item>
+        /// </list>
+        /// </remarks>
         public bool TryMakeReliable()
         {
-            // Stage 4 keeps both lookup paths: the carriers still implement the legacy protected internal
-            // member, while the new architecture extracts it into IRawUnreliableDebugReliability. The
-            // legacy fallback is deleted in Stage 6.
-            if (_owner is IRawUnreliableDebugReliability debugReliability)
-            {
-                return debugReliability.TryMakeReliableForDebug();
-            }
-
-            return ((LegacyRawUnreliableTransport)_owner).TryMakeReliableForDebug();
+            return _owner is IRawUnreliableDebugReliability debugReliability
+                   && debugReliability.TryMakeReliableForDebug();
         }
     }
 }

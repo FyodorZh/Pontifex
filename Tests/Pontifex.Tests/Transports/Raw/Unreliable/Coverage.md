@@ -13,15 +13,15 @@
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|
-| `RawUnreliableTransport_ExposesUnreliableRawTransportContract` | `RawUnreliableTransport` is an `IRawUnreliableTransport` and an `IRawTransport`. | The unreliable marker contract is exposed, which the legacy base deliberately omitted. | The class adds no lifecycle, carrier, or message-handling behaviour, so only its delta is asserted. |
+| `RawUnreliableTransport_ExposesUnreliableRawTransportContract` | `RawUnreliableTransport` is an `IRawUnreliableTransport` and an `IRawTransport`. | The unreliable marker contract is exposed by the marker facade. | The class adds no lifecycle, carrier, or message-handling behaviour, so only its delta is asserted. |
 | `GetControls_ExposesRawUnreliableTransportConformanceControl` | The conformance control published by `GetControls` is the typed unreliable transport control. | Exactly one control is added and it is the same instance the typed `Conformance` property returns; the public control interface is implemented. | The control is inspected but never armed, and no failure is injected: the suite does not use the conformance subsystem as a test mechanism. |
-| `TryMakeReliable_WhenOwnerImplementsDebugReliability_DelegatesToIt` | The conformance control prefers `IRawUnreliableDebugReliability` on the transport instance. | `TryMakeReliable` returns the carrier's answer and calls it once per invocation. | The double implements the interface, so this pins the preferred lookup branch. The legacy fallback cast is still exercised by the conformance suite against the four legacy carriers and is deleted in Stage 6. |
+| `TryMakeReliable_WhenOwnerImplementsDebugReliability_DelegatesToIt` | The conformance control forwards to `IRawUnreliableDebugReliability` on the transport instance. | `TryMakeReliable` returns the carrier's answer and calls it once per invocation. | The double implements the interface, so this pins the forwarding branch. An owner without the interface is declined with `false` by design; every production carrier implements it. |
 
 ## Planned
 
 | Missing layer or test | Owner | Reason |
 |---|---|---|
-| — | — | Both abstract children of this layer have their own layer (`Client`, `Server`). The two dead Ack/NoAck legacy bases are recorded as planned in `Raw/Coverage.md`. |
+| — | — | Both abstract children of this layer have their own layer (`Client`, `Server`). |
 
 ## Deferred by design
 

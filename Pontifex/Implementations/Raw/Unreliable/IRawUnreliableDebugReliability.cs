@@ -13,8 +13,8 @@ namespace Pontifex.Raw.Unreliable
     /// mode at the time of the call.</description></item>
     /// <item><description><b>Other notes</b>: The conformance control of an unreliable transport resolves
     /// this interface on the transport instance and forwards <c>TryMakeReliable</c> to it. The interface
-    /// is the replacement for the legacy <c>protected internal</c> abstract member and lets the four
-    /// carrier transports keep one implementation across the Ack and NoAck variants.</description></item>
+    /// lets the four carrier transports keep one implementation across the Ack and NoAck
+    /// variants.</description></item>
     /// </list>
     /// </remarks>
     public interface IRawUnreliableDebugReliability

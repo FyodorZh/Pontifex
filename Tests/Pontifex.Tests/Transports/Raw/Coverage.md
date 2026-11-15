@@ -20,8 +20,7 @@
 
 | Missing layer or test | Owner | Reason |
 |---|---|---|
-| `RawUnreliableAckServerTransport` layer | This layer | Dead abstract legacy base; it derives from `LegacyRawUnreliableServerTransport<TFactory>` and is deleted in Stage 6 of the conversion plan. |
-| `RawUnreliableNoAckServerTransport` layer | This layer | Dead abstract legacy base; it derives from `LegacyRawUnreliableServerTransport<TFactory>` and is deleted in Stage 6 of the conversion plan. |
+| — | — | No known missing layers or tests for this layer. |
 
 ## Deferred by design
 

@@ -12,9 +12,8 @@ namespace Pontifex.Raw.Unreliable
     /// <see cref="RawTransport"/>. It adds the unreliable transport contract and a typed view of the
     /// unreliable transport conformance control; lifecycle, carrier, handling, and routing behaviour
     /// belong to its client and server children.</description></item>
-    /// <item><description><b>Difference from the legacy hierarchy</b>: the legacy base deliberately did
-    /// not expose <see cref="IRawUnreliableTransport"/>; this class does, mirroring
-    /// <c>RawReliableTransport</c>.</description></item>
+    /// <item><description><b>Contract exposure</b>: the class exposes
+    /// <see cref="IRawUnreliableTransport"/>, mirroring <c>RawReliableTransport</c>.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawUnreliableTransport : RawTransport, IRawUnreliableTransport

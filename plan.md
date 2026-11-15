@@ -595,17 +595,19 @@ Tasks:
 ### Stage 6 — Delete legacy
 
 Tasks:
-- [ ] Delete `LegacyRawUnreliableTransport`, `LegacyRawUnreliableClientTransport`,
+- [x] Delete `LegacyRawUnreliableTransport`, `LegacyRawUnreliableClientTransport`,
       `LegacyRawUnreliableServerTransport<TFactory>`, `LegacyRawUnreliableEndpoint`,
       `RawUnreliableWorkItem`, the dispatcher field and helpers.
-- [ ] Delete the dead `RawUnreliableAckServerTransport` and `RawUnreliableNoAckServerTransport`;
+- [x] Delete the dead `RawUnreliableAckServerTransport` and `RawUnreliableNoAckServerTransport`;
       remove their two rows from `Tests/Pontifex.Tests/Transports/Raw/Coverage.md`.
-- [ ] Remove the legacy dispatcher plumbing: `OnCarrierInbound`, `SendToCarrier`, `TryInitialize`,
+- [x] Remove the legacy dispatcher plumbing: `OnCarrierInbound`, `SendToCarrier`, `TryInitialize`,
       `DispatchWork`, and every work-item switch arm. The new route registry and its lock stay.
-- [ ] Remove the legacy branch from `RawUnreliableTransportConformanceControl`; keep only the
+- [x] Remove the legacy branch from `RawUnreliableTransportConformanceControl`; keep only the
       `IRawUnreliableDebugReliability` lookup.
-- [ ] Grep gate: no `Legacy`, no `RawUnreliableWorkItem`, no `SerializedCallbackQueue` in the
-      unreliable path.
+- [x] Grep gate: no `Legacy`, no `RawUnreliableWorkItem`, no `DispatchWork`/`SendToCarrier`/
+      `TryInitialize` legacy plumbing. Two names legitimately survive and must not be grepped
+      away: `OnCarrierInbound` is the new server base's inbound entry, and
+      `SerializedCallbackQueue` is the Direct endpoints' ordered commit queue (stage 5).
 
 **Exit:** build green; all suites green; no legacy symbols.
 

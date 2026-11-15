@@ -400,16 +400,15 @@ ticker behavior is covered by the `RawReliableServerTransport` layer and is not 
 ### `RawUnreliableTransport` contract matrix
 
 `RawUnreliableTransport` is a thin marker facade over `RawTransport`, like the reliable marker, and adds
-no lifecycle or carrier behavior. Unlike the legacy unreliable base, it exposes the unreliable transport
-contract.
+no lifecycle or carrier behavior. It exposes the unreliable transport contract.
 
 - **Interface exposure**: an instance is assignable to `IRawUnreliableTransport` and `IRawTransport`.
 - **Conformance control**: `GetControls` publishes one `RawUnreliableTransportConformanceControl`, and the
   typed `Conformance` property returns the same instance through
   `IRawUnreliableTransportConformanceControl`.
-- **Debug reliability**: the control's `TryMakeReliable` prefers
-  `IRawUnreliableDebugReliability.TryMakeReliableForDebug` on the transport and returns its result. The
-  legacy `LegacyRawUnreliableTransport` cast remains a fallback until the carriers are converted.
+- **Debug reliability**: the control's `TryMakeReliable` forwards to
+  `IRawUnreliableDebugReliability.TryMakeReliableForDebug` on the transport and returns its result. An
+  owner that does not implement the interface is declined with `false`.
 
 ### `RawUnreliableClientTransport` contract matrix
 
@@ -629,8 +628,6 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
 - Carrier behavior: delivery, ordering, socket handling, and end-to-end topology behavior belong
   to the conformance suite in `Tests/Pontifex.Transports.Tests`.
 - Concrete carrier transports in the `Transports` projects (Direct, TCP, UDP).
-- The legacy unreliable hierarchy (`LegacyRawUnreliableTransport` and its children) and its dispatcher:
-  it is a temporary shim deleted in Stage 6 of the conversion plan.
 - Arming the conformance subsystem (gates and failure injection). The unreliable root layer only
   asserts that the control object is published and that the debug-reliability lookup is preferred.
 - The public `Stopped` event on transports, where it is raised independently of the handler

@@ -14,7 +14,7 @@
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|
 | `Init_WhenConstructed_BindsHandlerAndLeavesTransportUnstarted` | `Init` binds the handler from the constructed state. | The handler is stored, the transport stays valid and unstarted, and no carrier hook runs. | The transport does not wrap or transform the handler. |
-| `Init_CalledTwice_ReturnsFalseAndKeepsFirstHandler` | `Init` is one-shot. | The second call returns `false`, the first handler stays bound, and the transport is not invalidated. | Rejection without invalidation matches the legacy one-shot guard. |
+| `Init_CalledTwice_ReturnsFalseAndKeepsFirstHandler` | `Init` is one-shot. | The second call returns `false`, the first handler stays bound, and the transport is not invalidated. | Rejection without invalidation keeps the first binding usable. |
 | `Init_WithNullHandler_ThrowsWithoutChangingTheTransport` | A null handler is rejected. | `ArgumentNullException` is thrown, nothing is bound, and the transport is still startable (the start fails only for the missing initialization). | The handler contract (`IRawUnreliableClient.Init`) documents the throw. |
 | `Init_AfterStartAttempt_ReturnsFalseWithoutBindingHandler` | `Init` after a start attempt is rejected. | The handler stays unbound and neither carrier nor endpoint work runs. | The start attempt is terminal for `Init` even when it failed. |
 | `Init_AfterStart_ReturnsFalse` | `Init` after a successful start is rejected. | The first handler stays bound. | — |
@@ -43,7 +43,7 @@
 |---|---|
 | Re-testing inherited `AnyTransport`/`RawTransport`/`RawUnreliableTransport` behaviour. | Ancestor layers own that coverage. |
 | Real carrier start/stop, sockets, and network timing. | The layer is exercised through the `StartCarrier`/`StopCarrier`/`CreateEndpoint` seams. |
-| The legacy carrier's lazy connect and dispatcher. | Superseded by the endpoint-owned architecture; the legacy classes are deleted in Stage 6. |
+| The endpoint's lazy connect and its serial send queue. | Owned by the endpoint-owned architecture and covered by the `Endpoints` suite. |
 
 ## Notes
 

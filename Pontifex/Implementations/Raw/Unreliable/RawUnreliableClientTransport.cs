@@ -108,8 +108,8 @@ namespace Pontifex.Raw.Unreliable
         /// <see langword="false"/> without changing the bound handler. A null handler throws and leaves
         /// the transport untouched.</description></item>
         /// <item><description><b>Other notes</b>: Unlike the reliable client transport, a rejected
-        /// initialization does not invalidate the transport; it matches the one-shot guard of the legacy
-        /// unreliable base.</description></item>
+        /// initialization does not invalidate the transport; a rejected call is not a transport
+        /// failure.</description></item>
         /// </list>
         /// </remarks>
         public bool Init(IRawUnreliableHandler handler)
