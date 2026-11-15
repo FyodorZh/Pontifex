@@ -14,15 +14,22 @@ namespace Pontifex.Raw.Unreliable
     /// abstract carrier hooks and call <see cref="OnCarrierInbound"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The Ack and NoAck contracts differ only in the server handler factory
     /// signature; that difference is isolated to
     /// <see cref="InvokeHandlerFactory"/>, supplied by the variant server base.
+    /// </para>
+    /// <para>
+    /// This is a legacy base kept as a temporary shim for the carrier transports and is scheduled for
+    /// deletion in Stage 6. The canonical name <c>RawUnreliableTransport</c> is reserved for the new
+    /// architecture.
+    /// </para>
     /// </remarks>
-    public abstract class RawUnreliableTransport : RawTransport
+    public abstract class LegacyRawUnreliableTransport : RawTransport
     {
         protected new RawUnreliableTransportConformanceControl Conformance => (RawUnreliableTransportConformanceControl)base.Conformance;
 
-        protected RawUnreliableTransport(string typeName, ILogger logger, IMemoryRental memory, RawUnreliableTransportConformanceControl? conformanceControl = null)
+        protected LegacyRawUnreliableTransport(string typeName, ILogger logger, IMemoryRental memory, RawUnreliableTransportConformanceControl? conformanceControl = null)
             : base(typeName, logger, memory, conformanceControl ?? new RawUnreliableTransportConformanceControl())
         {
         }

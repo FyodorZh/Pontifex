@@ -455,15 +455,15 @@ Files:
 - `Transports/Pontifex.Transport.Net/Udp/Raw/Unreliable/_Common/RawUnreliableUdp*Transport.cs`
 
 Tasks:
-- [ ] Rename all three legacy bases. **Public rename only** — the four carrier `_Common` bases are
+- [x] Rename all three legacy bases. **Public rename only** — the four carrier `_Common` bases are
       public and derive from the client/server bases, so `internal` is not viable (CS0060).
-- [ ] Update `RawUnreliableTransportConformanceControl.TryMakeReliable` to cast to
+- [x] Update `RawUnreliableTransportConformanceControl.TryMakeReliable` to cast to
       `LegacyRawUnreliableTransport` (it currently casts to `RawUnreliableTransport`).
-- [ ] Repoint the two dead abstract Ack/NoAck server bases at
+- [x] Repoint the two dead abstract Ack/NoAck server bases at
       `LegacyRawUnreliableServerTransport<TFactory>` (one token each); they are deleted in Stage 6.
-- [ ] Free the canonical names `RawUnreliableTransport`, `RawUnreliableClientTransport`,
+- [x] Free the canonical names `RawUnreliableTransport`, `RawUnreliableClientTransport`,
       `RawUnreliableServerTransport<TFactory>` for Stage 4.
-- [ ] No behaviour change; no test change.
+- [x] No behaviour change; no test change.
 
 **Exit:** build green; every suite green; only `Legacy*` renames and their references are in the diff.
 

@@ -14,7 +14,7 @@ namespace Pontifex.Raw.Unreliable.Direct
     /// NoAck contract variants. The generic parameter is the variant
     /// handler-factory delegate type.
     /// </summary>
-    public abstract class RawUnreliableDirectServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>
+    public abstract class RawUnreliableDirectServerTransport<TFactory> : LegacyRawUnreliableServerTransport<TFactory>
         where TFactory : Delegate
     {
         private readonly IEndPoint _serverEp;

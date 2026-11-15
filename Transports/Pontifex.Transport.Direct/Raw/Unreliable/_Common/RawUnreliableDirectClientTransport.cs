@@ -13,7 +13,7 @@ namespace Pontifex.Raw.Unreliable.Direct
     /// in-process channel, delivery systems, and callback queue shared by the
     /// Ack and NoAck contract variants.
     /// </summary>
-    public abstract class RawUnreliableDirectClientTransport : RawUnreliableClientTransport
+    public abstract class RawUnreliableDirectClientTransport : LegacyRawUnreliableClientTransport
     {
         private readonly object _connectLock = new();
         private readonly IEndPoint _serverEp;

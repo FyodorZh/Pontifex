@@ -17,7 +17,7 @@ namespace Pontifex.Raw.Unreliable
     /// </remarks>
     public class LegacyRawUnreliableEndpoint : IRawUnreliableEndpoint
     {
-        private readonly RawUnreliableTransport _owner;
+        private readonly LegacyRawUnreliableTransport _owner;
         private readonly IRawUnreliableHandler _handler;
         private readonly IEndPoint? _remote;
         private readonly RawUnreliableEndpointConformanceControl _conformance = new();
@@ -38,7 +38,7 @@ namespace Pontifex.Raw.Unreliable
         /// </summary>
         internal Func<LegacyRawUnreliableEndpoint, StopReason?, bool>? StopDelegate;
 
-        internal LegacyRawUnreliableEndpoint(RawUnreliableTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
+        internal LegacyRawUnreliableEndpoint(LegacyRawUnreliableTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
         {
             _owner = owner;
             _handler = handler;

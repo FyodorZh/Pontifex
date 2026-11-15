@@ -15,7 +15,7 @@ namespace Pontifex.Raw.Unreliable.Udp
     /// datagram socket, sender, and receiver shared by the Ack and NoAck
     /// contract variants.
     /// </summary>
-    public abstract class RawUnreliableUdpClientTransport : RawUnreliableClientTransport
+    public abstract class RawUnreliableUdpClientTransport : LegacyRawUnreliableClientTransport
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;

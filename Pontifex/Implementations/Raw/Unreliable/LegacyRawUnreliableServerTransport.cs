@@ -12,10 +12,15 @@ namespace Pontifex.Raw.Unreliable
     /// NoAck servers a <see cref="Func{T, TResult}"/> receiving only the source
     /// route. The type-safe factory invocation is the only variant difference.
     /// </summary>
-    public abstract class RawUnreliableServerTransport<TFactory> : RawUnreliableTransport
+    /// <remarks>
+    /// This is a legacy base kept as a temporary shim for the carrier transports and is scheduled for
+    /// deletion in Stage 6. The canonical name <c>RawUnreliableServerTransport&lt;TFactory&gt;</c> is
+    /// reserved for the new architecture.
+    /// </remarks>
+    public abstract class LegacyRawUnreliableServerTransport<TFactory> : LegacyRawUnreliableTransport
         where TFactory : Delegate
     {
-        protected RawUnreliableServerTransport(string typeName, ILogger logger, IMemoryRental memory,
+        protected LegacyRawUnreliableServerTransport(string typeName, ILogger logger, IMemoryRental memory,
             RawUnreliableTransportConformanceControl? conformanceControl = null)
             : base(typeName, logger, memory, conformanceControl)
         {

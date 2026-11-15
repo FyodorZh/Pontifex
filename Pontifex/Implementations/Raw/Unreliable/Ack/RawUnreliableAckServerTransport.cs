@@ -5,7 +5,7 @@ using Scriba;
 
 namespace Pontifex.Raw.Unreliable.Ack
 {
-    public abstract class RawUnreliableAckServerTransport : RawUnreliableServerTransport<Func<IEndPoint, UnionDataList, IRawUnreliableHandler?>>
+    public abstract class RawUnreliableAckServerTransport : LegacyRawUnreliableServerTransport<Func<IEndPoint, UnionDataList, IRawUnreliableHandler?>>
     {
         protected RawUnreliableAckServerTransport(string typeName, ILogger logger, IMemoryRental memory,
             RawUnreliableTransportConformanceControl? conformanceControl = null)

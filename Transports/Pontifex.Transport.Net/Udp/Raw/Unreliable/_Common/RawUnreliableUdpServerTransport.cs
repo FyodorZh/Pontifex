@@ -17,7 +17,7 @@ namespace Pontifex.Raw.Unreliable.Udp
     /// contract variants. The generic parameter is the variant
     /// handler-factory delegate type.
     /// </summary>
-    public abstract class RawUnreliableUdpServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>
+    public abstract class RawUnreliableUdpServerTransport<TFactory> : LegacyRawUnreliableServerTransport<TFactory>
         where TFactory : Delegate
     {
         private IPEndPoint _localEndPoint;

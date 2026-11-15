@@ -5,9 +5,14 @@ using Scriba;
 
 namespace Pontifex.Raw.Unreliable
 {
-    public abstract class RawUnreliableClientTransport : RawUnreliableTransport, IRawUnreliableClient
+    /// <remarks>
+    /// This is a legacy base kept as a temporary shim for the carrier transports and is scheduled for
+    /// deletion in Stage 6. The canonical name <c>RawUnreliableClientTransport</c> is reserved for the
+    /// new architecture.
+    /// </remarks>
+    public abstract class LegacyRawUnreliableClientTransport : LegacyRawUnreliableTransport, IRawUnreliableClient
     {
-        protected RawUnreliableClientTransport(string typeName, ILogger logger, IMemoryRental memory,
+        protected LegacyRawUnreliableClientTransport(string typeName, ILogger logger, IMemoryRental memory,
             RawUnreliableTransportConformanceControl? conformanceControl = null)
             : base(typeName, logger, memory, conformanceControl)
         {
