@@ -346,11 +346,17 @@ dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj
 
 ### Stage 0 — Baseline
 
-- [ ] Run all verification commands; record pass/ignore counts.
-- [ ] Confirm the unreliable conformance suite is **not** ignoring (`TryMakeReliable` returns true
+- [x] Run all verification commands; record pass/ignore counts.
+- [x] Confirm the unreliable conformance suite is **not** ignoring (`TryMakeReliable` returns true
       for both Direct and UDP today).
 
 **Exit:** green baseline; counts recorded in this file or the PR description.
+
+**Recorded baseline (2026-11-15, `f850b75`):** build 0 errors / 21 warnings;
+`Pontifex.Tests` 610 passed / 0 skipped; `Pontifex.Transports.Tests` 238 passed / 67 skipped
+(the skips are the `TryAck_*` group, unrelated to unreliable), `--filter Unreliable` runs
+226 / 0 skipped; `Pontifex.Transport.Direct.Tests` 50 passed; `Pontifex.Transport.Net.Tests`
+280 passed; `Pontifex.Factory.Tests` 99 passed. Unreliable conformance suite is not ignoring.
 
 ---
 
@@ -362,16 +368,16 @@ Files:
 - `Tests/Pontifex.Tests/Endpoints/Coverage.md`
 
 Tasks:
-- [ ] Add `_pendingSendMessages`, `OnPendingSendChanged`, and the **five** notification sites
+- [x] Add `_pendingSendMessages`, `OnPendingSendChanged`, and the **five** notification sites
       enumerated in §5.2.
-- [ ] Make the queued stop action idempotent for `Stopping`/`Stopped` (§5.2 item 4).
-- [ ] Add tests: positive delta on reservation; negative delta on transmit; negative delta on
+- [x] Make the queued stop action idempotent for `Stopping`/`Stopped` (§5.2 item 4).
+- [x] Add tests: positive delta on reservation; negative delta on transmit; negative delta on
       drop-by-stop; negative delta on `DoSendRaw` throwing; matching `+`/`−` pairs for the local
       budget overflow and `Schedule`-returned-false paths; net-zero after drain; a throwing override
       is swallowed and logged; a stop latched while `Starting`, promoted by `FinishStart` before the
       queued stop action runs, yields no exception, no `FailHard`, one `BeginStop` and one handler
       notification.
-- [ ] Update the `RawEndpoint` coverage table.
+- [x] Update the `RawEndpoint` coverage table.
 
 **Exit:** build green; existing endpoints/transports/conformance suites unchanged; new tests green.
 

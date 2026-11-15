@@ -31,6 +31,13 @@
 | `Send_MultipleBuffers_PreservesAdmissionOrder` | Concurrently admitted sends are transmitted in admission order. | Two accepted buffers reach `DoSendRaw` in call order. | Deterministic single-threaded queue; no real concurrency. |
 | `Send_ExceedingCapacity_ReturnsBufferOverflow` | The outbound byte budget is bounded by `bufferCapacityBytes`. | An over-capacity send is rejected and its buffer released. | Budget accounting uses the serialized data size. |
 | `Send_BudgetIsFreedAfterDrain` | Capacity is reclaimed after admitted work drains. | A rejected send succeeds after the first send is transmitted. | Proves the budget is released in `DoSendRaw`'s finally path. |
+| `Send_WhenAdmitted_ReportsPositiveReservationDelta` | `OnPendingSendChanged` reports a reservation when bytes are reserved for a buffer. | An admitted send reports `+size` bytes and `+1` message before the buffer enters the queue. | The double keeps the signed deltas and their sums, so the sum is the endpoint's pending reservation; nothing is drained yet. |
+| `Send_AfterDrain_ReportsNegativeDeltaAndNetsToZero` | Transmission releases the reservation with a symmetric negative delta. | The delta sequence is exactly `(+size, +1)` then `(-size, -1)`, and the sums are zero after the drain. | Proves the `_sendAction` `finally` releases the reservation on the transmit path. |
+| `Send_WhenStopCompletesBeforeQueuedSend_DropsBufferAndReportsNegativeDelta` | A stop that lands before a queued send runs drops the buffer and releases its reservation. | The buffer is not transmitted, it is released, and the deltas net to zero. | The manual queue is FIFO, so the race is produced through the double's `AdmitWhileStopping` admission: the send passes `CanSendNow` as if before the stop latch, and its action lands behind the stop action. |
+| `Send_WhenDoSendRawThrows_ReportsNegativeDeltaAndFailsHard` | A throwing `DoSendRaw` still releases the reservation and fails the endpoint hard. | Deltas net to zero, `OnStopped(ExceptionFail)` fires once, and the endpoint is not running. | The base contract leaves the buffer to the throwing implementation; the test asserts it is still alive and releases it. |
+| `Send_WhenLocalBudgetOverflows_ReportsMatchingPositiveAndNegativeDeltas` | The local byte-budget rollback is symmetric. | A `BufferOverflow` rejection reports `(+size, +1)` then `(-size, -1)` and nets to zero. | The reservation is emitted before the capacity check, so a rejected admission is visible as a matching pair. |
+| `Send_WhenQueueRejectsAdmission_ReportsMatchingDeltasAndReleasesBuffer` | A queue that rejects the admission rolls the reservation back. | `Send` returns `Error`, the deltas net to zero, and the buffer is released. | Uses the manual queue's opt-in reject-next seam; a rejection invokes neither the action nor `onFailToRun`, so the endpoint performs the rollback itself. |
+| `Send_WhenPendingSendChangedOverrideThrows_IsSwallowedLoggedAndNetsToZero` | A throwing override cannot break buffer accounting. | The exception is logged, the endpoint keeps working, the buffer is transmitted, and the deltas net to zero. | Asserted through a recording `ILogConsumer`; the double throws after recording the delta, so the sums still prove the pairing. |
 | `CanSendNow_WhenNotStarted_ReturnsNotConnected` | `CanSendNow` requires the started stage. | Before start it reports `NotConnected`. | — |
 | `CanSendNow_WhenRunning_ReturnsOk` | A started endpoint with no stop request admits sends. | `CanSendNow` reports `Ok`. | — |
 | `CanSendNow_AfterStopRequested_ReturnsNotConnected` | A pending stop closes the send gate. | `CanSendNow` reports `NotConnected` immediately after `Stop`. | The stop action may still be queued. |
@@ -42,6 +49,7 @@
 | `Stop_WhenRunning_NotifiesHandlerWithReason` | A running stop calls `BeginStop` and notifies `OnStopped` with the same reason. | Reason identity and one-shot notification. | — |
 | `Stop_ForwardsTryBeGentleToBeginStop` | `tryBeGentle` is forwarded to the transport hook. | The hook observes the caller's hint. | — |
 | `Stop_CalledTwice_FirstReasonWins` | Repeated stops are idempotent. | Only the first reason and gentleness reach `BeginStop` and the handler. | — |
+| `Stop_LatchedWhileStartingAndPromotedByFinishStart_QueuedStopActionIsNoOp` | The queued stop action is a no-op when teardown has already started. | `FinishStart` promotes a stop latched while starting to `BeginStop`; the queued stop action then does nothing, so there is no hard failure and exactly one `OnStopped`. | Needs the single-step drain so the start-completion action runs before the queued stop action. `FinishStart`/`FinishStop` out of order still fail hard (covered below). |
 | `FinishStop_WhenNotStopping_FailsHard` | `FinishStop` is legal only while stopping. | An invalid completion fails hard with `ExceptionFail`. | Exercises the queue `onError` → `FailHard` path. |
 | `FailHard_WhenRunning_NotifiesHandlerAndStops` | A fatal failure from the started stage notifies the handler and stops. | Reason identity and terminal `IsRunning == false`. | The direct protected hook is invoked; the queue error path is covered by the start/stop guard tests. |
 | `GetControls_BaseImplementationAddsNothing` | The base control surface contributes no controls. | `GetControls` leaves the destination empty. | The conformance-control role is out of scope for this suite. |
@@ -52,10 +60,10 @@
 |---|---|---|
 | `Stopped` event raised once on every terminal path and subscriber exceptions isolated. | This layer | The public event is part of the endpoint contract but is not currently asserted. |
 | `IRawEndpoint`/`IBaseEndpoint` assignability and `GetControls` predicate overload. | This layer | Interface exposure and the predicate path are not covered. |
-| Inbound scheduling rejection releases the buffer. | This layer | The manual queue always accepts; a reject-next seam is needed. |
+| Inbound scheduling rejection releases the buffer. | This layer | The manual queue now has an opt-in reject-next seam; the test is not written yet. |
 | `OnReceived` throwing fails hard with `ExceptionFail` while releasing ownership. | This layer | Handler exception isolation is a documented failure path. |
 | `OnStopped` throwing and `Stopped` subscriber throwing are swallowed. | This layer | Callback exception isolation is a documented contract. |
-| `DoSendRaw` throwing routes to `FailHard`. | This layer | Transport hook exception path is not covered. |
+| `onFailToRun` accounting rollback when an accepted send is never executed. | This layer | Accepted-but-never-run actions are only produced by a released queue; the manual queue models no release barrier. |
 
 ## Deferred by design
 
@@ -70,7 +78,11 @@
 
 - Every transition is serialized through `ManualSerialActionQueue`, which models the production
   queue: one action at a time, actions scheduled during a drain run on a later iteration, and
-  queue-error routing to `FailHard`.
+  queue-error routing to `FailHard`. The queue can also be stepped one action at a time
+  (`DrainOne`) and can reject the next submission on demand, so ordering- and admission-sensitive
+  paths are deterministic.
+- `TestRawEndpoint` records every `OnPendingSendChanged` delta together with its running sums, so a
+  test can compare the delta sum with the endpoint's current pending outbound reservation.
 - `BeginStart`/`BeginStop` are recorded by the double and completed explicitly with
   `FinishStart`/`FinishStop`; tests never sleep or use real time.
 - The recording handler clones each delivered buffer for inspection, releases the original, and

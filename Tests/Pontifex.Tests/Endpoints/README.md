@@ -72,6 +72,7 @@ Endpoints/
 ├── Coverage.md                              RawEndpoint layer
 ├── Harness/
 │   ├── ManualSerialActionQueue.cs
+│   ├── RecordingLogConsumer.cs
 │   ├── RecordingRawHandler.cs
 │   ├── TestBuffers.cs
 │   └── TestRawEndpoint.cs
@@ -114,7 +115,8 @@ Harness contains stubs, recording doubles, test implementations of abstract type
 drivers.
 
 - The root `Harness/` holds the suite-wide doubles (`ManualSerialActionQueue`,
-  `RecordingRawHandler`, and `TestBuffers`) and the root layer's `TestRawEndpoint`.
+  `RecordingLogConsumer`, `RecordingRawHandler`, and `TestBuffers`) and the root layer's
+  `TestRawEndpoint`.
 - `RawReliable/Harness/` holds the layer's `TestRawReliableEndpoint` and the handler double
   `RecordingRawReliableHandler`, which is shared by both client/server branches.
 - Client-specific harness stays in `RawReliable/Client/Harness/`; server-specific harness stays

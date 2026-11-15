@@ -30,6 +30,7 @@ namespace Pontifex.Raw
         protected readonly ISerialActionQueue _actionQueue;
 
         private long _totalBuffersSize;
+        private int _pendingSendMessages;
 
         private enum State
         {
@@ -143,6 +144,15 @@ namespace Pontifex.Raw
                 finally
                 {
                     Interlocked.Add(ref _totalBuffersSize, -size);
+                    Interlocked.Add(ref _pendingSendMessages, -1);
+                    try
+                    {
+                        OnPendingSendChanged(-size, -1);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                    }
                 }
             };
 
@@ -426,20 +436,58 @@ namespace Pontifex.Raw
             }
 
             Interlocked.Add(ref _totalBuffersSize, bufferSize);
+            Interlocked.Add(ref _pendingSendMessages, 1);
+            try
+            {
+                OnPendingSendChanged(bufferSize, 1);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
+
             if (_totalBuffersSize > _bufferCapacityBytes)
             {
                 Interlocked.Add(ref _totalBuffersSize, -bufferSize);
+                Interlocked.Add(ref _pendingSendMessages, -1);
+                try
+                {
+                    OnPendingSendChanged(-bufferSize, -1);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
                 bufferToSend.Release();
                 return SendResult.BufferOverflow;
             }
 
             if (!_actionQueue.Schedule(bufferToSend, _sendAction, msg =>
                 {
-                    Interlocked.Add(ref _totalBuffersSize, -msg.GetDataSize());
+                    int droppedSize = msg.GetDataSize();
+                    Interlocked.Add(ref _totalBuffersSize, -droppedSize);
+                    Interlocked.Add(ref _pendingSendMessages, -1);
+                    try
+                    {
+                        OnPendingSendChanged(-droppedSize, -1);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.wtf(ex);
+                    }
                     msg.Release();
                 }))
             {
                 Interlocked.Add(ref _totalBuffersSize, -bufferSize);
+                Interlocked.Add(ref _pendingSendMessages, -1);
+                try
+                {
+                    OnPendingSendChanged(-bufferSize, -1);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
                 bufferToSend.Release();
                 return SendResult.Error;
             }
@@ -452,6 +500,26 @@ namespace Pontifex.Raw
         {
             return ScheduleToSend(bufferToSend);
         }
+
+        /// <summary>
+        /// Reports the signed change of this endpoint's pending outbound reservation: +size/+1 when bytes
+        /// are reserved for a buffer, -size/-1 when the reservation is released (transmitted, dropped by a
+        /// stop, aborted by DoSendRaw throwing, or rolled back because admission failed). Emitted before
+        /// the buffer enters the serial queue, so a rejected admission appears as a matching +/− pair.
+        /// May be invoked from different threads; overrides must aggregate atomically and must not throw.
+        /// </summary>
+        /// <param name="deltaBytes">The signed change of the reserved payload bytes.</param>
+        /// <param name="deltaMessages">The signed change of the reserved message count.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Invoked from any thread that reserves or releases a buffer,
+        /// including the serial action queue; an override must be safe for concurrent use.</description></item>
+        /// <item><description><b>Other notes</b>: The base implementation does nothing. The reported deltas are
+        /// symmetric on every path, so their sum equals the endpoint's current pending reservation. An exception
+        /// thrown by an override is logged and does not affect buffer accounting.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual void OnPendingSendChanged(int deltaBytes, int deltaMessages) { }
 
         #endregion
 
@@ -479,7 +547,10 @@ namespace Pontifex.Raw
                             break;
                         case State.Stopping:
                         case State.Stopped:
-                            throw new InvalidOperationException($"Impossible RawEndpoint.Stage '{_currentStage}'");
+                            // Teardown has already been started: FinishStart promoted a stop latched while
+                            // starting, or the endpoint failed hard. The CAS above guarantees at most one
+                            // queued stop action, so there is nothing left to do here.
+                            break;
                         default:
                             throw new ArgumentOutOfRangeException();
                     }
