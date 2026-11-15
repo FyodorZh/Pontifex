@@ -39,7 +39,12 @@ internal class RecordingRawHandler : IRawHandler, IDisposable
 
     public int StoppedCount { get; private set; }
 
-    public void OnReceived(UnionDataList receivedBuffer)
+    /// <summary>
+    /// Records a delivered buffer: the handler clones it for inspection, releases the original, and records
+    /// the event. Derived recording handlers override this to add their own observations before or after the
+    /// base recording.
+    /// </summary>
+    public virtual void OnReceived(UnionDataList receivedBuffer)
     {
         _received.Add(receivedBuffer.Clone(_memory.CollectablePool));
         receivedBuffer.Release();

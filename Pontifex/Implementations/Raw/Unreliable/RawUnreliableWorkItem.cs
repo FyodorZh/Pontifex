@@ -21,12 +21,12 @@ namespace Pontifex.Raw.Unreliable
     public readonly struct RawUnreliableWorkItem
     {
         public readonly RawUnreliableWorkKind Kind;
-        public readonly RawUnreliableEndpoint? Endpoint;
+        public readonly LegacyRawUnreliableEndpoint? Endpoint;
         public readonly IEndPoint? Source;
         public readonly UnionDataList? Message;
         public readonly StopReason? Reason;
 
-        private RawUnreliableWorkItem(RawUnreliableWorkKind kind, RawUnreliableEndpoint? endpoint, IEndPoint? source, UnionDataList? message, StopReason? reason)
+        private RawUnreliableWorkItem(RawUnreliableWorkKind kind, LegacyRawUnreliableEndpoint? endpoint, IEndPoint? source, UnionDataList? message, StopReason? reason)
         {
             Kind = kind;
             Endpoint = endpoint;
@@ -35,7 +35,7 @@ namespace Pontifex.Raw.Unreliable
             Reason = reason;
         }
 
-        public static RawUnreliableWorkItem StartClientEndpoint(RawUnreliableEndpoint endpoint) =>
+        public static RawUnreliableWorkItem StartClientEndpoint(LegacyRawUnreliableEndpoint endpoint) =>
             new(RawUnreliableWorkKind.StartClientEndpoint, endpoint, null, default, null);
 
         public static RawUnreliableWorkItem DeliverClient(UnionDataList message) =>
@@ -44,7 +44,7 @@ namespace Pontifex.Raw.Unreliable
         public static RawUnreliableWorkItem ProcessServer(IEndPoint source, UnionDataList message) =>
             new(RawUnreliableWorkKind.ProcessServer, null, source, message, null);
 
-        public static RawUnreliableWorkItem TeardownEndpoint(RawUnreliableEndpoint endpoint, StopReason reason) =>
+        public static RawUnreliableWorkItem TeardownEndpoint(LegacyRawUnreliableEndpoint endpoint, StopReason reason) =>
             new(RawUnreliableWorkKind.TeardownEndpoint, endpoint, null, default, reason);
 
         public static RawUnreliableWorkItem TeardownAll(StopReason reason) =>

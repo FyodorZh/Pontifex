@@ -18,7 +18,7 @@ namespace Pontifex.Raw.Unreliable.Direct
         private readonly object _connectLock = new();
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
-        private SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
+        private SerializedCallbackQueue<(LegacyRawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
         private volatile Channel? _channel;
         private volatile IDeliverySystem _clientDeliverySystem = new PerfectDeliverySystem();
         private volatile IDeliverySystem _serverDeliverySystem = new PerfectDeliverySystem();
@@ -46,7 +46,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         protected override bool StartCarrier()
         {
-            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>(
+            _callbackQueue = new SerializedCallbackQueue<(LegacyRawUnreliableEndpoint, UnionDataList)>(
                 QueueCapacity,
                 $"cli-cb-{_serverEp}",
                 pair =>
@@ -82,7 +82,7 @@ namespace Pontifex.Raw.Unreliable.Direct
             _callbackQueue = null;
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
+        protected override SendResult SendToCarrier(LegacyRawUnreliableEndpoint endpoint, UnionDataList message)
         {
             var channel = _channel;
             if (channel == null)

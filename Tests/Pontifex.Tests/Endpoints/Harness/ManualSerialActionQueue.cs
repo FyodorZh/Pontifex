@@ -66,6 +66,15 @@ internal sealed class ManualSerialActionQueue : ISerialActionQueue
     }
 
     /// <summary>
+    /// Gets the number of accepted actions that have not run yet.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so a test can observe where a callback ran relative to the actions the endpoint had already
+    /// scheduled, without inspecting production state.
+    /// </remarks>
+    public int PendingCount => _actions.Count;
+
+    /// <summary>
     /// Runs exactly one accepted action, the oldest, so a test can interleave scheduling and
     /// execution. Does nothing when the queue is empty.
     /// </summary>

@@ -15,11 +15,13 @@ Selected inheritance tree:
 
 ```
 RawEndpoint
-└── RawReliableEndpoint
-    ├── RawReliableClientEndpoint
-    │   └── RawReliableAckClientEndpoint
-    └── RawReliableServerEndpoint
-        └── RawReliableAckServerEndpoint
+├── RawReliableEndpoint
+│   ├── RawReliableClientEndpoint
+│   │   └── RawReliableAckClientEndpoint
+│   └── RawReliableServerEndpoint
+│       └── RawReliableAckServerEndpoint
+└── RawUnreliableEndpoint
+    └── RawUnreliableServerEndpoint
 ```
 
 ## Contract references
@@ -37,6 +39,12 @@ RawEndpoint
 - [RawReliableAckServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/Ack/RawReliableAckServerEndpoint.cs)
 - [IRawReliableAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerHandler.cs)
 - [RawReliableAckInfo.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckInfo.cs)
+- [RawUnreliableEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/RawUnreliableEndpoint.cs)
+- [IRawUnreliableEndpointImp.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/IRawUnreliableEndpointImp.cs)
+- [IRawUnreliableEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableEndpoint.cs)
+- [IRawUnreliableHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableHandler.cs)
+- [RawUnreliableServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/RawUnreliableServerEndpoint.cs)
+- [SendBudget.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/SendBudget.cs)
 
 ## Layers
 
@@ -51,6 +59,8 @@ parent, and coverage file.
 | `RawReliableServerEndpoint` | `Pontifex.Raw.Reliable.RawReliableServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server` | `RawReliableEndpoint` | [`RawReliable/Server/Coverage.md`](RawReliable/Server/Coverage.md) |
 | `RawReliableAckClientEndpoint` | `Pontifex.Raw.Reliable.Ack.RawReliableAckClientEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Ack` | `RawReliableClientEndpoint` | [`RawReliable/Client/Ack/Coverage.md`](RawReliable/Client/Ack/Coverage.md) |
 | `RawReliableAckServerEndpoint` | `Pontifex.Raw.Reliable.Ack.RawReliableAckServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack` | `RawReliableServerEndpoint` | [`RawReliable/Server/Ack/Coverage.md`](RawReliable/Server/Ack/Coverage.md) |
+| `RawUnreliableEndpoint` | `Pontifex.Raw.Unreliable.RawUnreliableEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawUnreliable` | `RawEndpoint` | [`RawUnreliable/Coverage.md`](RawUnreliable/Coverage.md) |
+| `RawUnreliableServerEndpoint` | `Pontifex.Raw.Unreliable.RawUnreliableServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawUnreliable/Server` | `RawUnreliableEndpoint` | [`RawUnreliable/Server/Coverage.md`](RawUnreliable/Server/Coverage.md) |
 
 ## Naming conventions
 
@@ -77,36 +87,47 @@ Endpoints/
 │   ├── TestBuffers.cs
 │   └── TestRawEndpoint.cs
 ├── RawEndpointTests.cs
-└── RawReliable/
-    ├── Coverage.md                          RawReliableEndpoint layer
+├── RawReliable/
+│   ├── Coverage.md                          RawReliableEndpoint layer
+│   ├── Harness/
+│   │   ├── RecordingRawReliableHandler.cs
+│   │   └── TestRawReliableEndpoint.cs
+│   ├── RawReliableEndpointTests.cs
+│   ├── Client/
+│   │   ├── Coverage.md                      RawReliableClientEndpoint layer
+│   │   ├── Harness/
+│   │   │   ├── RecordingRawReliableClientHandler.cs
+│   │   │   └── TestRawReliableClientEndpoint.cs
+│   │   ├── RawReliableClientEndpointTests.cs
+│   │   └── Ack/
+│   │       ├── Coverage.md                  RawReliableAckClientEndpoint layer
+│   │       ├── Harness/
+│   │       │   ├── RecordingRawReliableAckClientHandler.cs
+│   │       │   └── TestRawReliableAckClientEndpoint.cs
+│   │       └── RawReliableAckClientEndpointTests.cs
+│   └── Server/
+│       ├── Coverage.md                      RawReliableServerEndpoint layer
+│       ├── Harness/
+│       │   ├── RecordingRawReliableServerHandler.cs
+│       │   └── TestRawReliableServerEndpoint.cs
+│       ├── RawReliableServerEndpointTests.cs
+│       └── Ack/
+│           ├── Coverage.md                  RawReliableAckServerEndpoint layer
+│           ├── Harness/
+│           │   ├── RecordingRawReliableAckServerHandler.cs
+│           │   └── TestRawReliableAckServerEndpoint.cs
+│           └── RawReliableAckServerEndpointTests.cs
+└── RawUnreliable/
+    ├── Coverage.md                          RawUnreliableEndpoint layer
     ├── Harness/
-    │   ├── RecordingRawReliableHandler.cs
-    │   └── TestRawReliableEndpoint.cs
-    ├── RawReliableEndpointTests.cs
-    ├── Client/
-    │   ├── Coverage.md                      RawReliableClientEndpoint layer
-    │   ├── Harness/
-    │   │   ├── RecordingRawReliableClientHandler.cs
-    │   │   └── TestRawReliableClientEndpoint.cs
-    │   ├── RawReliableClientEndpointTests.cs
-    │   └── Ack/
-    │       ├── Coverage.md                  RawReliableAckClientEndpoint layer
-    │       ├── Harness/
-    │       │   ├── RecordingRawReliableAckClientHandler.cs
-    │       │   └── TestRawReliableAckClientEndpoint.cs
-    │       └── RawReliableAckClientEndpointTests.cs
+    │   ├── RecordingRawUnreliableHandler.cs
+    │   └── TestRawUnreliableEndpoint.cs
+    ├── RawUnreliableEndpointTests.cs
     └── Server/
-        ├── Coverage.md                      RawReliableServerEndpoint layer
+        ├── Coverage.md                      RawUnreliableServerEndpoint layer
         ├── Harness/
-        │   ├── RecordingRawReliableServerHandler.cs
-        │   └── TestRawReliableServerEndpoint.cs
-        ├── RawReliableServerEndpointTests.cs
-        └── Ack/
-            ├── Coverage.md                  RawReliableAckServerEndpoint layer
-            ├── Harness/
-            │   ├── RecordingRawReliableAckServerHandler.cs
-            │   └── TestRawReliableAckServerEndpoint.cs
-            └── RawReliableAckServerEndpointTests.cs
+        │   └── TestRawUnreliableServerEndpoint.cs
+        └── RawUnreliableServerEndpointTests.cs
 ```
 
 ## Harness layout and sharing
@@ -122,6 +143,10 @@ drivers.
 - Client-specific harness stays in `RawReliable/Client/Harness/`; server-specific harness stays
   in `RawReliable/Server/Harness/`.
 - Ack-specific harness stays in the corresponding ack layer's `Harness/`.
+- `RawUnreliable/Harness/` holds the layer's `TestRawUnreliableEndpoint` and the handler double
+  `RecordingRawUnreliableHandler`, which is shared by the unreliable server branch.
+- `RawUnreliable/Server/Harness/` holds only the server-specific `TestRawUnreliableServerEndpoint`;
+  it reuses the ancestor harness for the queue, buffer, and recording doubles.
 
 ## Coverage
 
@@ -133,6 +158,8 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`RawReliable/Server/Coverage.md`](RawReliable/Server/Coverage.md) — `RawReliableServerEndpoint`
 - [`RawReliable/Client/Ack/Coverage.md`](RawReliable/Client/Ack/Coverage.md) — `RawReliableAckClientEndpoint`
 - [`RawReliable/Server/Ack/Coverage.md`](RawReliable/Server/Ack/Coverage.md) — `RawReliableAckServerEndpoint`
+- [`RawUnreliable/Coverage.md`](RawUnreliable/Coverage.md) — `RawUnreliableEndpoint`
+- [`RawUnreliable/Server/Coverage.md`](RawUnreliable/Server/Coverage.md) — `RawUnreliableServerEndpoint`
 
 Each layer covers only the contract delta and invariants introduced by its subject. Ancestor
 behaviour is not repeated. A layer's `Coverage.md` lists the current covered tests, planned gaps,
@@ -185,11 +212,10 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=End
 - Transports, carriers, sockets, networks, threads, timers, and real time. Those belong to the
   transport suite in `Tests/Pontifex.Tests/Transports` and the conformance project
   `Tests/Pontifex.Transports.Tests`.
-- `RawUnreliableEndpoint`, which is a separate concrete hierarchy, not a descendant of
-  `RawEndpoint`.
 - Wrapper endpoints (`RawAckBaseEndpointWrapper` and its descendants) and converter endpoints.
-- The conformance subsystem: `IConformanceControl`, gates, failure injection, and the
-  conformance role of `GetControls`.
+- The conformance architecture: `IConformanceControl`, transport-level controls, failure injection, and
+  the conformance role of `GetControls`. Tests may arm an endpoint's gate counters purely as an observable
+  to pin delivery counts; `CheckPoint` behaviour itself belongs to its own suite.
 - The background `Task.Run`/`Task.Delay` keep-alive loop wrapper. The synchronous
   `KeepAliveTick` body is covered; the scheduling wrapper is not.
 - End-to-end reliability, ordering, delivery, and reconnection behaviour.

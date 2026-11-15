@@ -415,8 +415,8 @@ Tests/Pontifex.Tests/Endpoints/RawUnreliable/Server/Harness/...
 Tests/Pontifex.Tests/Endpoints/README.md                                   (layer table, layout, scope)
 ```
 Tasks:
-- [ ] `IRawUnreliableEndpointImp` adds `void Deliver(UnionDataList message)`.
-- [ ] `RawUnreliableEndpoint`: inbox + caps, `Deliver` driven by the `Buffering`/`Open`/`Closed`
+- [x] `IRawUnreliableEndpointImp` adds `void Deliver(UnionDataList message)`.
+- [x] `RawUnreliableEndpoint`: inbox + caps, `Deliver` driven by the `Buffering`/`Open`/`Closed`
       inbox state with a shared inbox lock,
       `BeginStart` → `FinishStart` + scheduled flush, `OnStarted` raised from flush,
       `BeginStop` (gate) → `FinishStop` (gate), `Stop(reason?)` one-shot with the `_invalidated`
@@ -425,14 +425,14 @@ Tasks:
       own `protected IRawUnreliableHandler Handler` reference, a three-state handler wrapper that
       forwards `OnStopped` only after a successful `OnStarted`, and inbox release from a `Stopped`
       subscription installed in the constructor.
-- [ ] `RawUnreliableServerEndpoint`: trigger through the constructor (first inbox element), shared
+- [x] `RawUnreliableServerEndpoint`: trigger through the constructor (first inbox element), shared
       `SendBudget`, `Send` override with the best-effort global check.
-- [ ] `SendBudget`: `CanAccept(size)` (bytes and messages), `Apply(deltaBytes, deltaMessages)`
+- [x] `SendBudget`: `CanAccept(size)` (bytes and messages), `Apply(deltaBytes, deltaMessages)`
       (Interlocked).
-- [ ] Rename the legacy proxy to public `LegacyRawUnreliableEndpoint`; update every reference:
+- [x] Rename the legacy proxy to public `LegacyRawUnreliableEndpoint`; update every reference:
       `RawUnreliableTransport`, `RawUnreliableWorkItem`, and the four carrier `SendToCarrier`
       signatures (plus their `SerializedCallbackQueue<...>` field types).
-- [ ] Endpoint tests and coverage as in §8.1. Extend `Tests/Pontifex.Tests/Endpoints/Harness/
+- [x] Endpoint tests and coverage as in §8.1. Extend `Tests/Pontifex.Tests/Endpoints/Harness/
       ManualSerialActionQueue.cs` with a single-step drain and expose it on the new
       `TestRawUnreliableEndpoint`, so a `Deliver` between `FinishStart`'s action and the flush action
       can be produced deterministically (the `Buffering`/`Open` ordering case).

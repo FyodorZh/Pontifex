@@ -126,7 +126,7 @@ namespace Pontifex.Raw.Unreliable.Udp
             }
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
+        protected override SendResult SendToCarrier(LegacyRawUnreliableEndpoint endpoint, UnionDataList message)
         {
             var sender = _sender;
             if (sender == null)

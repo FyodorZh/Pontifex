@@ -19,7 +19,7 @@ namespace Pontifex.Raw.Unreliable.Direct
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels = new();
-        private SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
+        private SerializedCallbackQueue<(LegacyRawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
 
         protected abstract int QueueCapacity { get; }
 
@@ -31,7 +31,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         protected override bool StartCarrier()
         {
-            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>(
+            _callbackQueue = new SerializedCallbackQueue<(LegacyRawUnreliableEndpoint, UnionDataList)>(
                 QueueCapacity,
                 $"srv-cb-{_serverEp}",
                 pair =>
@@ -71,7 +71,7 @@ namespace Pontifex.Raw.Unreliable.Direct
             _callbackQueue = null;
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
+        protected override SendResult SendToCarrier(LegacyRawUnreliableEndpoint endpoint, UnionDataList message)
         {
             if (!IsStarted)
             {

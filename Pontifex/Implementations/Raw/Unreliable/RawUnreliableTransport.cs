@@ -42,7 +42,7 @@ namespace Pontifex.Raw.Unreliable
         /// Ownership of the message transfers to the carrier; it must release it
         /// on any non-<see cref="SendResult.Ok"/> result.
         /// </summary>
-        protected abstract SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message);
+        protected abstract SendResult SendToCarrier(LegacyRawUnreliableEndpoint endpoint, UnionDataList message);
 
         /// <summary>
         /// The configured remote destination for the client endpoint, or null
@@ -95,8 +95,8 @@ namespace Pontifex.Raw.Unreliable
         protected IRawUnreliableHandler? ClientHandler => _clientHandler;
 
         internal ISerializedCallbackQueue<RawUnreliableWorkItem>? _dispatcher;
-        internal RawUnreliableEndpoint? _clientEndpoint;
-        private readonly Dictionary<IEndPoint, RawUnreliableEndpoint> _routes = new();
+        internal LegacyRawUnreliableEndpoint? _clientEndpoint;
+        private readonly Dictionary<IEndPoint, LegacyRawUnreliableEndpoint> _routes = new();
         private volatile bool _stopping;
 
         private void DispatchWork(RawUnreliableWorkItem item)
@@ -141,7 +141,7 @@ namespace Pontifex.Raw.Unreliable
             }
         }
 
-        protected void StartClientEndpoint(RawUnreliableEndpoint ep)
+        protected void StartClientEndpoint(LegacyRawUnreliableEndpoint ep)
         {
             Conformance.BeforeHandlerStartedGate.Hit();
             ep.MarkValid();
@@ -211,7 +211,7 @@ namespace Pontifex.Raw.Unreliable
 
         private void TeardownAllEndpoints(StopReason reason)
         {
-            var endpoints = new List<RawUnreliableEndpoint>();
+            var endpoints = new List<LegacyRawUnreliableEndpoint>();
             if (_clientEndpoint != null) endpoints.Add(_clientEndpoint);
             endpoints.AddRange(_routes.Values);
 
@@ -226,9 +226,9 @@ namespace Pontifex.Raw.Unreliable
             }
         }
 
-        protected RawUnreliableEndpoint CreateEndpoint(IRawUnreliableHandler handler, IEndPoint? remote)
+        protected LegacyRawUnreliableEndpoint CreateEndpoint(IRawUnreliableHandler handler, IEndPoint? remote)
         {
-            var ep = new RawUnreliableEndpoint(this, handler, remote)
+            var ep = new LegacyRawUnreliableEndpoint(this, handler, remote)
             {
                 SendDelegate = SendToCarrier,
                 StopDelegate = StopEndpoint
@@ -236,7 +236,7 @@ namespace Pontifex.Raw.Unreliable
             return ep;
         }
 
-        private void TeardownEndpoint(RawUnreliableEndpoint ep, StopReason reason)
+        private void TeardownEndpoint(LegacyRawUnreliableEndpoint ep, StopReason reason)
         {
             if (ep.TeardownDone) return;
             ep.MarkTeardownDone();
@@ -257,7 +257,7 @@ namespace Pontifex.Raw.Unreliable
             }
         }
 
-        internal bool StopEndpoint(RawUnreliableEndpoint ep, StopReason? reason)
+        internal bool StopEndpoint(LegacyRawUnreliableEndpoint ep, StopReason? reason)
         {
             if (!ep.TryBeginStop())
                 return false;
@@ -327,7 +327,7 @@ namespace Pontifex.Raw.Unreliable
             DeliverToEndpoint(ep, message);
         }
 
-        private void DeliverToEndpoint(RawUnreliableEndpoint ep, UnionDataList message)
+        private void DeliverToEndpoint(LegacyRawUnreliableEndpoint ep, UnionDataList message)
         {
             if (!ep.IsValid)
             {

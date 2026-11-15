@@ -9,7 +9,13 @@ namespace Pontifex.Raw.Unreliable
     /// Base endpoint implementation shared by all RawUnreliable transports.
     /// The owning transport constructs this type and wires its send and stop delegates.
     /// </summary>
-    public class RawUnreliableEndpoint : IRawUnreliableEndpoint
+    /// <remarks>
+    /// <para>
+    /// Temporary shim of the pre-conversion delegate-proxy endpoint. It is scheduled for deletion in Stage 6,
+    /// when the canonical unreliable endpoint replaces the legacy transport plumbing.
+    /// </para>
+    /// </remarks>
+    public class LegacyRawUnreliableEndpoint : IRawUnreliableEndpoint
     {
         private readonly RawUnreliableTransport _owner;
         private readonly IRawUnreliableHandler _handler;
@@ -24,15 +30,15 @@ namespace Pontifex.Raw.Unreliable
         /// Set by the owning transport once the endpoint can commit sends to a
         /// carrier. Null until wired; a null delegate rejects with Error.
         /// </summary>
-        internal Func<RawUnreliableEndpoint, UnionDataList, SendResult>? SendDelegate;
+        internal Func<LegacyRawUnreliableEndpoint, UnionDataList, SendResult>? SendDelegate;
 
         /// <summary>
         /// Set by the owning transport to drive the endpoint stop transition.
         /// Null until wired; a null delegate causes Stop to return false.
         /// </summary>
-        internal Func<RawUnreliableEndpoint, StopReason?, bool>? StopDelegate;
+        internal Func<LegacyRawUnreliableEndpoint, StopReason?, bool>? StopDelegate;
 
-        internal RawUnreliableEndpoint(RawUnreliableTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
+        internal LegacyRawUnreliableEndpoint(RawUnreliableTransport owner, IRawUnreliableHandler handler, IEndPoint? remote)
         {
             _owner = owner;
             _handler = handler;
