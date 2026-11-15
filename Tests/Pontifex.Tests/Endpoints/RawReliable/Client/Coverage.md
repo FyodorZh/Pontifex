@@ -4,7 +4,7 @@
 - **Subject:** `Pontifex.Raw.Reliable.RawReliableClientEndpoint`
 - **Directory:** `Tests/Pontifex.Tests/Endpoints/RawReliable/Client`
 - **Inheritance parent:** `Pontifex.Raw.Reliable.RawReliableEndpoint`
-- **Contract:** [RawReliableClientEndpoint.cs](../../../../../Pontifex/Implementations/Raw/Reliable/RawReliableClientEndpoint.cs)
+- **Contract:** [RawReliableClientEndpoint.cs](../../../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableClientEndpoint.cs)
 
 ## Covered tests
 

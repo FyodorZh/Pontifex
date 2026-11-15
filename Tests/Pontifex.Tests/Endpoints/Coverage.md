@@ -4,7 +4,7 @@
 - **Subject:** `Pontifex.Raw.RawEndpoint`
 - **Directory:** `Tests/Pontifex.Tests/Endpoints`
 - **Inheritance parent:** — (root)
-- **Contract:** [RawEndpoint.cs](../../../Pontifex/Implementations/Raw/RawEndpoint.cs),
+- **Contract:** [RawEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/RawEndpoint.cs),
   [IRawEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/IRawEndpoint.cs),
   [IBaseEndpoint.cs](../../../Pontifex/Abstractions/Transports/IBaseEndpoint.cs),
   [IRawHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/IRawHandler.cs)
