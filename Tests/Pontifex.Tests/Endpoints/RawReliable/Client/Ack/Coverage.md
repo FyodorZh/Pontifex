@@ -29,7 +29,6 @@
 | `FillAckData` producing data above `RawReliableAckInfo.AckMaxByteSize` stops with `TextFail`. | This layer | The oversize guard is not covered. |
 | An inbound ack response above `AckMaxByteSize` stops with `TextFail` and releases the frame. | This layer | The inbound oversize guard is not covered. |
 | `OnConnected` handler throwing stops with `ExceptionFail`. | This layer | The handler callback exception path is not covered. |
-| `Acknowledged` is raised exactly once and subscriber exceptions are isolated. | This layer | The public event is not asserted. |
 | No ping is sent before the ack request; keep-alive starts only after the handshake. | This layer | The handshake/keep-alive ordering invariant is documented but not asserted. |
 | An ack response received while logically disconnected is released silently. | This layer | The disconnected-stage branch is not covered. |
 

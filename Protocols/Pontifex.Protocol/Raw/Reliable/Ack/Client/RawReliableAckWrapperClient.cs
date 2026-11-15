@@ -67,11 +67,6 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             });
         }
 
-        protected override void OnReadyToConnect()
-        {
-            // TODO: fix race
-        }
-
         protected override void DestroyTransport(StopReason reason)
         {
             mBaseTransport.Stop();

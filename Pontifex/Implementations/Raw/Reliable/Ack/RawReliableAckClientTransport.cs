@@ -69,11 +69,6 @@ namespace Pontifex.Raw.Reliable.Ack
             }
         }
 
-        protected override void OnReadyToConnect()
-        {
-            // The endpoint connects asynchronously from BeginConnect; there is no additional ready step.
-        }
-
         protected override void DestroyTransport(StopReason reason)
         {
             var endpoint = AttachedEndpoint;

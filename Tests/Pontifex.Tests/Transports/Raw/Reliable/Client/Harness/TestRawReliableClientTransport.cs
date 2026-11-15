@@ -44,8 +44,6 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
 
     public int BeginConnectCalls { get; private set; }
 
-    public int OnReadyToConnectCalls { get; private set; }
-
     public int DestroyTransportCalls { get; private set; }
 
     public int SetupHandlerCalls { get; private set; }
@@ -104,12 +102,6 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
         BeginConnectCalls++;
         EventLog.Add("beginConnect");
         return BeginConnectBehavior();
-    }
-
-    protected override void OnReadyToConnect()
-    {
-        OnReadyToConnectCalls++;
-        EventLog.Add("readyToConnect");
     }
 
     protected override void DestroyTransport(StopReason reason)

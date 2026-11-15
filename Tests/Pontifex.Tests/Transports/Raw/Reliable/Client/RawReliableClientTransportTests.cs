@@ -160,7 +160,7 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
         {
-            "beginConnect", "readyToConnect", "handlerStopped", "destroyTransport", "startCallback"
+            "beginConnect", "handlerStopped", "destroyTransport", "startCallback"
         }));
     }
 
@@ -207,7 +207,6 @@ public sealed class RawReliableClientTransportTests
         }), Is.False);
 
         Assert.That(transport.BeginConnectCalls, Is.Zero);
-        Assert.That(transport.OnReadyToConnectCalls, Is.Zero);
         Assert.That(transport.DestroyTransportCalls, Is.Zero);
         Assert.That(transport.IsValid, Is.False);
         Assert.That(handler.StoppedCount, Is.Zero);
@@ -220,7 +219,7 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void Start_WhenInitialized_BeginsConnectThenReady()
+    public void Start_WhenInitialized_BeginsConnectAndStaysValid()
     {
         var transport = Create();
         using var handler = CreateHandler(transport);
@@ -230,13 +229,12 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.Start(_ => callbackCalled = true), Is.True);
 
         Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
         Assert.That(transport.DestroyTransportCalls, Is.Zero);
         Assert.That(transport.IsValid, Is.True);
         Assert.That(transport.IsConnected, Is.False);
         Assert.That(handler.StoppedCount, Is.Zero);
         Assert.That(callbackCalled, Is.False);
-        Assert.That(transport.EventLog, Is.EqualTo(new[] { "beginConnect", "readyToConnect" }));
+        Assert.That(transport.EventLog, Is.EqualTo(new[] { "beginConnect" }));
     }
 
     [Test]
@@ -255,7 +253,6 @@ public sealed class RawReliableClientTransportTests
         }), Is.False);
 
         Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.Zero);
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
         Assert.That(handler.DisconnectedCount, Is.Zero);
@@ -359,7 +356,7 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void Start_WhenBeginConnectStopsTransport_ReturnsFalseWithoutOnReady()
+    public void Start_WhenBeginConnectStopsTransport_ReturnsFalseAndDestroys()
     {
         var transport = Create();
         using var handler = CreateHandler(transport);
@@ -379,7 +376,6 @@ public sealed class RawReliableClientTransportTests
         }), Is.False);
 
         Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.Zero);
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
         Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
@@ -413,7 +409,6 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.Start(r => callbackReason = r), Is.True);
 
         Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
         Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
         Assert.That(handler.StoppedCount, Is.Zero);
@@ -600,7 +595,6 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.Start(_ => callbackCalled = true), Is.True);
 
         Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
-        Assert.That(transport.OnReadyToConnectCalls, Is.EqualTo(1));
         Assert.That(callbackCalled, Is.False);
     }
 
@@ -630,7 +624,7 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.IsConnected, Is.False);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
         {
-            "beginConnect", "readyToConnect", "handlerStopped", "destroyTransport", "startCallback"
+            "beginConnect", "handlerStopped", "destroyTransport", "startCallback"
         }));
     }
 

@@ -227,10 +227,9 @@ repeated.
   drives the stop path, where the transport notifies the handler `OnStopped` when it owns the
   notification (see the stop notification matrix). The transport never calls `OnDisconnected`.
 - **Start / connect**: `Start` works only from `Initialized`; it calls `BeginConnect` and, while
-  the state is still `Initialized`, moves to `Connecting`; `OnStarted` invokes
-  `OnReadyToConnect`. A `false` from `BeginConnect` fails, destroys, and notifies the handler
-  `OnStopped`; a `BeginConnect` that stops the transport synchronously makes `Start` return
-  `false` without `OnReadyToConnect`.
+  the state is still `Initialized`, moves to `Connecting`. A `false` from `BeginConnect` fails,
+  destroys, and notifies the handler `OnStopped`; a `BeginConnect` that stops the transport
+  synchronously makes `Start` return `false`.
 - **Connection ownership**: a `BeginConnect` that returns `true` must attach exactly one endpoint
   through `AttachEndpoint`. The endpoint is the single source of truth for connectivity and delivers
   `OnConnected`, `OnDisconnected`, and `OnStopped` to the user handler once the transport enters
@@ -370,8 +369,8 @@ never use reflection. Only these are asserted:
 - `TestRawReliableTransport : RawReliableTransport` supplies the inherited abstract members and a
   trivial `RawReliableConformanceControl` constructor argument only.
 - `TestRawReliableClientTransport : RawReliableClientTransport<IRawReliableClientHandler>` supplies
-  the abstract `Type`, `MessageMaxByteSize`, `BeginConnect`, `OnReadyToConnect`, and
-  `DestroyTransport` members. It records hook calls, lets each test choose the `BeginConnect`
+  the abstract `Type`, `MessageMaxByteSize`, `BeginConnect`, and `DestroyTransport` members. It
+  records hook calls, lets each test choose the `BeginConnect`
   result and the `SetupHandler` transformation, exposes `AttachedEndpoint` and `AttachEndpoint`, and
   records the endpoint and `IsConnected` observed inside `DestroyTransport`.
 - `RecordingRawReliableClientHandler : IRawReliableClientHandler, IDisposable` records

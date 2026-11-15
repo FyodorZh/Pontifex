@@ -48,11 +48,6 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             return true;
         }
 
-        protected override void OnReadyToConnect()
-        {
-            // TODO: Fix possible race
-        }
-
         protected override void DestroyTransport(StopReason reason)
         {
             var logic = _logic;

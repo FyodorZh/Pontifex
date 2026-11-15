@@ -41,11 +41,6 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <returns> TRUE если удалось запустить процесс подключения. </returns>
         protected abstract bool BeginConnect();
 
-        /// <summary>
-        /// Транспорт переходит в состояние когла можно завершить процесс коннекта вызовом метода
-        /// </summary>
-        protected abstract void OnReadyToConnect();
-
         protected abstract void DestroyTransport(StopReason reason);
 
         public bool IsInited
@@ -121,7 +116,8 @@ namespace Pontifex.Raw.Reliable.Ack
 
         protected sealed override void OnStarted()
         {
-            OnReadyToConnect();
+            // The connection attempt is started by BeginConnect; nothing is required after the start
+            // transition is accepted.
         }
 
         protected sealed override void OnStopped(StopReason reason)

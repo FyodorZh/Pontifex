@@ -74,11 +74,6 @@ namespace Pontifex.Raw.Reliable
         protected abstract bool BeginConnect();
 
         /// <summary>
-        /// Транспорт переходит в состояние когла можно завершить процесс коннекта вызовом метода
-        /// </summary>
-        protected abstract void OnReadyToConnect();
-
-        /// <summary>
         /// Destroys the transport-specific connection. Called from <see cref="OnStopped"/> after the
         /// transport state has moved to disconnected.
         /// </summary>
@@ -163,7 +158,6 @@ namespace Pontifex.Raw.Reliable
         protected sealed override void OnStarted()
         {
             var pendingStopReason = Interlocked.Exchange(ref _pendingEndpointStopReason, null);
-            OnReadyToConnect();
 
             if (pendingStopReason != null)
             {
