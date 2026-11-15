@@ -5,8 +5,8 @@ namespace Pontifex.Raw.Reliable
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Other notes</b>: A server endpoint is admitted by a server transport and driven
-    /// by its shared session ticker.</description></item>
+    /// <item><description><b>Other notes</b>: A server endpoint is admitted by a server transport, driven by
+    /// its shared session ticker, and stopped with the transport.</description></item>
     /// </list>
     /// </remarks>
     public interface IRawReliableServerEndpoint : IRawReliableEndpoint

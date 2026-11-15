@@ -8,16 +8,9 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable
 {
-    /// <summary>
-    /// Abstract base class for a reliable client endpoint. Extends <see cref="RawReliableEndpoint"/> with an
-    /// optional keep-alive mechanism that sends ping frames and stops the endpoint when no pong frame is
-    /// received within the configured timeout.
-    /// </summary>
+    /// <inheritdoc cref="IRawReliableClientEndpointImp"/>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Thread safety</b>: All public and protected instance members are safe to call
-    /// concurrently from any thread. Inbound handling accesses the pong timestamp through a thread-safe atomic
-    /// box, and the keep-alive loop runs on a thread-pool thread.</description></item>
     /// <item><description><b>Other notes</b>: Derived classes implement the inherited abstract connect and
     /// disconnect hooks. Overrides of OnConnected and ProcessInboundMessage must call the base implementation
     /// to keep the keep-alive timestamp current.</description></item>

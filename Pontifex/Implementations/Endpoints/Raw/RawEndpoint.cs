@@ -8,23 +8,14 @@ using Scriba;
 
 namespace Pontifex.Raw
 {
-    /// <summary>
-    /// Abstract base class for a raw data endpoint. Provides thread-safe outbound message admission and
-    /// serialization through an internal action queue, inbound message dispatch to the handler, and the
-    /// one-shot start and stop lifecycle shared by raw transports.
-    /// </summary>
+    /// <inheritdoc cref="IRawEndpointImp"/>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Thread safety</b>: All public and protected instance members are safe to call
-    /// concurrently from any thread. State transitions and handler dispatch are serialized by an internal
-    /// action queue that runs one action at a time; the executing thread is not fixed. Outbound messages are
-    /// transmitted in admission order.</description></item>
-    /// <item><description><b>Preconditions/Postconditions</b>: The lifecycle is one-shot. A stop request is
-    /// latched, and after the endpoint has stopped it cannot be started again.</description></item>
-    /// <item><description><b>Other notes</b>: An exception that escapes a queued action fails the endpoint
-    /// hard: it is logged, the stop reason is set to an ExceptionFail, and FailHard is invoked. The base
-    /// implementation of FailHard delivers the handler's stop notification when the endpoint had started and
-    /// then transitions the stage to Stopped; derived classes override it to release resources.</description></item>
+    /// <item><description><b>Other notes</b>: State transitions and handler dispatch are serialized by an
+    /// internal action queue. An exception that escapes a queued action fails the endpoint hard: it is logged,
+    /// the stop reason is set to an ExceptionFail, and FailHard is invoked. The base implementation of FailHard
+    /// delivers the handler's stop notification when the endpoint had started, then transitions the stage to
+    /// Stopped; derived classes override it to release resources.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawEndpoint : IRawEndpointImp
@@ -57,30 +48,10 @@ namespace Pontifex.Raw
         private readonly Action<UnionDataList> _sendAction;
         private readonly Action<UnionDataList> _receiveAction;
 
-        /// <summary>
-        /// Gets the remote endpoint address, or <see langword="null"/> when no remote address is known.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
-        /// <item><description><b>Other notes</b>: The value is captured at construction and never changes for
-        /// the lifetime of the endpoint, including after a stop.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public IEndPoint RemoteEndPoint { get; }
 
-        /// <summary>
-        /// Gets the maximum message size in bytes supported by the transport. It is an inclusive maximum for
-        /// the application payload and excludes transport framing and control metadata; empty payloads are
-        /// valid.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
-        /// <item><description><b>Other notes</b>: The value is fixed at construction. Admission compares the
-        /// size of a message to be sent against this limit.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public int MessageMaxByteSize { get; }
 
         /// <summary>
@@ -98,35 +69,10 @@ namespace Pontifex.Raw
         /// </summary>
         protected IMemoryRental Memory { get; }
 
-        /// <summary>
-        /// Gets a value indicating whether the endpoint is running and accepting new work, meaning the stage
-        /// is Started and no stop has been requested.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
-        /// <item><description><b>Other notes</b>: Becomes false as soon as a stop is requested, even while
-        /// work already accepted may still be draining. Derived classes expose transport-specific validity
-        /// getters in terms of this property.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public bool IsRunning => _currentStage == State.Started && _stopReason == null;
 
-        /// <summary>
-        /// Raised exactly once when the endpoint reaches the terminal stopped stage.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Raised on the serial action queue; observers must not
-        /// block. Subscriber exceptions are caught and logged and cannot disrupt the terminal
-        /// transition.</description></item>
-        /// <item><description><b>Other notes</b>: The handler's <see cref="IRawHandler.OnStopped"/> is
-        /// delivered only when the endpoint had started; this event is raised on every path that reaches the
-        /// terminal stopped stage, including endpoints that never started, so a transport can always detach.
-        /// It is transport-level observability and does not replace the handler lifecycle
-        /// callbacks.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public event Action<StopReason>? Stopped;
 
         /// <summary>
@@ -304,22 +250,7 @@ namespace Pontifex.Raw
 
         #region Start
 
-        /// <summary>
-        /// Requests a start of the endpoint, scheduling BeginStart on the endpoint's serial action queue. May
-        /// be called at most once, before any stop.
-        /// </summary>
-        /// <returns>true if the start request was accepted for processing; otherwise false. A successful
-        /// return means the request was queued, not that the endpoint has started.</returns>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the transition is serialized
-        /// on the internal action queue.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: Legal only while the endpoint is in the
-        /// constructed stage. A redundant call fails the endpoint hard.</description></item>
-        /// <item><description><b>Other notes</b>: Observe OnStarted or IsRunning to learn when the endpoint is
-        /// actually running.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public bool Start()
         {
             return _actionQueue.Schedule(() =>
@@ -526,25 +457,7 @@ namespace Pontifex.Raw
 
         #region Stop
 
-        /// <summary>
-        /// Requests a stop of the endpoint and latches the given reason. Only the first call performs the
-        /// transition; later calls do nothing.
-        /// </summary>
-        /// <param name="reason">The reason the endpoint is being stopped.</param>
-        /// <param name="tryBeGentle">A hint forwarded to BeginStop indicating whether the transport should
-        /// attempt a graceful stop; the base class does not interpret it.</param>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread, including concurrently with
-        /// other stop calls.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: The endpoint stops accepting new work
-        /// immediately, while work already accepted may still drain. Stopping an endpoint that was never
-        /// started moves it directly to Stopped; stopping one that is still starting defers the transition
-        /// until FinishStart completes. A stopped endpoint cannot be started again.</description></item>
-        /// <item><description><b>Other notes</b>: The reason becomes the endpoint's stop reason. If the
-        /// endpoint had started, the reason is supplied to the handler through OnStopped.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public void Stop(StopReason reason, bool tryBeGentle)
         {
             if (Interlocked.CompareExchange(ref _stopReason, reason, null) == null)
@@ -648,13 +561,7 @@ namespace Pontifex.Raw
         /// </remarks>
         protected abstract void DoSendRaw(UnionDataList bufferToSend);
 
-        /// <summary>
-        /// Populates dst with the IControl interfaces exposed by this endpoint, optionally filtered by
-        /// predicate.
-        /// </summary>
-        /// <param name="dst">The list that receives the exposed controls.</param>
-        /// <param name="predicate">An optional filter; when provided, a control is added only if it is
-        /// accepted.</param>
+        /// <inheritdoc/>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Other notes</b>: The base implementation adds no controls; overrides add the

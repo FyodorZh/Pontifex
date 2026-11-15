@@ -1,5 +1,17 @@
 namespace Pontifex.Raw.Reliable
 {
+    /// <summary>
+    /// Reliable raw endpoint contract: the raw endpoint surface plus a logical connection stage and an explicit
+    /// disconnect request.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><b>Side effects</b>: Outbound payloads are framed with a leading control byte before
+    /// admission, so the buffer is modified even when admission later fails. When a send returns
+    /// InvalidMessage the buffer is null or not alive and cannot be transferred, so the caller retains
+    /// ownership.</description></item>
+    /// </list>
+    /// </remarks>
     public interface IRawReliableEndpoint : IRawEndpoint
     {
         /// <summary>

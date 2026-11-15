@@ -6,20 +6,12 @@ using Scriba;
 
 namespace Pontifex.Raw.Reliable
 {
-    /// <summary>
-    /// Abstract base class for a reliable raw endpoint. Extends <see cref="RawEndpoint"/> with a logical
-    /// connection stage machine: connection completion, graceful and ungraceful disconnection, framing of
-    /// outbound payloads, and dispatch of inbound control frames.
-    /// </summary>
+    /// <inheritdoc cref="IRawReliableEndpointImp"/>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Thread safety</b>: All public and protected instance members are safe to call
-    /// concurrently from any thread. Connection stages, handler dispatch, and payload transmission are
-    /// serialized by the inherited action queue; the stage fields are volatile.</description></item>
-    /// <item><description><b>Preconditions/Postconditions</b>: The lifecycle is one-shot. After the endpoint
-    /// reaches the disconnected or stopped state it cannot be connected again.</description></item>
-    /// <item><description><b>Other notes</b>: Derived classes supply the transport-specific connect and
-    /// disconnect work and must drive completion through FinishConnect and FinishDisconnect.</description></item>
+    /// <item><description><b>Other notes</b>: Connection stages are held in volatile fields. Derived classes
+    /// supply the transport-specific connect and disconnect work and must drive completion through
+    /// FinishConnect and FinishDisconnect.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawReliableEndpoint : RawEndpoint, IRawReliableEndpointImp
@@ -76,18 +68,7 @@ namespace Pontifex.Raw.Reliable
 
         private volatile State _currentStage;
 
-        /// <summary>
-        /// Gets a value indicating whether the low-level connection has completed and disconnection has not
-        /// yet begun.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
-        /// <item><description><b>Other notes</b>: Becomes true only after FinishConnect completes and becomes
-        /// false as soon as disconnection begins, before the handler's disconnect notification is
-        /// raised.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public bool IsLowLevelConnected => _currentStage == State.Connected;
 
         /// <summary>
@@ -106,17 +87,7 @@ namespace Pontifex.Raw.Reliable
         /// </remarks>
         protected virtual bool GetIsConnected() => IsLowLevelConnected;
 
-        /// <summary>
-        /// Gets a value indicating whether the endpoint is currently logically connected.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
-        /// <item><description><b>Other notes</b>: May return true before OnConnected is invoked. Guaranteed to
-        /// return false during and after the handler's disconnect notification, because the transition to
-        /// false is synchronized with that call.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc/>
         public bool IsConnected => GetIsConnected();
 
         /// <summary>
@@ -371,21 +342,7 @@ namespace Pontifex.Raw.Reliable
             return base.CanSendNow(out errorCode);
         }
 
-        /// <summary>
-        /// Sends a payload message to the remote peer, framing it with the payload message type.
-        /// </summary>
-        /// <param name="bufferToSend">The payload to send. Ownership transfers to the endpoint on every result
-        /// except InvalidMessage; on InvalidMessage the buffer is null or not alive and cannot be transferred,
-        /// so the caller retains ownership.</param>
-        /// <returns>A SendResult describing the admission: Ok, or a synchronous rejection.</returns>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe for concurrent calls from any thread; concurrent Ok
-        /// sends are transmitted in admission order.</description></item>
-        /// <item><description><b>Side effects</b>: The frame type byte is prepended to the buffer before
-        /// admission, so the buffer is modified even when admission later fails.</description></item>
-        /// </list>
-        /// </remarks>
+        /// <inheritdoc cref="IRawEndpoint.Send"/>
         public override SendResult Send(UnionDataList bufferToSend)
         {
             if (bufferToSend != null! && bufferToSend.IsAlive)

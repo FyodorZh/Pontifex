@@ -6,16 +6,28 @@ namespace Pontifex.Raw
     {        
         /// <summary>
         /// Gets the remote endpoint address, or null if not connected.
-        /// Safe to read concurrently.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: The value is fixed when the endpoint is created and does not
+        /// change for the lifetime of the endpoint, including after a stop.</description></item>
+        /// </list>
+        /// </remarks>
         IEndPoint? RemoteEndPoint { get; }
         
         /// <summary>
         /// Gets the maximum message size in bytes supported by the transport.
         /// An inclusive maximum for the application payload; it excludes transport
         /// framing and control metadata. Empty payloads are valid.
-        /// Safe to read concurrently.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
+        /// <item><description><b>Other notes</b>: The value is fixed when the endpoint is created. Admission
+        /// compares the size of a message to be sent against this limit.</description></item>
+        /// </list>
+        /// </remarks>
         int MessageMaxByteSize { get; }
         
         /// <summary>
