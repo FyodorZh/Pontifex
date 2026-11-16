@@ -1,137 +1,137 @@
 using System;
-using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
-using Pontifex.Utils;
+using Pontifex.Raw.Unreliable;
+using Pontifex.StopReasons;
 using Pontifex.VirtualDelivery;
 using Scriba;
 
 namespace Pontifex.Raw.Unreliable.Direct
 {
     /// <summary>
-    /// Base class for all RawUnreliable Direct client transports. Owns the
-    /// in-process channel, delivery systems, and callback queue shared by the
-    /// Ack and NoAck contract variants.
+    /// Base class for all RawUnreliable Direct client transports. Owns the client configuration shared by
+    /// the Ack and NoAck contract variants; the endpoint owns the in-process channel.
     /// </summary>
-    public abstract class RawUnreliableDirectClientTransport : RawUnreliableClientTransport
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><b>Ownership</b>: the transport is configuration only. It creates one client
+    /// endpoint in <see cref="RawUnreliableClientTransport.CreateEndpoint"/> and the endpoint acquires the
+    /// in-process channel lazily on the first send.</description></item>
+    /// <item><description><b>Delivery systems</b>: <see cref="SetDeliverySystem"/> stores the default pair.
+    /// Reliable debug mode replaces both with a perfect pair for every route created
+    /// afterwards.</description></item>
+    /// </list>
+    /// </remarks>
+    public abstract class RawUnreliableDirectClientTransport : RawUnreliableClientTransport,
+        IRawUnreliableDebugReliability
     {
-        private readonly object _connectLock = new();
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
-        private SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>? _callbackQueue;
-        private volatile Channel? _channel;
+
         private volatile IDeliverySystem _clientDeliverySystem = new PerfectDeliverySystem();
         private volatile IDeliverySystem _serverDeliverySystem = new PerfectDeliverySystem();
 
         private bool _askedForReliableDelivery;
 
+        /// <summary>
+        /// Gets the capacity of the carrier queue that bounds this transport's outbound budget.
+        /// </summary>
         protected abstract int QueueCapacity { get; }
 
-        protected RawUnreliableDirectClientTransport(string typeName, string serverName, ILogger logger, IMemoryRental memoryRental)
+        /// <summary>
+        /// Gets the byte cap of the client endpoint's local outbound budget.
+        /// </summary>
+        protected long SendBudgetBytes => (long)MessageMaxByteSize * QueueCapacity;
+
+        /// <summary>
+        /// Gets the message cap of the client endpoint's inbox.
+        /// </summary>
+        protected int SendBudgetMessages => QueueCapacity;
+
+        /// <summary>
+        /// Gets the derived byte budget for budget-wiring tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; it exposes the same value the
+        /// endpoint receives as its local outbound cap.</description></item>
+        /// </list>
+        /// </remarks>
+        internal long ExposedSendBudgetBytes => SendBudgetBytes;
+
+        /// <summary>
+        /// Gets the derived message budget for budget-wiring tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only.</description></item>
+        /// </list>
+        /// </remarks>
+        internal int ExposedSendBudgetMessages => SendBudgetMessages;
+
+        protected RawUnreliableDirectClientTransport(string typeName, string serverName, ILogger logger,
+            IMemoryRental memoryRental)
             : base(typeName, logger, memoryRental)
         {
             _serverEp = new StringEndPoint(serverName);
             _clientEp = new GuidEndPoint(Guid.NewGuid());
         }
 
-        public void SetDeliverySystem(IDeliverySystem clientDeliverySystem, IDeliverySystem serverDeliverySystem)
+        /// <summary>
+        /// Stores the delivery systems used by the channel created for this transport's client endpoint.
+        /// </summary>
+        /// <param name="clientDeliverySystem">The server-to-client delivery system.</param>
+        /// <param name="serverDeliverySystem">The client-to-server delivery system.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called before the transport
+        /// starts. Reliable debug mode overrides both systems for endpoints created after
+        /// it.</description></item>
+        /// </list>
+        /// </remarks>
+        public void SetDeliverySystem(IDeliverySystem clientDeliverySystem,
+            IDeliverySystem serverDeliverySystem)
         {
             _clientDeliverySystem = clientDeliverySystem;
             _serverDeliverySystem = serverDeliverySystem;
-            _channel?.SetClientDeliverySystem(_clientDeliverySystem);
-            _channel?.SetServerDeliverySystem(_serverDeliverySystem);
         }
 
-        protected override IEndPoint? ClientRemoteEndPoint => _serverEp;
-
+        /// <inheritdoc/>
         protected override bool StartCarrier()
         {
-            _callbackQueue = new SerializedCallbackQueue<(RawUnreliableEndpoint, UnionDataList)>(
-                QueueCapacity,
-                $"cli-cb-{_serverEp}",
-                pair =>
-                {
-                    var (endpoint, message) = pair;
-                    var channel = _channel;
-                    if (channel == null)
-                    {
-                        message.Release();
-                        return;
-                    }
-                    endpoint.Conformance.BeforeSendCommitGate.Hit();
-                    channel.SendToServer(message);
-                    endpoint.Conformance.AfterSendCommitGate.Hit();
-                },
-                pair => pair.Item2.Release());
-            _callbackQueue.ExceptionHandler += ex => Log.wtf(ex);
-
+            // The client channel is acquired lazily by the endpoint on the first send.
             return true;
         }
 
+        /// <inheritdoc/>
         protected override void StopCarrier(StopReason reason)
         {
-            var channel = _channel;
-            if (channel != null)
-            {
-                _channel = null;
-                channel.SetClientDeliverySystem(new PerfectDeliverySystem());
-                channel.SetServerDeliverySystem(new PerfectDeliverySystem());
-                ChannelManager.Instance.Disconnect(_serverEp, _clientEp);
-            }
-            _callbackQueue?.Dispose();
-            _callbackQueue = null;
+            // The endpoint owns the channel and releases it during its own stop transition.
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
+        /// <inheritdoc/>
+        protected override RawUnreliableEndpoint CreateEndpoint(IRawUnreliableHandler handler)
         {
-            var channel = _channel;
-            if (channel == null)
-            {
-                lock (_connectLock)
-                {
-                    channel = _channel;
-                    if (channel == null)
-                    {
-                        channel = ChannelManager.Instance.Connect(_serverEp, _clientEp);
-                        if (channel == null)
-                        {
-                            message.Release();
-                            return SendResult.Error;
-                        }
-                        OnChannelConnected(channel);
-                        _channel = channel;
-                    }
-                }
-            }
+            IDeliverySystem clientDeliverySystem = _askedForReliableDelivery
+                ? new PerfectDeliverySystem()
+                : _clientDeliverySystem;
+            IDeliverySystem serverDeliverySystem = _askedForReliableDelivery
+                ? new PerfectDeliverySystem()
+                : _serverDeliverySystem;
 
-            if (message.GetDataSize() > MessageMaxByteSize)
-            {
-                message.Release();
-                return SendResult.MessageTooBig;
-            }
-
-            if (_callbackQueue?.Post((endpoint, message)) ?? false)
-            {
-                return SendResult.Ok;
-            }
-            message.Release();
-            return SendResult.Error;
-        }
-
-        private void OnChannelConnected(Channel channel)
-        {
-            channel.ClientHandler = message => OnCarrierInbound(null, message);
-
-            if (_askedForReliableDelivery)
-            {
-                channel.SetClientDeliverySystem(new PerfectDeliverySystem());
-                channel.SetServerDeliverySystem(new PerfectDeliverySystem());
-            }
-            else
-            {
-                channel.SetClientDeliverySystem(_clientDeliverySystem);
-                channel.SetServerDeliverySystem(_serverDeliverySystem);
-            }
+            return new RawUnreliableDirectClientEndpoint(
+                Name,
+                _serverEp,
+                _clientEp,
+                handler,
+                MessageMaxByteSize,
+                SendBudgetBytes,
+                SendBudgetMessages,
+                SendBudgetBytes,
+                clientDeliverySystem,
+                serverDeliverySystem,
+                Memory,
+                Log);
         }
 
         public override string ToString()
@@ -140,7 +140,15 @@ namespace Pontifex.Raw.Unreliable.Direct
             catch (Exception) { return "direct-client[unknown]"; }
         }
 
-        protected override bool TryMakeReliableForDebug()
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Requests reliable delivery for every
+        /// endpoint created afterwards and reports whether the request was accepted. The request is accepted
+        /// only before the transport starts.</description></item>
+        /// </list>
+        /// </remarks>
+        public bool TryMakeReliableForDebug()
         {
             _askedForReliableDelivery = true;
             return IsStarted == false;

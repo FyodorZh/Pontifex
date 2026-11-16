@@ -18,7 +18,7 @@ namespace Pontifex.Raw.Unreliable
         /// <summary>
         /// Enables transport-wide reliable debug mode for every current and future
         /// endpoint route of this transport. Must be called before Start. Returns
-        /// false if the implementation cannot provide the test mode.
+        /// false, without throwing, if the implementation cannot provide the test mode.
         /// </summary>
         bool TryMakeReliable();
     }

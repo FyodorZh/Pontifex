@@ -14,6 +14,12 @@ namespace Pontifex.Raw.Unreliable.Ack.Udp
 
         public override int MessageMaxByteSize => RawUnreliableAckUdpInfo.MessageMaxByteSize;
 
+        protected override int QueueCapacity => RawUnreliableAckUdpInfo.QueueCapacity;
+
+        protected override long SendBudgetBytes => RawUnreliableAckUdpInfo.SendBudgetBytes;
+
+        protected override int SendBudgetMessages => RawUnreliableAckUdpInfo.SendBudgetMessages;
+
         public RawUnreliableAckUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
             : base(RawUnreliableAckUdpInfo.TransportName, ipAddress, port, logger, memoryRental)
         {

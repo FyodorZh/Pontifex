@@ -20,6 +20,7 @@ internal sealed class TestRawEndpoint : RawEndpoint, IDisposable
     // No initializer: the queued is created during the base constructor, before field initializers run.
     private ManualSerialActionQueue? _queue;
     private readonly List<UnionDataList> _capturedSends = new();
+    private readonly List<(int DeltaBytes, int DeltaMessages)> _pendingSendChanges = new();
 
     public TestRawEndpoint(
         IRawHandler handler,
@@ -48,6 +49,18 @@ internal sealed class TestRawEndpoint : RawEndpoint, IDisposable
     #region Queue control
 
     public void DrainAll() => _queue!.DrainAll();
+
+    /// <summary>
+    /// Runs exactly one queued action so a test can interleave scheduling and execution. Does nothing
+    /// when no action is pending.
+    /// </summary>
+    public void DrainOne() => _queue!.DrainOne();
+
+    /// <summary>
+    /// Makes the next action submission fail, modelling a queue that rejects an admission. The flag is
+    /// consumed by that call and is off by default.
+    /// </summary>
+    public void RejectNextSchedule() => _queue!.RejectNextSchedule();
 
     #endregion
 
@@ -96,6 +109,40 @@ internal sealed class TestRawEndpoint : RawEndpoint, IDisposable
     /// </summary>
     public IReadOnlyList<UnionDataList> CapturedSends => _capturedSends;
 
+    /// <summary>
+    /// Gets the pending-send deltas reported through <see cref="OnPendingSendChanged"/>, in call order.
+    /// </summary>
+    public IReadOnlyList<(int DeltaBytes, int DeltaMessages)> PendingSendChanges => _pendingSendChanges;
+
+    /// <summary>
+    /// Gets the sum of the reported byte deltas: the endpoint's current pending outbound reservation.
+    /// </summary>
+    public int PendingSendBytes { get; private set; }
+
+    /// <summary>
+    /// Gets the sum of the reported message deltas: the endpoint's current pending message count.
+    /// </summary>
+    public int PendingSendMessages { get; private set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether <see cref="OnPendingSendChanged"/> throws after recording
+    /// the delta, modelling an override that violates its contract.
+    /// </summary>
+    public bool ThrowOnPendingSendChanged { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether <see cref="DoSendRaw"/> throws instead of transmitting,
+    /// modelling a carrier hook that violates its contract.
+    /// </summary>
+    public bool ThrowOnSend { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether an admission passes <see cref="CanSendNow"/> while a stop
+    /// has already been requested. It models a send that observed the flow-control snapshot just before
+    /// the stop latch, so its queued action lands behind the stop transition.
+    /// </summary>
+    public bool AdmitWhileStopping { get; set; }
+
     #endregion
 
     #region Exposed protected surface
@@ -124,8 +171,36 @@ internal sealed class TestRawEndpoint : RawEndpoint, IDisposable
         LastTryBeGentle = tryBeGentle;
     }
 
+    protected override bool CanSendNow(out SendResult errorCode)
+    {
+        if (AdmitWhileStopping)
+        {
+            errorCode = SendResult.Ok;
+            return true;
+        }
+
+        return base.CanSendNow(out errorCode);
+    }
+
+    protected override void OnPendingSendChanged(int deltaBytes, int deltaMessages)
+    {
+        _pendingSendChanges.Add((deltaBytes, deltaMessages));
+        PendingSendBytes += deltaBytes;
+        PendingSendMessages += deltaMessages;
+
+        if (ThrowOnPendingSendChanged)
+        {
+            throw new InvalidOperationException("OnPendingSendChanged override failed");
+        }
+    }
+
     protected override void DoSendRaw(UnionDataList bufferToSend)
     {
+        if (ThrowOnSend)
+        {
+            throw new InvalidOperationException("DoSendRaw failed");
+        }
+
         _capturedSends.Add(bufferToSend.Clone(Memory.CollectablePool));
         bufferToSend.Release();
     }

@@ -5,6 +5,8 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.NetSockets;
+using Pontifex.Raw.Unreliable;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
@@ -12,12 +14,22 @@ using Transport.Utils;
 namespace Pontifex.Raw.Unreliable.Udp
 {
     /// <summary>
-    /// Base class for all RawUnreliable UDP server transports. Owns the
-    /// datagram socket, receiver, and sender shared by the Ack and NoAck
-    /// contract variants. The generic parameter is the variant
+    /// Base class for all RawUnreliable UDP server transports. Owns the datagram socket, the receiver, the
+    /// shared asynchronous sender, and the route-to-address map. The generic parameter is the variant
     /// handler-factory delegate type.
     /// </summary>
-    public abstract class RawUnreliableUdpServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><b>Ownership</b>: the transport owns the socket and the sender. Each accepted route
+    /// gets a <see cref="UdpSessionChannel"/> over the shared sender and the route's remote
+    /// address.</description></item>
+    /// <item><description><b>Budget</b>: one <see cref="SendBudget"/> is shared by every session of the
+    /// transport. Its caps are derived from <see cref="IRawTransport.MessageMaxByteSize"/> and the variant
+    /// queue capacity.</description></item>
+    /// </list>
+    /// </remarks>
+    public abstract class RawUnreliableUdpServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>,
+        IRawUnreliableDebugReliability
         where TFactory : Delegate
     {
         private IPEndPoint _localEndPoint;
@@ -31,31 +43,68 @@ namespace Pontifex.Raw.Unreliable.Udp
 
         private readonly TrafficCollectorSlim _trafficCollector;
 
-        protected RawUnreliableUdpServerTransport(string typeName, IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
+        protected RawUnreliableUdpServerTransport(string typeName, IPAddress ipAddress, int port, ILogger logger,
+            IMemoryRental memoryRental)
             : base(typeName, logger, memoryRental)
         {
             _localEndPoint = new IPEndPoint(ipAddress, port);
-            _endPointsMap = new TemporaryMap<EndPoint, IpEndPoint>(UtcNowDateTimeProvider.Instance, TimeSpan.FromSeconds(10));
+            _endPointsMap = new TemporaryMap<EndPoint, IpEndPoint>(UtcNowDateTimeProvider.Instance,
+                TimeSpan.FromSeconds(10));
             _trafficCollector = new TrafficCollectorSlim(typeName, UtcNowDateTimeProvider.Instance);
         }
 
+        /// <summary>
+        /// Gets the capacity of the carrier queue that bounds the shared outbound budget.
+        /// </summary>
+        protected abstract int QueueCapacity { get; }
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default derives from the carrier queue capacity. Every
+        /// concrete transport overrides it from its variant <c>*Info.SendBudgetBytes</c> constant, which is the
+        /// single source of truth.</description></item>
+        /// </list>
+        /// </remarks>
+        protected override long SendBudgetBytes => (long)MessageMaxByteSize * QueueCapacity;
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default derives from the carrier queue capacity. Every
+        /// concrete transport overrides it from its variant <c>*Info.SendBudgetMessages</c>
+        /// constant.</description></item>
+        /// </list>
+        /// </remarks>
+        protected override int SendBudgetMessages => QueueCapacity;
+
+        /// <summary>
+        /// Gets the configured byte budget for budget-wiring tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; it exposes the same value used
+        /// to create the shared budget and each endpoint's local cap.</description></item>
+        /// </list>
+        /// </remarks>
+        internal long ExposedSendBudgetBytes => SendBudgetBytes;
+
+        /// <summary>
+        /// Gets the configured message budget for budget-wiring tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only.</description></item>
+        /// </list>
+        /// </remarks>
+        internal int ExposedSendBudgetMessages => SendBudgetMessages;
+
+        /// <inheritdoc/>
         protected override bool StartCarrier()
         {
             try
             {
                 _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-
-                // try
-                // {
-                //     var sioUdpConnectionReset = -1744830452;
-                //     var inValue = new byte[] {0};
-                //     var outValue = new byte[] {0};
-                //     _socket.IOControl(sioUdpConnectionReset, inValue, outValue);
-                // }
-                // catch (Exception ex)
-                // {
-                //     Log.wtf("Socket icmp exception 'MAGIC FIX' throw error!", ex);
-                // }
 
                 try
                 {
@@ -117,6 +166,7 @@ namespace Pontifex.Raw.Unreliable.Udp
             }
         }
 
+        /// <inheritdoc/>
         protected override void StopCarrier(StopReason reason)
         {
             var receiver = _receiver;
@@ -141,35 +191,40 @@ namespace Pontifex.Raw.Unreliable.Udp
             }
         }
 
-        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Returns <see langword="null"/> without
+        /// publishing a route when the sender is already gone or the source is not a routable IP endpoint. The
+        /// base class then releases the trigger.</description></item>
+        /// </list>
+        /// </remarks>
+        protected override RawUnreliableServerEndpoint? CreateEndpoint(IRawUnreliableHandler handler,
+            IEndPoint source, UnionDataList trigger)
         {
-            var sender = _sender;
-            if (sender == null)
+            UdpAsyncSender? sender = _sender;
+            SendBudget? budget = SharedSendBudget;
+
+            if (sender == null || budget == null || source is not IpEndPoint ipEndPoint)
             {
-                message?.Release();
-                return SendResult.Error;
+                return null;
             }
 
-            if (endpoint.RemoteEndPoint is not IpEndPoint ep)
-            {
-                message.Release();
-                return SendResult.InvalidAddress;
-            }
+            var channel = new UdpSessionChannel(sender, ipEndPoint.EP);
 
-            using var disposer = message.AsDisposable();
-
-            try
-            {
-                endpoint.Conformance.BeforeSendCommitGate.Hit();
-                var result = sender.Send(ep.EP, message.Acquire());
-                endpoint.Conformance.AfterSendCommitGate.Hit();
-                return result == SendResult.NotConnected ? SendResult.Error : result;
-            }
-            catch (Exception e)
-            {
-                Log.wtf(e);
-                return SendResult.Error;
-            }
+            return new RawUnreliableUdpServerEndpoint(
+                Name,
+                source,
+                handler,
+                MessageMaxByteSize,
+                SendBudgetBytes,
+                QueueCapacity,
+                SendBudgetBytes,
+                trigger,
+                budget,
+                channel,
+                Memory,
+                Log);
         }
 
         private void OnReceivedInternal(EndPoint sender, UnionDataList message)
@@ -183,10 +238,8 @@ namespace Pontifex.Raw.Unreliable.Udp
             OnCarrierInbound(ep, message);
         }
 
-        protected override bool TryMakeReliableForDebug()
-        {
-            return true;
-        }
+        /// <inheritdoc/>
+        public bool TryMakeReliableForDebug() => true;
 
         public override string ToString()
         {

@@ -1,169 +1,125 @@
 using System;
 using System.Net;
-using System.Net.Sockets;
 using Actuarius.Memory;
-using Operarius;
 using Pontifex.NetSockets;
-using Pontifex.Utils;
+using Pontifex.Raw.Unreliable;
+using Pontifex.StopReasons;
 using Scriba;
-using Transport.Utils;
 
 namespace Pontifex.Raw.Unreliable.Udp
 {
     /// <summary>
-    /// Base class for all RawUnreliable UDP client transports. Owns the
-    /// datagram socket, sender, and receiver shared by the Ack and NoAck
-    /// contract variants.
+    /// Base class for all RawUnreliable UDP client transports. Owns the client configuration shared by the
+    /// Ack and NoAck contract variants; the endpoint owns the datagram socket.
     /// </summary>
-    public abstract class RawUnreliableUdpClientTransport : RawUnreliableClientTransport
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><b>Ownership</b>: the transport is configuration only. Its endpoint binds the socket
+    /// in <see cref="RawUnreliableEndpoint.BeginStart"/> and acquires the sender and receiver
+    /// there.</description></item>
+    /// <item><description><b>Start semantics</b>: a bind failure is reported through the endpoint's stop path,
+    /// not as a failed transport start, mirroring the reliable transports.</description></item>
+    /// </list>
+    /// </remarks>
+    public abstract class RawUnreliableUdpClientTransport : RawUnreliableClientTransport,
+        IRawUnreliableDebugReliability
     {
         private readonly IPEndPoint _remoteEndPoint;
         private readonly IEndPoint _managedRemoteEndPoint;
 
-        private UdpSyncSender? _sender;
-        private UdpReceiver? _receiver;
-        private Socket? _socket;
-
-        private readonly TrafficCollectorSlim _trafficCollector;
-
-        protected RawUnreliableUdpClientTransport(string typeName, IPAddress ipAddress, int port, ILogger logger, IMemoryRental memoryRental)
+        protected RawUnreliableUdpClientTransport(string typeName, IPAddress ipAddress, int port, ILogger logger,
+            IMemoryRental memoryRental)
             : base(typeName, logger, memoryRental)
         {
             _remoteEndPoint = new IPEndPoint(ipAddress, port);
             _managedRemoteEndPoint = new IpEndPoint(_remoteEndPoint);
-            _trafficCollector = new TrafficCollectorSlim(typeName, UtcNowDateTimeProvider.Instance);
         }
 
+        /// <summary>
+        /// Gets the capacity of the carrier queue that bounds this transport's outbound budget.
+        /// </summary>
+        protected abstract int QueueCapacity { get; }
+
+        /// <summary>
+        /// Gets the configured remote server address.
+        /// </summary>
         public IEndPoint ServerAddress => _managedRemoteEndPoint;
 
-        protected override IEndPoint? ClientRemoteEndPoint => _managedRemoteEndPoint;
+        /// <summary>
+        /// Gets the byte cap of the client endpoint's local outbound budget.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default derives from the carrier queue capacity. Every
+        /// concrete transport overrides it from its variant <c>*Info.SendBudgetBytes</c> constant, which is the
+        /// single source of truth.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual long SendBudgetBytes => (long)MessageMaxByteSize * QueueCapacity;
 
+        /// <summary>
+        /// Gets the message cap of the client endpoint's outbound queue and pre-start inbox.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default derives from the carrier queue capacity. Every
+        /// concrete transport overrides it from its variant <c>*Info.SendBudgetMessages</c>
+        /// constant.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual int SendBudgetMessages => QueueCapacity;
+
+        /// <summary>
+        /// Gets the configured byte budget for budget-wiring tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; it exposes the same value the
+        /// endpoint receives as its local outbound cap.</description></item>
+        /// </list>
+        /// </remarks>
+        internal long ExposedSendBudgetBytes => SendBudgetBytes;
+
+        /// <summary>
+        /// Gets the configured message budget for budget-wiring tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only.</description></item>
+        /// </list>
+        /// </remarks>
+        internal int ExposedSendBudgetMessages => SendBudgetMessages;
+
+        /// <inheritdoc/>
         protected override bool StartCarrier()
         {
-            IPEndPoint? localEndPoint = null;
-            try
-            {
-                var addressFamily = _remoteEndPoint.AddressFamily;
-                var bindedAddress = addressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
-
-                _socket = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
-
-                bool binded = false;
-
-                Random rnd = new Random();
-                for (int i = 0; i < 30; ++i)
-                {
-                    try
-                    {
-                        int randomPort = 10000 + rnd.Next(30000);
-                        localEndPoint = new IPEndPoint(bindedAddress, randomPort);
-                        _socket.Bind(localEndPoint);
-                    }
-                    catch (Exception)
-                    {
-                        continue;
-                    }
-
-                    binded = true;
-                    break;
-                }
-
-                if (!binded)
-                {
-                    _socket.Close();
-                    _socket = null;
-                    return false;
-                }
-
-                Log.i("UDP.Sender from local='{0}' to remote='{1}'", localEndPoint!, _remoteEndPoint);
-                _sender = new UdpSyncSender(_socket, _remoteEndPoint, MessageMaxByteSize,
-                    Memory.ByteArraysPool,
-                    (ex) => { FailException("Sender.Exception", ex); }, _trafficCollector);
-
-                Log.i("UDP.Listener from local='{0}' of remote='{1}'", localEndPoint!, _remoteEndPoint);
-                _receiver = new UdpReceiver(_socket, _remoteEndPoint,
-                    OnReceivedInternal, (ex) => { FailException("UDP.Receiver", ex); },
-                    Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log, _trafficCollector);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                if (_socket != null)
-                {
-                    _socket.Close();
-                    _socket = null;
-                }
-
-                _sender = null;
-
-                if (_receiver != null)
-                {
-                    _receiver.Stop();
-                }
-
-                FailException("TryStart", ex);
-                return false;
-            }
-        }
-
-        protected override void StopCarrier(StopReason reason)
-        {
-            _sender = null;
-
-            var receiver = _receiver;
-            if (receiver != null)
-            {
-                receiver.Stop();
-                _receiver = null;
-            }
-
-            var socket = _socket;
-            if (socket != null)
-            {
-                socket.Close();
-                _socket = null;
-            }
-        }
-
-        protected override SendResult SendToCarrier(RawUnreliableEndpoint endpoint, UnionDataList message)
-        {
-            var sender = _sender;
-            if (sender == null)
-            {
-                message.Release();
-                return SendResult.Error;
-            }
-
-            try
-            {
-                endpoint.Conformance.BeforeSendCommitGate.Hit();
-                var result = sender.Send(message);
-                endpoint.Conformance.AfterSendCommitGate.Hit();
-                return result == SendResult.NotConnected ? SendResult.Error : result;
-            }
-            catch (Exception e)
-            {
-                Log.wtf(e);
-                return SendResult.Error;
-            }
-        }
-
-        private void OnReceivedInternal(EndPoint remoteEp, UnionDataList message)
-        {
-            if (!remoteEp.Equals(_remoteEndPoint))
-            {
-                message.Release();
-                return;
-            }
-
-            OnCarrierInbound(null, message);
-        }
-
-        protected override bool TryMakeReliableForDebug()
-        {
+            // The endpoint binds the socket during its own start.
             return true;
         }
+
+        /// <inheritdoc/>
+        protected override void StopCarrier(StopReason reason)
+        {
+            // The endpoint owns the socket and releases it during its own stop transition.
+        }
+
+        /// <inheritdoc/>
+        protected override RawUnreliableEndpoint CreateEndpoint(IRawUnreliableHandler handler)
+        {
+            return new RawUnreliableUdpClientEndpoint(
+                Name,
+                _remoteEndPoint,
+                handler,
+                MessageMaxByteSize,
+                SendBudgetBytes,
+                SendBudgetMessages,
+                SendBudgetBytes,
+                Memory,
+                Log);
+        }
+
+        /// <inheritdoc/>
+        public bool TryMakeReliableForDebug() => true;
 
         public override string ToString()
         {

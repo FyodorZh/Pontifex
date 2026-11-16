@@ -201,8 +201,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new SizeRecordingHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -223,8 +223,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
         var server = fixture.Server;
-        if (!EnableReliable(client, server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, server), Is.True,
+            "The implementation does not provide reliable debug mode.");
 
         var emptyReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var serverReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -255,8 +255,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -277,8 +277,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new ReplyAllServerHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -297,8 +297,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -320,8 +320,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new ThrowingHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -345,8 +345,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var clientHandler = new ThrowingHandler(fixture);
         var serverHandler = new ServerSendsValuesHandler(fixture, 1, 2);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -369,8 +369,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var clientHandler = new EchoOnceClientHandler(fixture, client);
         var serverHandler = new ServerReentrancyHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -389,8 +389,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var clientHandler = new BlockingClientHandler(fixture);
         var serverHandler = new ServerSendsValuesHandler(fixture, 1, 2);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -413,8 +413,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -488,8 +488,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new StopFromReceiveServerHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
 
@@ -515,34 +515,68 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new SendReturnedObservingHandler(fixture, new ReturnedFlag());
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
-        var endpointControl = GetEndpointControl<IRawUnreliableEndpointConformanceControl>(endpoint);
-        var beforeCommitReached = endpointControl.BeforeSendCommitGate.Arm();
 
-        _ = Task.Run(() => endpoint.Send(CreateMessage(client, 1)));
-        await beforeCommitReached.WaitAsync(DeliveryTimeout);
-        serverHandler.Flag.Value = 1;
-        endpointControl.BeforeSendCommitGate.Reset();
+        // Warm up the route so its endpoint exists, then hold the next delivery at the server's
+        // pre-delivery gate. The gate is the callback boundary, not the sender's commit path, so the test
+        // is meaningful for an asynchronously committing carrier and for a carrier whose socket send is
+        // synchronous.
+        Assert.That(endpoint.Send(CreateMessage(client, 0)), Is.EqualTo(SendResult.Ok));
+        await serverHandler.WarmupReceived.Task.WaitAsync(DeliveryTimeout);
+        var serverEndpoint = serverHandler.Endpoint!;
+        var serverControl = GetEndpointControl<IRawUnreliableEndpointConformanceControl>(serverEndpoint);
+        var gateReached = serverControl.AfterReceivedGate.Arm();
+
+        var sendReturned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = Task.Run(() =>
+        {
+            endpoint.Send(CreateMessage(client, 1));
+            serverHandler.Flag.Value = 1;
+            sendReturned.TrySetResult();
+        });
+
+        await gateReached.WaitAsync(DeliveryTimeout);
+
+        // The delivery is parked at the callback gate. The send call must already have returned and set the
+        // flag, so the handler will observe it when it finally runs. A carrier that performs the whole
+        // receive hand-off synchronously inside Send keeps Send blocked here, so the wait times out and the
+        // test fails.
+        try
+        {
+            await sendReturned.Task.WaitAsync(DeliveryTimeout);
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail(
+                "The send call did not return while the receive gate held the delivery. This is the " +
+                "synchronous-commit signature: the carrier handed the message to the peer inside Send " +
+                "instead of committing it off the send path.");
+        }
+
+        Assert.That(serverHandler.Observed.Task.IsCompleted, Is.False,
+            "the receive callback must not begin while the pre-delivery gate holds it");
+
+        serverControl.AfterReceivedGate.Reset();
 
         Assert.That(await serverHandler.Observed.Task.WaitAsync(DeliveryTimeout), Is.True);
     }
 
     [Test]
-    public async Task ServerCallbacks_AreGloballySerializedAcrossClients()
+    public async Task ServerCallbacks_AreSerializedPerEndpoint()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var firstClient = fixture.CreateClient();
         var secondClient = fixture.CreateClient();
-        if (!EnableReliable(firstClient, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
-        if (!EnableReliable(secondClient, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(firstClient, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(secondClient, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
 
         var probe = new ServerSerializationProbe();
         var created = new ConcurrentQueue<BlockingServerHandler>();
@@ -562,8 +596,14 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         var firstEndpoint = WaitForEndpoint(firstClientHandler);
         var secondEndpoint = WaitForEndpoint(secondClientHandler);
+
+        // Two messages per endpoint: an endpoint may not begin its second callback while its first callback is
+        // still blocked. Callbacks of different endpoints may overlap, so the test does not require or forbid
+        // cross-endpoint concurrency; it only records whether one handler ever ran two callbacks at once.
         Assert.That(firstEndpoint.Send(CreateMessage(firstClient, 1)), Is.EqualTo(SendResult.Ok));
-        Assert.That(secondEndpoint.Send(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(firstEndpoint.Send(CreateMessage(firstClient, 2)), Is.EqualTo(SendResult.Ok));
+        Assert.That(secondEndpoint.Send(CreateMessage(secondClient, 3)), Is.EqualTo(SendResult.Ok));
+        Assert.That(secondEndpoint.Send(CreateMessage(secondClient, 4)), Is.EqualTo(SendResult.Ok));
 
         await probe.FirstEntered.Task.WaitAsync(DeliveryTimeout);
         await Task.Delay(200);
@@ -572,8 +612,9 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         Assert.Multiple(() =>
         {
-            Assert.That(probe.ConcurrentCallbacks, Is.Zero);
+            Assert.That(probe.HasConcurrentCallback, Is.False);
             Assert.That(created.Count, Is.EqualTo(2));
+            Assert.That(probe.CompletedCallbacks, Is.EqualTo(4));
         });
     }
 
@@ -584,8 +625,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new BlockingPreReceiveServerHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -695,8 +736,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new ServerSendsValuesHandler(fixture, 5);
         var clientHandler = new OnStartedOrderClientHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -746,8 +787,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
             return handler;
         }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
@@ -774,8 +815,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Assert.That(fixture.InitServer((_, _) =>
             Interlocked.Increment(ref factoryCalls) == 1 ? (IRawUnreliableHandler?)null : serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
@@ -807,8 +848,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
             return serverHandler;
         }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
@@ -841,8 +882,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
                 : goodHandler;
         }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
@@ -876,8 +917,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
             return handler;
         }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
@@ -913,8 +954,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var factoryCalls = 0;
         Assert.That(fixture.InitServer((_, _) => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
 
         var serverControl = GetControl<IRawUnreliableTransportConformanceControl>(fixture.Server);
         var gateReached = serverControl.BeforeHandlerStartedGate.Arm();
@@ -1021,8 +1062,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var serverHandler = new EndpointStopOnReceiveHandler(fixture);
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Start(fixture.Server, client);
 
         var endpoint = WaitForEndpoint(clientHandler);
@@ -1069,10 +1110,10 @@ public abstract class RawUnreliableConformanceTests<TServer>
             serverHandlers.Enqueue(handler);
             return handler;
         }), Is.True);
-        if (!EnableReliable(firstClient, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
-        if (!EnableReliable(secondClient, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(firstClient, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(secondClient, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(firstClient.Init(firstClientHandler), Is.True);
         Assert.That(secondClient.Init(secondClientHandler), Is.True);
         Start(fixture.Server, firstClient);
@@ -1108,8 +1149,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var factoryCalls = 0;
         Assert.That(fixture.InitServer((_, _) => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
 
         var serverControl = GetControl<IRawUnreliableTransportConformanceControl>(fixture.Server);
         var gateReached = serverControl.BeforeHandlerFactoryGate.Arm();
@@ -1140,8 +1181,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var factoryCalls = 0;
         Assert.That(fixture.InitServer((_, _) => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
 
         var serverControl = GetControl<IRawUnreliableTransportConformanceControl>(fixture.Server);
         var gateReached = serverControl.BeforeHandlerStartedGate.Arm();
@@ -1181,13 +1222,25 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var endpointControl = GetEndpointControl<IRawUnreliableEndpointConformanceControl>(endpoint);
         var gateReached = endpointControl.BeforeEndpointStopStateTransitionGate.Arm();
 
+        // The endpoint is invalidated before the gate is hit, so the latch and IsValid turn over while the
+        // stop transition is still blocked. The call may execute the transition inline, hence the separate
+        // task for the blocking Stop.
         var stopTask = Task.Run(() => endpoint.Stop());
         await gateReached.WaitAsync(DeliveryTimeout);
-        Assert.That(endpoint.IsValid, Is.True);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(endpoint.IsValid, Is.False);
+            Assert.That(endpoint.Stop(), Is.False);
+        });
 
         endpointControl.BeforeEndpointStopStateTransitionGate.Reset();
         Assert.That(await stopTask.WaitAsync(DeliveryTimeout), Is.True);
-        Assert.That(endpoint.IsValid, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(endpoint.IsValid, Is.False);
+            Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Error));
+        });
     }
 
     [Test]
@@ -1203,16 +1256,36 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         var endpoint = WaitForEndpoint(clientHandler);
         var endpointControl = GetEndpointControl<IRawUnreliableEndpointConformanceControl>(endpoint);
+
+        // The gate sits inside RawUnreliableEndpoint.BeginStop, immediately before FinishStop, so the
+        // endpoint is already invalid while the handler's OnStopped notification is still pending. The client
+        // stop may execute the endpoint transition inline on the stopping thread, so the blocking call runs on
+        // a separate task.
         var gateReached = endpointControl.BeforeHandlerStoppedGate.Arm();
 
         var stopTask = Task.Run(() => client.Stop());
         await gateReached.WaitAsync(DeliveryTimeout);
-        Assert.That(clientHandler.StoppedReason, Is.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(endpoint.IsValid, Is.False);
+            Assert.That(clientHandler.StoppedReason, Is.Null);
+        });
 
         endpointControl.BeforeHandlerStoppedGate.Reset();
         WaitUntil(() => clientHandler.OnStoppedCount == 1);
         Assert.That(await stopTask.WaitAsync(DeliveryTimeout), Is.True);
         Assert.That(clientHandler.StoppedReason, Is.Not.Null);
+    }
+
+    [Test]
+    public void TryMakeReliable_ClientAndServer_ReportSupported()
+    {
+        // Guard against the suite silently degrading to skips: every adapter must provide the reliable debug
+        // mode that the reliable-mode tests depend on. This test FAILS, it never ignores.
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+
+        Assert.That(EnableReliable(client, fixture.Server), Is.True);
     }
 
     [Test]
@@ -1222,8 +1295,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        if (!EnableReliable(client, fixture.Server))
-            Assert.Ignore("The implementation does not provide reliable debug mode.");
+        Assert.That(EnableReliable(client, fixture.Server), Is.True,
+            "The implementation does not provide reliable debug mode.");
         Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -1670,6 +1743,9 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         public ReturnedFlag Flag => _flag;
 
+        public TaskCompletionSource<bool> WarmupReceived { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public TaskCompletionSource<bool> Observed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public SendReturnedObservingHandler(IRawUnreliableConformanceFixture<TServer> fixture, ReturnedFlag flag)
@@ -1680,16 +1756,27 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         public override void OnReceived(UnionDataList message)
         {
-            try { Observed.TrySetResult(_flag.Value == 1); }
-            finally { message.Release(); }
+            try
+            {
+                if (message.TryPopFirst(out int value) && value == 0)
+                {
+                    WarmupReceived.TrySetResult(true);
+                    return;
+                }
+
+                Observed.TrySetResult(_flag.Value == 1);
+            }
+            finally
+            {
+                message.Release();
+            }
         }
     }
 
     private sealed class ServerSerializationProbe
     {
-        private int _active;
-        private int _concurrent;
-        private int _completed;
+        private int _completedCallbacks;
+        private int _hasConcurrentCallback;
 
         public ManualResetEventSlim Release { get; } = new();
 
@@ -1697,19 +1784,23 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         public TaskCompletionSource AllCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public int ConcurrentCallbacks { get { return Volatile.Read(ref _concurrent); } }
+        public bool HasConcurrentCallback { get { return Volatile.Read(ref _hasConcurrentCallback) != 0; } }
+
+        public int CompletedCallbacks { get { return Volatile.Read(ref _completedCallbacks); } }
+
+        public void ReportConcurrentCallback()
+        {
+            Interlocked.Exchange(ref _hasConcurrentCallback, 1);
+        }
 
         public void Enter()
         {
-            if (Interlocked.Increment(ref _active) > 1)
-                Interlocked.Exchange(ref _concurrent, 1);
             FirstEntered.TrySetResult();
         }
 
         public void Exit()
         {
-            Interlocked.Decrement(ref _active);
-            if (Interlocked.Increment(ref _completed) == 2)
+            if (Interlocked.Increment(ref _completedCallbacks) == 4)
                 AllCompleted.TrySetResult();
         }
     }
@@ -1717,6 +1808,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
     private sealed class BlockingServerHandler : RawUnreliableTestHandler
     {
         private readonly ServerSerializationProbe _probe;
+        private int _activeCallbacks;
 
         public BlockingServerHandler(IRawUnreliableConformanceFixture<TServer> fixture, ServerSerializationProbe probe)
             : base(fixture)
@@ -1726,11 +1818,19 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         public override void OnReceived(UnionDataList message)
         {
-            _probe.Enter();
-            try { _probe.Release.Wait(DeliveryTimeout); }
+            // Per-handler concurrency is the contract: two callbacks of one endpoint must never overlap.
+            if (Interlocked.Increment(ref _activeCallbacks) > 1)
+                _probe.ReportConcurrentCallback();
+
+            try
+            {
+                _probe.Enter();
+                _probe.Release.Wait(DeliveryTimeout);
+            }
             finally
             {
                 message.Release();
+                Interlocked.Decrement(ref _activeCallbacks);
                 _probe.Exit();
             }
         }

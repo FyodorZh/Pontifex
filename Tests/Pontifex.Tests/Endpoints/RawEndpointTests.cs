@@ -4,6 +4,7 @@ using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Tests.Endpoints;
 
@@ -301,6 +302,153 @@ public sealed class RawEndpointTests
 
     #endregion
 
+    #region Pending send
+
+    [Test]
+    public void Send_WhenAdmitted_ReportsPositiveReservationDelta()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        int size = buffer.GetDataSize();
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.Ok));
+
+        Assert.That(ep.CapturedSends, Is.Empty);
+        Assert.That(ep.PendingSendChanges, Is.EqualTo(new[] { (size, 1) }));
+        Assert.That(ep.PendingSendBytes, Is.EqualTo(size));
+        Assert.That(ep.PendingSendMessages, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Send_AfterDrain_ReportsNegativeDeltaAndNetsToZero()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        int size = buffer.GetDataSize();
+
+        ep.Send(buffer);
+        ep.DrainAll();
+
+        Assert.That(ep.CapturedSends, Has.Count.EqualTo(1));
+        Assert.That(ep.PendingSendChanges, Is.EqualTo(new[] { (size, 1), (-size, -1) }));
+        Assert.That(ep.PendingSendBytes, Is.Zero);
+        Assert.That(ep.PendingSendMessages, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenStopCompletesBeforeQueuedSend_DropsBufferAndReportsNegativeDelta()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        int size = buffer.GetDataSize();
+
+        ep.Stop(Reason(), tryBeGentle: false);
+        ep.AdmitWhileStopping = true;
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.Ok));
+        ep.AdmitWhileStopping = false;
+        Assert.That(ep.PendingSendBytes, Is.EqualTo(size));
+
+        ep.DrainAll();
+
+        Assert.That(ep.CapturedSends, Is.Empty);
+        Assert.That(buffer.IsAlive, Is.False);
+        Assert.That(ep.PendingSendChanges, Is.EqualTo(new[] { (size, 1), (-size, -1) }));
+        Assert.That(ep.PendingSendBytes, Is.Zero);
+        Assert.That(ep.PendingSendMessages, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenDoSendRawThrows_ReportsNegativeDeltaAndFailsHard()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        int size = buffer.GetDataSize();
+        ep.ThrowOnSend = true;
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.Ok));
+        ep.DrainAll();
+
+        Assert.That(ep.PendingSendChanges, Is.EqualTo(new[] { (size, 1), (-size, -1) }));
+        Assert.That(ep.PendingSendBytes, Is.Zero);
+        Assert.That(ep.PendingSendMessages, Is.Zero);
+        Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(ep.IsRunning, Is.False);
+
+        // The base class does not release a buffer whose DoSendRaw threw; the test owns it.
+        Assert.That(buffer.IsAlive, Is.True);
+        buffer.Release();
+    }
+
+    [Test]
+    public void Send_WhenLocalBudgetOverflows_ReportsMatchingPositiveAndNegativeDeltas()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler, max: 1024, capacity: 2);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        int size = buffer.GetDataSize();
+        Assert.That(size, Is.GreaterThan(2));
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.BufferOverflow));
+
+        Assert.That(ep.PendingSendChanges, Is.EqualTo(new[] { (size, 1), (-size, -1) }));
+        Assert.That(ep.PendingSendBytes, Is.Zero);
+        Assert.That(ep.PendingSendMessages, Is.Zero);
+        Assert.That(buffer.IsAlive, Is.False);
+    }
+
+    [Test]
+    public void Send_WhenQueueRejectsAdmission_ReportsMatchingDeltasAndReleasesBuffer()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        int size = buffer.GetDataSize();
+
+        ep.RejectNextSchedule();
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.Error));
+
+        Assert.That(ep.PendingSendChanges, Is.EqualTo(new[] { (size, 1), (-size, -1) }));
+        Assert.That(ep.PendingSendBytes, Is.Zero);
+        Assert.That(ep.PendingSendMessages, Is.Zero);
+        Assert.That(buffer.IsAlive, Is.False);
+    }
+
+    [Test]
+    public void Send_WhenPendingSendChangedOverrideThrows_IsSwallowedLoggedAndNetsToZero()
+    {
+        var logConsumer = new RecordingLogConsumer();
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = new TestRawEndpoint(handler, log: new Logger([logConsumer]));
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        int size = buffer.GetDataSize();
+        ep.ThrowOnPendingSendChanged = true;
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.Ok));
+        ep.DrainAll();
+
+        Assert.That(ep.PendingSendChanges, Is.EqualTo(new[] { (size, 1), (-size, -1) }));
+        Assert.That(ep.PendingSendBytes, Is.Zero);
+        Assert.That(ep.PendingSendMessages, Is.Zero);
+        Assert.That(ep.CapturedSends, Has.Count.EqualTo(1));
+        Assert.That(ep.IsRunning, Is.True);
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(logConsumer.Messages, Has.Some.Contains("OnPendingSendChanged override failed"));
+    }
+
+    #endregion
+
     #region CanSendNow
 
     [Test]
@@ -467,6 +615,37 @@ public sealed class RawEndpointTests
         Assert.That(ep.LastTryBeGentle, Is.False);
         Assert.That(handler.StoppedReason, Is.SameAs(first));
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Stop_LatchedWhileStartingAndPromotedByFinishStart_QueuedStopActionIsNoOp()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        var reason = Reason();
+
+        ep.Start();
+        ep.DrainOne();
+
+        ep.ExposedFinishStart(() => { });
+        ep.Stop(reason, tryBeGentle: false);
+
+        ep.DrainOne();
+
+        Assert.That(ep.BeginStopCalls, Is.EqualTo(1));
+        Assert.That(ep.LastStopReason, Is.SameAs(reason));
+        Assert.That(ep.LastTryBeGentle, Is.False);
+
+        ep.DrainOne();
+
+        Assert.That(ep.BeginStopCalls, Is.EqualTo(1));
+
+        ep.DrainAll();
+        ep.CompleteStop();
+
+        Assert.That(handler.StoppedReason, Is.SameAs(reason));
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(ep.IsRunning, Is.False);
     }
 
     [Test]
