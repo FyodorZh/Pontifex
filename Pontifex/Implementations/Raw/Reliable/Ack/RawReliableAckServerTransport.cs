@@ -149,9 +149,10 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Safe to call from the carrier's accept callback.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: A successful caller must eventually call
-        /// either <see cref="CompleteAdmission(IRawReliableServerEndpointImp)"/> or
-        /// <see cref="AbandonAdmission()"/> exactly once, using the handler-aware overloads when it created a
-        /// handler.</description></item>
+        /// either
+        /// <see cref="CompleteAdmission(IRawReliableServerEndpointImp, IRawReliableAckServerHandler, StopReason)"/>
+        /// or <see cref="AbandonAdmission()"/> exactly once, using the handler-aware overloads when it created
+        /// a handler.</description></item>
         /// </list>
         /// </remarks>
         protected bool TryBeginAdmission()
@@ -168,27 +169,6 @@ namespace Pontifex.Raw.Reliable.Ack
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Converts a successful admission into a registered session.
-        /// </summary>
-        /// <param name="session">The non-started session endpoint. Must be non-null.</param>
-        /// <returns><see langword="true"/> when the session was registered; otherwise
-        /// <see langword="false"/>.</returns>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
-        /// reserved by <see cref="TryBeginAdmission"/>. The session slot is released by the base transport when
-        /// the session ends, or by this method when registration fails.</description></item>
-        /// <item><description><b>Other notes</b>: This parameterless-handler overload is a temporary
-        /// compatibility wrapper for carrier paths where no handler exists. Carriers that created a handler
-        /// must use the overload that notifies it on a failed start.</description></item>
-        /// </list>
-        /// </remarks>
-        protected bool CompleteAdmission(IRawReliableServerEndpointImp session)
-        {
-            return CompleteAdmission(session, null, new TextFail(Name, "Failed to start or register a session"));
         }
 
         /// <summary>
@@ -242,7 +222,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
         /// reserved by <see cref="TryBeginAdmission"/> that is being rejected, timed out, or aborted. Must not
-        /// be called after <see cref="CompleteAdmission(IRawReliableServerEndpointImp)"/>.</description></item>
+        /// be called after
+        /// <see cref="CompleteAdmission(IRawReliableServerEndpointImp, IRawReliableAckServerHandler, StopReason)"/>.</description></item>
         /// <item><description><b>Other notes</b>: This overload is for carrier paths where no handler exists.
         /// A path that created a handler must use the overload that notifies it.</description></item>
         /// </list>
@@ -264,8 +245,9 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
         /// reserved by <see cref="TryBeginAdmission"/> that is being rejected, timed out, or aborted. Must not
-        /// be called after <see cref="CompleteAdmission(IRawReliableServerEndpointImp)"/>. The handshake slot
-        /// and the session slot are released before the handler is notified.</description></item>
+        /// be called after
+        /// <see cref="CompleteAdmission(IRawReliableServerEndpointImp, IRawReliableAckServerHandler, StopReason)"/>.
+        /// The handshake slot and the session slot are released before the handler is notified.</description></item>
         /// <item><description><b>Other notes</b>: A handler exception is logged and swallowed. The shared gate
         /// keeps the notification one-shot if another path already reported the stop.</description></item>
         /// </list>

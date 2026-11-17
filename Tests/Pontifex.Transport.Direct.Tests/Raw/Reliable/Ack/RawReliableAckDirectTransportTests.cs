@@ -286,6 +286,31 @@ public sealed class RawReliableAckDirectTransportTests
         Assert.That(server.IsStarted, Is.True);
     }
 
+    [Test]
+    public void ServerHandler_ReceivesOnDisconnectedThenOnStopped_OnNormalStop()
+    {
+        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler() };
+        var server = StartServer(acknowledger, out var serverName);
+
+        var clientHandler = new RecordingClientHandler();
+        StartClient(serverName, clientHandler, waitForConnect: true);
+        var serverEndpoint = WaitForServerEndpoint(acknowledger);
+        var serverHandler = acknowledger.LastHandler!;
+        WaitFor(() => serverHandler.Connected, "The server session did not connect");
+
+        var reason = new UserIntention("test", "server session stop");
+        Assert.That(serverEndpoint!.Disconnect(reason), Is.True);
+
+        WaitFor(() => serverHandler.StoppedReason != null, "The server session did not stop");
+
+        Assert.That(serverHandler.DisconnectedCount, Is.EqualTo(1));
+        Assert.That(serverHandler.StoppedCount, Is.EqualTo(1));
+        Assert.That(serverHandler.StoppedReason, Is.SameAs(reason));
+        Assert.That(serverHandler.Events,
+            Is.EqualTo(new[] { "connected", "disconnected", "stopped" }),
+            "the server handler must observe the documented lifecycle order");
+    }
+
     private static string NewServerName()
     {
         return "direct-" + Guid.NewGuid().ToString("N");
@@ -494,6 +519,7 @@ public sealed class RawReliableAckDirectTransportTests
     {
         private readonly object _lock = new();
         private readonly List<int> _received = new();
+        private readonly List<string> _events = new();
 
         public IRawReliableEndpoint? Endpoint { get; private set; }
 
@@ -502,6 +528,26 @@ public sealed class RawReliableAckDirectTransportTests
         public int? AckResponseValue { get; init; }
 
         public StopReason? DisconnectReason { get; private set; }
+
+        public StopReason? StoppedReason { get; private set; }
+
+        public int DisconnectedCount { get; private set; }
+
+        public int StoppedCount { get; private set; }
+
+        /// <summary>
+        /// Gets the ordered lifecycle callbacks observed by the handler.
+        /// </summary>
+        public IReadOnlyList<string> Events
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _events.ToArray();
+                }
+            }
+        }
 
         public int ReceivedCount
         {
@@ -535,8 +581,12 @@ public sealed class RawReliableAckDirectTransportTests
 
         public void OnConnected(IRawReliableEndpoint endPoint)
         {
-            Endpoint = endPoint;
-            Connected = true;
+            lock (_lock)
+            {
+                Endpoint = endPoint;
+                Connected = true;
+                _events.Add("connected");
+            }
         }
 
         public void OnReceived(UnionDataList message)
@@ -562,12 +612,20 @@ public sealed class RawReliableAckDirectTransportTests
             lock (_lock)
             {
                 DisconnectReason = reason;
+                DisconnectedCount++;
                 Connected = false;
+                _events.Add("disconnected");
             }
         }
 
         public void OnStopped(StopReason reason)
         {
+            lock (_lock)
+            {
+                StoppedReason = reason;
+                StoppedCount++;
+                _events.Add("stopped");
+            }
         }
     }
 }

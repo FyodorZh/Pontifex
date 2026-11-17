@@ -23,6 +23,11 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
     /// <item><description><b>Other notes</b>: The transport owns the listener and every socket it accepts until
     /// the handshake either transfers the socket to an endpoint or rejects it. No Task or async is used on the
     /// server path.</description></item>
+    /// <item><description><b>Stop-once notification</b>: Closing handshake sockets during a transport stop is
+    /// best-effort cleanup only. A session handler may already exist by the time the completion path runs, so
+    /// the single <see cref="IRawHandler.OnStopped"/> guarantee comes from the shared stop-once gate returned by
+    /// <see cref="RawReliableAckServerTransport.TryAcknowledge"/>, not from the absence of a
+    /// handler.</description></item>
     /// </list>
     /// </remarks>
     public class RawReliableAckTcpServerTransport : RawReliableAckServerTransport
@@ -335,17 +340,19 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             }
         }
 
-        private void OnHandshakeCompleted(Socket socket, AckAcceptResult result)
+        internal void OnHandshakeCompleted(Socket socket, AckAcceptResult result)
         {
             UntrackHandshakeSocket(socket);
 
             if (result.Status == AckAcceptStatus.Accepted)
             {
-                CompleteAdmission(result.Endpoint!);
+                CompleteAdmission(result.Endpoint!, result.Handler,
+                    new TextFail(Name, "Failed to start or register a TCP session"));
                 return;
             }
 
-            AbandonAdmission();
+            AbandonAdmission(result.Handler,
+                result.Reason ?? new TextFail(Name, "The acceptance handshake failed"));
 
             if (result.Status == AckAcceptStatus.Faulted && result.Error != null)
             {

@@ -138,6 +138,91 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
     }
 
     [Test]
+    public void ServerHandler_ReceivesOnDisconnectedThenOnStopped_OnNormalStop()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var remoteEndPoint = new IpEndPoint((IPEndPoint)listener.LocalEndpoint);
+
+        var clientHandler = new RecordingAckClientHandler();
+        var serverHandler = new RecordingAckServerHandler();
+
+        RawReliableAckTcpClientEndpoint? client = null;
+        RawReliableAckTcpServerEndpoint? server = null;
+        Socket? acceptedSocket = null;
+        try
+        {
+            client = new RawReliableAckTcpClientEndpoint(
+                "it-client-stop",
+                remoteEndPoint,
+                clientHandler,
+                MessageMaxByteSize,
+                BufferCapacityBytes,
+                Memory,
+                Log,
+                pingOptions: null,
+                connectTimeout: Timeout);
+
+            Assert.That(client.Start(), Is.True, "the client start request must be accepted");
+
+            acceptedSocket = AcceptWithTimeout(listener, Timeout);
+
+            var captured = new AcceptCapture();
+            using var acceptDone = new ManualResetEventSlim(false);
+
+            RawReliableAckTcpServerEndpoint.BeginAccept(
+                "it-server-stop",
+                acceptedSocket,
+                (_, _) => serverHandler,
+                MessageMaxByteSize,
+                BufferCapacityBytes,
+                Memory,
+                Log,
+                TimeSpan.FromSeconds(30),
+                result =>
+                {
+                    captured.Value = result;
+                    acceptDone.Set();
+                },
+                ackHandshakeTimeout: Timeout);
+
+            // The handshake owns the accepted socket from this point on.
+            acceptedSocket = null;
+
+            Assert.That(acceptDone.Wait(Timeout), Is.True, "the accept callback must complete");
+            Assert.That(captured.Value, Is.Not.Null, "the accept callback must produce a result");
+
+            AckAcceptResult acceptResult = captured.Value!.Value;
+            Assert.That(acceptResult.Status, Is.EqualTo(AckAcceptStatus.Accepted));
+            server = acceptResult.Endpoint!;
+
+            Assert.That(server.Start(), Is.True, "the accepted endpoint start request must be accepted");
+            Assert.That(serverHandler.Connected.Wait(Timeout), Is.True,
+                "the server handler must observe the logical connection");
+
+            var reason = new UserIntention("integration-test", "server normal stop");
+            Assert.That(((IRawReliableEndpoint)server).Disconnect(reason), Is.True,
+                "the server disconnect request must be accepted");
+            Assert.That(serverHandler.Stopped.Wait(Timeout), Is.True,
+                "the server handler must observe the stop");
+
+            Assert.That(serverHandler.DisconnectedCount, Is.EqualTo(1));
+            Assert.That(serverHandler.StoppedCount, Is.EqualTo(1));
+            Assert.That(serverHandler.StoppedReason, Is.SameAs(reason));
+            Assert.That(serverHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }),
+                "the server handler must observe the documented lifecycle order");
+        }
+        finally
+        {
+            StopQuietly(client, clientHandler.Stopped);
+            StopQuietly(server, serverHandler.Stopped);
+            DisposeQuietly(acceptedSocket);
+            StopListener(listener);
+        }
+    }
+
+    [Test]
     public void Rejection_FactoryReturnsNull_ReportsRejectedAndClosesPeer()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -502,11 +587,36 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
 
     private sealed class RecordingAckServerHandler : IRawReliableAckServerHandler
     {
+        private readonly object _lock = new();
+        private readonly List<string> _events = new();
+
         public readonly ManualResetEventSlim Connected = new(false);
         public readonly ManualResetEventSlim FillAckResponseCalled = new(false);
         public readonly ManualResetEventSlim Stopped = new(false);
 
         public IRawReliableEndpoint? ConnectedEndPoint { get; private set; }
+
+        public int DisconnectedCount { get; private set; }
+
+        public int StoppedCount { get; private set; }
+
+        public StopReason? DisconnectedReason { get; private set; }
+
+        public StopReason? StoppedReason { get; private set; }
+
+        /// <summary>
+        /// Gets the ordered lifecycle callbacks observed by the handler.
+        /// </summary>
+        public IReadOnlyList<string> Events
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _events.ToArray();
+                }
+            }
+        }
 
         public void FillAckResponse(UnionDataList ackData)
         {
@@ -516,7 +626,12 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
 
         public void OnConnected(IRawReliableEndpoint endPoint)
         {
-            ConnectedEndPoint = endPoint;
+            lock (_lock)
+            {
+                ConnectedEndPoint = endPoint;
+                _events.Add("connected");
+            }
+
             Connected.Set();
         }
 
@@ -527,10 +642,23 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
 
         public void OnDisconnected(StopReason reason)
         {
+            lock (_lock)
+            {
+                DisconnectedCount++;
+                DisconnectedReason = reason;
+                _events.Add("disconnected");
+            }
         }
 
         public void OnStopped(StopReason reason)
         {
+            lock (_lock)
+            {
+                StoppedCount++;
+                StoppedReason = reason;
+                _events.Add("stopped");
+            }
+
             Stopped.Set();
         }
     }

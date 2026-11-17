@@ -225,7 +225,8 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                     Log.wtf(ex);
                     ackData.Release();
                     ackData = null;
-                    RejectHandshake(entry);
+                    AbandonAdmission(handler, new ExceptionFail(Name, ex, "Failed to create the server endpoint"));
+                    RejectChannel(entry.Channel);
                     return;
                 }
 
@@ -240,7 +241,8 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
                 try
                 {
-                    if (!CompleteAdmission(endpoint))
+                    if (!CompleteAdmission(endpoint, handler,
+                            new TextFail(Name, "Failed to start or register a direct session")))
                     {
                         Log.w("Failed to start or register a direct session");
                     }

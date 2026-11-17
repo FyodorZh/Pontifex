@@ -72,6 +72,13 @@ namespace Pontifex.Raw.Reliable.Ack
         public RawReliableAckTcpServerEndpoint? Endpoint { get; }
 
         /// <summary>
+        /// Gets the session handler created by the handler factory, when one exists. Non-null for
+        /// <see cref="AckAcceptStatus.Accepted"/> and for a <see cref="AckAcceptStatus.Faulted"/> attempt that
+        /// failed after the factory returned a handler; otherwise <see langword="null"/>.
+        /// </summary>
+        public IRawReliableAckServerHandler? Handler { get; }
+
+        /// <summary>
         /// Gets the stop reason associated with a rejection or protocol failure, when available.
         /// </summary>
         public StopReason? Reason { get; }
@@ -85,33 +92,36 @@ namespace Pontifex.Raw.Reliable.Ack
             AckAcceptStatus status,
             RawReliableAckTcpServerEndpoint? endpoint,
             StopReason? reason,
-            Exception? error)
+            Exception? error,
+            IRawReliableAckServerHandler? handler)
         {
             Status = status;
             Endpoint = endpoint;
             Reason = reason;
             Error = error;
+            Handler = handler;
         }
 
-        internal static AckAcceptResult Accepted(RawReliableAckTcpServerEndpoint endpoint)
+        internal static AckAcceptResult Accepted(
+            RawReliableAckTcpServerEndpoint endpoint, IRawReliableAckServerHandler handler)
         {
-            return new AckAcceptResult(AckAcceptStatus.Accepted, endpoint, null, null);
+            return new AckAcceptResult(AckAcceptStatus.Accepted, endpoint, null, null, handler);
         }
 
         internal static AckAcceptResult Rejected(StopReason reason)
         {
-            return new AckAcceptResult(AckAcceptStatus.Rejected, null, reason, null);
+            return new AckAcceptResult(AckAcceptStatus.Rejected, null, reason, null, null);
         }
 
         internal static AckAcceptResult EndOfStream(string transportName)
         {
             return new AckAcceptResult(
-                AckAcceptStatus.Eof, null, new UnknownRemoteIntention(transportName), null);
+                AckAcceptStatus.Eof, null, new UnknownRemoteIntention(transportName), null, null);
         }
 
         internal static AckAcceptResult TimedOut(string transportName)
         {
-            return new AckAcceptResult(AckAcceptStatus.Timeout, null, new TimeOut(transportName), null);
+            return new AckAcceptResult(AckAcceptStatus.Timeout, null, new TimeOut(transportName), null, null);
         }
 
         internal static AckAcceptResult PayloadTooBig(string transportName)
@@ -120,22 +130,25 @@ namespace Pontifex.Raw.Reliable.Ack
                 AckAcceptStatus.MessageTooBig,
                 null,
                 new TextFail(transportName, "Ack data exceeds AckMaxByteSize"),
+                null,
                 null);
         }
 
         internal static AckAcceptResult ProtocolFailure(string transportName, string text)
         {
             return new AckAcceptResult(
-                AckAcceptStatus.ProtocolError, null, new TextFail(transportName, text), null);
+                AckAcceptStatus.ProtocolError, null, new TextFail(transportName, text), null, null);
         }
 
-        internal static AckAcceptResult Faulted(string transportName, Exception error)
+        internal static AckAcceptResult Faulted(
+            string transportName, Exception error, IRawReliableAckServerHandler? handler = null)
         {
             return new AckAcceptResult(
                 AckAcceptStatus.Faulted,
                 null,
                 new ExceptionFail(transportName, error, "Ack handshake failed"),
-                error);
+                error,
+                handler);
         }
     }
 
@@ -1322,12 +1335,12 @@ namespace Pontifex.Raw.Reliable.Ack
                         _gracefulShutdownDeadline,
                         _sendSourceInitialCapacity);
 
-                    CompleteClaimed(AckAcceptResult.Accepted(endpoint));
+                    CompleteClaimed(AckAcceptResult.Accepted(endpoint, handler));
                 }
                 catch (Exception ex)
                 {
                     ackData.Release();
-                    CompleteClaimed(AckAcceptResult.Faulted(_transportName, ex));
+                    CompleteClaimed(AckAcceptResult.Faulted(_transportName, ex, handler));
                 }
             }
 
