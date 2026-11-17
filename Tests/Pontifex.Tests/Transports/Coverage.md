@@ -48,7 +48,6 @@
 
 | Missing layer or test | Owner | Reason |
 |---|---|---|
-| `RawReliableNoAckTransport` layer | This layer | Abstract descendant of `AnyTransport` with no layer yet; the nearest existing ancestor is the root layer. |
 | `RawReliableAckClient` layer | This layer | Abstract descendant of `AnyTransport` with no layer yet; the nearest existing ancestor is the root layer. |
 | `RawReliableAckServer` layer | This layer | Abstract descendant of `AnyTransport` with no layer yet; the nearest existing ancestor is the root layer. |
 
@@ -62,6 +61,9 @@
 
 ## Notes
 
+- The NoAck transport layers — `RawReliableNoAckClientTransport` and
+  `RawReliableNoAckServerTransport` — are added in Stage 7 of the NoAck transport plan. They are
+  not descendants of `AnyTransport` in this table and have no layer here yet.
 - `TestAnyTransport : AnyTransport` implements the abstract lifecycle hooks and records `TryStart`,
   `OnStarted`, and `OnStopped` calls, their order, and the state observed inside `OnStopped`.
 - Every test constructs its own transport; there is no shared mutable state between tests.
