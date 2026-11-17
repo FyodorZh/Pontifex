@@ -17,9 +17,11 @@ Selected inheritance tree:
 RawEndpoint
 ├── RawReliableEndpoint
 │   ├── RawReliableClientEndpoint
-│   │   └── RawReliableAckClientEndpoint
+│   │   ├── RawReliableAckClientEndpoint
+│   │   └── RawReliableNoAckClientEndpoint
 │   └── RawReliableServerEndpoint
-│       └── RawReliableAckServerEndpoint
+│       ├── RawReliableAckServerEndpoint
+│       └── RawReliableNoAckServerEndpoint
 └── RawUnreliableEndpoint
     └── RawUnreliableServerEndpoint
 ```
@@ -39,6 +41,11 @@ RawEndpoint
 - [RawReliableAckServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/Ack/RawReliableAckServerEndpoint.cs)
 - [IRawReliableAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerHandler.cs)
 - [RawReliableAckInfo.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckInfo.cs)
+- [RawReliableNoAckClientEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/NoAck/RawReliableNoAckClientEndpoint.cs)
+- [IRawReliableNoAckClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/NoAck/Client/IRawReliableNoAckClientHandler.cs)
+- [RawReliableNoAckServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/NoAck/RawReliableNoAckServerEndpoint.cs)
+- [IRawReliableNoAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/NoAck/Server/IRawReliableNoAckServerHandler.cs)
+- [IRawReliableNoAckEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/NoAck/IRawReliableNoAckEndpoint.cs)
 - [RawUnreliableEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/RawUnreliableEndpoint.cs)
 - [IRawUnreliableEndpointImp.cs](../../../Pontifex/Implementations/Endpoints/Raw/Unreliable/IRawUnreliableEndpointImp.cs)
 - [IRawUnreliableEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableEndpoint.cs)
@@ -59,6 +66,8 @@ parent, and coverage file.
 | `RawReliableServerEndpoint` | `Pontifex.Raw.Reliable.RawReliableServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server` | `RawReliableEndpoint` | [`RawReliable/Server/Coverage.md`](RawReliable/Server/Coverage.md) |
 | `RawReliableAckClientEndpoint` | `Pontifex.Raw.Reliable.Ack.RawReliableAckClientEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Ack` | `RawReliableClientEndpoint` | [`RawReliable/Client/Ack/Coverage.md`](RawReliable/Client/Ack/Coverage.md) |
 | `RawReliableAckServerEndpoint` | `Pontifex.Raw.Reliable.Ack.RawReliableAckServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack` | `RawReliableServerEndpoint` | [`RawReliable/Server/Ack/Coverage.md`](RawReliable/Server/Ack/Coverage.md) |
+| `RawReliableNoAckClientEndpoint` | `Pontifex.Raw.Reliable.NoAck.RawReliableNoAckClientEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/NoAck` | `RawReliableClientEndpoint` | [`RawReliable/Client/NoAck/Coverage.md`](RawReliable/Client/NoAck/Coverage.md) |
+| `RawReliableNoAckServerEndpoint` | `Pontifex.Raw.Reliable.NoAck.RawReliableNoAckServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/NoAck` | `RawReliableServerEndpoint` | [`RawReliable/Server/NoAck/Coverage.md`](RawReliable/Server/NoAck/Coverage.md) |
 | `RawUnreliableEndpoint` | `Pontifex.Raw.Unreliable.RawUnreliableEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawUnreliable` | `RawEndpoint` | [`RawUnreliable/Coverage.md`](RawUnreliable/Coverage.md) |
 | `RawUnreliableServerEndpoint` | `Pontifex.Raw.Unreliable.RawUnreliableServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawUnreliable/Server` | `RawUnreliableEndpoint` | [`RawUnreliable/Server/Coverage.md`](RawUnreliable/Server/Coverage.md) |
 
@@ -99,24 +108,36 @@ Endpoints/
 │   │   │   ├── RecordingRawReliableClientHandler.cs
 │   │   │   └── TestRawReliableClientEndpoint.cs
 │   │   ├── RawReliableClientEndpointTests.cs
-│   │   └── Ack/
-│   │       ├── Coverage.md                  RawReliableAckClientEndpoint layer
+│   │   ├── Ack/
+│   │   │   ├── Coverage.md                  RawReliableAckClientEndpoint layer
+│   │   │   ├── Harness/
+│   │   │   │   ├── RecordingRawReliableAckClientHandler.cs
+│   │   │   │   └── TestRawReliableAckClientEndpoint.cs
+│   │   │   └── RawReliableAckClientEndpointTests.cs
+│   │   └── NoAck/
+│   │       ├── Coverage.md                  RawReliableNoAckClientEndpoint layer
 │   │       ├── Harness/
-│   │       │   ├── RecordingRawReliableAckClientHandler.cs
-│   │       │   └── TestRawReliableAckClientEndpoint.cs
-│   │       └── RawReliableAckClientEndpointTests.cs
+│   │       │   ├── RecordingRawReliableNoAckClientHandler.cs
+│   │       │   └── TestRawReliableNoAckClientEndpoint.cs
+│   │       └── RawReliableNoAckClientEndpointTests.cs
 │   └── Server/
 │       ├── Coverage.md                      RawReliableServerEndpoint layer
 │       ├── Harness/
 │       │   ├── RecordingRawReliableServerHandler.cs
 │       │   └── TestRawReliableServerEndpoint.cs
 │       ├── RawReliableServerEndpointTests.cs
-│       └── Ack/
-│           ├── Coverage.md                  RawReliableAckServerEndpoint layer
+│       ├── Ack/
+│       │   ├── Coverage.md                  RawReliableAckServerEndpoint layer
+│       │   ├── Harness/
+│       │   │   ├── RecordingRawReliableAckServerHandler.cs
+│       │   │   └── TestRawReliableAckServerEndpoint.cs
+│       │   └── RawReliableAckServerEndpointTests.cs
+│       └── NoAck/
+│           ├── Coverage.md                  RawReliableNoAckServerEndpoint layer
 │           ├── Harness/
-│           │   ├── RecordingRawReliableAckServerHandler.cs
-│           │   └── TestRawReliableAckServerEndpoint.cs
-│           └── RawReliableAckServerEndpointTests.cs
+│           │   ├── RecordingRawReliableNoAckServerHandler.cs
+│           │   └── TestRawReliableNoAckServerEndpoint.cs
+│           └── RawReliableNoAckServerEndpointTests.cs
 └── RawUnreliable/
     ├── Coverage.md                          RawUnreliableEndpoint layer
     ├── Harness/
@@ -142,7 +163,8 @@ drivers.
   `RecordingRawReliableHandler`, which is shared by both client/server branches.
 - Client-specific harness stays in `RawReliable/Client/Harness/`; server-specific harness stays
   in `RawReliable/Server/Harness/`.
-- Ack-specific harness stays in the corresponding ack layer's `Harness/`.
+- Ack-specific harness stays in the corresponding ack layer's `Harness/`; the
+  no-acknowledgement harness stays in the corresponding no-acknowledgement layer's `Harness/`.
 - `RawUnreliable/Harness/` holds the layer's `TestRawUnreliableEndpoint` and the handler double
   `RecordingRawUnreliableHandler`, which is shared by the unreliable server branch.
 - `RawUnreliable/Server/Harness/` holds only the server-specific `TestRawUnreliableServerEndpoint`;
@@ -158,6 +180,8 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`RawReliable/Server/Coverage.md`](RawReliable/Server/Coverage.md) — `RawReliableServerEndpoint`
 - [`RawReliable/Client/Ack/Coverage.md`](RawReliable/Client/Ack/Coverage.md) — `RawReliableAckClientEndpoint`
 - [`RawReliable/Server/Ack/Coverage.md`](RawReliable/Server/Ack/Coverage.md) — `RawReliableAckServerEndpoint`
+- [`RawReliable/Client/NoAck/Coverage.md`](RawReliable/Client/NoAck/Coverage.md) — `RawReliableNoAckClientEndpoint`
+- [`RawReliable/Server/NoAck/Coverage.md`](RawReliable/Server/NoAck/Coverage.md) — `RawReliableNoAckServerEndpoint`
 - [`RawUnreliable/Coverage.md`](RawUnreliable/Coverage.md) — `RawUnreliableEndpoint`
 - [`RawUnreliable/Server/Coverage.md`](RawUnreliable/Server/Coverage.md) — `RawUnreliableServerEndpoint`
 
