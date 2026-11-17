@@ -35,6 +35,8 @@
 | The inherited keep-alive background loop. | Keep-alive is disabled in the no-acknowledgement client double; the loop wrapper uses real time and is out of scope. |
 | Real transport connect and teardown. | Covered by the transport suites and the carrier integration tests. |
 | Real timing and socket failures. | The suite uses deterministic seams. |
+| Direct NoAck carrier. | Direct NoAck is deferred; only the TCP `tcp-noack` carrier is implemented. |
+| NoAck conformance controls and suite. | NoAck conformance controls and the conformance suite are deferred. |
 
 ## Notes
 

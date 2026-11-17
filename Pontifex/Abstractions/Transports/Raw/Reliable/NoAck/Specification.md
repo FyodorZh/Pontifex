@@ -181,9 +181,9 @@ callback is invoked.
 
 ## 7. Carrier notes
 
-TCP is the only in-scope carrier for RawReliableNoAck. Its canonical scheme is
-`tcp-noack`. `tcp` is not an alias for RawReliableNoAck; it remains the scheme
-of the corresponding RawReliableAck carrier.
+TCP is the only implemented carrier for RawReliableNoAck. Its canonical scheme
+is `tcp-noack`. `tcp` is not an alias for RawReliableNoAck; it remains the
+scheme of the corresponding RawReliableAck carrier.
 
 The TCP carrier owns the socket, framing, receiver, sender, connect and
 teardown behavior. It derives no admission payload from the factory: rejection
@@ -192,9 +192,13 @@ is observed by the client as a closed connection.
 Direct NoAck is reserved, not implemented; `direct-noack` is not a registered
 scheme. NoAck conformance controls and a NoAck conformance suite are deferred.
 
-Deferred future work includes consolidating the Ack and NoAck TCP endpoints
-onto a shared client/server endpoint base. Until then the NoAck carrier is a
-separate implementation that carries no acknowledgement frames.
+The NoAck TCP client and server endpoints duplicate the Ack TCP endpoints. That
+duplication is intentional: the NoAck carrier was written as a fresh,
+handshake-free copy rather than by removing acknowledgement behavior from the
+Ack carrier. A future consolidation is planned, either by T2a composition of
+the shared socket plumbing or by T2b componentization of the common carrier
+parts. Until then the NoAck carrier remains a separate implementation that
+carries no acknowledgement frames.
 
 ## 8. Non-goals
 

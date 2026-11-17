@@ -38,7 +38,8 @@
 | Gap | Reason |
 |---|---|
 | Inherited session admission, registry, transport stop, and ticker behaviour. | Covered once by `RawReliableServerTransportTests`; not repeated here. |
-| Conformance controls. | The conformance subsystem is out of scope and planned for a rewrite. |
+| Direct NoAck carrier. | Direct NoAck is deferred; only the TCP `tcp-noack` carrier is implemented. |
+| NoAck conformance controls and suite. | NoAck conformance controls and the conformance suite are deferred. |
 | Real carrier accept loops and end-to-end no-handshake sessions. | Carrier and integration behaviour belong to the carrier suites. |
 | Logging verification for factory exceptions. | Requires a custom observable `ILogSink`; the transport-level policy is already covered. |
 

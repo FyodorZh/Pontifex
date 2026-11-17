@@ -28,7 +28,8 @@
 | Gap | Reason |
 |---|---|
 | Inherited init, start/connect handoff, failed-start non-notification, and endpoint attach/detach ownership. | Covered once by `RawReliableClientTransportTests`; not repeated here. |
-| Conformance controls. | The conformance subsystem is out of scope and planned for a rewrite. |
+| Direct NoAck carrier. | Direct NoAck is deferred; only the TCP `tcp-noack` carrier is implemented. |
+| NoAck conformance controls and suite. | NoAck conformance controls and the conformance suite are deferred. |
 | Handler factory, admission, and server-session hand-off. | Belongs to the NoAck server layer and the Endpoints suite. |
 
 ## Notes
