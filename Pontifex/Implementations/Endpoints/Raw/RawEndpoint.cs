@@ -14,8 +14,8 @@ namespace Pontifex.Raw
     /// <item><description><b>Other notes</b>: State transitions and handler dispatch are serialized by an
     /// internal action queue. An exception that escapes a queued action fails the endpoint hard: it is logged,
     /// the stop reason is set to an ExceptionFail, and FailHard is invoked. The base implementation of FailHard
-    /// delivers the handler's stop notification when the endpoint had started, then transitions the stage to
-    /// Stopped; derived classes override it to release resources.</description></item>
+    /// delivers the handler's stop notification at most once when a start was attempted, then transitions the
+    /// stage to Stopped; derived classes override it to release resources.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawEndpoint : IRawEndpointImp
@@ -45,6 +45,8 @@ namespace Pontifex.Raw
         private volatile StopReason? _stopReason;
 
         private int _stoppedRaised;
+
+        private int _handlerStopped;
 
         private readonly Action<UnionDataList> _sendAction;
         private readonly Action<UnionDataList> _receiveAction;
@@ -200,9 +202,9 @@ namespace Pontifex.Raw
 
         /// <summary>
         /// Handles a fatal endpoint failure. Invoked after the stop reason has been recorded. The base
-        /// implementation delivers the handler's stop notification when the endpoint had started and then
-        /// transitions the stage to Stopped; derived classes override to release unmanaged resources and
-        /// terminate their work.
+        /// implementation delivers the handler's stop notification - at most once - when the endpoint had a
+        /// start attempt in progress or had started, and then transitions the stage to Stopped; derived
+        /// classes override to release unmanaged resources and terminate their work.
         /// </summary>
         /// <param name="reason">The error description that caused the failure.</param>
         /// <remarks>
@@ -210,31 +212,63 @@ namespace Pontifex.Raw
         /// <item><description><b>Thread safety</b>: Invoked on the thread that executed the failing action;
         /// the base implementation delivers the stop notification and sets the stage to
         /// Stopped.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: The base implementation delivers the stop
-        /// notification only when the stage is Started, then sets the stage to Stopped, and the override must
-        /// not throw.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The base implementation notifies the
+        /// handler at most once when the stage is Starting, Started, or Stopping. A Constructed endpoint has
+        /// no start attempt and a Stopped endpoint has already notified, so neither notifies the handler.
+        /// The stage is then set to Stopped and the public <see cref="Stopped"/> event is raised; the
+        /// override must not throw.</description></item>
+        /// <item><description><b>Other notes</b>: This method guarantees at most one notification per
+        /// endpoint, not that the handler observes one. An unreliable subclass may gate the notification
+        /// through its handler gate, so a start-attempted endpoint can legitimately notify no
+        /// handler.</description></item>
         /// </list>
         /// </remarks>
         protected virtual void FailHard(StopReason reason)
         {
             try
             {
-                if (_currentStage == State.Started)
+                if (_currentStage == State.Starting ||
+                    _currentStage == State.Started ||
+                    _currentStage == State.Stopping)
                 {
-                    try
-                    {
-                        _handler.OnStopped(reason);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
-                    }
+                    NotifyHandlerStoppedOnce(reason);
                 }
             }
             finally
             {
                 _currentStage = State.Stopped;
                 RaiseStopped(reason);
+            }
+        }
+
+        /// <summary>
+        /// Delivers the handler's stop notification at most once per endpoint, isolating handler failures.
+        /// </summary>
+        /// <param name="reason">The reason passed to the handler.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the one-shot latch is
+        /// atomic.</description></item>
+        /// <item><description><b>Other notes</b>: The terminal stop paths compete for one latch, so a path
+        /// that follows an already completed stop is silent even when it produces a different reason. A
+        /// handler exception is logged and swallowed; it does not prevent the terminal
+        /// transition.</description></item>
+        /// </list>
+        /// </remarks>
+        private void NotifyHandlerStoppedOnce(StopReason reason)
+        {
+            if (Interlocked.Exchange(ref _handlerStopped, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _handler.OnStopped(reason);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
             }
         }
 
@@ -526,6 +560,15 @@ namespace Pontifex.Raw
         #region Stop
 
         /// <inheritdoc/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Only the first caller wins; later calls are ignored. The
+        /// handler stop notification is delivered at most once for a start-attempted endpoint, and a stop
+        /// before the first start does not notify the handler at all (the public
+        /// <see cref="Stopped"/> event is still raised). An unreliable subclass may gate the notification
+        /// through its handler gate.</description></item>
+        /// </list>
+        /// </remarks>
         public void Stop(StopReason reason, bool tryBeGentle)
         {
             if (Interlocked.CompareExchange(ref _stopReason, reason, null) == null)
@@ -576,22 +619,32 @@ namespace Pontifex.Raw
         protected abstract void BeginStop(StopReason reason, bool tryBeGentle);
 
         /// <summary>
-        /// Completes the stop transition, setting the stage to Stopped and invoking the handler's stop
-        /// notification.
+        /// Completes the stop transition, setting the stage to Stopped and delivering the handler's stop
+        /// notification at most once.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: The transition is serialized on the internal action queue;
         /// the call may be scheduled from any thread.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: Intended to be called exactly once per
-        /// endpoint by BeginStop or its continuation, while the endpoint is in the stopping stage. An invalid
-        /// stage fails the endpoint hard.</description></item>
+        /// endpoint by BeginStop or its continuation, while the endpoint is in the stopping stage. A call that
+        /// arrives after the endpoint already reached Stopped, for example because a hard failure completed
+        /// the endpoint, is a no-op. Any other invalid stage fails the endpoint hard.</description></item>
+        /// <item><description><b>Other notes</b>: The handler notification runs through the same one-shot
+        /// latch as <see cref="FailHard"/>, so a hard failure followed by a stop completion notifies the
+        /// handler only once, with the first reason. An unreliable subclass may gate the notification through
+        /// its handler gate.</description></item>
         /// </list>
         /// </remarks>
         protected void FinishStop()
         {
             _actionQueue.Schedule(() =>
             {
+                if (_currentStage == State.Stopped)
+                {
+                    return;
+                }
+
                 if (_currentStage != State.Stopping)
                 {
                     throw new InvalidOperationException($"Stage expected to be 'Stopping' but was {_currentStage}");
@@ -600,11 +653,7 @@ namespace Pontifex.Raw
                 _currentStage = State.Stopped;
                 try
                 {
-                    _handler.OnStopped(_stopReason!);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
+                    NotifyHandlerStoppedOnce(_stopReason!);
                 }
                 finally
                 {

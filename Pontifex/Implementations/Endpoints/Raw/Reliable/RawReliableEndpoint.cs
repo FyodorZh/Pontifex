@@ -12,6 +12,21 @@ namespace Pontifex.Raw.Reliable
     /// <item><description><b>Other notes</b>: Connection stages are held in volatile fields. Derived classes
     /// supply the transport-specific connect and disconnect work and must drive completion through
     /// FinishConnect and FinishDisconnect.</description></item>
+    /// <item><description><b>Handler stop rule</b>: a reliable endpoint that was started delivers the
+    /// handler's terminal notification exactly once. The situation decides which callbacks the handler
+    /// observes:
+    /// <list type="table">
+    /// <listheader><term>Situation</term><description>Handler callbacks</description></listheader>
+    /// <item><term>The transport's Start returns false</term><description>none</description></item>
+    /// <item><term>Start returned true, but the connection failed before OnConnected</term>
+    /// <description>exactly one OnStopped</description></item>
+    /// <item><term>OnConnected was delivered</term>
+    /// <description>OnConnected, then OnDisconnected, then OnStopped, each exactly once</description></item>
+    /// <item><term>A server handler was created, but its session endpoint cannot be created, started, or
+    /// admitted</term><description>exactly one OnStopped</description></item>
+    /// </list>
+    /// The terminal notification is once-only even when a stop completion follows a hard
+    /// failure.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawReliableEndpoint : RawEndpoint, IRawReliableEndpointImp
@@ -127,8 +142,9 @@ namespace Pontifex.Raw.Reliable
         /// <item><description><b>Thread safety</b>: Invoked on the thread that executed the failing
         /// action.</description></item>
         /// <item><description><b>Other notes</b>: The base implementation transitions the stage to Stopped and
-        /// delivers the handler's stop notification when the endpoint had started. The handler receives no
-        /// disconnect notification on this path.</description></item>
+        /// delivers the handler's stop notification at most once, from the starting, started, or stopping
+        /// stage; a constructed or already stopped endpoint stays silent. The handler receives no disconnect
+        /// notification on this path.</description></item>
         /// </list>
         /// </remarks>
         protected override void FailHard(StopReason reason)

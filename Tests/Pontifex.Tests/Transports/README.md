@@ -95,7 +95,7 @@ layer table above.
 - Layer name = subject type name.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
 - Test methods = `Scenario_ExpectedResult`, for example
-  `Start_WhenBeginConnectReturnsFalse_DestroysAndNotifiesStopped`.
+  `Start_WhenBeginConnectReturnsFalse_DestroysWithoutNotifyingHandler`.
 - Namespace = `Pontifex.Tests.Transports` for every file in the suite, including harness files.
 - Every fixture carries `[Category("Transports")]`.
 
@@ -282,15 +282,16 @@ repeated.
   drives the stop path, where the transport notifies the handler `OnStopped` when it owns the
   notification (see the stop notification matrix). The transport never calls `OnDisconnected`.
 - **Start / connect**: `Start` works only from `Initialized`; it calls `BeginConnect` and, while
-  the state is still `Initialized`, moves to `Connecting`. A `false` from `BeginConnect` fails,
-  destroys, and notifies the handler `OnStopped`; a `BeginConnect` that stops the transport
-  synchronously makes `Start` return `false`.
+  the state is still `Initialized`, moves to `Connecting`. A `false` from `BeginConnect` fails and
+  destroys, and does **not** notify the handler `OnStopped`; a `BeginConnect` that stops the
+  transport synchronously makes `Start` return `false` and likewise notifies no handler.
 - **Connection ownership**: a `BeginConnect` that returns `true` must attach exactly one endpoint
   through `AttachEndpoint`. The endpoint is the single source of truth for connectivity and delivers
   `OnConnected`, `OnDisconnected`, and `OnStopped` to the user handler once the transport enters
   `Connecting`; the transport keeps no connected state of its own and offers no
-  connection-completion hook. A `BeginConnect` that fails leaves the transport `Initialized` and
-  the terminal notification with the transport, even when it already attached an endpoint.
+  connection-completion hook. A `BeginConnect` that fails destroys, detaches, and does not notify
+  the handler, even when it already attached an endpoint; the transport is not left
+  `Initialized`.
 - **IsConnected**: mirrors the attached endpoint and is `false` when no endpoint is attached.
   Without an endpoint it stays `false` after `Start`; with an attached endpoint it follows that
   endpoint, so it can be `true` inside `DestroyTransport` until the base detaches.
@@ -303,8 +304,8 @@ repeated.
   `Initialized` state and still allows a later `Start`. While `Connecting` the order is
   `handler.OnStopped`, `DestroyTransport`, detach, start callback when no endpoint is attached;
   when an endpoint is attached the transport skips its own notification and the endpoint owns it.
-  While `Initialized` it is `DestroyTransport`, detach, `handler.OnStopped` — this also covers a
-  failed `BeginConnect` that already attached an endpoint. The transport never calls
+  While `Initialized` it is `DestroyTransport`, detach, and no handler `OnStopped` — this also
+  covers a failed `BeginConnect` that already attached an endpoint. The transport never calls
   `OnDisconnected`; endpoint-owned transports deliver both connection callbacks from the endpoint.
 - **Handler exception isolation**: exceptions from `OnStopped` are caught, logged, and swallowed at
   this layer; `DestroyTransport`, detach, and the start callback still run, and the transport ends in
@@ -364,7 +365,7 @@ the `RawTransport`/`RawReliableTransport` facades are not repeated.
 `RawReliableAckClientTransport` is a facade over
 `RawReliableClientTransport<IRawReliableAckClientHandler>`. It only fixes `Type` to
 `RawReliableAck` and exposes `IRawReliableAckClient`; the inherited init, start/connect handoff,
-endpoint ownership, connectivity, and failed-start notifications are covered by the
+endpoint ownership, connectivity, and failed-start non-notification are covered by the
 `RawReliableClientTransport` layer and are not repeated.
 
 - **Interface exposure**: `IRawReliableAckClient`,

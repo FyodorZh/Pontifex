@@ -20,7 +20,7 @@
 | `Start_WhenConstructed_AfterCompletionIsRunning` | `Start` reaches the started stage after `FinishStart`. | Happy-path start exposes `IsRunning == true` and performs one `BeginStart`. | Completion is explicit; the double only records `BeginStart`. |
 | `Start_WhileStarting_IsNotRunningUntilCompleted` | `IsRunning` is false until the start transition completes. | The observable only flips after `FinishStart`. | — |
 | `Start_CalledTwice_FailsHard` | A second `Start` is an invalid transition. | The queued action throws, the queue routes it to `onError`, and the endpoint fails hard with `ExceptionFail`. | `Start()` returns `true` because admission is queued; the failure is observed asynchronously on drain. |
-| `Start_AfterStop_FailsHardWithoutSecondStopNotification` | A stopped endpoint cannot be restarted. | The invalid transition fails hard but does not raise a second handler stop notification. | `FailHard` notifies the handler only from the started stage. |
+| `Start_AfterStop_FailsHardWithoutSecondStopNotification` | A stopped endpoint cannot be restarted. | The invalid transition fails hard but does not raise a second handler stop notification. | The once-only handler latch makes `FailHard` notify from the starting, started, or stopping stage only; the stopped stage is silent. |
 | `Start_StopWhileStarting_IsDeferredUntilFinishStart` | A stop requested while starting waits for `FinishStart`. | The stop is latched, then forwarded to `BeginStop` with `tryBeGentle: false` after the start completes. | The deferred path deliberately downgrades gentleness. |
 | `FinishStart_WhenNotStarting_InvokesOnFailAndFailsHard` | `FinishStart` is legal only while starting. | The failure callback runs and the endpoint becomes terminal. | No handler stop notification because the endpoint never started. |
 | `FinishStart_WhenAlreadyStarted_InvokesOnFailAndNotifiesStopped` | `FinishStart` after start is an invalid transition. | The failure callback runs and the started endpoint notifies `OnStopped(ExceptionFail)`. | Exercises the queue `onError` → `FailHard` path. |
@@ -52,6 +52,11 @@
 | `Stop_LatchedWhileStartingAndPromotedByFinishStart_QueuedStopActionIsNoOp` | The queued stop action is a no-op when teardown has already started. | `FinishStart` promotes a stop latched while starting to `BeginStop`; the queued stop action then does nothing, so there is no hard failure and exactly one `OnStopped`. | Needs the single-step drain so the start-completion action runs before the queued stop action. `FinishStart`/`FinishStop` out of order still fail hard (covered below). |
 | `FinishStop_WhenNotStopping_FailsHard` | `FinishStop` is legal only while stopping. | An invalid completion fails hard with `ExceptionFail`. | Exercises the queue `onError` → `FailHard` path. |
 | `FailHard_WhenRunning_NotifiesHandlerAndStops` | A fatal failure from the started stage notifies the handler and stops. | Reason identity and terminal `IsRunning == false`. | The direct protected hook is invoked; the queue error path is covered by the start/stop guard tests. |
+| `FailHard_WhileStarting_NotifiesStoppedOnce` | A start-attempted endpoint notifies the handler when it fails hard while starting. | The handler receives exactly one `OnStopped` with the failure reason, and the endpoint is not running. | The stage is entered through the queue (`Start` then `DrainOne`) before the direct `FailHard` call. |
+| `FailHard_WhileConstructed_DoesNotNotifyHandler` | A constructed endpoint has no start attempt, so a hard failure is silent. | No handler notification; the endpoint is not running. | `FailHard` still sets the terminal stage and raises the public `Stopped` event. |
+| `FailHard_AfterFinishStop_DoesNotNotifyAgain` | The terminal notification is once-only across stop completion and hard failure. | After a completed stop, a subsequent `FailHard` adds no notification and the original stop reason is retained. | `CompleteStop` is not called directly from the started stage; `FinishStop` requires the stopping stage, so the test uses `StopAndComplete`. |
+| `FailHard_WhileStopping_NotifiesStoppedOnce` | A hard failure during the stopping stage notifies the handler once. | One `OnStopped` with the fail reason. | `BeginStop` is recorded but not completed, so the endpoint is still stopping. |
+| `FailHard_WhileStopped_DoesNotNotifyAgain` | A stop before start is terminal and later silent. | The handler is not notified by the stop or by the following `FailHard`. | Reuses the stop-before-start setup of `Stop_BeforeStart_TransitionsWithoutHandlerCallback`. |
 | `GetControls_BaseImplementationAddsNothing` | The base control surface contributes no controls. | `GetControls` leaves the destination empty. | The conformance-control role is out of scope for this suite. |
 
 ## Planned
@@ -89,3 +94,6 @@
   releases the clones on dispose. Captured outbound buffers are cloned by the endpoint double.
 - The public `Stopped` event is raised independently of the handler callback; it is currently a
   planned gap rather than covered behaviour.
+- `FinishStop` and `FailHard` share one once-only handler latch, so the handler's stop notification
+  is delivered at most once per endpoint. A stop completion that arrives after a hard failure is a
+  no-op instead of an invalid-stage exception.

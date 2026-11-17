@@ -493,9 +493,10 @@ namespace Pontifex.Raw.Unreliable
         /// <item><description><b>Thread safety</b>: Invoked on the thread that executed the failing
         /// action.</description></item>
         /// <item><description><b>Other notes</b>: The base implementation delivers the handler stop notification
-        /// when the endpoint had started and always raises <see cref="IRawEndpointImp.Stopped"/>, which releases
-        /// the inbox. The handler gate suppresses the notification when the start notification did not complete
-        /// successfully.</description></item>
+        /// at most once, from the starting, started, or stopping stage, and always raises
+        /// <see cref="IRawEndpointImp.Stopped"/>, which releases the inbox. The handler gate suppresses the
+        /// notification when the start notification did not complete successfully, so a start-attempted
+        /// endpoint that never received its start notification remains silent.</description></item>
         /// </list>
         /// </remarks>
         protected override void FailHard(StopReason reason)

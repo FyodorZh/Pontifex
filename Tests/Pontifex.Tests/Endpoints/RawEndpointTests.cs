@@ -680,6 +680,84 @@ public sealed class RawEndpointTests
         Assert.That(ep.IsRunning, Is.False);
     }
 
+    [Test]
+    public void FailHard_WhileStarting_NotifiesStoppedOnce()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        var reason = Reason();
+
+        ep.Start();
+        ep.DrainOne();
+
+        ep.ExposedFailHard(reason);
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedReason, Is.SameAs(reason));
+        Assert.That(ep.IsRunning, Is.False);
+    }
+
+    [Test]
+    public void FailHard_WhileConstructed_DoesNotNotifyHandler()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        var reason = Reason();
+
+        ep.ExposedFailHard(reason);
+
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(ep.IsRunning, Is.False);
+    }
+
+    [Test]
+    public void FailHard_AfterFinishStop_DoesNotNotifyAgain()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        var stopReason = Reason("stop");
+        var failReason = Reason("fail");
+
+        ep.StopAndComplete(stopReason, tryBeGentle: false);
+        ep.ExposedFailHard(failReason);
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedReason, Is.SameAs(stopReason));
+    }
+
+    [Test]
+    public void FailHard_WhileStopping_NotifiesStoppedOnce()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        var failReason = Reason("fail");
+
+        ep.Stop(Reason("stop"), tryBeGentle: false);
+        ep.DrainAll();
+        Assert.That(ep.BeginStopCalls, Is.EqualTo(1));
+
+        ep.ExposedFailHard(failReason);
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedReason, Is.SameAs(failReason));
+    }
+
+    [Test]
+    public void FailHard_WhileStopped_DoesNotNotifyAgain()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+
+        ep.Stop(Reason("stop"), tryBeGentle: true);
+        ep.DrainAll();
+
+        ep.ExposedFailHard(Reason("fail"));
+
+        Assert.That(handler.StoppedCount, Is.Zero);
+    }
+
     #endregion
 
     #region Controls

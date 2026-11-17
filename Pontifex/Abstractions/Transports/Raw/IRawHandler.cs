@@ -18,6 +18,7 @@ namespace Pontifex.Raw
         /// For an unreliable endpoint, OnStopped() is called exactly once after
         /// the endpoint becomes invalid, provided OnStarted() completed
         /// successfully; no OnReceived will begin after this point.
+        /// A transport Start that returns false does not invoke OnStopped().
         /// </summary>
         /// <param name="reason">The reason for the stop.</param>
         void OnStopped(StopReason reason);
