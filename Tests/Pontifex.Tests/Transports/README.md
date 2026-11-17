@@ -5,8 +5,9 @@ Black-box contract tests for the abstract transport class hierarchy in `Pontifex
 The suite lives under `Tests/Pontifex.Tests/Transports/` and tests the transport classes
 directly, without carriers, sockets, timers, or wall-clock time. It is the transport-level
 counterpart of the `Endpoints` suite: the same deterministic, public-plus-protected-contract
-approach, applied one layer up. One categorised test uses gated, joined threads to prove the
-admission lock's single-factory-call invariant; see [Categories](#categories).
+approach, applied one layer up. Two categorised tests use gated, joined threads to prove the
+admission lock's and the handler-factory lock's single-call invariants; see
+[Categories](#categories).
 
 ## Suite type
 
@@ -22,9 +23,11 @@ AnyTransport
 └── RawTransport
     ├── RawReliableTransport
     │   ├── RawReliableClientTransport<TClientHandler>
-    │   │   └── RawReliableAckClientTransport
+    │   │   ├── RawReliableAckClientTransport
+    │   │   └── RawReliableNoAckClientTransport
     │   └── RawReliableServerTransport<TServerHandler>
-    │       └── RawReliableAckServerTransport
+    │       ├── RawReliableAckServerTransport
+    │       └── RawReliableNoAckServerTransport
     └── RawUnreliableTransport
         ├── RawUnreliableClientTransport
         └── RawUnreliableServerTransport<TFactory>
@@ -56,6 +59,11 @@ Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md
 - [IRawReliableAckServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServer.cs)
 - [IRawReliableAckServerAcknowledger.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerAcknowledger.cs)
 - [IRawReliableAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerHandler.cs)
+- [RawReliableNoAckClientTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/NoAck/RawReliableNoAckClientTransport.cs)
+- [IRawReliableNoAckClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/NoAck/Client/IRawReliableNoAckClient.cs)
+- [RawReliableNoAckServerTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/NoAck/RawReliableNoAckServerTransport.cs)
+- [IRawReliableNoAckServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/NoAck/Server/IRawReliableNoAckServer.cs)
+- [IRawReliableNoAckServerHandlerFactory.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/NoAck/Server/IRawReliableNoAckServerHandlerFactory.cs)
 - [RawUnreliableTransport.cs](../../../Pontifex/Implementations/Raw/Unreliable/RawUnreliableTransport.cs)
 - [IRawUnreliableTransport.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableTransport.cs)
 - [IRawUnreliableDebugReliability.cs](../../../Pontifex/Implementations/Raw/Unreliable/IRawUnreliableDebugReliability.cs)
@@ -82,7 +90,9 @@ inheritance parent, and coverage file.
 | `RawReliableClientTransport` | `Pontifex.Raw.Reliable.RawReliableClientTransport<TClientHandler>` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client` | `RawReliableTransport` | [`Raw/Reliable/Client/Coverage.md`](Raw/Reliable/Client/Coverage.md) |
 | `RawReliableServerTransport` | `Pontifex.Raw.Reliable.RawReliableServerTransport<TServerHandler>` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server` | `RawReliableTransport` | [`Raw/Reliable/Server/Coverage.md`](Raw/Reliable/Server/Coverage.md) |
 | `RawReliableAckClientTransport` | `Pontifex.Raw.Reliable.Ack.RawReliableAckClientTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client/Ack` | `RawReliableClientTransport<TClientHandler>` | [`Raw/Reliable/Client/Ack/Coverage.md`](Raw/Reliable/Client/Ack/Coverage.md) |
+| `RawReliableNoAckClientTransport` | `Pontifex.Raw.Reliable.NoAck.RawReliableNoAckClientTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client/NoAck` | `RawReliableClientTransport<TClientHandler>` | [`Raw/Reliable/Client/NoAck/Coverage.md`](Raw/Reliable/Client/NoAck/Coverage.md) |
 | `RawReliableAckServerTransport` | `Pontifex.Raw.Reliable.Ack.RawReliableAckServerTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack` | `RawReliableServerTransport<TServerHandler>` | [`Raw/Reliable/Server/Ack/Coverage.md`](Raw/Reliable/Server/Ack/Coverage.md) |
+| `RawReliableNoAckServerTransport` | `Pontifex.Raw.Reliable.NoAck.RawReliableNoAckServerTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/NoAck` | `RawReliableServerTransport<TServerHandler>` | [`Raw/Reliable/Server/NoAck/Coverage.md`](Raw/Reliable/Server/NoAck/Coverage.md) |
 | `RawUnreliableTransport` | `Pontifex.Raw.Unreliable.RawUnreliableTransport` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable` | `RawTransport` | [`Raw/Unreliable/Coverage.md`](Raw/Unreliable/Coverage.md) |
 | `RawUnreliableClientTransport` | `Pontifex.Raw.Unreliable.RawUnreliableClientTransport` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable/Client` | `RawUnreliableTransport` | [`Raw/Unreliable/Client/Coverage.md`](Raw/Unreliable/Client/Coverage.md) |
 | `RawUnreliableServerTransport` | `Pontifex.Raw.Unreliable.RawUnreliableServerTransport<TFactory>` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable/Server` | `RawUnreliableTransport` | [`Raw/Unreliable/Server/Coverage.md`](Raw/Unreliable/Server/Coverage.md) |
@@ -124,11 +134,16 @@ Transports/
     │   │   ├── Harness/
     │   │   │   ├── RecordingRawReliableClientHandler.cs
     │   │   │   └── TestRawReliableClientTransport.cs
-    │   │   └── Ack/                                 RawReliableAckClientTransport layer
+    │   │   ├── Ack/                                 RawReliableAckClientTransport layer
+    │   │   │   ├── Coverage.md
+    │   │   │   ├── RawReliableAckClientTransportTests.cs
+    │   │   │   └── Harness/
+    │   │   │       └── TestRawReliableAckClientTransport.cs
+    │   │   └── NoAck/                               RawReliableNoAckClientTransport layer
     │   │       ├── Coverage.md
-    │   │       ├── RawReliableAckClientTransportTests.cs
+    │   │       ├── RawReliableNoAckClientTransportTests.cs
     │   │       └── Harness/
-    │   │           └── TestRawReliableAckClientTransport.cs
+    │   │           └── TestRawReliableNoAckClientTransport.cs
     │   └── Server/                                  RawReliableServerTransport layer
     │       ├── Coverage.md
     │       ├── RawReliableServerTransportTests.cs
@@ -137,12 +152,18 @@ Transports/
     │       │   ├── ScriptedSerialActionQueue.cs
     │       │   ├── TestRawReliableServerSession.cs
     │       │   └── TestRawReliableServerTransport.cs
-    │       └── Ack/                                 RawReliableAckServerTransport layer
+    │       ├── Ack/                                 RawReliableAckServerTransport layer
+    │       │   ├── Coverage.md
+    │       │   ├── RawReliableAckServerTransportTests.cs
+    │       │   └── Harness/
+    │       │       ├── RecordingRawReliableAckServerAcknowledger.cs
+    │       │       └── TestRawReliableAckServerTransport.cs
+    │       └── NoAck/                               RawReliableNoAckServerTransport layer
     │           ├── Coverage.md
-    │           ├── RawReliableAckServerTransportTests.cs
+    │           ├── RawReliableNoAckServerTransportTests.cs
     │           └── Harness/
-    │               ├── RecordingRawReliableAckServerAcknowledger.cs
-    │               └── TestRawReliableAckServerTransport.cs
+    │               ├── RecordingRawReliableNoAckServerHandlerFactory.cs
+    │               └── TestRawReliableNoAckServerTransport.cs
     └── Unreliable/                                  RawUnreliableTransport layer
         ├── Coverage.md
         ├── RawUnreliableTransportTests.cs
@@ -173,6 +194,10 @@ drivers.
 - Server-specific harness stays in `Raw/Reliable/Server/Harness/`. `ManualPeriodicLogicDriver`
   is here because it is shared by the server layer and its Ack child.
 - Ack-specific harness stays in the corresponding Ack layer's `Harness/`.
+- NoAck-specific harness stays in the corresponding NoAck layer's `Harness/`. The NoAck client
+  layer reuses `TestRawReliableNoAckClientEndpoint` and `RecordingRawReliableNoAckClientHandler`
+  from `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/NoAck/Harness`; the NoAck server layer
+  reuses `TestRawReliableServerSession` from the server layer's `Harness/`.
 - The client layer reuses the endpoint double from
   `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness`. Both suites live in the same test
   assembly and the endpoint double is covered by the `Endpoints` suite.
@@ -197,7 +222,9 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`Raw/Reliable/Client/Coverage.md`](Raw/Reliable/Client/Coverage.md) — `RawReliableClientTransport`
 - [`Raw/Reliable/Server/Coverage.md`](Raw/Reliable/Server/Coverage.md) — `RawReliableServerTransport`
 - [`Raw/Reliable/Client/Ack/Coverage.md`](Raw/Reliable/Client/Ack/Coverage.md) — `RawReliableAckClientTransport`
+- [`Raw/Reliable/Client/NoAck/Coverage.md`](Raw/Reliable/Client/NoAck/Coverage.md) — `RawReliableNoAckClientTransport`
 - [`Raw/Reliable/Server/Ack/Coverage.md`](Raw/Reliable/Server/Ack/Coverage.md) — `RawReliableAckServerTransport`
+- [`Raw/Reliable/Server/NoAck/Coverage.md`](Raw/Reliable/Server/NoAck/Coverage.md) — `RawReliableNoAckServerTransport`
 - [`Raw/Unreliable/Coverage.md`](Raw/Unreliable/Coverage.md) — `RawUnreliableTransport`
 - [`Raw/Unreliable/Client/Coverage.md`](Raw/Unreliable/Client/Coverage.md) — `RawUnreliableClientTransport`
 - [`Raw/Unreliable/Server/Coverage.md`](Raw/Unreliable/Server/Coverage.md) — `RawUnreliableServerTransport`
@@ -211,10 +238,11 @@ gaps, and deferred-by-design gaps for that layer.
 - Suite root category: `Transports`. Every fixture carries it.
 - Additional filtering categories: `Transports.Concurrency`.
 
-`Transports.Concurrency` marks the one server-layer test that uses real threads to prove the
-single-factory-call invariant of the admission lock. The threads are controlled by gates, joined with
-bounded timeouts, and the gates are always released in `finally`; no test sleeps or polls. The test
-still runs in the default suite because it is deterministic and fast. Any future non-default facet
+`Transports.Concurrency` marks the server-layer tests that use real threads to prove the
+single-factory-call invariant of the admission lock and of the handler-factory lock. The threads are
+controlled by gates, joined with bounded timeouts, and the gates are always released in `finally`;
+no test sleeps or polls. The tests still run in the default suite because they are deterministic
+and fast. Any future non-default facet
 (real I/O, load, timing stress) must go into a separate layer or group with its own declared
 category, not the default suite run.
 
