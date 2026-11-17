@@ -228,6 +228,22 @@ namespace Pontifex.Raw.Reliable
         /// <param name="session">The non-started endpoint. Must be non-null.</param>
         /// <returns><see langword="true"/> when the endpoint was registered; otherwise
         /// <see langword="false"/>.</returns>
+        protected bool TryStartAndRegisterSession(IRawReliableServerEndpointImp session)
+        {
+            return TryStartAndRegisterSession(session, out _);
+        }
+
+        /// <summary>
+        /// Starts and registers a non-started session endpoint whose session slot was already reserved and
+        /// reports whether the endpoint accepted its start.
+        /// </summary>
+        /// <param name="session">The non-started endpoint. Must be non-null.</param>
+        /// <param name="sessionStarted">Receives <see langword="true"/> when <see cref="RawEndpoint.Start"/>
+        /// was accepted, including the transport-stopping path where the endpoint is started only to be
+        /// stopped again; otherwise <see langword="false"/> when the start attempt was rejected or
+        /// threw.</param>
+        /// <returns><see langword="true"/> when the endpoint was registered; otherwise
+        /// <see langword="false"/>.</returns>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Safe to call from any thread. The registry lock is not held
@@ -239,9 +255,14 @@ namespace Pontifex.Raw.Reliable
         /// always mean the slot is free yet. <see cref="RawEndpoint.Start"/> is called at most once on the
         /// endpoint. <see cref="OnSessionStopped"/> is invoked only when the endpoint was successfully
         /// registered.</description></item>
+        /// <item><description><b>Other notes</b>: A session whose start was accepted owns its terminal
+        /// <see cref="IRawHandler.OnStopped"/> notification, even when registration fails afterwards; an
+        /// admission fallback must not preempt it. Only <paramref name="sessionStarted"/> =
+        /// <see langword="false"/> leaves the handler without a terminal notification from the endpoint
+        /// itself.</description></item>
         /// </list>
         /// </remarks>
-        protected bool TryStartAndRegisterSession(IRawReliableServerEndpointImp session)
+        protected bool TryStartAndRegisterSession(IRawReliableServerEndpointImp session, out bool sessionStarted)
         {
             if (session == null)
             {
@@ -259,7 +280,7 @@ namespace Pontifex.Raw.Reliable
 
             if (!alive)
             {
-                TryStartThenStop(session, new TextFail(Name, "Transport is stopping"));
+                sessionStarted = TryStartThenStop(session, new TextFail(Name, "Transport is stopping"));
                 ReleaseSession();
                 return false;
             }
@@ -277,6 +298,8 @@ namespace Pontifex.Raw.Reliable
                 Log.wtf(ex);
                 started = false;
             }
+
+            sessionStarted = started;
 
             isStarted = IsStarted;
             lock (_sessionsLock)
@@ -386,15 +409,17 @@ namespace Pontifex.Raw.Reliable
             }
         }
 
-        private void TryStartThenStop(IRawReliableServerEndpointImp session, StopReason reason)
+        private bool TryStartThenStop(IRawReliableServerEndpointImp session, StopReason reason)
         {
+            bool started;
             try
             {
-                session.Start();
+                started = session.Start();
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
+                started = false;
             }
 
             try
@@ -405,6 +430,8 @@ namespace Pontifex.Raw.Reliable
             {
                 Log.wtf(ex);
             }
+
+            return started;
         }
 
         private void OnSessionEnded(SessionEntry entry, StopReason reason)

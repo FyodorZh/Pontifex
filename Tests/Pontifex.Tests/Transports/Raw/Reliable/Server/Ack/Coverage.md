@@ -24,12 +24,18 @@
 | `Init_WhenAlreadyMarkedInitialized_DoesNotInstallAcknowledger` | A subclass that already marked the transport initialized blocks `Init`. | No acknowledger is installed and `TryAcknowledge` returns null. | Exercises the protected initialization marker exposed by the double. |
 | `Init_ConcurrentCalls_ExactlyOneSucceeds` | Concurrent `Init` calls have exactly one winner. | Exactly one of 20 initializers is installed and serves the single `TryAcknowledge` call. | Uses `Parallel.For`; the assertion is an invariant, not a scheduling order. |
 | `TryAcknowledge_WithoutInit_ReturnsNullAndLeavesDataOwnedByCaller` | `TryAcknowledge` before `Init` returns null. | The caller keeps ownership and the reference count stays at one. | — |
-| `TryAcknowledge_WhenStarted_PassesSameDataWithExtraReferenceAndReturnsHandler` | The acknowledger receives the remote endpoint and the same buffer with one added reference. | The handler is returned unchanged, the remote endpoint is the same instance, and the added reference is released exactly once. | Reference counts are asserted around the acknowledger call. |
+| `TryAcknowledge_WhenStarted_PassesSameDataWithExtraReferenceAndReturnsHandler` | The acknowledger receives the remote endpoint and the same buffer with one added reference. | A stop-once gate wrapping the handler is returned; the gate forwards the callbacks and guarantees one `OnStopped`. The remote endpoint is the same instance, and the added reference is released exactly once. | Reference counts are asserted around the acknowledger call. |
 | `TryAcknowledge_WhenAcknowledgerRejects_ReturnsNullAndKeepsCallerReference` | A rejection returns null without consuming the caller's reference. | The acknowledger's added reference is released and the caller's reference remains alive. | — |
 | `TryAcknowledge_WhenAcknowledgerThrows_ReturnsNullAndDoesNotStopTransport` | An acknowledger exception is isolated. | `TryAcknowledge` returns null, the buffer survives, and the transport remains valid and started. | — |
 | `TryAcknowledge_BeforeStart_ReturnsNullAndDoesNotCallAcknowledger` | `TryAcknowledge` requires a started transport. | The acknowledger is not called and the caller keeps ownership. | — |
 | `TryAcknowledge_AfterStop_ReturnsNullAndDoesNotCallAcknowledger` | `TryAcknowledge` after a normal stop is rejected without calling the acknowledger. | The buffer survives and ownership stays with the caller. | — |
 | `TryAcknowledge_AfterFail_ReturnsNullAndDoesNotCallAcknowledger` | `TryAcknowledge` after a failure is rejected without calling the acknowledger. | The buffer survives and ownership stays with the caller. | — |
+| `TryAcknowledge_ReturnsStopOnceWrapper` | A successful acknowledgement returns a stop-once gate. | The result is a `StopOnceAckServerHandler` whose `Inner` is the acknowledger's handler. | The wrapper changes handler identity; reference comparisons use `Inner`. |
+| `StopOnceWrapper_ForwardsLifecycleCallbacks` | The gate forwards the non-terminal callbacks. | `OnConnected`, `OnReceived`, `OnDisconnected`, and `FillAckResponse` are observed by the wrapped handler with the original arguments. | — |
+| `StopOnceWrapper_ForwardsOnStoppedOnce` | The gate guarantees one terminal notification. | Two `OnStopped` calls through the interface deliver the first reason once and ignore the second. | — |
+| `AbandonAdmission_WithHandler_NotifiesOnStoppedOnce` | An abandoned admission notifies the created handler. | The gated handler receives one `OnStopped`; a later direct call is ignored and the session slot is released. | Uses the exact gate returned by `TryAcknowledge` for both calls. |
+| `CompleteAdmission_WhenTransportStopping_DoesNotPreemptStartedSession` | A started session owns its terminal notification. | The admission fallback stays silent immediately after completion; draining the session delivers one `OnStopped` and releases the slot. | The base server-session double does not raise `OnConnected`/`OnDisconnected`, so those are not asserted. |
+| `CompleteAdmission_WhenSessionCannotStart_NotifiesOnStoppedOnce` | A session that cannot start has no terminal notification of its own. | The admission fallback delivers one `OnStopped` and the drained session adds no second one. | Covers the rejected-start path only; a second rejected-start variant is deliberately not added. |
 
 ## Planned
 
@@ -49,7 +55,11 @@
 ## Notes
 
 - `TestRawReliableAckServerTransport` supplies the carrier hooks and a hand-driven ticker and
-  exposes `TryAcknowledge`, `TryMarkInitialized`, and `HasStartBeenAttempted`.
+  exposes `TryAcknowledge`, `TryBeginAdmission`, `CompleteAdmission`, `AbandonAdmission`,
+  `TryMarkInitialized`, `HasStartBeenAttempted`, and `ActiveSessions`.
+- `StopOnceAckServerHandler` wraps every handler returned by the acknowledger. The carrier, the
+  session endpoint, and the admission fallback share the gate, so the wrapped handler observes at
+  most one `OnStopped`.
 - `RecordingRawReliableAckServerAcknowledger` records the remote endpoint, the buffer identity,
   and the reference counts before and after its configured behavior.
 - The tests allocate `UnionDataList` instances, so the fixture runs `GC.Collect()` in `TearDown`

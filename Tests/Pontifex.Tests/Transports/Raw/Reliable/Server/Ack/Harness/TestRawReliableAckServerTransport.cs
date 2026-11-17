@@ -1,6 +1,7 @@
 using System;
 using Actuarius.Memory;
 using Operarius;
+using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
@@ -44,7 +45,24 @@ internal sealed class TestRawReliableAckServerTransport : RawReliableAckServerTr
 
     public bool ExposedHasStartBeenAttempted => HasStartBeenAttempted;
 
+    public int ExposedActiveSessions => ActiveSessions;
+
     public bool ExposedTryMarkInitialized() => TryMarkInitialized();
+
+    public bool ExposedTryBeginAdmission() => TryBeginAdmission();
+
+    public bool ExposedCompleteAdmission(
+        IRawReliableServerEndpointImp session,
+        IRawReliableAckServerHandler? handler,
+        StopReason failureReason)
+    {
+        return CompleteAdmission(session, handler, failureReason);
+    }
+
+    public void ExposedAbandonAdmission(IRawReliableAckServerHandler? handler, StopReason reason)
+    {
+        AbandonAdmission(handler, reason);
+    }
 
     public IRawReliableAckServerHandler? ExposedTryAcknowledge(IEndPoint remote, UnionDataList ackData)
     {

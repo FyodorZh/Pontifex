@@ -391,8 +391,9 @@ ticker behavior is covered by the `RawReliableServerTransport` layer and is not 
 - **TryAcknowledge gating**: returns `null` without calling the acknowledger when the transport is
   invalid, not started, or has no acknowledger. This covers before-start, after-stop, and after-fail.
 - **TryAcknowledge hand-off**: when started, passes the remote endpoint and the same
-  `UnionDataList` with one additional reference to the acknowledger, and returns its handler
-  unchanged. The caller keeps its own reference; the acknowledger must release the added reference
+  `UnionDataList` with one additional reference to the acknowledger, and returns a stop-once gate
+  wrapping the acknowledger's handler; the gate forwards the handler callbacks and guarantees one
+  `OnStopped`. The caller keeps its own reference; the acknowledger must release the added reference
   exactly once. A rejection returns `null`. An acknowledger exception is caught/logged, returns
   `null`, and leaves the transport valid and started.
 - **Ownership**: the caller's buffer remains alive with its original reference count after the
@@ -525,8 +526,9 @@ never use reflection. Only these are asserted:
 - `TestRawReliableAckClientTransport : RawReliableAckClientTransport` supplies the inherited
   abstract members and adds no behavior.
 - `TestRawReliableAckServerTransport : RawReliableAckServerTransport` supplies the carrier hooks
-  and a hand-driven ticker, and exposes `TryAcknowledge`, `TryMarkInitialized`,
-  `HasStartBeenAttempted`, and the carrier call counters.
+  and a hand-driven ticker, and exposes `TryAcknowledge`, `TryBeginAdmission`, `CompleteAdmission`,
+  `AbandonAdmission`, `TryMarkInitialized`, `HasStartBeenAttempted`, `ActiveSessions`, and the
+  carrier call counters.
 - `RecordingRawReliableAckServerAcknowledger` records the remote endpoint, the acknowledgement
   buffer, and its reference count around a configurable behavior. The behavior owns the additional
   reference; the recorder releases it as a safety net if the behavior does not.

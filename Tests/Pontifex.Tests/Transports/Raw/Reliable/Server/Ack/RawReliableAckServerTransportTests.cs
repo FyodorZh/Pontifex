@@ -130,7 +130,9 @@ public sealed class RawReliableAckServerTransportTests
         UnionDataList data = CreateData(1);
         using var dataDisposer = data.AsDisposable();
 
-        Assert.That(transport.ExposedTryAcknowledge(Remote, data), Is.SameAs(firstHandler));
+        IRawReliableAckServerHandler? result = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(result, Is.InstanceOf<StopOnceAckServerHandler>());
+        Assert.That(((StopOnceAckServerHandler)result!).Inner, Is.SameAs(firstHandler));
         Assert.That(first.TryAckCalls, Is.EqualTo(1));
         Assert.That(second.TryAckCalls, Is.Zero);
     }
@@ -291,7 +293,8 @@ public sealed class RawReliableAckServerTransportTests
 
         IRawReliableAckServerHandler? result = transport.ExposedTryAcknowledge(Remote, data);
 
-        Assert.That(result, Is.SameAs(handler));
+        Assert.That(result, Is.InstanceOf<StopOnceAckServerHandler>());
+        Assert.That(((StopOnceAckServerHandler)result!).Inner, Is.SameAs(handler));
         Assert.That(received, Is.EqualTo(42));
         Assert.That(acknowledger.TryAckCalls, Is.EqualTo(1));
         Assert.That(acknowledger.LastRemote, Is.SameAs(Remote));
@@ -394,6 +397,163 @@ public sealed class RawReliableAckServerTransportTests
 
         Assert.That(acknowledger.TryAckCalls, Is.Zero);
         Assert.That(data.IsAlive, Is.True);
+    }
+
+    #endregion
+
+    #region Stop-once gate
+
+    [Test]
+    public void TryAcknowledge_ReturnsStopOnceWrapper()
+    {
+        var transport = Create();
+        using var handler = new RecordingRawReliableAckServerHandler(Memory);
+        var acknowledger = CreateAcknowledger((_, data) =>
+        {
+            data.Release();
+            return handler;
+        });
+        InitializeAndStart(transport, acknowledger);
+        UnionDataList data = CreateData(1);
+        using var dataDisposer = data.AsDisposable();
+
+        IRawReliableAckServerHandler? result = transport.ExposedTryAcknowledge(Remote, data);
+
+        Assert.That(result, Is.TypeOf<StopOnceAckServerHandler>());
+        Assert.That(((StopOnceAckServerHandler)result!).Inner, Is.SameAs(handler));
+    }
+
+    [Test]
+    public void StopOnceWrapper_ForwardsLifecycleCallbacks()
+    {
+        using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        var endpoint = new TestRawReliableServerSession(recording);
+        var gate = new StopOnceAckServerHandler(recording);
+        var disconnectReason = Reason("disconnect");
+        UnionDataList receivedData = CreateData(7);
+
+        gate.OnConnected(endpoint);
+        gate.OnReceived(receivedData);
+        gate.OnDisconnected(disconnectReason);
+        UnionDataList ackData = CreateData(0);
+        using var ackDataDisposer = ackData.AsDisposable();
+        gate.FillAckResponse(ackData);
+
+        Assert.That(recording.ConnectedCount, Is.EqualTo(1));
+        Assert.That(recording.ConnectedEndPoint, Is.SameAs(endpoint));
+        Assert.That(recording.ReceivedCount, Is.EqualTo(1));
+        Assert.That(recording.DisconnectedCount, Is.EqualTo(1));
+        Assert.That(recording.DisconnectedReason, Is.SameAs(disconnectReason));
+        Assert.That(recording.FillAckResponseCalls, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void StopOnceWrapper_ForwardsOnStoppedOnce()
+    {
+        using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        IRawReliableAckServerHandler gate = new StopOnceAckServerHandler(recording);
+        var first = Reason("first");
+        var second = Reason("second");
+
+        gate.OnStopped(first);
+        gate.OnStopped(second);
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
+        Assert.That(recording.StoppedReason, Is.SameAs(first));
+    }
+
+    #endregion
+
+    #region Admission
+
+    [Test]
+    public void AbandonAdmission_WithHandler_NotifiesOnStoppedOnce()
+    {
+        var transport = Create();
+        using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        var acknowledger = CreateAcknowledger((_, data) =>
+        {
+            data.Release();
+            return recording;
+        });
+        InitializeAndStart(transport, acknowledger);
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+        UnionDataList data = CreateData(1);
+        using var dataDisposer = data.AsDisposable();
+        IRawReliableAckServerHandler? handler = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(handler, Is.Not.Null);
+
+        transport.ExposedAbandonAdmission(handler, Reason("abandon"));
+        handler!.OnStopped(Reason("second"));
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
+    }
+
+    [Test]
+    public void CompleteAdmission_WhenTransportStopping_DoesNotPreemptStartedSession()
+    {
+        var transport = Create();
+        using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        var acknowledger = CreateAcknowledger((_, data) =>
+        {
+            data.Release();
+            return recording;
+        });
+        InitializeAndStart(transport, acknowledger);
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+        UnionDataList data = CreateData(1);
+        using var dataDisposer = data.AsDisposable();
+        IRawReliableAckServerHandler? handler = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(handler, Is.Not.Null);
+        var session = new TestRawReliableServerSession(handler!);
+
+        Assert.That(transport.Stop(Reason("transport")), Is.True);
+        Assert.That(
+            transport.ExposedCompleteAdmission(
+                session, handler, new TextFail(transport.Name, "Failed to start or register a session")),
+            Is.False);
+
+        // The session accepted its start, so it owns the terminal notification and the admission
+        // fallback must not preempt it.
+        Assert.That(recording.StoppedCount, Is.Zero);
+
+        session.DrainAll();
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
+    }
+
+    [Test]
+    public void CompleteAdmission_WhenSessionCannotStart_NotifiesOnStoppedOnce()
+    {
+        var transport = Create();
+        using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        var acknowledger = CreateAcknowledger((_, data) =>
+        {
+            data.Release();
+            return recording;
+        });
+        InitializeAndStart(transport, acknowledger);
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+        UnionDataList data = CreateData(1);
+        using var dataDisposer = data.AsDisposable();
+        IRawReliableAckServerHandler? handler = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(handler, Is.Not.Null);
+        var session = new TestRawReliableServerSession(handler!);
+        session.Queue.RejectNextSchedule = true;
+
+        Assert.That(
+            transport.ExposedCompleteAdmission(
+                session, handler, new TextFail(transport.Name, "Failed to start or register a session")),
+            Is.False);
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
+
+        session.DrainAll();
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
     }
 
     #endregion

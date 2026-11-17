@@ -1,5 +1,6 @@
 using System;
 using Actuarius.Memory;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
@@ -99,16 +100,19 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <param name="ackData">The borrowed acknowledgement request. This method adds a reference to the
         /// same list and passes it to the acknowledger; the caller retains its own reference, and mutations
         /// are visible to the caller.</param>
-        /// <returns>The session handler created by the acknowledger, or <see langword="null"/> when the
-        /// client is rejected, no acknowledger is configured, or the transport is not valid and
-        /// started.</returns>
+        /// <returns>The stop-once gate wrapping the session handler created by the acknowledger, or
+        /// <see langword="null"/> when the client is rejected, no acknowledger is configured, or the
+        /// transport is not valid and started.</returns>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Called from the carrier's handshake callback, serialized
         /// with other acknowledgements.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: The added reference is owned by the
         /// acknowledger and must be released by it exactly once, including on an exceptional path. An
-        /// exception is logged and treated as a rejection.</description></item>
+        /// exception is logged and treated as a rejection. A non-null handler is always wrapped in
+        /// <see cref="StopOnceAckServerHandler"/>, so the carrier, the session endpoint, and the admission
+        /// fallback share one stop latch and the acknowledger's handler observes at most one
+        /// <see cref="IRawHandler.OnStopped"/>.</description></item>
         /// </list>
         /// </remarks>
         protected IRawReliableAckServerHandler? TryAcknowledge(IEndPoint remote, UnionDataList ackData)
@@ -124,7 +128,8 @@ namespace Pontifex.Raw.Reliable.Ack
             {
                 try
                 {
-                    return acknowledger.TryAck(remote, ackData.Acquire());
+                    IRawReliableAckServerHandler? handler = acknowledger.TryAck(remote, ackData.Acquire());
+                    return handler == null ? null : new StopOnceAckServerHandler(handler);
                 }
                 catch (Exception ex)
                 {
@@ -144,7 +149,9 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Safe to call from the carrier's accept callback.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: A successful caller must eventually call
-        /// either <see cref="CompleteAdmission"/> or <see cref="AbandonAdmission"/> exactly once.</description></item>
+        /// either <see cref="CompleteAdmission(IRawReliableServerEndpointImp)"/> or
+        /// <see cref="AbandonAdmission()"/> exactly once, using the handler-aware overloads when it created a
+        /// handler.</description></item>
         /// </list>
         /// </remarks>
         protected bool TryBeginAdmission()
@@ -174,12 +181,58 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
         /// reserved by <see cref="TryBeginAdmission"/>. The session slot is released by the base transport when
         /// the session ends, or by this method when registration fails.</description></item>
+        /// <item><description><b>Other notes</b>: This parameterless-handler overload is a temporary
+        /// compatibility wrapper for carrier paths where no handler exists. Carriers that created a handler
+        /// must use the overload that notifies it on a failed start.</description></item>
         /// </list>
         /// </remarks>
         protected bool CompleteAdmission(IRawReliableServerEndpointImp session)
         {
+            return CompleteAdmission(session, null, new TextFail(Name, "Failed to start or register a session"));
+        }
+
+        /// <summary>
+        /// Converts a successful admission into a registered session, notifying the handler created by the
+        /// acknowledger when the session could not even be started.
+        /// </summary>
+        /// <param name="session">The non-started session endpoint. Must be non-null.</param>
+        /// <param name="handler">The stop-once gate returned by <see cref="TryAcknowledge"/> for this
+        /// admission, or <see langword="null"/> when no handler exists.</param>
+        /// <param name="failureReason">The reason passed to the handler's
+        /// <see cref="IRawHandler.OnStopped"/> when the session could not be started.</param>
+        /// <returns><see langword="true"/> when the session was registered; otherwise
+        /// <see langword="false"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
+        /// reserved by <see cref="TryBeginAdmission"/>. The session slot is released by the base transport when
+        /// the session ends, or by
+        /// <see cref="TryStartAndRegisterSession(IRawReliableServerEndpointImp)"/>
+        /// when registration fails.</description></item>
+        /// <item><description><b>Other notes</b>: The handler is notified only when the session did not accept
+        /// its start. A started session owns its terminal notification, including the path where the transport
+        /// is stopping and registration fails; the shared gate deduplicates if both paths fire. A handler
+        /// exception is logged and does not change the admission result.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool CompleteAdmission(IRawReliableServerEndpointImp session,
+            IRawReliableAckServerHandler? handler, StopReason failureReason)
+        {
             EndHandshake();
-            return TryStartAndRegisterSession(session);
+            bool registered = TryStartAndRegisterSession(session, out bool sessionStarted);
+            if (!sessionStarted)
+            {
+                try
+                {
+                    handler?.OnStopped(failureReason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
+            }
+
+            return registered;
         }
 
         /// <summary>
@@ -189,13 +242,47 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
         /// reserved by <see cref="TryBeginAdmission"/> that is being rejected, timed out, or aborted. Must not
-        /// be called after <see cref="CompleteAdmission"/>.</description></item>
+        /// be called after <see cref="CompleteAdmission(IRawReliableServerEndpointImp)"/>.</description></item>
+        /// <item><description><b>Other notes</b>: This overload is for carrier paths where no handler exists.
+        /// A path that created a handler must use the overload that notifies it.</description></item>
         /// </list>
         /// </remarks>
         protected void AbandonAdmission()
         {
+            AbandonAdmission(null, new TextFail(Name, "Admission abandoned"));
+        }
+
+        /// <summary>
+        /// Releases an admission that will not become a session and notifies the handler created by the
+        /// acknowledger exactly once.
+        /// </summary>
+        /// <param name="handler">The stop-once gate returned by <see cref="TryAcknowledge"/> for this
+        /// admission, or <see langword="null"/> when no handler exists.</param>
+        /// <param name="reason">The reason passed to the handler's
+        /// <see cref="IRawHandler.OnStopped"/>.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
+        /// reserved by <see cref="TryBeginAdmission"/> that is being rejected, timed out, or aborted. Must not
+        /// be called after <see cref="CompleteAdmission(IRawReliableServerEndpointImp)"/>. The handshake slot
+        /// and the session slot are released before the handler is notified.</description></item>
+        /// <item><description><b>Other notes</b>: A handler exception is logged and swallowed. The shared gate
+        /// keeps the notification one-shot if another path already reported the stop.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void AbandonAdmission(IRawReliableAckServerHandler? handler, StopReason reason)
+        {
             EndHandshake();
             ReleaseSession();
+
+            try
+            {
+                handler?.OnStopped(reason);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
         }
     }
 }
