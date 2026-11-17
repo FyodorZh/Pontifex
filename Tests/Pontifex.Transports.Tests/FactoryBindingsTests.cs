@@ -1,16 +1,22 @@
+using System.Net;
+using System.Net.Sockets;
 using Actuarius.Memory;
 using Pontifex;
 using Pontifex.Factory;
+using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack.Direct;
 using Pontifex.Raw.Reliable.Ack.Logger;
 using Pontifex.Raw.Reliable.Ack.Reconnectable;
 using Pontifex.Raw.Reliable.Ack.Tcp;
 using Pontifex.Raw.Reliable.Ack.Zip;
+using Pontifex.Raw.Reliable.NoAck;
+using Pontifex.Raw.Reliable.NoAck.Tcp;
 using Pontifex.Raw.Unreliable.Ack.Direct;
 using Pontifex.Raw.Unreliable.Ack.Udp;
 using Pontifex.Raw.Unreliable.NoAck.Direct;
 using Pontifex.Raw.Unreliable.NoAck.Udp;
 using Pontifex.RR.Unreliable.NoAck.Udp;
+using Pontifex.Utils;
 using Scriba;
 using FormulaRegistry = Pontifex.TransportFormula.Registry;
 using Registration = Pontifex.Factory.Registration;
@@ -27,6 +33,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Server, "direct-raw-unreliable-noack(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliableAck),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Server, "tcp-noack(\"127.0.0.1\", 9000)", TransportType.RawReliableNoAck),
         Case(Registration.TransportRole.Server, "udp-raw-unreliable-ack(\"127.0.0.1\", 9000)", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Server, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
@@ -37,6 +44,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Client, "direct-raw-unreliable-ack(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable-noack(\"node-1\")", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Client, "tcp-noack(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliableNoAck),
         Case(Registration.TransportRole.Client, "udp-raw-unreliable-ack(\"127.0.0.1\", 9000)", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
@@ -78,6 +86,9 @@ public sealed class FactoryBindingsTests
             factory.Canonicalize("TCP(\"127.0.0.1\", 9000)"),
             Is.EqualTo("tcp(127.0.0.1, 9000)"));
         Assert.That(
+            factory.Canonicalize("TCP-NOACK(\"127.0.0.1\", 9000)"),
+            Is.EqualTo("tcp-noack(127.0.0.1, 9000)"));
+        Assert.That(
             factory.Canonicalize("UDP(\"127.0.0.1\", 9000) AS RRUnreliableNoAck"),
             Is.EqualTo("udp(127.0.0.1, 9000) as RRUnreliableNoAck"));
         Assert.That(
@@ -89,6 +100,75 @@ public sealed class FactoryBindingsTests
         Assert.That(
             factory.Canonicalize("LOG(TCP(\"127.0.0.1\", 9000))"),
             Is.EqualTo("log(tcp(127.0.0.1, 9000))"));
+    }
+
+    [Test]
+    [Category("Integration")]
+    public void TcpNoAckBinding_CompilesAndConnects()
+    {
+        var factory = BuildFactory();
+        int port = GetFreeLoopbackPort();
+
+        var serverHandler = new RecordingNoAckServerHandler();
+        var serverHandlerFactory = new RecordingNoAckServerHandlerFactory(serverHandler);
+        var clientHandler = new RecordingNoAckClientHandler();
+
+        var serverTransport = factory.Compile(
+            $"tcp-noack(\"127.0.0.1\", {port})",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
+        Assert.That(serverTransport, Is.InstanceOf<IRawReliableNoAckServer>(),
+            "the server role must compile to a no-acknowledgement server transport");
+
+        var clientTransport = factory.Compile(
+            $"tcp-noack(\"127.0.0.1\", {port})",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
+        Assert.That(clientTransport, Is.InstanceOf<IRawReliableNoAckClient>(),
+            "the client role must compile to a no-acknowledgement client transport");
+
+        var server = (IRawReliableNoAckServer)serverTransport;
+        var client = (IRawReliableNoAckClient)clientTransport;
+        try
+        {
+            Assert.That(server.Init(serverHandlerFactory), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            Assert.That(client.Init(clientHandler), Is.True);
+            Assert.That(client.Start(_ => { }), Is.True);
+
+            Assert.That(serverHandler.Connected.Wait(Timeout), Is.True,
+                "the server handler must connect through the compiled binding");
+            Assert.That(clientHandler.Connected.Wait(Timeout), Is.True,
+                "the client handler must connect through the compiled binding");
+
+            var toServer = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            toServer.PutLast(11);
+            Assert.That(clientHandler.Endpoint!.Send(toServer), Is.EqualTo(SendResult.Ok));
+            Assert.That(serverHandler.Received.Wait(Timeout), Is.True,
+                "the server must receive the message sent by the compiled client");
+            Assert.That(serverHandler.ReceivedValues, Is.EqualTo(new[] { 11 }));
+
+            var toClient = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            toClient.PutLast(22);
+            Assert.That(serverHandler.Endpoint!.Send(toClient), Is.EqualTo(SendResult.Ok));
+            Assert.That(clientHandler.Received.Wait(Timeout), Is.True,
+                "the client must receive the message sent by the compiled server");
+            Assert.That(clientHandler.ReceivedValues, Is.EqualTo(new[] { 22 }));
+        }
+        finally
+        {
+            client.Stop();
+            server.Stop();
+        }
+    }
+
+    private static int GetFreeLoopbackPort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
     }
 
     private static ITransportFactory BuildFactory()
@@ -105,6 +185,7 @@ public sealed class FactoryBindingsTests
         builder.RegisterTransport(RawUnreliableAckDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableNoAckDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableNoAckTcpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableAckUdpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
         builder.RegisterTransport(RRUnreliableNoAckUdpBinding.CreateRegistration());
@@ -121,5 +202,135 @@ public sealed class FactoryBindingsTests
         TransportType expectedType)
     {
         return new object[] { role, formula, expectedType };
+    }
+
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+
+    private sealed class RecordingNoAckServerHandlerFactory
+        : IRawReliableNoAckServerHandlerFactory<IRawReliableNoAckServerHandler>
+    {
+        private readonly IRawReliableNoAckServerHandler _handler;
+
+        public RecordingNoAckServerHandlerFactory(IRawReliableNoAckServerHandler handler)
+        {
+            _handler = handler;
+        }
+
+        public IRawReliableNoAckServerHandler? TryCreate(IEndPoint remote)
+        {
+            return _handler;
+        }
+    }
+
+    private sealed class RecordingNoAckServerHandler : IRawReliableNoAckServerHandler
+    {
+        private readonly object _lock = new();
+        private readonly List<int> _receivedValues = new();
+
+        public readonly ManualResetEventSlim Connected = new(false);
+        public readonly ManualResetEventSlim Received = new(false);
+
+        public IRawReliableEndpoint? Endpoint { get; private set; }
+
+        public IReadOnlyList<int> ReceivedValues
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _receivedValues.ToArray();
+                }
+            }
+        }
+
+        public void OnConnected(IRawReliableEndpoint endPoint)
+        {
+            Endpoint = endPoint;
+            Connected.Set();
+        }
+
+        public void OnReceived(UnionDataList receivedBuffer)
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    if (receivedBuffer.Elements.Count > 0)
+                    {
+                        _receivedValues.Add(receivedBuffer.Elements[0].Alias.IntValue);
+                    }
+                }
+
+                Received.Set();
+            }
+            finally
+            {
+                receivedBuffer.Release();
+            }
+        }
+
+        public void OnDisconnected(StopReason reason)
+        {
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+        }
+    }
+
+    private sealed class RecordingNoAckClientHandler : IRawReliableNoAckClientHandler
+    {
+        private readonly object _lock = new();
+        private readonly List<int> _receivedValues = new();
+
+        public readonly ManualResetEventSlim Connected = new(false);
+        public readonly ManualResetEventSlim Received = new(false);
+
+        public IRawReliableEndpoint? Endpoint { get; private set; }
+
+        public IReadOnlyList<int> ReceivedValues
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _receivedValues.ToArray();
+                }
+            }
+        }
+
+        public void OnConnected(IRawReliableEndpoint endPoint)
+        {
+            Endpoint = endPoint;
+            Connected.Set();
+        }
+
+        public void OnReceived(UnionDataList receivedBuffer)
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    if (receivedBuffer.Elements.Count > 0)
+                    {
+                        _receivedValues.Add(receivedBuffer.Elements[0].Alias.IntValue);
+                    }
+                }
+
+                Received.Set();
+            }
+            finally
+            {
+                receivedBuffer.Release();
+            }
+        }
+
+        public void OnDisconnected(StopReason reason)
+        {
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+        }
     }
 }
