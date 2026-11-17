@@ -7,7 +7,7 @@ namespace Pontifex.Tests.Raw.Reliable.Ack;
 /// <summary>
 /// Base test handler for RawReliableAck server session callbacks. Tracks the
 /// endpoint from OnConnected, auto-registers it with the fixture (so Dispose
-/// resets its gates), and records the disconnected reason.
+/// resets its gates), and records the disconnected and stopped reasons.
 /// </summary>
 public abstract class RawReliableAckTestServerHandler : IRawReliableAckServerHandler
 {
@@ -21,6 +21,11 @@ public abstract class RawReliableAckTestServerHandler : IRawReliableAckServerHan
     public IRawReliableEndpoint? Endpoint { get; private set; }
     public bool IsConnected { get; private set; }
     public StopReason? DisconnectReason { get; private set; }
+    public StopReason? StoppedReason { get; private set; }
+    public bool IsStopped => StoppedCount != 0;
+    public int StoppedCount => Volatile.Read(ref _stoppedCount);
+
+    private int _stoppedCount;
 
     public virtual void FillAckResponse(UnionDataList ackData) { }
 
@@ -42,7 +47,9 @@ public abstract class RawReliableAckTestServerHandler : IRawReliableAckServerHan
         IsConnected = false;
     }
 
-    public void OnStopped(StopReason reason)
+    public virtual void OnStopped(StopReason reason)
     {
+        StoppedReason = reason;
+        Interlocked.Increment(ref _stoppedCount);
     }
 }

@@ -27,13 +27,21 @@ namespace Pontifex.Raw.Reliable.Ack
         ICheckPointCtl BeforeHandlerDisconnectedGate { get; }
 
         /// <summary>
-        /// Hit once immediately before a client handler's <c>OnStopped(reason)</c>
-        /// is invoked. The session has already been disconnected. Not triggered
-        /// for server sessions (the reliable server transport does not invoke
-        /// <c>OnStopped</c> for server sessions).
-        /// Not hit in the establishment-failure path where <c>OnConnected</c> was
-        /// never invoked.
+        /// Hit once immediately before a handler's <c>OnStopped(reason)</c>
+        /// is invoked. The session has already been disconnected. For an
+        /// implementation claiming Carrier-Independent Core Conformance, this
+        /// gate covers <c>OnStopped</c> for both client and server sessions.
+        /// The gate is hit before the single <c>OnStopped</c> even when
+        /// <c>OnConnected</c> was never invoked.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is a conformance contract, not a description of current
+        /// production behavior. The current production Ack endpoints do not
+        /// claim Carrier-Independent Core Conformance and do not yet raise this
+        /// control; the conformance suite remains ignored.
+        /// </para>
+        /// </remarks>
         ICheckPointCtl BeforeHandlerStoppedGate { get; }
 
         /// <summary>

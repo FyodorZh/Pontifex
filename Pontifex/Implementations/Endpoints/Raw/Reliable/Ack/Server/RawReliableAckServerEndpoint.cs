@@ -136,7 +136,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// handling.</description></item>
         /// <item><description><b>Other notes</b>: The logical stage is moved to disconnected before the
         /// disconnect notification, so IsConnected is false during that callback. The base implementation also
-        /// delivers the stop notification when the endpoint had started.</description></item>
+        /// delivers the endpoint's single terminal handler stop notification; the exact situations are documented
+        /// on <see cref="RawReliableEndpoint"/>.</description></item>
         /// </list>
         /// </remarks>
         protected override void FailHard(StopReason reason)

@@ -246,6 +246,12 @@ initialized with the owning transport's `Name`. A reason generated internally
 by the transport (for example from a failed `Start` or an unrecoverable
 failure) need not be supplied by the caller and is transport-defined.
 
+**Known divergence.** `AnyTransport.Start` clears its stored transport-level
+callback before a plain failed start, so it does not invoke that callback on
+that path; it invokes it only when `TryStart` stops the transport
+synchronously. This narrow transport-callback divergence is tracked separately
+and is not changed by this specification revision.
+
 `Stop` is thread-safe and may be called from a handler. Once it returns, no
 new `OnReceived` invocation may begin for any endpoint of that transport. A
 handler already running may finish asynchronously. The transport may discard
@@ -353,11 +359,13 @@ handler as `AckRejected`.
 7. `FillAckResponse` receives transport-owned scratch storage. The handler
    **MUST** populate it but **MUST NOT** retain or release it.
 8. If a callback fails before the server handler's `OnConnected`, the session
-   never became logical and that handler receives no lifecycle callback.
+   never became logical and that handler receives exactly one `OnStopped` and
+   no `OnConnected` or `OnDisconnected`.
 9. If the populated ACK response exceeds `MessageMaxByteSize`, establishment
    **MUST** fail. The client **MUST** receive `OnStopped` without
-   `OnConnected`, and the pre-connected server handler receives no lifecycle
-   callback. The client failure reason is implementation-defined.
+   `OnConnected`, and the pre-connected server handler receives exactly one
+   `OnStopped` and no `OnConnected` or `OnDisconnected`. The client failure
+   reason is implementation-defined.
 
 Server acceptance is local. Server `OnConnected` MAY run before the client
 receives the ACK response or runs its own `OnConnected`.
@@ -374,8 +382,9 @@ and drop the ACK data, and leave no session binding for that connection
 attempt. The transport **MUST NOT** stop or invalidate solely because `TryAck`
 threw. A later connection attempt from the same source is eligible to invoke
 `TryAck` again. If `FillAckResponse` throws, the server **MUST** treat it as
-establishment failure: the pre-connected server handler receives no lifecycle
-callback, and the client receives `OnStopped` without `OnConnected`.
+establishment failure: the pre-connected server handler receives exactly one
+`OnStopped` and no `OnConnected` or `OnDisconnected`, and the client receives
+`OnStopped` without `OnConnected`.
 
 ## 9. Connection lifecycle
 
@@ -388,8 +397,8 @@ stateDiagram-v2
     Connecting --> Failed: handshake rejected or establishment error
     Connected --> Disconnecting: Disconnect, local failure, remote failure, or async failure
     Disconnecting --> Disconnected: OnDisconnected
-    Disconnected --> Stopped: (client only) OnStopped
-    Failed --> Stopped: (client only) OnStopped
+    Disconnected --> Stopped: OnStopped
+    Failed --> Stopped: OnStopped
 ```
 
 ### 9.2 Client lifecycle
@@ -424,13 +433,13 @@ authenticated identity, authorization claim, or proof of peer ownership.
 For each accepted server session, the callback sequence is:
 
 ```text
-OnConnected -> OnDisconnected
+OnConnected -> OnDisconnected -> OnStopped
 ```
 
-`OnDisconnected` **MUST** occur exactly once for each successfully connected
-server session. The server-session callback sequence is `OnConnected ->
-OnDisconnected`; the reliable server transport does not invoke `OnStopped`
-for server sessions.
+`OnDisconnected` and `OnStopped` **MUST** each occur exactly once for each
+successfully connected server session, in that order. A session that never
+reaches `OnConnected` receives exactly one `OnStopped` and no
+`OnDisconnected`.
 
 The server session is independent of the server transport lifecycle with
 respect to callbacks. A server transport may be stopped while sessions are
@@ -525,8 +534,8 @@ or disconnected, and the original reason and teardown remain unchanged.
 
 Once `Disconnect` returns true, the transport **MAY** discard already accepted
 but undelivered outbound messages. The caller's reason **MUST** be supplied to
-the local `OnDisconnected` and, for a client, local `OnStopped` as the exact
-same `StopReason` instance. The remote peer's reason is implementation-defined
+the local `OnDisconnected` and local `OnStopped` as the exact same
+`StopReason` instance. The remote peer's reason is implementation-defined
 and **MUST NOT** be assumed to equal the local reason.
 
 `Send` and `Disconnect` may race. Either operation may linearize first:
@@ -699,12 +708,10 @@ before that transition becomes visible to a concurrent `IsConnected` read.
 invokes `handler.OnDisconnected(reason)`. The endpoint is already disconnected
 at this point.
 
-`BeforeHandlerStoppedGate` is hit once immediately before a client handler's
-`OnStopped(reason)` is invoked. The session has already been disconnected.
-This gate is not triggered for server sessions (the reliable server transport
-does not invoke `OnStopped` for server sessions). It is not hit for a client
-whose `OnConnected` was never invoked and therefore receives only `OnStopped`
-without a preceding `OnDisconnected`; in that establishment-failure path the
+`BeforeHandlerStoppedGate` is hit once immediately before a handler's
+`OnStopped(reason)` is invoked, for both client and server sessions. The
+session has already been disconnected. The gate is hit before the single
+`OnStopped` even when `OnConnected` was never invoked, including when the
 endpoint is never exposed to the handler.
 
 `BeforeSendCommitGate` is hit when a message accepted from this endpoint is
@@ -731,10 +738,10 @@ remains implementation-defined.
 An exception in `TryAck` **MUST** be caught and logged; it fails the
 individual connection attempt as described in Section 8.3. An exception in
 `FillAckResponse` **MUST** fail establishment: the pre-connected server
-handler receives no lifecycle callback, and the client receives `OnStopped`
-without `OnConnected`.
+handler receives exactly one `OnStopped` and no `OnConnected` or
+`OnDisconnected`, and the client receives `OnStopped` without `OnConnected`.
 
-An exception in `OnDisconnected` or client `OnStopped` **MUST NOT** create
+An exception in `OnDisconnected` or `OnStopped` **MUST NOT** create
 duplicate lifecycle callbacks. The transport **MUST** catch and log the
 exception and otherwise continue its already-determined teardown.
 
@@ -747,10 +754,12 @@ When `Stop(reason)` is called on a connected client, normal teardown **MUST**
 occur: `OnDisconnected(reason)` followed by `OnStopped(reason)`, both with the
 exact supplied `StopReason` instance.
 
-If a started client is stopped or otherwise terminates before `OnConnected`,
-it **MUST** receive exactly one `OnStopped(reason)` and no `OnDisconnected`.
-This includes asynchronous connection-establishment failure after a
-successful `Start`, for example an unreachable or rejecting destination.
+If a started client — that is, a client whose `Start` returned true — is
+stopped or otherwise terminates before `OnConnected`, it **MUST** receive
+exactly one `OnStopped(reason)` and no `OnDisconnected`. This includes
+asynchronous connection-establishment failure after a successful `Start`, for
+example an unreachable or rejecting destination. This rule does not apply when
+`Start` returned false; Section 7.3 governs that case.
 
 A client that disconnects from its single endpoint (via `Disconnect` or
 endpoint failure) **MUST** stop the client transport. If `OnConnected`
@@ -765,7 +774,10 @@ When `Stop(reason)` is called on a running server, it **MUST** stop accepting
 new clients and logically disconnect every active session with that exact
 reason instance. The server **MUST** schedule `OnDisconnected` for every
 session handler whose `OnConnected` completed successfully before invoking the
-server transport's `onStopped` callback.
+server transport's `onStopped` callback, and each of those session handlers
+**MUST** observe the documented sequence ending in `OnStopped(reason)`. A
+session handler whose session never reached `OnConnected` observes exactly one
+`OnStopped`.
 
 The transport-level `onStopped` callback **MUST** run only after all affected
 session `OnDisconnected` callbacks have been scheduled (they need not have

@@ -1273,7 +1273,7 @@ public abstract class RawReliableAckConformanceTests
     // ── Server session ──────────────────────────────────────────────────
 
     [Test]
-    public void Server_SuccessfulSession_OnConnectedThenOnDisconnected()
+    public void Server_SuccessfulSession_OnConnectedThenOnDisconnectedThenOnStopped()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
@@ -1286,8 +1286,16 @@ public abstract class RawReliableAckConformanceTests
         WaitForConnectedEndpoint(serverHandler);
         var endpoint = WaitForConnectedEndpoint(clientHandler);
         Assert.That(endpoint.Send(CreateMessage(client, 1)), Is.EqualTo(SendResult.Ok));
-        Assert.That(fixture.Server.Stop(), Is.True);
+        var reason = new UserIntention("test", "serverstop");
+        Assert.That(fixture.Server.Stop(reason), Is.True);
         WaitUntil(() => serverHandler.OnDisconnectedCalled);
+        WaitUntil(() => serverHandler.StoppedCount == 1);
+        Assert.Multiple(() =>
+        {
+            Assert.That(serverHandler.IsConnected, Is.False);
+            Assert.That(serverHandler.DisconnectReason, Is.SameAs(reason));
+            Assert.That(serverHandler.StoppedReason, Is.SameAs(reason));
+        });
     }
 
     [Test]
@@ -1320,7 +1328,7 @@ public abstract class RawReliableAckConformanceTests
     }
 
     [Test]
-    public async Task Server_SessionCleanup_OldHandlerGetsNoMoreCallbacks()
+    public async Task Server_SessionCleanup_OldHandlerGetsNoMoreCallbacksAfterStopped()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var firstHandler = new SessionRecordingServerHandler();
@@ -1343,6 +1351,7 @@ public abstract class RawReliableAckConformanceTests
         WaitUntil(() => firstHandler.ReceivedCount == 1);
         Assert.That(firstEndpoint.Disconnect(new UserIntention("test", "d")), Is.True);
         WaitUntil(() => firstHandler.OnDisconnectedCount == 1);
+        WaitUntil(() => firstHandler.StoppedCount == 1);
 
         var secondClient = fixture.CreateClient();
         var secondClientHandler = new RecordingClientHandler();
@@ -1352,7 +1361,11 @@ public abstract class RawReliableAckConformanceTests
         Assert.That(secondEndpoint.Send(CreateMessage(secondClient, 2)), Is.EqualTo(SendResult.Ok));
 
         await Task.Delay(200);
-        Assert.That(firstHandler.OnDisconnectedCount, Is.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstHandler.OnDisconnectedCount, Is.EqualTo(1));
+            Assert.That(firstHandler.StoppedCount, Is.EqualTo(1));
+        });
     }
 
     // ── Ack handshake ───────────────────────────────────────────────────
@@ -1427,11 +1440,37 @@ public abstract class RawReliableAckConformanceTests
         Start(fixture.Server, client);
 
         WaitUntil(() => clientHandler.StoppedReason != null);
+        WaitUntil(() => throwingHandler.StoppedCount == 1);
         Assert.Multiple(() =>
         {
             Assert.That(clientHandler.OnConnectedCalled, Is.False);
             Assert.That(clientHandler.OnDisconnectedCalled, Is.False);
             Assert.That(throwingHandler.IsConnected, Is.False);
+            Assert.That(throwingHandler.StoppedReason, Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public async Task Server_NeverConnectedHandler_ReceivesExactlyOneOnStopped()
+    {
+        using var fixture = CreateAdapter().CreateFixture();
+        var client = fixture.CreateClient();
+        var neverConnectedHandler = new ThrowingFillAckResponseServerHandler();
+        var clientHandler = new RecordingClientHandler();
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return neverConnectedHandler; })), Is.True);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Start(fixture.Server, client);
+
+        WaitUntil(() => clientHandler.StoppedReason != null);
+        WaitUntil(() => neverConnectedHandler.StoppedCount == 1);
+        await Task.Delay(200);
+        Assert.Multiple(() =>
+        {
+            Assert.That(neverConnectedHandler.Endpoint, Is.Null);
+            Assert.That(neverConnectedHandler.IsConnected, Is.False);
+            Assert.That(neverConnectedHandler.DisconnectReason, Is.Null);
+            Assert.That(neverConnectedHandler.StoppedReason, Is.Not.Null);
+            Assert.That(neverConnectedHandler.StoppedCount, Is.EqualTo(1));
         });
     }
 
@@ -1447,10 +1486,13 @@ public abstract class RawReliableAckConformanceTests
         Start(fixture.Server, client);
 
         WaitUntil(() => clientHandler.StoppedReason != null);
+        WaitUntil(() => throwingHandler.StoppedCount == 1);
         Assert.Multiple(() =>
         {
             Assert.That(clientHandler.OnConnectedCalled, Is.False);
             Assert.That(clientHandler.OnDisconnectedCalled, Is.False);
+            Assert.That(throwingHandler.IsConnected, Is.False);
+            Assert.That(throwingHandler.StoppedReason, Is.Not.Null);
         });
     }
 
@@ -2070,6 +2112,7 @@ public abstract class RawReliableAckConformanceTests
         var created = handlers.ToArray();
         Assert.That(fixture.Server.Stop(new UserIntention("test", "serverstop")), Is.True);
         WaitUntil(() => created[0].OnDisconnectedCount == 1 && created[1].OnDisconnectedCount == 1);
+        WaitUntil(() => created[0].StoppedCount == 1 && created[1].StoppedCount == 1);
     }
 
     // ── Conformance controls ────────────────────────────────────────────

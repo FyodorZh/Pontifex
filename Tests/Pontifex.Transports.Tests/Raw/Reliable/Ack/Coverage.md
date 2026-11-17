@@ -41,11 +41,11 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 ### Server session lifecycle
 | Specification area | Coverage |
 | --- | --- |
-| Successful acceptance | `OnConnected` → `OnDisconnected` occur exactly once per session in that order. |
-| No OnStopped for server | Server handler never receives an `OnStopped` callback. |
+| Successful acceptance | `OnConnected` → `OnDisconnected` → `OnStopped` occur exactly once per session in that order. |
+| Never-connected server session | A server handler whose session never reaches `OnConnected` receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`. |
 | Handler freshness | Each accepted session receives a distinct handler instance; a handler never serves multiple sessions. |
 | Session independence | Sessions are independent; stopping the server transport disconnects all sessions. |
-| Session cleanup on reconnection | After a session disconnects, a new connection from the same source triggers a fresh `TryAck` and creates a distinct handler. Old handlers never receive additional callbacks after their `OnDisconnected`. |
+| Session cleanup on reconnection | After a session disconnects, a new connection from the same source triggers a fresh `TryAck` and creates a distinct handler. Old handlers never receive additional callbacks after their final `OnStopped`, which follows their `OnDisconnected`. |
 
 ### ACK handshake
 | Specification area | Coverage |
@@ -55,13 +55,13 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | TryAck rejection | Returning null rejects the connection; a later attempt from the same client invokes `TryAck` again. |
 | TryAck acceptance | Returning a handler creates a session; the server invokes `FillAckResponse` before `OnConnected`. |
 | TryAck exception | Caught and logged; the individual connection attempt fails without stopping the transport. |
-| FillAckResponse exception | Establishment fails; the pre-connected server handler receives no lifecycle callback; client receives `OnStopped` without `OnConnected`. |
+| FillAckResponse exception | Establishment fails; the pre-connected server handler receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`; client receives `OnStopped` without `OnConnected`. |
 | FillAckResponse ownership | The handler populates a transport-owned buffer; must not retain or release it. |
 | FillAckData ownership | The handler populates a transport-owned buffer; must not retain or release it. |
 | Oversized ACK data/response | Handshake data exceeding `MessageMaxByteSize` causes establishment failure with the specified callback sequences. |
 | AckResponse in OnConnected | The client receives the server's ACK response in `OnConnected`; it owns and must release the buffer. |
 | Server OnConnected ordering | Server `OnConnected` is invoked only after the ACK response is accepted for outbound delivery. |
-| ACK response lost before commit | If a failure occurs between `FillAckResponse` returning and the ACK response being committed for outbound delivery, the server handler receives no lifecycle callback and the client receives `OnStopped` without `OnConnected`. |
+| ACK response lost before commit | If a failure occurs between `FillAckResponse` returning and the ACK response being committed for outbound delivery, the server handler receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`, and the client receives `OnStopped` without `OnConnected`. |
 
 ### Send and SendResult
 | Specification area | Coverage |
@@ -97,7 +97,7 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | Specification area | Coverage |
 | --- | --- |
 | One-time Disconnect | Returns true once, then false on subsequent calls. |
-| Reason propagation | The caller's reason reaches `OnDisconnected` and (for client) `OnStopped` as the exact same instance. |
+| Reason propagation | The caller's reason reaches `OnDisconnected` and `OnStopped` as the exact same instance. |
 | Client Disconnect stops transport | Disconnecting the single client endpoint stops the client transport. |
 | Server Disconnect keeps server | Disconnecting a server session endpoint does not stop the server transport. |
 | Disconnect from callback | `Disconnect` called from `OnConnected` or `OnReceived` defers `OnDisconnected` until the callback returns. |
@@ -115,7 +115,7 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | Handler exception — OnDisconnected / OnStopped | Caught and logged; no duplicate callbacks created; teardown continues. |
 | Handler exception — FillAckData | Terminates the connection; client receives `OnStopped` without `OnConnected`. |
 | Handler exception — TryAck | Caught and logged; individual connection attempt fails without stopping the transport. |
-| Handler exception — FillAckResponse | Fails establishment; client receives `OnStopped` without `OnConnected`. |
+| Handler exception — FillAckResponse | Fails establishment; server handler receives exactly one `OnStopped`; client receives `OnStopped` without `OnConnected`. |
 | Stop from callback | `Stop` may be called from any handler callback without deadlock or reentrancy. |
 | OnReceived not before OnConnected | `OnReceived` is never invoked before `OnConnected` returns successfully. |
 
@@ -124,7 +124,7 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | --- | --- |
 | Client Stop (connected) | `OnDisconnected(reason)` then `OnStopped(reason)` with exact supplied `StopReason` instance. |
 | Client Stop (pre-connect) | Exactly one `OnStopped(reason)` without `OnDisconnected`. |
-| Server Stop | Stops accepting new clients; every active session receives `OnDisconnected` before server-level `onStopped`. |
+| Server Stop | Stops accepting new clients; every active session receives `OnDisconnected` and then `OnStopped` before server-level `onStopped`. |
 | Server Stop timing | All affected session `OnDisconnected` callbacks are scheduled before `onStopped` begins. |
 
 ### Conformance controls — transport
@@ -143,7 +143,7 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | --- | --- |
 | BeforeEndpointDisconnectStateTransitionGate | Armed gate blocks the endpoint's transition to disconnected; `IsConnected` still reads true. |
 | BeforeHandlerDisconnectedGate | Armed gate blocks `OnDisconnected` callback; endpoint is already disconnected. |
-| BeforeHandlerStoppedGate | Armed gate blocks client `OnStopped` callback (not triggered for server sessions). |
+| BeforeHandlerStoppedGate | Unimplemented conformance contract for client and server sessions, not a current production behavior. When implemented, an armed gate blocks the single `OnStopped` callback, including when `OnConnected` was never invoked. |
 | BeforeSendCommitGate | Armed gate blocks message from reaching the underlying IO commit attempt. |
 | AfterSendCommitGate | Armed gate blocks after an endpoint message completes an IO commit attempt. |
 | AfterReceivedGate | Armed gate blocks `OnReceived` invocation per impending delivery. |
