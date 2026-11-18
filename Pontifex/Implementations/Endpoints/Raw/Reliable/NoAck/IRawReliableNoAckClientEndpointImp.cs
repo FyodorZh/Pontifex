@@ -15,7 +15,7 @@ namespace Pontifex.Raw.Reliable.NoAck
     /// stage.</description></item>
     /// </list>
     /// </remarks>
-    public interface IRawReliableNoAckClientEndpointImp : IRawReliableClientEndpointImp, IRawReliableNoAckEndpoint
+    public interface IRawReliableNoAckClientEndpointImp : IRawReliableClientEndpointImp
     {
     }
 }

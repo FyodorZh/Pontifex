@@ -15,7 +15,7 @@ namespace Pontifex.Raw.Reliable.NoAck
     /// complete teardown from their disconnect stage.</description></item>
     /// </list>
     /// </remarks>
-    public interface IRawReliableNoAckServerEndpointImp : IRawReliableServerEndpointImp, IRawReliableNoAckEndpoint
+    public interface IRawReliableNoAckServerEndpointImp : IRawReliableServerEndpointImp
     {
     }
 }
