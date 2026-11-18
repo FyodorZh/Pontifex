@@ -7,7 +7,7 @@ NoAck implementations exist exactly once, in the shared reliable layer: the admi
 the server transports, the connection/disconnection notification machinery of the endpoints, the
 `GetSafe`/`Test` handler wrappers, the server socket listener, and the server-handler logging
 wrapper. Ack and NoAck become thin protocol deltas over those shared bases, and the NoAck
-protocol gains logging wrappers plus a `log(...)` factory binding. The plan adds API surface but
+protocol gains logging wrappers plus a `log-noack(...)` factory binding. The plan adds API surface but
 changes existing behaviour only where the next paragraph says so.
 
 Deliberate behaviour/API changes (the complete list):
@@ -15,8 +15,9 @@ Deliberate behaviour/API changes (the complete list):
 1. `GetSafe(...)` now also guards `OnConnected`. Today a throwing user handler escapes the "safe"
    wrapper on that one callback.
 2. Handler log lines of `RawReliableAckServerLogger` move from the static `Scriba.Log` sink to the
-   transport's `ILogger` (`_core.Log`), matching `RawReliableAckClientLogger` and the transport
-   lines in the same class.
+   transport's `ILogger` (`_core.Log`), matching `RawReliableAckClientLogger`. The transport and
+   acknowledger log lines of the same class keep their current static `Scriba.Log` sink; this plan
+   does not move them.
 3. The public static class `Pontifex.Raw.Reliable.Ack.IRawAckServerHandler_Ext` is replaced by
    `Pontifex.Raw.Reliable.IRawReliableServerHandler_Ext`. All in-repo call sites keep compiling;
    external callers must switch namespace/class name. This is the only removed public type.
@@ -68,9 +69,17 @@ Scope: items 1, 3, 4, 5 and 7 of the unification inventory agreed with the user.
   `<list type="bullet">` items for thread safety, pre/postconditions, and other notes. New
   production public/protected members carry documentation.
 - No public type renames and no namespace moves of public types. The allowed public API changes
-  are exactly: the new extension class replacing `IRawAckServerHandler_Ext` (stage 2), new
-  protected members on existing types (stages 3, 5), and new public logging/binding types for
-  NoAck (stage 9). `RawReliableAckServerLogger` keeps all three of its interfaces (stage 8).
+  are exactly: the new extension class replacing `IRawAckServerHandler_Ext` (stage 2); the four
+  admission helpers moving from the two protocol server transports to
+  `RawReliableServerTransport<TServerHandler>` (stage 3 — source-compatible for callers, but
+  binary-breaking for external subclasses of the protocol transports); new protected members on
+  existing types (stage 5); and new public logging/binding types for NoAck (stage 9).
+  `RawReliableAckServerLogger` keeps all three of its interfaces (stage 8).
+- Every stage's build verification is `dotnet build Pontifex.sln -p:NuGetAudit=false`. Because
+  `Terminal.UICommon`, `Pontifex.TestUI` and `Pontifex.Tests` do not promote warnings to errors,
+  each stage additionally compares the warning set with the documented baseline: 24 warnings at
+  the start of the plan, all pre-existing, distributed as 16 `Terminal.UICommon`, 3
+  `Pontifex.Tests`, 5 `Pontifex.TestUI`. A stage may not add a warning.
 - `Tests/RULES.md` is normative for every test suite touched: one layer per abstract type
   (ATS-01), derived layers cover only their own delta and never duplicate an ancestor
   (ATS-09/ATS-10, EVOL-11), `Coverage.md` updated in the same change as the tests
@@ -115,10 +124,14 @@ Scope: items 1, 3, 4, 5 and 7 of the unification inventory agreed with the user.
   `.../NoAck/Server/IRawReliableNoAckServerHandler.cs` at commit `796b5a1`.
 - C# allows one class to implement two interfaces that share an inherited member set; with both
   markers empty, a single wrapper class can implement both.
-- The factory registry keys registrations by `(scheme, TransportType)`, so a `log` registration
-  for `TransportType.RawReliableNoAck` coexists with the existing `log` registration for
-  `TransportType.RawReliableAck`. Evidence: `Pontifex.Factory/TransportConstructorRegistry.cs`
-  (`Key` is scheme + type).
+- The low-level `TransportConstructorRegistry` keys entries by `(scheme, TransportType)`, but the
+  public builder path used by `Pontifex.TestUI` and `FactoryBindingsTests` rejects a duplicate
+  canonical scheme name regardless of type (`TransportRegistryBuilder`, duplicate-canonical-name
+  rule), and the selector prefers the canonical constructor for a scheme. A second `log`
+  registration is therefore impossible. Evidence: `Pontifex.Factory/TransportConstructorRegistry.cs`,
+  `Pontifex.TransportFormula/Registry/Internal/TransportRegistryBuilder.cs`,
+  `Pontifex.TransportFormula/Semantics/Internal/ConstructorSelector.cs`. The NoAck binding
+  therefore uses its own scheme, `log-noack`, mirroring the `tcp` / `tcp-noack` convention.
 - Every reliable carrier endpoint calls `base.BeginDisconnect(...)` from its own
   `BeginDisconnect` override. Evidence: `RawReliableAckDirectClientEndpoint.cs:112`,
   `RawReliableAckDirectServerEndpoint.cs:112`, `RawReliableAckTcpClientEndpoint.cs:227`,
@@ -192,6 +205,8 @@ debt" note is gone.
 - `ls Transports/Pontifex.Transport.Net/Tcp/Raw/Reliable/Ack/Server` → `No such file or directory`.
 - `grep -n "using Pontifex.Raw.Reliable.Ack.Tcp;" Transports/Pontifex.Transport.Net/Tcp/Raw/Reliable/Ack/RawReliableAckTcpServerTransport.cs Transports/Pontifex.Transport.Net/Tcp/Raw/Reliable/NoAck/RawReliableNoAckTcpServerTransport.cs`
   → no matches.
+- `grep -n "Namespace debt" Transports/Pontifex.Transport.Net/Tcp/Raw/Reliable/NoAck/RawReliableNoAckTcpServerTransport.cs`
+  → no matches.
 - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj --no-build --nologo`
   → 306 tests, all pass.
 
@@ -241,17 +256,20 @@ are empty markers.
    Add `using Pontifex.Raw.Reliable;` only where the enclosing namespace is not
    `Pontifex.Raw.Reliable.*`.
 4. Create the loose test file `Tests/Pontifex.Tests/RawReliableServerHandlerExtTests.cs`
-   (`namespace Pontifex.Tests;`, `[TestFixture]`, no suite category — loose file). Cover, for both
-   `GetSafe` overloads: each of the four callbacks is forwarded; an exception from each callback,
-   including `OnConnected`, is reported to the callback and swallowed. Use a hand-written recording
-   handler implementing the corresponding marker interface. Do not test `Test(...)` (DEBUG-only);
-   put that decision in a short comment at the top of the fixture.
+   (`namespace Pontifex.Tests;`, `[TestFixture]`, no suite category — loose file). For **each**
+   overload (`GetSafe` on `IRawReliableAckServerHandler` and on `IRawReliableNoAckServerHandler`)
+   and **each** of the four callbacks, write one forwarding test and one exception test:
+   - forwarding: the callback reaches the wrapped handler with unchanged arguments;
+   - exception: the wrapped handler throws, `onFail` receives that exception, and nothing escapes.
+   That is 16 tests. Use a hand-written recording handler implementing the marker interface.
+   Do not test `Test(...)` (DEBUG-only); put that decision in a short comment at the top of the
+   fixture.
 
 **Verification.**
 
 - `dotnet build Pontifex.sln -p:NuGetAudit=false -v q --nologo` → `Build succeeded.`
 - `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --no-build --filter FullyQualifiedName~RawReliableServerHandlerExt`
-  → all tests pass.
+  → 16 tests, all pass.
 - `grep -rn "IRawAckServerHandler_Ext" --include=*.cs .` → no matches.
 
 **Definition of done.** The Ack-only extension file is deleted, the shared class provides both
@@ -306,7 +324,9 @@ compile without them; the Transports suite passes unchanged.
 
 **Risks / notes.** This is a protected-surface change: any external subclass calling
 `CompleteAdmission` with a concrete handler still compiles because the concrete handler converts
-to `IRawReliableServerHandler`.
+to `IRawReliableServerHandler`, but code compiled against the old declaring type must be rebuilt,
+and a subclass that overrides nothing is unaffected. Do not also delete `TryBeginHandshake` /
+`TryReserveSession`: those stay as the low-level gates.
 
 ### Stage 4 — Cover the shared admission helpers at the `RawReliableServerTransport` layer
 
@@ -325,20 +345,24 @@ stop-once delta.
    - `public bool ExposedCompleteAdmission(IRawReliableServerEndpointImp session, IRawReliableServerHandler? handler, StopReason failureReason) => CompleteAdmission(session, handler, failureReason);`
    - `public void ExposedAbandonAdmission(IRawReliableServerHandler? handler, StopReason reason) => AbandonAdmission(handler, reason);`
    - `public void ExposedAbandonAdmission() => AbandonAdmission();`
-2. Add `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Harness/RecordingRawReliableServerHandler.cs`
+2. Add `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Harness/RecordingRawAdmissionServerHandler.cs`
    (`internal sealed class`, namespace `Pontifex.Tests.Transports`): implements
    `IRawReliableServerHandler`, records `StoppedCount`, `LastStopReason`, `ReceivedCount`, and
-   `DisconnectedCount`; exposes a `ThrowOnStopped` switch. Hand-written (HARNESS-09). No
-   `IDisposable` requirement.
+   `DisconnectedCount`. Hand-written (HARNESS-09), no `IDisposable`.
+   The name must not be `RecordingRawReliableServerHandler`: that type exists in
+   `Pontifex.Tests.Endpoints` and is imported by `RawReliableServerTransportTests.cs`, where a
+   same-named type in the file's own namespace would silently rebind every existing use.
 3. Add a `#region Admission` to
    `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/RawReliableServerTransportTests.cs` with
    six new tests written against that plain recording handler (not moved from a protocol layer):
-   - `TryBeginAdmission_ReservesSessionAndHandshakeSlots` — after a successful call, both gates
-     are exhausted (`ExposedTryBeginHandshake()` and `ExposedTryReserveSession()` return false).
-   - `TryBeginAdmission_WhenHandshakeGateFull_ReleasesTheSessionSlot` — exhaust the handshake
-     gate, then assert `TryBeginAdmission` fails and `ExposedActiveSessions` is zero.
-   - `AbandonAdmission_WithHandler_NotifiesOnStopped` — passes the raw recording handler and
-     asserts `StoppedCount == 1` and both gates released.
+   - `TryBeginAdmission_ReservesSessionAndHandshakeSlots` — construct the transport with
+     `maxConcurrentHandshakes: 1, maxActiveSessions: 1`; after a successful call, both gates are
+     exhausted (`ExposedTryBeginHandshake()` and `ExposedTryReserveSession()` return false).
+   - `TryBeginAdmission_WhenHandshakeGateFull_ReleasesTheSessionSlot` — same 1/1 limits; occupy
+     the handshake gate with `ExposedTryBeginHandshake()`, then assert `TryBeginAdmission` fails
+     and `ExposedActiveSessions` is zero.
+   - `AbandonAdmission_WithHandler_NotifiesOnStopped` — passes
+     `RecordingRawAdmissionServerHandler` and asserts `StoppedCount == 1` and both gates released.
    - `AbandonAdmission_WithoutHandler_ReleasesBothSlots` — parameterless overload; gates released,
      no handler involved.
    - `CompleteAdmission_WhenSessionCannotStart_NotifiesOnStopped` — `TestRawReliableServerSession`
@@ -392,8 +416,11 @@ endpoint behaviour changes.
    - `protected bool NotifyConnectedCore(Action onConnected)`: marks the latch, then
      `try { onConnected(); return true; } catch (Exception ex) { Log.wtf(ex);
      Stop(new ExceptionFail(TransportName, ex, "OnConnected failed"), false); return false; }`.
-   - `protected void NotifyDisconnected(StopReason reason)`:
+   - `protected void NotifyDisconnectedCore(StopReason reason)`:
      `if (Interlocked.Exchange(ref _disconnectedNotified, 1) == 0 && Volatile.Read(ref _connectedNotified) != 0) { try { _handler.OnDisconnected(reason); } catch (Exception ex) { Log.wtf(ex); } }`.
+     The name must not be `NotifyDisconnected`: both NoAck leaf endpoints still declare a private
+     `NotifyDisconnected` with that signature until stage 6, and the resulting CS0108 would be an
+     error in `Pontifex`.
    - change `protected virtual bool GetIsConnected()` from `=> IsLowLevelConnected` to
      `=> IsLowLevelConnected && Volatile.Read(ref _disconnectedNotified) == 0`.
    - add `using System.Threading;` if absent.
@@ -410,18 +437,30 @@ endpoint behaviour changes.
 4. Update the two layer harnesses:
    - `Tests/Pontifex.Tests/Endpoints/RawReliable/Harness/TestRawReliableEndpoint.cs`: expose
      `ExposedMarkConnectedNotified()`, `ExposedNotifyConnectedCore(Action)`, and
-     `ExposedNotifyDisconnected(StopReason)`. Its `BeginDisconnect` override keeps recording only.
+     `ExposedNotifyDisconnectedCore(StopReason)`. Its `BeginDisconnect` override keeps recording
+     only.
    - `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Harness/TestRawReliableServerEndpoint.cs`:
      expose `ExposedNotifyConnected()`.
-5. Add base-layer tests to `Tests/Pontifex.Tests/Endpoints/RawReliable/RawReliableEndpointTests.cs`:
-   - `NotifyDisconnected_WhenConnected_NotifiesOnce` (second call does not notify);
-   - `NotifyDisconnected_WhenNeverConnected_DoesNotNotify`;
-   - `NotifyDisconnected_WhenHandlerThrows_DoesNotThrowOutOfTheEndpoint` (the handler is called
-     once and no exception escapes);
-   - `IsConnected_AfterDisconnectNotification_IsFalse`;
-   - `NotifyConnectedCore_WhenCallbackThrows_StopsWithExceptionFail`.
+5. Add base-layer tests to `Tests/Pontifex.Tests/Endpoints/RawReliable/RawReliableEndpointTests.cs`.
+   The two throwing cases use test-local private doubles declared inside the fixture file (the
+   layer recorders cannot throw): `ThrowingRawReliableHandler` for
+   `IRawReliableHandler.OnDisconnected` and `ThrowingRawReliableServerHandler` for
+   `IRawReliableServerHandler.OnConnected`.
+   - `NotifyDisconnected_WhenConnected_NotifiesOnce` — `ExposedMarkConnectedNotified()`, then
+     `ExposedNotifyDisconnectedCore` twice; the handler is called once.
+   - `NotifyDisconnected_WhenNeverConnected_DoesNotNotify`.
+   - `NotifyDisconnected_WhenHandlerThrows_DoesNotThrowOutOfTheEndpoint` — connected first; the
+     throwing handler is called once and no exception escapes the helper.
+   - `IsConnected_AfterDisconnectNotification_IsFalse` — connect the endpoint through
+     `ConnectAndComplete()` first, then notify; assert `IsConnected` is false inside the handler
+     callback (the recording handler takes a probe) and after it.
+   - `NotifyConnectedCore_WhenCallbackThrows_StopsWithExceptionFail` — the callback throws;
+     assert the endpoint stopped with an `ExceptionFail` whose source is the transport name and
+     that `NotifyConnectedCore` returned false. (Use the server-layer test for the
+     `NotifyConnected` variant; this one drives `NotifyConnectedCore` directly through the double.)
 6. Add server-layer tests to
-   `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/RawReliableServerEndpointTests.cs`:
+   `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/RawReliableServerEndpointTests.cs`
+   (`NotifyConnected_...` uses the test-local `ThrowingRawReliableServerHandler`):
    `NotifyConnected_ForwardsToHandlerAndMarksConnected` and
    `NotifyConnected_WhenHandlerThrows_StopsWithExceptionFail`.
 7. Update `Tests/Pontifex.Tests/Endpoints/RawReliable/Coverage.md` and
@@ -434,15 +473,19 @@ endpoint behaviour changes.
   → 163 tests, all pass (156 + 7). Existing tests must not change behaviour: every leaf endpoint
   still overrides `GetIsConnected`, and the base still does not notify.
 - `git diff --stat` for this stage → `RawReliableEndpoint.cs`, `RawReliableServerEndpoint.cs`,
-  `RecordingRawReliableHandler`-driven `TestRawReliableEndpoint.cs`,
-  `TestRawReliableServerEndpoint.cs`, the two endpoint test files, and two `Coverage.md` files.
+  `TestRawReliableEndpoint.cs`, `TestRawReliableServerEndpoint.cs`,
+  `RawReliableEndpointTests.cs`, `RawReliableServerEndpointTests.cs`, and two `Coverage.md`
+  files.
 
 **Definition of done.** The shared helpers exist and are covered at their own layers; no leaf
 endpoint uses them yet; the whole Endpoints suite is green.
 
 **Risks / notes.** `RawEndpoint` keeps its own `private IRawHandler _handler`; the reliable layer
 now holds a second reference to the same object. That is intentional: `RawEndpoint` drives
-`OnReceived` and the terminal stop notification. Do not remove its field.
+`OnReceived` and the terminal stop notification. Do not remove its field. All three handler fields
+(`RawEndpoint`, `RawReliableEndpoint`, `RawReliableServerEndpoint`) are private, so a same-named
+private field in a derived class is not a hiding warning; the protocol client endpoints keep their
+own typed `_handler` fields, which are likewise private and do not collide.
 
 ### Stage 6 — Adopt the shared machinery in the NoAck endpoints
 
@@ -458,8 +501,8 @@ helper, and `OnConnected` uses the shared guarded helper.
    - delete `_handler`, `_connectedNotified`, `_disconnectedNotified`, `GetIsConnected`, and the
      private `NotifyDisconnected`;
    - **keep** `FailHard` and `BeginDisconnect` as:
-     `protected override void FailHard(StopReason reason) { NotifyDisconnected(reason); base.FailHard(reason); }`
-     and `protected override void BeginDisconnect(StopReason reason, bool tryBeGentle) { NotifyDisconnected(reason); }`.
+     `protected override void FailHard(StopReason reason) { NotifyDisconnectedCore(reason); base.FailHard(reason); }`
+     and `protected override void BeginDisconnect(StopReason reason, bool tryBeGentle) { NotifyDisconnectedCore(reason); }`.
      They must stay: `RawReliableEndpoint.BeginDisconnect` is abstract, and the carrier endpoints
      (`RawReliableNoAckTcpServerEndpoint.cs:293`, `RawReliableNoAckTcpClientEndpoint.cs:244`) call
      `base.BeginDisconnect`, which would otherwise be CS0205;
@@ -509,9 +552,9 @@ unedited.
    - keep the local `try/catch` in `SendAckResponse` unchanged (it sets
      `_stage = State.LogicallyDisconnected` and stops with `new ExceptionFail(TransportName, ex)`);
    - `FailHard`: `ReleasePendingAckResponse(); _stage = State.LogicallyDisconnected;
-     NotifyDisconnected(reason); base.FailHard(reason);`
+     NotifyDisconnectedCore(reason); base.FailHard(reason);`
    - `BeginDisconnect`: `ReleasePendingAckResponse(); _stage = State.LogicallyDisconnected;
-     NotifyDisconnected(reason);`
+     NotifyDisconnectedCore(reason);`
    - keep `GetIsConnected` and the `State` enum unchanged.
 2. `RawReliableAckClientEndpoint.cs`:
    - keep the typed `_handler` field (`IRawReliableAckClientHandler`) for `FillAckData` and the
@@ -521,9 +564,9 @@ unedited.
      `NotifyConnectedCore(() => _handler.OnConnected(this, message))` and ignore its result. The
      helper marks the latch, logs, and stops with the same `"OnConnected failed"` reason the
      current catch uses;
-   - `FailHard`: `_stage = State.LogicallyDisconnected; NotifyDisconnected(reason);
+   - `FailHard`: `_stage = State.LogicallyDisconnected; NotifyDisconnectedCore(reason);
      base.FailHard(reason);`
-   - `BeginDisconnect`: `_stage = State.LogicallyDisconnected; NotifyDisconnected(reason);`
+   - `BeginDisconnect`: `_stage = State.LogicallyDisconnected; NotifyDisconnectedCore(reason);`
    - keep `GetIsConnected` and the `State` enum unchanged.
 
 **Verification.**
@@ -580,12 +623,22 @@ uses it and keeps its public surface.
    instance (not the original endpoint) and the wrapper's `Send`/`Disconnect` operate on the
    original (use `null` as the wrapped endpoint and expect `SendResult.Error` / `false`); changing
    `UserHandler` redirects subsequent callbacks.
+5. Create the loose test file `Tests/Pontifex.Tests/RawReliableAckServerLoggerTests.cs` to prove
+   the rewritten class still delegates. Declare a test-local `FakeAckServer : IRawReliableAckServer`
+   implementing the ten `ITransport` members plus `Init` (return stored values; `Log` returns
+   `new Logger([])`), and a recording acknowledger. Drive `Init(recordingAcknowledger)` →
+   `TryAck(remote, ackData)` → take the returned `IRawReliableServerHandler` and call all four
+   callbacks. Assert each reached the user handler exactly once, that `OnConnected` received a
+   wrapper rather than the original endpoint, and that a second `Init`/`TryAck` rewires
+   `UserHandler` to the new session handler.
 
 **Verification.**
 
 - `dotnet build Pontifex.sln -p:NuGetAudit=false -v q --nologo` → `Build succeeded.`
 - `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --no-build --filter FullyQualifiedName~RawReliableServerHandlerLogger`
-  → all tests pass.
+  → all pass.
+- `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --no-build --filter FullyQualifiedName~RawReliableAckServerLogger`
+  → all pass.
 - `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --no-build --nologo`
   → all pass (the Ack `log` binding is compiled in `FactoryBindingsTests`).
 - `grep -n "_userHandler" Pontifex/Wrappers/Logger/RawReliableAckServerLogger.cs` → no matches.
@@ -598,10 +651,11 @@ external consumer can depend on it. Handler log lines of the Ack server logger n
 transport logger (Goal item 2) and appear in a different sink than before — intended.
 The Ack logger still holds one handler at a time; that pre-existing limitation is preserved.
 
-### Stage 9 — Add NoAck logging wrappers and the NoAck `log` binding
+### Stage 9 — Add NoAck logging wrappers and the NoAck `log-noack` binding
 
-**Objective.** `log(...)` works for `RawReliableNoAck` in both roles, built on the shared handler
-wrapper; the binding is registered in the TestUI factory and covered by compile cases.
+**Objective.** `log-noack(...)` works for `RawReliableNoAck` in both roles, built on the shared
+handler wrapper; the binding is registered in the TestUI factory and covered by compile and
+behaviour tests.
 
 **Inputs.** Stage 8 committed.
 
@@ -625,36 +679,51 @@ wrapper; the binding is registered in the TestUI factory and covered by compile 
    `_core.Log`.
 3. Create `Pontifex/Wrappers/Logger/RawReliableNoAckLoggerBinding.cs`, namespace
    `Pontifex.Raw.Reliable.NoAck.Logger`, `public static class RawReliableNoAckLoggerBinding` with
-   `public const string SchemeName = "log";` and a `CreateRegistration()` mirroring
-   `RawReliableAckLoggerBinding` with `TransportType.RawReliableNoAck` and
-   `TransportTypeSet.Exactly(TransportType.RawReliableNoAck)`. `Create` returns the server logger
-   for `TransportRole.Server` and the client logger otherwise.
+   `public const string SchemeName = "log-noack";` (a distinct canonical scheme is required: the
+   builder rejects a second `log`). Mirror `RawReliableAckLoggerBinding` with
+   `TransportType.RawReliableNoAck` and `TransportTypeSet.Exactly(TransportType.RawReliableNoAck)`.
+   `Create` returns the server logger for `TransportRole.Server` and the client logger otherwise.
 4. Register the binding in `Pontifex.TestUI/TransportFactory.cs` next to
    `RawReliableAckLoggerBinding.CreateRegistration()`.
 5. In `Tests/Pontifex.Transports.Tests/FactoryBindingsTests.cs`, register
    `RawReliableNoAckLoggerBinding.CreateRegistration()` in the builder and add two formulas to
    the existing `CompileCases` source (no category; the `Case(...)` helper cannot carry one):
-   `Case(TransportRole.Server, "log(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliableNoAck)`
+   `Case(TransportRole.Server, "log-noack(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliableNoAck)`
    and the `TransportRole.Client` counterpart.
+6. Create the loose test files
+   `Tests/Pontifex.Tests/RawReliableNoAckServerLoggerTests.cs` and
+   `Tests/Pontifex.Tests/RawReliableNoAckClientLoggerTests.cs`:
+   - server: a test-local `FakeNoAckServer : IRawReliableNoAckServer` (ten `ITransport` members +
+     `Init`), a recording factory; assert `Init` forwards and stores the factory, `TryCreate`
+     returns a handler that forwards all four callbacks and wraps the endpoint, and an exception
+     from the user factory is logged and rethrown;
+   - client: a test-local `FakeNoAckClient : IRawReliableNoAckClient`, a recording handler; assert
+     `Init` forwards, all four callbacks reach the handler, and `OnConnected` receives a wrapper
+     rather than the original endpoint.
+   Use `VoidEndPoint.Instance` for the `IEndPoint` argument and `new Logger([])` for logging.
 
 **Verification.**
 
 - `dotnet build Pontifex.sln -p:NuGetAudit=false -v q --nologo` → `Build succeeded.`
+- `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --no-build --filter FullyQualifiedName~RawReliableNoAckServerLogger`
+  → all pass.
+- `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --no-build --filter FullyQualifiedName~RawReliableNoAckClientLogger`
+  → all pass.
 - `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --no-build --nologo`
-  → all pass, including the two new compile cases.
+  → all pass, including the two new compile cases (`FactoryBindingsTests` grows by 2).
 - `dotnet test Pontifex.sln --no-build --nologo` → whole solution green. The expected increase
-  over the 2230-test baseline is 6 (stage 4) + 7 (stage 5) + the loose tests added in stages 2
-  and 8; record the exact per-project counts in the completion report.
+  over the 2230-test baseline is 6 (stage 4) + 7 (stage 5) + 2 (stage 9 compile cases) + the
+  loose tests added in stages 2, 8 and 9; record the exact per-project counts in the completion
+  report.
 
-**Definition of done.** A `log(...)` formula over a NoAck transport compiles in both roles; the
-NoAck loggers implement the same forwarding and endpoint-wrapping pattern as the Ack loggers.
+**Definition of done.** A `log-noack(...)` formula over a NoAck transport compiles in both roles;
+the NoAck loggers forward and wrap exactly like the Ack loggers, proven by loose tests.
 
 **Risks / notes.** `RawReliableNoAckServerLogger` creates one handler wrapper per admitted
 session, unlike the Ack logger, because a NoAck factory is invoked once per connection. That is
-deliberate for the new code and must not be back-ported to the Ack logger here. Verification is
-compile-level: no test asserts the NoAck loggers' emitted lines (recorded as a known gap in the
-completion report, not a hidden assumption). The reused endpoint wrappers keep their `Ack` names
-and namespace by decision.
+deliberate for the new code and must not be back-ported to the Ack logger here. The reused
+endpoint wrappers keep their `Ack` names and namespace by decision. The scheme is `log-noack`, not
+`log`: see the registry assumption.
 
 ## Global definition of done
 
