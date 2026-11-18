@@ -108,7 +108,7 @@ namespace Pontifex.Raw.Reliable.Ack
                 return $"'{_core}' - '{_core.GetType()}'";
             }
 
-            void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
+            void IRawReliableServerHandler.OnConnected(IRawReliableEndpoint endPoint)
             {
                 ChangeState(HandlerState.Constructed, HandlerState.Connected);
                 _core.OnConnected(endPoint);

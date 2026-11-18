@@ -73,7 +73,6 @@ public interface IRawReliableNoAckServerHandlerFactory<out THandler>
 
 public interface IRawReliableNoAckServerHandler : IRawReliableServerHandler
 {
-    void OnConnected(IRawReliableEndpoint endPoint);
 }
 
 public interface IRawReliableNoAckEndpoint : IRawReliableEndpoint
@@ -88,9 +87,10 @@ public interface IRawReliableNoAckEndpoint : IRawReliableEndpoint
 `Log`, `Memory`, `MessageMaxByteSize`, and `GetControls`.
 
 `IRawReliableHandler` extends `IRawHandler` and supplies
-`OnDisconnected(StopReason)`. `IRawReliableClientHandler` and
-`IRawReliableServerHandler` extend `IRawReliableHandler` and add no lifecycle
-members of their own. `IRawHandler` supplies `OnReceived(UnionDataList)` and
+`OnDisconnected(StopReason)`. `IRawReliableServerHandler` extends
+`IRawReliableHandler` and supplies `OnConnected(IRawReliableEndpoint)`.
+`IRawReliableClientHandler` extends `IRawReliableHandler` and adds no lifecycle
+members of its own. `IRawHandler` supplies `OnReceived(UnionDataList)` and
 `OnStopped(StopReason)`.
 
 `IRawEndpoint` extends `IBaseEndpoint` and supplies `RemoteEndPoint`,

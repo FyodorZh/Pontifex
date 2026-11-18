@@ -180,7 +180,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Called on the serial action queue, so the response is
         /// admitted for outbound delivery before the handler's
-        /// <see cref="IRawReliableAckServerHandler.OnConnected"/> runs and inbound frames remain
+        /// <see cref="IRawReliableServerHandler.OnConnected"/> runs and inbound frames remain
         /// serialized.</description></item>
         /// <item><description><b>Other notes</b>: A missing pending response stops the endpoint instead of
         /// leaving the client to wait for its watchdog.</description></item>
@@ -211,7 +211,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <see cref="OnConnected"/>.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: A response arriving after the logical stage
         /// left <see cref="State.Constructed"/> is released and ignored. The handler observes
-        /// <see cref="IRawReliableAckServerHandler.OnConnected"/> only after the response was admitted for
+        /// <see cref="IRawReliableServerHandler.OnConnected"/> only after the response was admitted for
         /// outbound delivery.</description></item>
         /// <item><description><b>Other notes</b>: An exception moves the logical stage to disconnected and
         /// stops the endpoint with <see cref="ExceptionFail"/>; the handler receives no disconnect

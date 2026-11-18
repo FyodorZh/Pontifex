@@ -140,7 +140,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             response?.Release();
         }
 
-        void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
+        void IRawReliableServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             Connect(endPoint, out var isFirstConnection);
             if (isFirstConnection)

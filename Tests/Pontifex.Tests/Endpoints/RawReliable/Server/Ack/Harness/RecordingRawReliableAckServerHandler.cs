@@ -26,11 +26,7 @@ internal sealed class RecordingRawReliableAckServerHandler : RecordingRawReliabl
 
     public bool ThrowOnConnected { get; set; }
 
-    public int ConnectedCount { get; private set; }
-
-    public IRawReliableEndpoint? ConnectedEndPoint { get; private set; }
-
-    public void OnConnected(IRawReliableEndpoint endPoint)
+    public override void OnConnected(IRawReliableEndpoint endPoint)
     {
         OnConnectedProbe?.Invoke();
 
@@ -39,7 +35,6 @@ internal sealed class RecordingRawReliableAckServerHandler : RecordingRawReliabl
             throw new InvalidOperationException("OnConnected test failure");
         }
 
-        ConnectedCount++;
-        ConnectedEndPoint = endPoint;
+        base.OnConnected(endPoint);
     }
 }

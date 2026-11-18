@@ -44,7 +44,6 @@ public interface IRawReliableAckServer : IRawReliableTransport
 
 public interface IRawReliableAckServerHandler : IRawReliableServerHandler
 {
-    void OnConnected(IRawReliableEndpoint endPoint);
 }
 
 public interface IRawReliableAckServerAcknowledger<THandler>
@@ -68,8 +67,9 @@ public interface IRawReliableEndpoint : IRawEndpoint
 
 `IRawReliableHandler` extends `IRawHandler` and supplies
 `OnDisconnected(StopReason)`.
-`IRawReliableClientHandler` and `IRawReliableServerHandler` extend
-`IRawReliableHandler` and add no lifecycle members of their own.
+`IRawReliableServerHandler` extends `IRawReliableHandler` and supplies
+`OnConnected(IRawReliableEndpoint)`. `IRawReliableClientHandler` extends
+`IRawReliableHandler` and adds no lifecycle members of its own.
 `IRawHandler` supplies `OnReceived(UnionDataList)` and `OnStopped(StopReason)`.
 
 `IRawEndpoint` extends `IBaseEndpoint` and supplies `RemoteEndPoint`,

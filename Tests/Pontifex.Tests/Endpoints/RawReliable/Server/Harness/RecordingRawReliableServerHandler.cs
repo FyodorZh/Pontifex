@@ -14,4 +14,14 @@ internal class RecordingRawReliableServerHandler : RecordingRawReliableHandler, 
         : base(memory)
     {
     }
+
+    public int ConnectedCount { get; private set; }
+
+    public IRawReliableEndpoint? ConnectedEndPoint { get; private set; }
+
+    public virtual void OnConnected(IRawReliableEndpoint endPoint)
+    {
+        ConnectedCount++;
+        ConnectedEndPoint = endPoint;
+    }
 }

@@ -33,7 +33,7 @@ namespace Pontifex.Api
             Log = logger;
         }
 
-        void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
+        void IRawReliableServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             _endpoint = endPoint;
             

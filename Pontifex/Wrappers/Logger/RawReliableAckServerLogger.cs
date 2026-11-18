@@ -99,7 +99,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _userHandler?.OnReceived(receivedBuffer);
         }
 
-        void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
+        void IRawReliableServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             Log.i("UserHandler.OnConnected()");
             var endPointWrapper = new RawAckServerSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
