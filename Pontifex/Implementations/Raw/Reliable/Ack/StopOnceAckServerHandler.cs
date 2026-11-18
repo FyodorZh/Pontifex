@@ -1,3 +1,4 @@
+using System.Threading;
 using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable.Ack
@@ -19,7 +20,7 @@ namespace Pontifex.Raw.Reliable.Ack
     /// </remarks>
     internal sealed class StopOnceAckServerHandler : IRawReliableAckServerHandler
     {
-        private readonly StopOnceNotifier _stopOnce = new();
+        private int _stopped;
 
         /// <summary>
         /// Initializes a new gate around the acknowledger's session handler.
@@ -62,7 +63,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <inheritdoc/>
         public void OnStopped(StopReason reason)
         {
-            if (_stopOnce.TryNotify())
+            if (Interlocked.Exchange(ref _stopped, 1) == 0)
             {
                 Inner.OnStopped(reason);
             }

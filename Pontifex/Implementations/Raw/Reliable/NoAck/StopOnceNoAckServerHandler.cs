@@ -1,3 +1,4 @@
+using System.Threading;
 using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable.NoAck
@@ -19,7 +20,7 @@ namespace Pontifex.Raw.Reliable.NoAck
     /// </remarks>
     internal sealed class StopOnceNoAckServerHandler : IRawReliableNoAckServerHandler
     {
-        private readonly StopOnceNotifier _stopOnce = new();
+        private int _stopped;
 
         /// <summary>
         /// Initializes a new gate around the handler created by the factory.
@@ -56,7 +57,7 @@ namespace Pontifex.Raw.Reliable.NoAck
         /// <inheritdoc/>
         public void OnStopped(StopReason reason)
         {
-            if (_stopOnce.TryNotify())
+            if (Interlocked.Exchange(ref _stopped, 1) == 0)
             {
                 Inner.OnStopped(reason);
             }
