@@ -3,6 +3,7 @@ using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Raw.Reliable.Ack;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
@@ -55,7 +56,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public override int MessageMaxByteSize => _coreTransport.MessageMaxByteSize;
 
-        IRawReliableAckServerHandler? IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>.TryAck(IEndPoint remote, UnionDataList ackData)
+        (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>.TryAck(IEndPoint remote, UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
             if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ackRequest))
@@ -85,49 +86,99 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
                 var logic = _sessionsMap.Find(sessionId);
                 if (logic != null) // Нашли искомую сессию
                 {
-                    if (logic.Reattach(secret.Acquire())) // Ломимся в неё
+                    // Reattach answers with the response composed for the original connection, so the
+                    // clone has to exist before the session is claimed.
+                    var clonedResponse = logic.CloneAckResponse();
+                    if (clonedResponse == null)
                     {
-                        return logic;
+                        Log.w("Session[{0}] has no ACK response to reattach with", sessionId);
+                        return null;
                     }
 
-                    // Сессия есть, но она нас реджектит (у клиента будет не аксепт)
-                    Log.w("Session[{0}] rejected user reconnection", sessionId);
-                    return null;
+                    if (!logic.Reattach(secret.Acquire())) // Ломимся в неё
+                    {
+                        clonedResponse.Release();
+
+                        // Сессия есть, но она нас реджектит (у клиента будет не аксепт)
+                        Log.w("Session[{0}] rejected user reconnection", sessionId);
+                        return null;
+                    }
+
+                    return (logic, clonedResponse);
                 }
 
                 Log.w("Session[{0}] not found", sessionId);
                 return null;
             }
 
-            IRawReliableAckServerHandler? userHandler = TryConnectNewClient(remote, ackData.Acquire());
-            if (userHandler != null)
+            var newClient = TryConnectNewClient(remote, ackData.Acquire());
+            if (newClient == null)
             {
-                ReconnectableServerLogic logic = new ReconnectableServerLogic(userHandler, _disconnectTimeout, Log, Memory);
-
-                logic.OnConnected += (endPoint) => { userHandler.OnConnected(endPoint); };
-
-                logic.OnStopped += (reason) =>
-                {
-                    Log.i("{0} is closed", logic);
-                    userHandler.OnDisconnected(reason);
-                    _sessionsMap.RemoveSession(logic.Id);
-                };
-
-                sessionId = _sessionsMap.AddSession(logic);
-                if (sessionId.IsValid)
-                {
-                    logic.Attach(sessionId);
-                    if (_sessionsLogicDriver!.Start(logic) != LogicStartResult.Success)
-                    {
-                        _sessionsMap.RemoveSession(logic.Id);
-                        Log.w("{0} failed to start", logic);
-                        return null;
-                    }
-                    return logic;
-                }
+                return null;
             }
 
-            return null;
+            IRawReliableAckServerHandler userHandler = newClient.Value.handler;
+            UnionDataList userAckResponse = newClient.Value.ackResponse;
+
+            ReconnectableServerLogic newLogic = new ReconnectableServerLogic(userHandler, _disconnectTimeout, Log, Memory);
+
+            newLogic.OnConnected += (endPoint) => { userHandler.OnConnected(endPoint); };
+
+            newLogic.OnStopped += (reason) =>
+            {
+                Log.i("{0} is closed", newLogic);
+                userHandler.OnDisconnected(reason);
+                _sessionsMap.RemoveSession(newLogic.Id);
+                newLogic.ReleaseAckResponse();
+            };
+
+            sessionId = _sessionsMap.AddSession(newLogic);
+            if (!sessionId.IsValid)
+            {
+                userAckResponse.Release();
+                NotifyUserHandlerStopped(userHandler, "Session map is full");
+                return null;
+            }
+
+            newLogic.Attach(sessionId);
+
+            UnionDataList composedResponse;
+            try
+            {
+                composedResponse = newLogic.CreateAckResponse(userAckResponse);
+            }
+            catch
+            {
+                _sessionsMap.RemoveSession(newLogic.Id);
+                newLogic.ReleaseAckResponse();
+                NotifyUserHandlerStopped(userHandler, "Failed to compose the ACK response");
+                throw;
+            }
+
+            // The logic driver must not run before the session can answer a reattach.
+            if (_sessionsLogicDriver!.Start(newLogic) != LogicStartResult.Success)
+            {
+                _sessionsMap.RemoveSession(newLogic.Id);
+                newLogic.ReleaseAckResponse();
+                composedResponse.Release();
+                Log.w("{0} failed to start", newLogic);
+                NotifyUserHandlerStopped(userHandler, "Failed to start the session logic");
+                return null;
+            }
+
+            return (newLogic, composedResponse);
+        }
+
+        private void NotifyUserHandlerStopped(IRawReliableAckServerHandler userHandler, string reason)
+        {
+            try
+            {
+                userHandler.OnStopped(new TextFail(ReconnectableInfo.TransportName, reason));
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
         }
 
         public override string ToString()
