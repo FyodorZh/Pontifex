@@ -47,7 +47,10 @@ public sealed class RawReliableAckDirectTransportTests
     [Test]
     public void Successful_handshake_carries_ack_data_and_response()
     {
-        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler { AckResponseValue = 456 } };
+        var acknowledger = new TestAcknowledger
+        {
+            Factory = (_, _) => (new RecordingServerHandler(), CreateAckResponse(456))
+        };
         var server = StartServer(acknowledger, out var serverName);
 
         var clientHandler = new RecordingClientHandler { AckDataValue = 123 };
@@ -57,6 +60,9 @@ public sealed class RawReliableAckDirectTransportTests
         Assert.That(clientHandler.AckResponseValue, Is.EqualTo(456));
         Assert.That(acknowledger.CallCount, Is.EqualTo(1));
         Assert.That(acknowledger.ReceivedAckValue, Is.EqualTo(123));
+        Assert.That(acknowledger.ReceivedAckData, Is.Not.Null);
+        Assert.That(acknowledger.ReceivedAckData!.IsAlive, Is.False,
+            "the transport must release its caller-owned ACK request reference");
         Assert.That(clientHandler.Endpoint, Is.Not.Null);
         Assert.That(clientHandler.Endpoint!.IsConnected, Is.True);
         Assert.That(clientHandler.Endpoint.RemoteEndPoint, Is.Not.Null);
@@ -67,7 +73,10 @@ public sealed class RawReliableAckDirectTransportTests
     [Test]
     public void Messages_are_delivered_in_both_directions_in_order()
     {
-        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler() };
+        var acknowledger = new TestAcknowledger
+        {
+            Factory = (_, _) => (new RecordingServerHandler(), CreateAckResponse())
+        };
         var server = StartServer(acknowledger, out var serverName);
 
         var clientHandler = new RecordingClientHandler();
@@ -115,7 +124,10 @@ public sealed class RawReliableAckDirectTransportTests
     [Test]
     public void Client_disconnect_notifies_the_server_session()
     {
-        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler() };
+        var acknowledger = new TestAcknowledger
+        {
+            Factory = (_, _) => (new RecordingServerHandler(), CreateAckResponse())
+        };
         var server = StartServer(acknowledger, out var serverName);
 
         var clientHandler = new RecordingClientHandler();
@@ -139,7 +151,10 @@ public sealed class RawReliableAckDirectTransportTests
     [Test]
     public void Server_stop_notifies_connected_clients()
     {
-        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler() };
+        var acknowledger = new TestAcknowledger
+        {
+            Factory = (_, _) => (new RecordingServerHandler(), CreateAckResponse())
+        };
         var server = StartServer(acknowledger, out var serverName);
 
         var clientHandler = new RecordingClientHandler();
@@ -174,7 +189,10 @@ public sealed class RawReliableAckDirectTransportTests
     [Test]
     public void Oversized_message_is_rejected_and_the_connection_survives()
     {
-        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler() };
+        var acknowledger = new TestAcknowledger
+        {
+            Factory = (_, _) => (new RecordingServerHandler(), CreateAckResponse())
+        };
         var server = StartServer(acknowledger, out var serverName);
 
         var clientHandler = new RecordingClientHandler();
@@ -196,7 +214,10 @@ public sealed class RawReliableAckDirectTransportTests
     [Test]
     public void Client_transport_stop_notifies_the_handler_and_the_server_session()
     {
-        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler() };
+        var acknowledger = new TestAcknowledger
+        {
+            Factory = (_, _) => (new RecordingServerHandler(), CreateAckResponse())
+        };
         var server = StartServer(acknowledger, out var serverName);
 
         var clientHandler = new RecordingClientHandler();
@@ -227,7 +248,7 @@ public sealed class RawReliableAckDirectTransportTests
             {
                 var handler = new RecordingServerHandler();
                 sessionHandlers.Add(handler);
-                return handler;
+                return (handler, CreateAckResponse());
             }
         };
         var server = StartServer(acknowledger, out var serverName);
@@ -289,7 +310,10 @@ public sealed class RawReliableAckDirectTransportTests
     [Test]
     public void ServerHandler_ReceivesOnDisconnectedThenOnStopped_OnNormalStop()
     {
-        var acknowledger = new TestAcknowledger { Factory = (_, _) => new RecordingServerHandler() };
+        var acknowledger = new TestAcknowledger
+        {
+            Factory = (_, _) => (new RecordingServerHandler(), CreateAckResponse())
+        };
         var server = StartServer(acknowledger, out var serverName);
 
         var clientHandler = new RecordingClientHandler();
@@ -359,6 +383,20 @@ public sealed class RawReliableAckDirectTransportTests
         return message;
     }
 
+    /// <summary>
+    /// Acquires a fresh ACK response owned by the transport after the acknowledger returns it.
+    /// </summary>
+    private static UnionDataList CreateAckResponse(int? value = null)
+    {
+        var response = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+        if (value.HasValue)
+        {
+            response.PutLast(value.Value);
+        }
+
+        return response;
+    }
+
     private static void WaitFor(Func<bool> condition, string message)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
@@ -377,22 +415,26 @@ public sealed class RawReliableAckDirectTransportTests
     {
         private readonly object _lock = new();
 
-        public Func<IEndPoint, UnionDataList, RecordingServerHandler?> Factory { get; init; } =
-            (_, _) => new RecordingServerHandler();
+        public Func<IEndPoint, UnionDataList, (RecordingServerHandler handler, UnionDataList ackResponse)?> Factory { get; init; } =
+            (_, _) => (new RecordingServerHandler(), CreateAckResponse());
 
         public int CallCount { get; private set; }
 
         public int? ReceivedAckValue { get; private set; }
 
+        public UnionDataList? ReceivedAckData { get; private set; }
+
         public RecordingServerHandler? LastHandler { get; private set; }
 
-        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
+            IEndPoint remote, UnionDataList ackData)
         {
             try
             {
                 lock (_lock)
                 {
                     CallCount++;
+                    ReceivedAckData = ackData;
                     if (ackData.TryPopFirst(out int value))
                     {
                         ReceivedAckValue = value;
@@ -400,13 +442,14 @@ public sealed class RawReliableAckDirectTransportTests
                     }
                 }
 
-                var handler = Factory(remote, ackData);
+                var result = Factory(remote, ackData);
                 lock (_lock)
                 {
-                    LastHandler = handler;
+                    LastHandler = result?.handler;
                 }
 
-                return handler;
+                // The transport owns the returned response and releases it after the handshake.
+                return result is { } accepted ? (accepted.handler, accepted.ackResponse) : null;
             }
             finally
             {
@@ -525,8 +568,6 @@ public sealed class RawReliableAckDirectTransportTests
 
         public bool Connected { get; private set; }
 
-        public int? AckResponseValue { get; init; }
-
         public StopReason? DisconnectReason { get; private set; }
 
         public StopReason? StoppedReason { get; private set; }
@@ -568,14 +609,6 @@ public sealed class RawReliableAckDirectTransportTests
                 {
                     return _received.ToArray();
                 }
-            }
-        }
-
-        public void FillAckResponse(UnionDataList ackData)
-        {
-            if (AckResponseValue.HasValue)
-            {
-                ackData.PutLast(AckResponseValue.Value);
             }
         }
 
