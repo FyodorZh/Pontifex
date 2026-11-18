@@ -39,15 +39,23 @@ namespace TransportAnalyzer.TestLogic
             evt?.Invoke(handler);
         }
 
-        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(IEndPoint remote, UnionDataList ackData)
         {
             using var ackDataDisposer = ackData.AsDisposable();
-            if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) && RawReliableAckCommonLogic.AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
+            if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack))
             {
-                ack.Release();
-                return new Handler(this, _memory, _logger);
+                return null;
             }
-            return null;
+
+            using var ackDisposer = ack.AsDisposable();
+            if (!RawReliableAckCommonLogic.AckRequest.EqualByContent(ack) || ackData.Elements.Count != 0)
+            {
+                return null;
+            }
+
+            var ackResponse = _memory.CollectablePool.Acquire<UnionDataList>();
+            ackResponse.PutFirst(new UnionData(RawReliableAckCommonLogic.AckResponse));
+            return (new Handler(this, _memory, _logger), ackResponse);
         }
 
         ICollection<IClientHandler> Clients => mClients.Values;
@@ -73,11 +81,6 @@ namespace TransportAnalyzer.TestLogic
                 :base(memoryRental, logger)
             {
                 mOwner = owner;
-            }
-
-            void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackResponse)
-            {
-                ackResponse.PutFirst(new UnionData(AckResponse));
             }
 
             public void OnConnected(IRawReliableEndpoint endPoint)
