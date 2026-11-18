@@ -1,6 +1,6 @@
 ---
 name: plan-executor
-description: Manual-only skill invoked after planning is complete. Turns an agreed task into a single implementation plan file, hardens it through repeated fresh-context audits, reports every finding, and only after explicit user permission executes the plan stage by stage with independent validation and one git commit per stage. Not automatic; never invoke without an explicit user request.
+description: Manual-only skill invoked after planning is complete. Turns an agreed task into a single implementation plan file, hardens it through repeated parallel fresh-context audits that separate blocking defects from implementation-time deferrals, reports every blocking finding, and only after explicit user permission executes the plan stage by stage with independent validation and one git commit per stage. Not automatic; never invoke without an explicit user request.
 ---
 
 # Plan Executor
@@ -21,7 +21,7 @@ Separate **fresh sub-agents** (new context, no inherited conversation) perform t
 
 Auditors are instantiated as three fresh sub-agents per iteration; see Phase 2.
 
-Sub-agents never receive the orchestrator's reasoning or chat history. Pass them only what the prompt templates below specify: file paths, stage numbers, and the exact report format. This isolation is deliberate — it prevents auditors from inheriting the author's assumptions and the implementator from inheriting the auditors' doubts.
+Sub-agents never receive the orchestrator's reasoning or chat history. Pass them only what the prompt templates below specify: file paths, stage numbers, the stage's deferrable notes, and the exact report format. This isolation is deliberate — it prevents auditors from inheriting the author's assumptions and the implementator from inheriting the auditors' doubts.
 
 ## Phase 0 — Understanding gate
 
@@ -92,7 +92,7 @@ git commit -m "Plan revision <N>"
 
 where `<N>` is the iteration number about to run. Commit the plan file only — never stage or commit unrelated working-tree changes.
 
-If the plan file has no changes relative to the previous commit (for example, the previous audit produced only minor findings that were left in place), skip the commit. Never create an empty commit.
+If the plan file has no changes relative to the previous commit (for example, the previous audit produced only deferrable notes that were left in place), skip the commit. Never create an empty commit.
 
 This keeps every audited plan version recoverable and guarantees that a valid fix cannot be lost between iterations.
 
@@ -115,38 +115,51 @@ Collect all three reports before triage. Deduplicate by location + problem; when
 The orchestrator evaluates **every** deduplicated finding from the three reports. An auditor can misread the plan, import outside assumptions, or invent a problem. Lens disagreements are resolved against the plan text and the repository, not by majority. For each finding:
 
 1. Locate it in the plan (or the referenced code).
-2. Decide: **valid** — the problem genuinely exists and would block, mislead, or force guess-work during implementation; or **invalid** — the auditor misread, the concern is already addressed elsewhere in the plan, or the point is stylistic preference.
-3. Valid findings are fixed in the plan file immediately, at the smallest scope that resolves the problem. If a fix ripples across stages, update every affected stage in the same pass.
-4. Invalid findings are recorded as rejected with a one-line reason. Do not fix them, do not argue with the auditor, and do not let them trigger churn.
+2. Apply the disposition test in 2.4: **blocking**, **deferrable**, or **invalid**.
+3. **Blocking** — fix it in the plan immediately, at the smallest scope that resolves the problem. If a fix ripples across stages, update every affected stage in the same pass.
+4. **Deferrable** — do not edit the plan. Record it in the ledger with the four required fields and attach it to the stage it belongs to, for use in Phase 4. Reject notes that do not meet the relevance rule: already settled by the plan, trivially discoverable, duplicated, or stylistic.
+5. **Invalid** — the auditor misread the plan, the concern is already addressed, or it has no implementation impact. Record it as rejected with a one-line reason. Do not fix it, do not argue with the auditor, and do not let it trigger churn.
+
+If any of the four deferral conditions cannot be established, or the impact of the issue is uncertain, treat it as blocking.
 
 Never "fix" a finding by adding vague reassurance. If the fix is to clarify, clarify concretely; if the fix is to add a missing step, add the step and its verification.
 
-### 2.4 Severity
+### 2.4 Dispositions
 
-Findings are classified **major** or **minor**.
+Every finding is classified by impact, not by effort or taste.
 
-**Major** — anything that could make implementation fail, stall, or silently go wrong:
+**Blocking** — the plan cannot be implemented reliably without resolving it:
 
-- Contradictions between stages, requirements, or constraints.
-- Missing or underspecified actions that force the implementator to design or research.
-- Wrong file paths, type names, APIs, commands, or environment assumptions.
-- A stage with no reliable verification, or verification that cannot prove the stage's objective.
-- Ordering or dependency errors between stages.
-- Scope that conflicts with the stated non-goals.
-- Any place where a reasonable implementator would have to guess.
+- the implementator would have to make a design decision, research, or guess;
+- the fix could change scope, interfaces, public behaviour, ordering, or acceptance criteria;
+- a wrong choice would pass the stage's verification unnoticed;
+- contradictions, missing actions, wrong paths/types/APIs/commands, unprovable verification, or ordering errors.
 
-**Minor** — wording, formatting, redundancy, or clarity that does not change what gets built.
+**Deferrable** — a concrete, local gap that must be communicated to the implementator but does not need a plan edit:
+
+- exactly one deterministic resolution follows from the plan and the repository;
+- it cannot change scope, interfaces, public behaviour, ordering, or acceptance criteria;
+- the stage's verification would catch a wrong resolution;
+- the plan does not already settle it, and the implementator would not trivially discover it.
+
+Each deferrable note must state: the gap, the expected resolution, why it cannot change the outcome, and which verification catches a wrong choice. Merge related notes; do not list optional improvements.
+
+**Stylistic** — wording, formatting, naming preferences, prose quality. Never report.
+
+There is no numeric cap on deferrable notes. The four-field requirement and the relevance rule are the filter: a note that cannot fill them is not deferrable.
+
+When in doubt about impact, classify as blocking.
 
 ### 2.5 Stopping condition
 
 Stop when both are true:
 
-- Zero unresolved major findings remain after triage across all three lens reports. A major finding is resolved only when it is fixed in the plan or rejected as invalid with a recorded reason.
-- All three reports end with `Plan is implementation ready`, or a report that still ends `Plan is not implementation ready` contains only findings the orchestrator rejected as invalid — with the rejection reasons recorded in the ledger.
+- Zero unresolved **blocking** findings remain after triage across all three lens reports. A blocking finding is resolved only when it is fixed in the plan or rejected as invalid with a recorded reason.
+- All three reports end with `Plan is implementation ready`, or a report that still ends `Plan is not implementation ready` contains only findings the orchestrator rejected as invalid or deferred — with the reasons recorded in the ledger.
 
-Or stop when the iteration counter reaches **N = 5** (the user may set a different N when invoking the skill). Minor findings do not extend the loop; record them in the ledger and report them at the end.
+Or stop when the iteration counter reaches **N = 5** (the user may set a different N when invoking the skill). Deferrable notes do not extend the loop; record them in the ledger and report them at the end.
 
-If the cap is reached with major findings outstanding, the plan is **not ready**. Report and wait for the user. Do not start implementation.
+If the cap is reached with blocking findings outstanding, the plan is **not ready**. Report and wait for the user. Do not start implementation.
 
 Whenever the loop ends, the plan file on disk must be committed. If the final triage changed it and no further iteration will run, commit it as `Plan revision <N+1> (final)` so the exact audited state is recoverable.
 
@@ -168,29 +181,36 @@ Your lens: <LENS_NAME>
 
    | Item | Verdict | Evidence / justification | After second sweep |
    |------|---------|--------------------------|--------------------|
-   | Front matter | `ok` or `#1` | What you checked | `confirmed ok` or `#1` |
+   | Front matter | `ok` / `#1` / `d1` | What you checked | `confirmed ok` / `#1` / `d1` |
    | Stage 1 | ... | ... | ... |
 
-   - `Verdict` is `ok` or the number of a finding.
+   - `Verdict` is `ok`, `#<n>` for a blocking finding, or `d<n>` for a
+     deferrable note.
    - An `ok` requires a one-line justification naming what you checked. A bare
      `ok` is not acceptable.
    - Every stage must appear as its own row. Do not group or omit stages.
-4. Do not stop when you find a blocker. Report every finding you can support,
-   even if one already makes the plan unimplementable. Do not omit a finding
-   because another is worse, and do not summarise or praise the plan.
-5. Second sweep — mandatory, even if the first pass already found majors.
-   Re-read the plan end to end. For every item marked `ok`, ask: "what would the
-   implementator most likely have to guess, research, or improvise here?" If a
-   concrete, supportable risk exists, add a finding and set the verdict to its
-   number. Otherwise write `confirmed ok` in the last column. Do not conclude
-   before every `ok` row has been re-examined.
-6. For every finding report: location, severity (major or minor), the problem in
-   one or two sentences, the concrete fix, and the plan text or repository
-   evidence that supports it. Report only findings within your lens; the other
-   auditors cover the rest. Omit speculative concerns — every finding must be
-   traceable to evidence.
-7. Only after the matrix is complete and the second sweep is recorded, end with
-   exactly one line:
+4. Do not stop when you find a blocker. Report every blocking finding you can
+   support, even if one already makes the plan unimplementable. Do not omit a
+   finding because another is worse, and do not summarise or praise the plan.
+5. Second sweep — mandatory, even if the first pass already found blockers.
+   Re-read the plan end to end. For every item marked `ok`, ask: "would the
+   implementator be blocked here, have to ask, or have to make a choice that
+   verification could not catch?" If yes, add a finding and set the verdict to
+   its number. Otherwise write `confirmed ok` in the last column. Do not
+   conclude before every `ok` row has been re-examined.
+6. Classify every finding:
+   - `blocking` — report the location, the concrete implementation failure it
+     would cause, the fix, and the plan text or repository evidence.
+   - `deferrable` — report the gap, the expected resolution, why it cannot
+     change the outcome, and which verification catches a wrong choice. Report
+     it only if the implementator must be told: the plan does not already
+     settle it and it is not trivially discoverable. Merge duplicates.
+   Never report stylistic, wording, naming, or optional-improvement issues.
+   Report only findings within your lens; the other auditors cover the rest.
+   Omit speculative concerns — every finding must be traceable to evidence.
+7. The plan is ready only when there are no blocking findings. Deferrable notes
+   do not make the plan unready. After the matrix is complete and the second
+   sweep is recorded, end with exactly one line:
    Plan is implementation ready
    or
    Plan is not implementation ready
@@ -201,8 +221,8 @@ Your lens: <LENS_NAME>
 After the loop terminates, print a cumulative report:
 
 - Number of iterations (audit rounds) run and the cap.
-- A table of every finding ever raised: iteration, lens, location, severity, status (`fixed` / `rejected as invalid` / `minor, accepted`), and the resolution.
-- Any minor findings left in place.
+- A table of every finding ever raised: iteration, lens, location, disposition (`blocking` / `deferrable` / `invalid`), status (`fixed` / `deferred` / `rejected`), and the resolution.
+- Every deferred note, attached to its stage and stating the expected resolution, with an explanation that it will be resolved during implementation and checked by the validator.
 - The final resolution, stated plainly: **Plan is implementation ready** or **Plan is not implementation ready**.
 
 If the resolution is not ready, implementation is not permitted. Report and wait for the user.
@@ -225,11 +245,11 @@ The plan is now frozen. Do not edit it during execution.
 
 Iterate the stages strictly in plan order.
 
-**Step 1 — Implement.** Spawn a fresh implementator using the template below with the plan path and stage number. It implements only that stage, runs that stage's verification, and reports changes and results. It must not touch other stages or the plan file.
+**Step 1 — Implement.** Spawn a fresh implementator using the template below with the plan path, stage number, and the stage's deferrable notes. It implements only that stage, resolves the deferrals deterministically, reports each choice, runs that stage's verification, and reports changes and results. It must not touch other stages or the plan file.
 
-**Step 2 — Validate.** Spawn a fresh validator using the template below. It reads the stage from the plan, inspects the working tree diff, reruns the stage verification, and reports either readiness or a numbered problem list.
+**Step 2 — Validate.** Spawn a fresh validator using the template below with the plan path, stage number, and the same deferrable notes. It reads the stage from the plan, inspects the working tree diff, reruns the stage verification, checks that deferral choices are consistent with the plan and constraints, and reports either readiness or a numbered problem list.
 
-**Step 3 — Triage.** Apply the same validity test used in Phase 2 to every validator finding: confirm it against the plan and the code before acting. Pass only valid problems to the implementator.
+**Step 3 — Triage.** Apply the same validity test used in Phase 2 to every validator finding: confirm it against the plan and the code before acting. Pass every confirmed problem to the implementator. Do not defer stage problems — the fix loop is the only place they are resolved.
 
 **Step 4 — Fix loop.** If valid problems exist, spawn a fresh implementator to fix exactly those problems, then spawn a fresh validator again. Maximum **3 implement/validate rounds per stage**. On exhaustion: stop, do not commit the stage, report the unresolved problems and the current diff state, and wait for the user.
 
@@ -247,15 +267,22 @@ context and no authority to change the plan.
 2. Implement stage <STAGE_NUMBER> only: follow its actions in order, touch only
    the files it names (or strictly necessary files it implies), and do not
    implement later stages or unrelated improvements.
-3. Run the stage's verification procedure exactly as written and capture the
+3. Resolve the deferrable notes below deterministically, consistently with the
+   plan and its constraints. Report each choice you made. If a note cannot be
+   resolved without a design decision, stop and report it.
+4. Run the stage's verification procedure exactly as written and capture the
    output.
-4. Do not modify the plan file. If the plan is wrong, ambiguous, or
+5. Do not modify the plan file. If the plan is wrong, ambiguous, or
    unimplementable, stop and report the problem instead of improvising.
-5. Report:
+6. Report:
    - files changed,
    - what was done per action,
+   - each deferrable note and how it was resolved,
    - verification commands and their output,
    - anything not completed and why.
+
+Deferrable notes for this stage:
+<DEFERRAL_NOTES>
 ```
 
 ### 4.4 Validator prompt template
@@ -266,19 +293,26 @@ this code.
 
 1. Read stage <STAGE_NUMBER> of the plan at: <PLAN_PATH>.
 2. Inspect the working tree diff for the stage's described changes.
-3. Rerun the stage's verification procedure yourself and capture the output.
-4. Check that the implementation:
+3. The stage's deferrable notes are listed below. Confirm each was resolved
+   consistently with the plan and its constraints; report a concrete problem if
+   one was not.
+4. Rerun the stage's verification procedure yourself and capture the output.
+5. Check that the implementation:
    - does what the stage's objective and actions require, and nothing outside
      the stage's scope;
    - matches the plan's constraints, non-goals, and assumptions;
+   - resolves each deferrable note consistently with the plan;
    - leaves the repository in the state later stages expect;
    - passes verification reproducibly.
-5. Do not fix anything. Do not modify files.
-6. Report exactly one of:
+6. Do not fix anything. Do not modify files.
+7. Report exactly one of:
    - `Stage <STAGE_NUMBER> is ready` — optionally followed by non-blocking
      observations;
    - `Stage <STAGE_NUMBER> is not ready` — followed by a numbered list of
      concrete problems, each with file/line evidence and what must change.
+
+Deferrable notes for this stage:
+<DEFERRAL_NOTES>
 ```
 
 ## Phase 5 — Completion
@@ -291,7 +325,7 @@ When every stage has passed validation and been committed:
    - stages completed, in order, with their commit messages;
    - for each stage, the number of implement/validate rounds used;
    - all validator findings raised during execution and how each was resolved;
-   - all problems found and fixed or rejected during the audit loop;
+   - every blocking finding fixed or rejected and every deferred note from the audit loop, with how each deferral was resolved during implementation;
    - confirmation that the plan file is deleted and the working tree is clean.
 4. Stop. Do not begin additional work.
 
@@ -299,10 +333,10 @@ When every stage has passed validation and been committed:
 
 Maintain one ledger for the whole run, used for both loops. Keep it in memory and reproduce it in the Phase 3 and Phase 5 reports.
 
-| Iteration | Lens | Phase | Location | Severity | Finding | Status | Resolution |
-|-----------|------|-------|----------|----------|---------|--------|------------|
+| Iteration | Lens | Phase | Location | Disposition | Finding | Status | Resolution |
+|-----------|------|-------|----------|-------------|---------|--------|------------|
 
-Status values: `fixed`, `rejected as invalid`, `minor, accepted`.
+Status values: `fixed`, `deferred`, `rejected`. For a deferred note, the Resolution column holds the expected resolution, the reason it cannot change the outcome, and which verification catches a wrong choice.
 
 ## Guardrails
 
@@ -310,10 +344,12 @@ Status values: `fixed`, `rejected as invalid`, `minor, accepted`.
 - Never write the plan on top of unresolved questions.
 - Never overwrite an existing plan file.
 - Commit the plan before every audit iteration; skip the commit only when the file is unchanged.
-- Never hand the plan text to an auditor or implementator; give them the path.
+- Never hand the plan text to an auditor, implementator, or validator; give them the path.
 - Run the three lens auditors independently and in parallel; never show one auditor another's report.
 - Never accept a finding without checking it. Never reject a finding without a reason.
-- Never let a minor finding extend the audit loop.
+- Never defer a blocking finding. If verification could not catch a wrong choice, it is blocking.
+- Never report stylistic issues; classify by impact, not taste.
+- Never let a deferrable note extend the audit loop.
 - Never start implementation without explicit permission.
 - Never start implementation when the final resolution is not `Plan is implementation ready`.
 - Never edit the plan after implementation permission is granted. If it turns out to be wrong, stop, report, and let the user decide.
