@@ -15,11 +15,13 @@ The agent running this skill is the **orchestrator**. It owns the plan file, the
 
 Separate **fresh sub-agents** (new context, no inherited conversation) perform three narrowly scoped jobs:
 
-- **Auditor** — reads the plan from disk and attacks it.
+- **Auditors** — three independent lenses that read the plan from disk and attack it.
 - **Implementator** — reads the plan from disk and implements exactly one stage.
 - **Validator** — reads the plan stage and checks the resulting work.
 
-Sub-agents never receive the orchestrator's reasoning or chat history. Pass them only what the prompt templates below specify: file paths, stage numbers, and the exact report format. This isolation is deliberate — it prevents the auditor from inheriting the author's assumptions and the implementator from inheriting the auditor's doubts.
+Auditors are instantiated as three fresh sub-agents per iteration; see Phase 2.
+
+Sub-agents never receive the orchestrator's reasoning or chat history. Pass them only what the prompt templates below specify: file paths, stage numbers, and the exact report format. This isolation is deliberate — it prevents auditors from inheriting the author's assumptions and the implementator from inheriting the auditors' doubts.
 
 ## Phase 0 — Understanding gate
 
@@ -77,15 +79,40 @@ Every stage must contain all of the following. A stage missing any of them is no
 
 ## Phase 2 — Adversarial refinement loop
 
-Repeat until the stopping condition is met. Each iteration uses a **new** auditor sub-agent with no memory of previous iterations or of the orchestrator's reasoning.
+Repeat until the stopping condition is met. Each iteration runs three **fresh** auditor sub-agents with different lenses and no memory of previous iterations, of the orchestrator's reasoning, or of each other's work.
 
-### 2.1 Spawn the auditor
+### 2.1 Commit the plan before each iteration
 
-Use the auditor prompt template below, substituting the plan path and iteration number. The auditor reads the plan from disk itself; never paste the plan into the prompt.
+Immediately before spawning the auditors, commit the current version of the plan file:
 
-### 2.2 Triage the report
+```text
+git add <plan path>
+git commit -m "Plan revision <N>"
+```
 
-The orchestrator evaluates **every** finding. An auditor can misread the plan, import outside assumptions, or invent a problem. For each finding:
+where `<N>` is the iteration number about to run. Commit the plan file only — never stage or commit unrelated working-tree changes.
+
+If the plan file has no changes relative to the previous commit (for example, the previous audit produced only minor findings that were left in place), skip the commit. Never create an empty commit.
+
+This keeps every audited plan version recoverable and guarantees that a valid fix cannot be lost between iterations.
+
+### 2.2 Spawn the auditors
+
+Run **three** auditor sub-agents per iteration, concurrently and independently. One round of three auditors counts as one iteration.
+
+Each auditor receives the same plan path and iteration number but a different lens:
+
+1. **Logic and consistency** — contradictions between sections, stages, constraints, and non-goals; scope drift; unstated requirements; assumptions presented as facts without evidence; internal inconsistencies.
+2. **Implementation sufficiency** — missing or underspecified actions that force research, design, or guess-work; wrong paths, type/member names, APIs, commands, or environment assumptions. This lens inspects the repository to confirm references.
+3. **Verifiability and sequencing** — verification that cannot prove the stage's objective; missing expected results; ordering or dependency errors between stages; stages that are not independently implementable or verifiable; gaps in prerequisites and the definition of done.
+
+Use the auditor prompt template below, substituting the lens name and mandate. The auditor reads the plan from disk itself; never paste the plan into the prompt, and never let one auditor see another's report.
+
+Collect all three reports before triage. Deduplicate by location + problem; when lenses overlap, keep the strongest evidence and merge the fixes. The round is ready only under the stopping condition in 2.5.
+
+### 2.3 Triage the reports
+
+The orchestrator evaluates **every** deduplicated finding from the three reports. An auditor can misread the plan, import outside assumptions, or invent a problem. Lens disagreements are resolved against the plan text and the repository, not by majority. For each finding:
 
 1. Locate it in the plan (or the referenced code).
 2. Decide: **valid** — the problem genuinely exists and would block, mislead, or force guess-work during implementation; or **invalid** — the auditor misread, the concern is already addressed elsewhere in the plan, or the point is stylistic preference.
@@ -94,7 +121,7 @@ The orchestrator evaluates **every** finding. An auditor can misread the plan, i
 
 Never "fix" a finding by adding vague reassurance. If the fix is to clarify, clarify concretely; if the fix is to add a missing step, add the step and its verification.
 
-### 2.3 Severity
+### 2.4 Severity
 
 Findings are classified **major** or **minor**.
 
@@ -110,43 +137,60 @@ Findings are classified **major** or **minor**.
 
 **Minor** — wording, formatting, redundancy, or clarity that does not change what gets built.
 
-### 2.4 Stopping condition
+### 2.5 Stopping condition
 
 Stop when both are true:
 
-- The latest report ends with `Plan is implementation ready`.
-- The orchestrator confirms zero major findings remain after triage.
+- Zero unresolved major findings remain after triage across all three lens reports. A major finding is resolved only when it is fixed in the plan or rejected as invalid with a recorded reason.
+- All three reports end with `Plan is implementation ready`, or a report that still ends `Plan is not implementation ready` contains only findings the orchestrator rejected as invalid — with the rejection reasons recorded in the ledger.
 
 Or stop when the iteration counter reaches **N = 5** (the user may set a different N when invoking the skill). Minor findings do not extend the loop; record them in the ledger and report them at the end.
 
 If the cap is reached with major findings outstanding, the plan is **not ready**. Report and wait for the user. Do not start implementation.
 
-### 2.5 Auditor prompt template
+Whenever the loop ends, the plan file on disk must be committed. If the final triage changed it and no further iteration will run, commit it as `Plan revision <N+1> (final)` so the exact audited state is recoverable.
+
+### 2.6 Auditor prompt template
 
 ```text
-You are an independent plan auditor. You have no prior context.
+You are one of three independent plan auditors. You have no prior context and
+no knowledge of the other auditors or their findings.
+
+Your lens: <LENS_NAME>
+<LENS_MANDATE>
 
 1. Read the plan at: <PLAN_PATH> (iteration <ITERATION>).
-2. Audit it as if you were the person who must implement it with no further
-   clarification and no access to the author.
-3. Look specifically for:
-   - contradictions between sections, stages, constraints, or non-goals;
-   - missing implementation details that force research or guess-work;
-   - stages that cannot be verified, or verification that does not prove the
-     stage's objective;
-   - wrong paths, type/member names, APIs, commands, or environment assumptions
-     (inspect the repository to confirm references where needed);
-   - ordering or dependency errors between stages;
-   - assumptions presented as facts without evidence;
-   - scope drift or unstated requirements.
-4. Report every finding with:
-   - location (section or stage number),
-   - severity (major or minor),
-   - the problem in one or two sentences,
-   - the concrete fix.
-   Do not pad the report: if a finding is speculative, omit it. Do not restate
-   the plan or praise it.
-5. End with exactly one line:
+2. Audit the whole document through your lens, as if you were the person who
+   must implement it with no further clarification and no access to the author.
+3. Build a coverage matrix with one row for the front matter (title, goal,
+   context, constraints, non-goals, assumptions, prerequisites, global
+   definition of done) and one row for every stage. Report the matrix in full:
+
+   | Item | Verdict | Evidence / justification | After second sweep |
+   |------|---------|--------------------------|--------------------|
+   | Front matter | `ok` or `#1` | What you checked | `confirmed ok` or `#1` |
+   | Stage 1 | ... | ... | ... |
+
+   - `Verdict` is `ok` or the number of a finding.
+   - An `ok` requires a one-line justification naming what you checked. A bare
+     `ok` is not acceptable.
+   - Every stage must appear as its own row. Do not group or omit stages.
+4. Do not stop when you find a blocker. Report every finding you can support,
+   even if one already makes the plan unimplementable. Do not omit a finding
+   because another is worse, and do not summarise or praise the plan.
+5. Second sweep — mandatory, even if the first pass already found majors.
+   Re-read the plan end to end. For every item marked `ok`, ask: "what would the
+   implementator most likely have to guess, research, or improvise here?" If a
+   concrete, supportable risk exists, add a finding and set the verdict to its
+   number. Otherwise write `confirmed ok` in the last column. Do not conclude
+   before every `ok` row has been re-examined.
+6. For every finding report: location, severity (major or minor), the problem in
+   one or two sentences, the concrete fix, and the plan text or repository
+   evidence that supports it. Report only findings within your lens; the other
+   auditors cover the rest. Omit speculative concerns — every finding must be
+   traceable to evidence.
+7. Only after the matrix is complete and the second sweep is recorded, end with
+   exactly one line:
    Plan is implementation ready
    or
    Plan is not implementation ready
@@ -156,10 +200,12 @@ You are an independent plan auditor. You have no prior context.
 
 After the loop terminates, print a cumulative report:
 
-- Number of iterations run and the cap.
-- A table of every finding ever raised: iteration, location, severity, status (`fixed` / `rejected as invalid` / `minor, accepted`), and the resolution.
+- Number of iterations (audit rounds) run and the cap.
+- A table of every finding ever raised: iteration, lens, location, severity, status (`fixed` / `rejected as invalid` / `minor, accepted`), and the resolution.
 - Any minor findings left in place.
 - The final resolution, stated plainly: **Plan is implementation ready** or **Plan is not implementation ready**.
+
+If the resolution is not ready, implementation is not permitted. Report and wait for the user.
 
 Then stop and wait.
 
@@ -169,9 +215,9 @@ Implementation may begin only on an explicit, unambiguous instruction to impleme
 
 ### 4.1 Preflight
 
-1. Run `git status --porcelain`. The only permitted entry is the plan file itself.
-2. If any other modified, staged, or untracked file exists, **stop** and report the list. Do not stash, clean, commit, or work around the user's changes.
-3. Commit the plan file alone with a message such as `Add implementation plan`.
+1. Run `git status --porcelain`. It must be empty — every plan revision was committed in Phase 2.
+2. If the plan file or any other file is modified, staged, or untracked, **stop** and report the list. Do not stash, clean, commit, or work around the user's changes. A dirty tree here means the plan on disk is not the version that passed the audit.
+3. Confirm the latest plan commit exists with `git log -1 --stat`.
 
 The plan is now frozen. Do not edit it during execution.
 
@@ -253,8 +299,8 @@ When every stage has passed validation and been committed:
 
 Maintain one ledger for the whole run, used for both loops. Keep it in memory and reproduce it in the Phase 3 and Phase 5 reports.
 
-| Iteration | Phase | Location | Severity | Finding | Status | Resolution |
-|-----------|-------|----------|----------|---------|--------|------------|
+| Iteration | Lens | Phase | Location | Severity | Finding | Status | Resolution |
+|-----------|------|-------|----------|----------|---------|--------|------------|
 
 Status values: `fixed`, `rejected as invalid`, `minor, accepted`.
 
@@ -263,10 +309,13 @@ Status values: `fixed`, `rejected as invalid`, `minor, accepted`.
 - One plan file, one task. Never span unrelated work in a single plan.
 - Never write the plan on top of unresolved questions.
 - Never overwrite an existing plan file.
+- Commit the plan before every audit iteration; skip the commit only when the file is unchanged.
 - Never hand the plan text to an auditor or implementator; give them the path.
+- Run the three lens auditors independently and in parallel; never show one auditor another's report.
 - Never accept a finding without checking it. Never reject a finding without a reason.
 - Never let a minor finding extend the audit loop.
 - Never start implementation without explicit permission.
+- Never start implementation when the final resolution is not `Plan is implementation ready`.
 - Never edit the plan after implementation permission is granted. If it turns out to be wrong, stop, report, and let the user decide.
 - Never commit unrelated files, failed stages, or multiple stages in one commit.
 - Never proceed after the audit cap or the per-stage retry cap; report and wait.
