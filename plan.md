@@ -232,6 +232,9 @@ update every implementation inside `Pontifex/Pontifex.csproj` so that project co
       - update the responsibilities table so `TryAck` owns response construction;
       - update Section 8.2 with fresh response ownership, pool allocation, response-before-
         `OnConnected`, and the one-`OnStopped` pre-connected failure rule;
+      - update Section 8.2.4 and the Section 11.2 `TryAck(ackData)` row to state the additional-
+        reference rule: the caller keeps and releases its own reference; the acknowledger receives an
+        additional reference, must release it exactly once, and must not retain the returned response;
       - state the exact size rule: "The framed ACK response MUST NOT exceed
         `RawReliableAckInfo.AckMaxByteSize`; it is admitted only if it also fits
         `MessageMaxByteSize`; otherwise establishment fails with `TextFail`."
@@ -245,6 +248,8 @@ update every implementation inside `Pontifex/Pontifex.csproj` so that project co
         sessions whose `OnConnected` returned without throwing;
       - update Section 12.2 to list `BeforeAckResponseCommitGate` in the conformance-control members
         and state that no production implementation hits it yet;
+      - update Section 15 so an application acknowledger releases the received ACK-data reference,
+        returns a pool-acquired ACK response, and must not release or retain that response;
       - update Section 16, removing only the `FillAckResponse` rules and preserving the existing
         `OnConnected` exception rule otherwise;
       - remove every remaining `FillAckResponse` mention.
@@ -401,7 +406,7 @@ the callback until Stage 4.
 Both protocol projects build. Code review confirms the wrapper chain passes responses without a
 handler callback; this is review-level, not runtime-verified. There is no protocol-wrapper test
 project and no test connects through the Zip stack. Do not claim end-to-end Zip coverage. Record the
-lack of a Zip handshake test as a known coverage gap in the Phase 5 final report.
+lack of a Zip handshake test as a known coverage gap in the final completion report for this plan.
 
 ### Risks / notes
 
@@ -413,8 +418,9 @@ lack of a Zip handshake test as a known coverage gap in the Phase 5 final report
 
 ### Objective
 
-Compose reconnectable ACK responses in the acknowledger path, store them for reattachment, and
-remove `ReconnectableServerLogic.FillAckResponse`.
+Adapt the reconnectable acknowledger path to compose and store ACK responses, and remove
+`ReconnectableServerLogic.FillAckResponse`. This stage is compile-level; Stage 8 adds deterministic
+unit tests for the composed response, clone, and release behaviour.
 
 ### Inputs
 
@@ -491,16 +497,17 @@ remove `ReconnectableServerLogic.FillAckResponse`.
 
 ```bash
 dotnet build Protocols/Pontifex.Protocol.Reconnectable/Pontifex.Protocol.Reconnectable.csproj -p:NuGetAudit=false -v minimal
+grep -rn "FillAckResponse" Protocols/Pontifex.Protocol.Reconnectable --include='*.cs' --exclude-dir=obj --exclude-dir=bin
 ```
 
-Expected: `Build succeeded.` with zero errors.
+Expected: build succeeds and the grep prints nothing.
 
 ### Definition of done
 
-The reconnectable project builds and no `FillAckResponse` remains. This stage is compile-level and
-review-level only: the repository has no reconnectable handshake test suite, so runtime composition,
-clone ownership, reattach equality, and the new failure paths are not executed. Do not claim runtime
-verification; record the gap in the Phase 5 final report.
+The reconnectable project builds and no `FillAckResponse` remains. This stage is compile-level;
+Stage 8 adds executable unit tests for composition order, clone equality, release idempotence, and
+the null-stored-response path. Full carrier handshake/reattach remains untested and must be recorded
+in the final completion report for this plan.
 
 ### Risks / notes
 
@@ -563,7 +570,7 @@ Expected: `Build succeeded.` with zero errors.
 The Direct project builds and the endpoint receives a response, not an ACK request. Stage 10
 behaviourally verifies response routing and client rejection, but no existing test observes that a
 rejected direct client releases its admission slots. The `AbandonAdmission()` call is review-only
-and must not be dropped; record that admission-release gap in the Phase 5 final report.
+and must not be dropped; record that admission-release gap in the final completion report for this plan.
 
 ### Risks / notes
 
@@ -605,6 +612,10 @@ the endpoint.
    - Construct `RawReliableAckTcpServerEndpoint` with the response instead of `ackData`.
    - If endpoint construction fails, release `ackResponse` and complete with
      `AckAcceptResult.Faulted(..., handler)`.
+   - Update the `RawReliableAckTcpServerEndpoint.OnConnected` summary: the response is prebuilt, so
+     `base.OnConnected()` completes the handshake synchronously before `Receiver.Start()`. State
+     that inbound frames remain serialized on the action queue and that the receiver starts only
+     after the response has been admitted.
    - Update XML docs for the factory result and ownership.
 2. In `RawReliableAckTcpServerTransport`:
    - Confirm `OnClientConnected` passes `TryAcknowledge` with the new tuple-returning signature.
@@ -670,7 +681,7 @@ Expected: `Build succeeded.` with zero errors.
 
 TestUI builds. Code review confirms the acknowledger constructs the stress-test ACK response. This is
 compile-level and review-level only; `Pontifex.TestUI` is an executable with no automated test
-project. Record the TestUI acknowledgement gap in the Phase 5 final report.
+project. Record the TestUI acknowledgement gap in the final completion report for this plan.
 
 ### Risks / notes
 
@@ -683,7 +694,8 @@ project. Record the TestUI acknowledgement gap in the Phase 5 final report.
 ### Objective
 
 Update the core endpoint and transport test suites and their harnesses to the tuple contract and the
-pending-response endpoint model.
+pending-response endpoint model, and add deterministic unit tests for the reconnectable response
+composition.
 
 ### Inputs
 
@@ -695,6 +707,8 @@ pending-response endpoint model.
 - `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack/Harness/RecordingRawReliableAckServerHandler.cs`
 - `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack/Harness/TestRawReliableAckServerEndpoint.cs`
 - `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack/RawReliableAckServerEndpointTests.cs`
+- `Protocols/Pontifex.Protocol.Reconnectable/Pontifex.Protocol.Reconnectable.csproj`
+- `Tests/Pontifex.Transports.Tests/ReconnectableAckResponseTests.cs` (new loose test file)
 
 ### Actions
 
@@ -744,13 +758,13 @@ pending-response endpoint model.
      ReleasePendingAckResponse();` and call it from `Dispose()` as a safety net. Do not rely on the
      harness release to prove the production release; the dedicated stop test asserts before
      disposal. The method must be idempotent because the endpoint may already have sent the response.
-6. `RecordingRawReliableAckServerHandler`:
+6. `RecordingRawReliableAckServerHandler` (same file as Action 2; apply Actions 2 and 6 in one pass):
    - Add `public Action? OnConnectedProbe { get; set; }`.
    - Add `public bool ThrowOnConnected { get; set; }`.
    - Invoke the probe at the very start of `OnConnected`, before setting `ConnectedEndPoint` or
      incrementing `ConnectedCount`. If `ThrowOnConnected` is set, throw
      `new InvalidOperationException("OnConnected test failure")` after the probe and before recording
-     a successful connection.
+     a successful connection. Do not leave the file with only Action 2 applied.
 7. `RawReliableAckServerEndpointTests`:
    - Replace `Connect_DoesNotSendAnythingUntilAckRequest` with
      `StartWithoutFinishConnect_DoesNotSendOrNotifyHandler`: construct with a response, call
@@ -785,10 +799,11 @@ pending-response endpoint model.
    - Add `NoPendingAckResponse_StopsWithTextFail`: construct the harness without setting a response
      (make the harness response parameter nullable), connect, and assert no `OnConnected`,
      `TextFail`, and one `OnStopped` after `CompleteDisconnect()`.
-   - Add `StopBeforeConnect_ReleasesPendingAckResponse`: construct with a response, call
-     `Start(); DrainAll(); Stop(reason, false); DrainAll();`, and assert the response is no longer
-     alive **before** the harness `Dispose()` runs. This proves the production `Stopped`-event
-     release, not the harness safety net.
+   - Add `StopBeforeConnect_ReleasesPendingAckResponse`: construct with a response and call
+     `Stop(reason, false); DrainAll();` **without** `Start()`. The endpoint is in `Constructed`,
+     where `BeginStop` raises `Stopped` immediately. Assert the response is no longer alive before
+     the harness `Dispose()` runs. Do not use `Start()` here: in `Starting`, stop is deferred until
+     `FinishStart`, and the response would not be released.
    - Remove `AckRequest_RefreshesWatchdog`.
    - `Disconnect_WhenLogicallyConnected_NotifiesOnDisconnected`: connect with a response and remove
      the `ExposedProcessInbound(AckRequestFrame)` call; `ConnectAndComplete` already completes the
@@ -812,23 +827,41 @@ pending-response endpoint model.
    ACK-response oversize row and the `OnConnected`-throw row are now covered and must move into the
    covered table. Rewrite the `Notes` prose about request-driven watchdog refresh and
    `ExceptionFail` duplicate requests. The final contract has no request handling in this layer.
+9. Add deterministic reconnectable response tests:
+   - Add an `InternalsVisibleTo` assembly attribute for `Pontifex.Transports.Tests` to
+     `Protocols/Pontifex.Protocol.Reconnectable/Pontifex.Protocol.Reconnectable.csproj`.
+   - Create `Tests/Pontifex.Transports.Tests/ReconnectableAckResponseTests.cs` (loose test file,
+     `[TestFixture]`, category `Reconnectable`) with a minimal fake
+     `IRawReliableAckServerHandler` and `MemoryRental.Shared`.
+   - `CreateAckResponse_PrependsMetadataAndReleasesUserResponse`: create the logic, call
+     `Attach(new SessionId(0, 1))`, pass a user response containing `42`, and assert the composed
+     elements are `AckOKResponse`, id, generation, secret, `42`; the user response is no longer
+     alive; release the composed response.
+   - `CloneAckResponse_ReturnsEqualIndependentCopy`: compose a response, clone it, assert
+     `EqualByContent`, release both.
+   - `ReleaseAckResponse_IsIdempotent`: compose, release twice, assert `CloneAckResponse()` is null
+     and no exception is thrown.
+   - This is a loose test file, not a new suite; no `Coverage.md` is required for it under
+     `Tests/RULES.md` LOOSE-01.
 
 ### Verification
 
 ```bash
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter "FullyQualifiedName~RawReliableAckServer" -p:NuGetAudit=false -v minimal
+dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --filter "FullyQualifiedName~ReconnectableAckResponse" -p:NuGetAudit=false -v minimal
 ```
 
-Expected: all selected tests pass. The baseline is 33 tests. This stage adds two transport tests and
-three endpoint tests (`OnConnected`-throws, no-pending-response, stop-before-connect release), and
-removes the endpoint watchdog-refresh test and the unrepresentable stop-while-handshake-pending test,
-so the expected selected count is **36**.
+Expected: the core filter passes with **36** selected tests. The reconnectable filter passes with
+**3** tests. The core baseline is 33; this stage adds two transport tests and three endpoint tests
+(`OnConnected`-throws, no-pending-response, stop-before-connect release), and removes the endpoint
+watchdog-refresh test and the unrepresentable stop-while-handshake-pending test.
 
 ### Definition of done
 
 The core test project compiles, the RawReliableAck server transport/endpoint tests pass with the new
-contract, the ordering probe proves response admission before handler `OnConnected`, and both owning
-`Coverage.md` files are updated in the same stage.
+contract, the ordering probe proves response admission before handler `OnConnected`, both owning
+`Coverage.md` files are updated in the same stage, and the three reconnectable response unit tests
+pass.
 
 ### Risks / notes
 
@@ -850,7 +883,8 @@ Runtime conformance behaviour remains intentionally unverified while the fixture
 
 ### Inputs
 
-- Stages 1–6 complete.
+- Stages 1–6 complete, including Stage 3 (protocol wrappers) and Stage 4 (reconnectable). This test
+  project references `Pontifex.Protocol.Zip` and `Pontifex.Protocol.Reconnectable` transitively.
 - `Tests/Pontifex.Transports.Tests/Raw/Reliable/Ack/RawReliableAckTestServerHandler.cs`
 - `Tests/Pontifex.Transports.Tests/Raw/Reliable/Ack/IRawReliableAckConformanceFixture.cs`
 - `Tests/Pontifex.Transports.Tests/Raw/Reliable/Ack/RawReliableAckConformanceFixture.cs`
@@ -898,8 +932,9 @@ dotnet build Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj -p
 dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj -p:NuGetAudit=false -v minimal
 ```
 
-Expected: build succeeds and the full project passes. The baseline is 245 passed and 68 skipped; this
-stage deletes one ignored test, so the expected result is **245 passed, 67 skipped, 0 failed**. The
+Expected: build succeeds and the full project passes. The baseline before the refactor is 245 passed
+and 68 skipped. Stage 8 adds three reconnectable unit tests to this project, and this stage deletes
+one ignored conformance test, so the expected result is **248 passed, 67 skipped, 0 failed**. The
 skipped tests are the ignored RawReliableAck conformance fixture. The fixture must compile but must
 not run.
 
@@ -988,7 +1023,7 @@ Adapt TCP transport and endpoint integration tests to the tuple factory/acknowle
    - Update any test doubles that expose `TryAcknowledge`.
 2. `RawReliableAckTcpServerEndpointIntegrationTests`:
    - Change **both** handler-returning `BeginAccept` factory lambdas
-     (`Successful_handshake_carries_ack_data_and_response` and
+     (`HappyPath_RealClientAndServerEndpoints_CompleteAckHandshake` and
      `ServerHandler_ReceivesOnDisconnectedThenOnStopped_OnNormalStop`) to return
      `(serverHandler, ackResponse)` where `ackResponse` contains `0xCD`. Acquire a new response for
      each invocation.
@@ -1085,9 +1120,12 @@ already updated by Stage 1 and the test stages, then run the full solution gates
 1. Contract-reference consistency check (the specification was rewritten in Stage 1, before the test
    stages changed):
    - Verify `Ack/Specification.md` contains no `FillAckResponse`, matches the tuple contract, shows
-     acknowledger-owned response creation, and contains the exact size rule: "The framed ACK response
-     MUST NOT exceed `RawReliableAckInfo.AckMaxByteSize`; it is admitted only if it also fits
-     `MessageMaxByteSize`; otherwise establishment fails with `TextFail`."
+     acknowledger-owned response creation, states the additional-reference ACK-data rule in §8.2.4
+     and §11.2, and contains the exact size rule: "The framed ACK response MUST NOT exceed
+     `RawReliableAckInfo.AckMaxByteSize`; it is admitted only if it also fits `MessageMaxByteSize`;
+     otherwise establishment fails with `TextFail`."
+   - Verify Section 15 requires the acknowledger to release the received ACK-data reference, return a
+     pool-acquired response, and not release or retain that response.
    - Verify the specification states that a handler throwing from `OnConnected` receives `OnStopped`
      without `OnDisconnected` and an `ExceptionFail` carrying the instance.
    - Verify §8.2/§9.3/§13.1 contain no contradictory session-sequence text: the sequence rule is
@@ -1118,13 +1156,15 @@ already updated by Stage 1 and the test stages, then run the full solution gates
      response recording.
 4. Confirm no `FillAckResponse` references remain anywhere in the repository except the plan file
    before the final commit.
-5. Prepare the `## Known coverage gaps` section for the plan-executor Phase 5 final response. It must list
-   exactly: Zip handshake response forwarding; Direct rejected-client admission release; logger
-   response hand-off; `RawUnreliableNoAckToRawReliableAckServer` response discard; reconnectable
-   composition/reattach; TestUI acknowledger; `RawReliableAckServer.TryConnectNewClient` defensive
-   validation; the unimplemented conformance `BeforeAckResponseCommitGate`; and the fact that no
-   runtime reconnectable test exists. No new repository file is created for this list; it is part of
-   the Phase 5 completion report under a `## Known coverage gaps` heading.
+5. Prepare the `## Known coverage gaps` section for the final completion report of this plan. It must
+   list: Zip handshake response forwarding and `AcknowledgerWrapper` release semantics; Direct
+   rejected-client admission release; logger response hand-off; 
+   `RawUnreliableNoAckToRawReliableAckServer` response discard; reconnectable carrier
+   handshake/reattach integration; TestUI acknowledger; `RawReliableAckServer.TryConnectNewClient`
+   defensive validation; the `RawReliableAckServerTransport.TryAcknowledge` both-null defensive
+   branch; and the unimplemented conformance `BeforeAckResponseCommitGate`. No new repository file is
+   created for this list; it is part of the final completion report of this plan under a
+   `## Known coverage gaps` heading.
 
 ### Verification
 
@@ -1149,16 +1189,16 @@ dotnet test Pontifex.sln -p:NuGetAudit=false -v minimal
 ```
 
 Expected: every test project passes. The baseline was required to be green at **2224 passed, 68
-skipped**. The expected final result is **2227 passed, 67 skipped, 0 failed**: the core RawReliableAck
-server filter gains three net tests (33 → 36), increasing the solution total by three, and Stage 9
-deletes one ignored conformance test (68 → 67 skipped). The only permitted exclusion is the ignored
+skipped**. The expected final result is **2230 passed, 67 skipped, 0 failed**: the core RawReliableAck
+server filter gains three net tests (33 → 36), Stage 8 adds three reconnectable unit tests, and
+Stage 9 deletes one ignored conformance test (68 → 67 skipped). The only permitted exclusion is the ignored
 `DirectRawReliableAckConformanceAdapterTests` fixture. Any failure blocks completion.
 
 ### Definition of done
 
 Documentation matches the new contract, coverage files match the current test set, the full solution
 builds, the full solution test gate passes with only the known ignored conformance fixture excluded,
-and the "Known coverage gaps" list for the Phase 5 final report is prepared.
+and the "Known coverage gaps" list for the final completion report for this plan is prepared.
 
 ### Risks / notes
 
@@ -1180,7 +1220,7 @@ and the "Known coverage gaps" list for the Phase 5 final report is prepared.
 - Reconnectable reattach returns a stored response clone by construction.
 - No `FillAckResponse` references remain outside the plan file.
 - `dotnet build Pontifex.sln -p:NuGetAudit=false` succeeds.
-- `dotnet test Pontifex.sln -p:NuGetAudit=false` passes with the expected **2227 passed, 67 skipped,
+- `dotnet test Pontifex.sln -p:NuGetAudit=false` passes with the expected **2230 passed, 67 skipped,
   0 failed**, with only the known ignored conformance fixture excluded.
-- The plan-executor Phase 5 final report contains the exact "Known coverage gaps" list from Stage 13.
+- The plan-executor final completion report for this plan contains the exact "Known coverage gaps" list from Stage 13.
 - One git commit per completed stage.
