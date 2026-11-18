@@ -133,7 +133,13 @@ namespace Pontifex.Converters
                 _remoteEndPoint = remoteEndPoint;
 
                 var ackData = owner.Memory.CollectablePool.Acquire<UnionDataList>();
-                _handler = acknowledger.TryAck(remoteEndPoint, ackData) ?? throw new InvalidOperationException("Acknowledger rejected client");
+                using var ackDataDisposer = ackData.AsDisposable();
+                var ackResult = acknowledger.TryAck(remoteEndPoint, ackData.Acquire())
+                    ?? throw new InvalidOperationException("Acknowledger rejected client");
+                // This converter has no wire-level ACK response channel, so the response returned by the
+                // acknowledger is only released here.
+                using var ackResponseDisposer = ackResult.ackResponse.AsDisposable();
+                _handler = ackResult.handler;
                 _handler = _handler.Test(text => owner.Log.e(text)).GetSafe(e => owner.Log.wtf(e));
 
                 _dm = new Delivery.DeliveryManager(
@@ -148,9 +154,6 @@ namespace Pontifex.Converters
                 _dm.Received += OnDmReceived;
                 _dm.Delivered += OnDmDelivered;
                 _dm.FailedToDeliver += OnDmFailedToDeliver;
-
-                var ackResponse = owner.Memory.CollectablePool.Acquire<UnionDataList>();
-                _handler.FillAckResponse(ackResponse);
 
                 _handler.OnConnected(_endpoint);
             }

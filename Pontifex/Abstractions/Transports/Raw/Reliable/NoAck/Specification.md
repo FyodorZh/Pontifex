@@ -39,7 +39,7 @@ these exceptions:
 - admission replaces the ACK handshake with a server-side handler factory
   (Section 5);
 - no acknowledgment data or acknowledgment response exists, so the ownership
-  rows for `FillAckData`, `TryAck`, and `FillAckResponse` have no equivalent;
+  rows for `FillAckData` and `TryAck` have no equivalent;
 - the lifecycle rule table in Section 6 is authoritative for handler callbacks;
 - this document overrides admission and handshake behavior only.
 

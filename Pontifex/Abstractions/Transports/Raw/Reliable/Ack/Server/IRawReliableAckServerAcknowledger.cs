@@ -3,10 +3,11 @@ using Pontifex.Utils;
 namespace Pontifex.Raw.Reliable.Ack
 {
     /// <summary>
-    /// Validates incoming client connections and creates per-client session handlers.
+    /// Validates incoming client connections, creates per-client session handlers, and builds the ACK
+    /// response returned to the client.
     /// Implemented by business logic.
     /// </summary>
-    public interface IRawReliableAckServerAcknowledger<out THandler>
+    public interface IRawReliableAckServerAcknowledger<THandler>
         where THandler : IRawReliableAckServerHandler
     {
         /// <summary>
@@ -18,7 +19,11 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </summary>
         /// <param name="remote">The remote endpoint of the connecting client.</param>
         /// <param name="ackData">Client identification data.</param>
-        /// <returns>Null if the client is not recognized; otherwise a client session handler.</returns>
-        THandler? TryAck(IEndPoint remote, UnionDataList ackData);
+        /// <returns><see langword="null"/> if the client is not recognized; otherwise a fresh session
+        /// handler and an owned ACK response. The transport owns the response after the call, so the
+        /// acknowledger MUST NOT retain or release it after returning. A failure while constructing the
+        /// response is a <c>TryAck</c> failure.</returns>
+        (THandler handler, UnionDataList ackResponse)? TryAck(
+            IEndPoint remote, UnionDataList ackData);
     }
 }

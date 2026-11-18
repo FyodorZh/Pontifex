@@ -21,7 +21,7 @@ namespace Pontifex.Raw.Reliable.Ack
         private enum State
         {
             /// <summary>
-            /// Before the client's ack request is received.
+            /// Before the low-level connection is completed and the ACK response is sent.
             /// </summary>
             Constructed = 0,
 
@@ -38,41 +38,48 @@ namespace Pontifex.Raw.Reliable.Ack
 
         private volatile State _stage;
 
-        private UnionDataList? _pendingAckData;
+        private UnionDataList? _pendingAckResponse;
 
         /// <summary>
-        /// Stores the acknowledgement request that was read from the carrier before the endpoint started.
+        /// Stores the already-built acknowledgement response that is sent once the low-level connection is
+        /// ready.
         /// </summary>
-        /// <param name="pendingAckData">The acknowledgement request without its frame-type byte. Ownership
-        /// transfers to the endpoint.</param>
+        /// <param name="pendingAckResponse">The acknowledgement response without its frame-type byte.
+        /// Ownership transfers to the endpoint.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: Must be called at most once, typically from
         /// the concrete endpoint's constructor.</description></item>
-        /// <item><description><b>Other notes</b>: The buffered request is processed automatically from the
-        /// first <see cref="OnConnected"/> transition.</description></item>
+        /// <item><description><b>Other notes</b>: The buffered response is sent automatically from the first
+        /// <see cref="OnConnected"/> transition.</description></item>
         /// </list>
         /// </remarks>
-        protected void SetPendingAckData(UnionDataList pendingAckData)
+        protected void SetPendingAckResponse(UnionDataList pendingAckResponse)
         {
-            if (pendingAckData == null)
+            if (pendingAckResponse == null)
             {
-                throw new ArgumentNullException(nameof(pendingAckData));
+                throw new ArgumentNullException(nameof(pendingAckResponse));
             }
 
-            if (Interlocked.CompareExchange(ref _pendingAckData, pendingAckData, null) != null)
+            if (Interlocked.CompareExchange(ref _pendingAckResponse, pendingAckResponse, null) != null)
             {
-                throw new InvalidOperationException("The pending acknowledgement request is already set.");
+                throw new InvalidOperationException("The pending acknowledgement response is already set.");
             }
         }
 
         /// <summary>
-        /// Releases the buffered acknowledgement request when it has not been processed yet.
+        /// Releases the buffered acknowledgement response when it has not been sent yet.
         /// </summary>
-        protected void ReleasePendingAckData()
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call concurrently; only the first call releases
+        /// the response.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void ReleasePendingAckResponse()
         {
-            var ackData = Interlocked.Exchange(ref _pendingAckData, null);
-            ackData?.Release();
+            var ackResponse = Interlocked.Exchange(ref _pendingAckResponse, null);
+            ackResponse?.Release();
         }
 
         /// <summary>
@@ -82,8 +89,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <param name="transportName">The name of the transport that owns this endpoint.</param>
         /// <param name="remoteEndPoint">The remote endpoint address, or <see langword="null"/> when it is
         /// unknown.</param>
-        /// <param name="handler">The session handler that provides the ack response data and receives the
-        /// connection lifecycle notifications.</param>
+        /// <param name="handler">The session handler that receives the connection lifecycle
+        /// notifications.</param>
         /// <param name="messageMaxByteSize">The inclusive maximum message size, in bytes, admitted by this
         /// endpoint; must be at least 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted by this endpoint but not
@@ -105,6 +112,10 @@ namespace Pontifex.Raw.Reliable.Ack
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log, disconnectTimeout)
         {
             _handler = handler;
+
+            // A terminal stop may happen before the endpoint is connected, so the pending response is
+            // released here as well as from FailHard and BeginDisconnect. The release is idempotent.
+            Stopped += OnEndpointStopped;
         }
 
         /// <summary>
@@ -142,7 +153,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </remarks>
         protected override void FailHard(StopReason reason)
         {
-            ReleasePendingAckData();
+            ReleasePendingAckResponse();
 
             if (_stage == State.LogicallyConnected)
             {
@@ -162,137 +173,85 @@ namespace Pontifex.Raw.Reliable.Ack
         }
 
         /// <summary>
-        /// Starts the inherited watchdog and processes a buffered acknowledgement request once the endpoint is
+        /// Starts the inherited watchdog and sends the pending acknowledgement response once the endpoint is
         /// connected.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Called on the serial action queue, so the response is
+        /// admitted for outbound delivery before the handler's
+        /// <see cref="IRawReliableAckServerHandler.OnConnected"/> runs and inbound frames remain
+        /// serialized.</description></item>
+        /// <item><description><b>Other notes</b>: A missing pending response stops the endpoint instead of
+        /// leaving the client to wait for its watchdog.</description></item>
+        /// </list>
+        /// </remarks>
         protected override void OnConnected()
         {
             base.OnConnected();
 
-            var ackData = Interlocked.Exchange(ref _pendingAckData, null);
-            if (ackData != null)
+            var ackResponse = Interlocked.Exchange(ref _pendingAckResponse, null);
+            if (ackResponse == null)
             {
-                ProcessInboundMessage(MessageType.AckRequestMessage, ackData);
+                Stop(new TextFail(TransportName, "No pending ACK response"), false);
+                return;
             }
-        }
-        
-        private void FinishAckConnect(UnionDataList message)
-        {
-            _actionQueue.Schedule(() =>
-            {
-                try
-                {
-                    switch (_stage)
-                    {
-                        case State.Constructed:
-                            message.Release();
-                            if (SendAckResponse())
-                            {
-                                _stage = State.LogicallyConnected;
-                                _handler.OnConnected(this);
-                            }
-                            break;
 
-                        case State.LogicallyConnected:
-                            message.Release();
-                            throw new InvalidOperationException($"Wrong RawReliableAckServerEndpoint stage: '{_stage}'");
-
-                        case State.LogicallyDisconnected:
-                            message.Release();
-                            break;
-
-                        default:
-                            throw new ArgumentOutOfRangeException();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _stage = State.LogicallyDisconnected;
-                    Log.wtf(ex);
-                    Stop(new ExceptionFail(TransportName, ex), false);
-                }
-            });
+            SendAckResponse(ackResponse);
         }
 
-        private bool SendAckResponse()
+        /// <summary>
+        /// Sends the already-built acknowledgement response and completes the logical connection.
+        /// </summary>
+        /// <param name="ackResponse">The acknowledgement response without its frame-type byte. The endpoint
+        /// releases its own reference on every path.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Called on the serial action queue from
+        /// <see cref="OnConnected"/>.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: A response arriving after the logical stage
+        /// left <see cref="State.Constructed"/> is released and ignored. The handler observes
+        /// <see cref="IRawReliableAckServerHandler.OnConnected"/> only after the response was admitted for
+        /// outbound delivery.</description></item>
+        /// <item><description><b>Other notes</b>: An exception moves the logical stage to disconnected and
+        /// stops the endpoint with <see cref="ExceptionFail"/>; the handler receives no disconnect
+        /// notification on that path.</description></item>
+        /// </list>
+        /// </remarks>
+        private void SendAckResponse(UnionDataList ackResponse)
         {
-            UnionDataList ackResponse = Memory.CollectablePool.Acquire<UnionDataList>();
             using var disposer = ackResponse.AsDisposable();
+
+            if (_stage != State.Constructed)
+            {
+                return;
+            }
+
             try
             {
-                try
-                {
-                    _handler.FillAckResponse(ackResponse);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                    _stage = State.LogicallyDisconnected;
-                    Stop(new ExceptionFail(TransportName, ex, "FillAckResponse throw an exception"), false);
-                    return false;
-                }
-
                 ackResponse.PutFirst((byte)MessageType.AckResponseMessage);
 
                 if (ackResponse.GetDataSize() > RawReliableAckInfo.AckMaxByteSize)
                 {
                     Stop(new TextFail(TransportName, "Ack response exceeds AckMaxByteSize"), false);
-                    return false;
+                    return;
                 }
 
                 if (ScheduleToSend(ackResponse.Acquire()) != SendResult.Ok)
                 {
                     Stop(new TextFail(TransportName, "Failed to send ACK response"), false);
-                    return false;
+                    return;
                 }
 
-                return true;
+                _stage = State.LogicallyConnected;
+                _handler.OnConnected(this);
             }
             catch (Exception ex)
             {
-                Log.wtf(ex);
                 _stage = State.LogicallyDisconnected;
-                Stop(new TextFail(TransportName, "FillAckResponse throw an exception"), false);
-                return false;
+                Log.wtf(ex);
+                Stop(new ExceptionFail(TransportName, ex), false);
             }
-        }
-
-        /// <summary>
-        /// Handles an acknowledgement request by completing the ack handshake, and delegates all other frame
-        /// types to the base implementation.
-        /// </summary>
-        /// <param name="messageType">The frame type popped from the message.</param>
-        /// <param name="message">The frame body. An acknowledgement request is released by this method.</param>
-        /// <returns><see langword="true"/> when the frame was handled; otherwise
-        /// <see langword="false"/>.</returns>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Invoked on the caller's thread; the acknowledgement
-        /// completion runs on the serial action queue, so handler callbacks remain
-        /// serialized.</description></item>
-        /// <item><description><b>Side effects</b>: Refreshes the idle-session watchdog timestamp for an
-        /// acknowledgement request.</description></item>
-        /// <item><description><b>Other notes</b>: An acknowledgement request received outside the expected
-        /// stage is treated as a fatal protocol violation. Overrides must delegate non-acknowledgement frames to
-        /// the base implementation.</description></item>
-        /// </list>
-        /// </remarks>
-        protected override bool ProcessInboundMessage(MessageType messageType, UnionDataList message)
-        {
-            if (messageType == MessageType.AckRequestMessage)
-            {
-                RefreshLastInboundMessage();
-                if (message.GetDataSize() > RawReliableAckInfo.AckMaxByteSize)
-                {
-                    message.Release();
-                    Stop(new TextFail(TransportName, "Ack request exceeds AckMaxByteSize"), false);
-                    return true;
-                }
-                FinishAckConnect(message);
-                return true;
-            }
-
-            return base.ProcessInboundMessage(messageType, message);
         }
 
         /// <summary>
@@ -312,7 +271,7 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </remarks>
         protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
         {
-            ReleasePendingAckData();
+            ReleasePendingAckResponse();
 
             if (_stage == State.LogicallyConnected)
             {
@@ -327,6 +286,16 @@ namespace Pontifex.Raw.Reliable.Ack
                 }
             }
             _stage = State.LogicallyDisconnected;
+        }
+
+        /// <summary>
+        /// Releases the acknowledgement response that was never sent when the endpoint reaches its terminal
+        /// stop.
+        /// </summary>
+        /// <param name="reason">The reason the endpoint stopped; not used.</param>
+        private void OnEndpointStopped(StopReason reason)
+        {
+            ReleasePendingAckResponse();
         }
     }
 }

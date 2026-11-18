@@ -67,11 +67,6 @@ namespace Pontifex.Raw.Reliable.Ack
                 }
             }
 
-            public void FillAckResponse(UnionDataList ackData)
-            {
-                _handler.FillAckResponse(ackData);
-            }
-
             public void OnConnected(IRawReliableEndpoint endPoint)
             {
                 _handler.OnConnected(endPoint);
@@ -111,11 +106,6 @@ namespace Pontifex.Raw.Reliable.Ack
             public override string ToString()
             {
                 return $"'{_core}' - '{_core.GetType()}'";
-            }
-
-            void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackData)
-            {
-                _core.FillAckResponse(ackData);
             }
 
             void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)

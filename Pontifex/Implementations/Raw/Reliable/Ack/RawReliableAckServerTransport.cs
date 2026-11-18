@@ -93,16 +93,18 @@ namespace Pontifex.Raw.Reliable.Ack
         }
 
         /// <summary>
-        /// Asks the configured acknowledger to validate a client's acknowledgement data and create its
-        /// session handler.
+        /// Asks the configured acknowledger to validate a client's acknowledgement data, create its
+        /// session handler, and build the ACK response for the client.
         /// </summary>
         /// <param name="remote">The remote endpoint of the connecting client.</param>
         /// <param name="ackData">The borrowed acknowledgement request. This method adds a reference to the
         /// same list and passes it to the acknowledger; the caller retains its own reference, and mutations
         /// are visible to the caller.</param>
-        /// <returns>The stop-once gate wrapping the session handler created by the acknowledger, or
-        /// <see langword="null"/> when the client is rejected, no acknowledger is configured, or the
-        /// transport is not valid and started.</returns>
+        /// <returns>The stop-once gate wrapping the session handler created by the acknowledger together
+        /// with the ACK response it built, or <see langword="null"/> when the client is rejected, no
+        /// acknowledger is configured, the transport is not valid and started, or the acknowledger returned
+        /// an unusable result. The caller owns the returned response and must release it exactly once, unless
+        /// it hands ownership to a session endpoint.</returns>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Called from the carrier's handshake callback, serialized
@@ -112,10 +114,12 @@ namespace Pontifex.Raw.Reliable.Ack
         /// exception is logged and treated as a rejection. A non-null handler is always wrapped in
         /// <see cref="StopOnceAckServerHandler"/>, so the carrier, the session endpoint, and the admission
         /// fallback share one stop latch and the acknowledger's handler observes at most one
-        /// <see cref="IRawHandler.OnStopped"/>.</description></item>
+        /// <see cref="IRawHandler.OnStopped"/>. A response without a handler is released and the attempt is
+        /// rejected; a handler without a response is stopped once and the attempt is rejected.</description></item>
         /// </list>
         /// </remarks>
-        protected IRawReliableAckServerHandler? TryAcknowledge(IEndPoint remote, UnionDataList ackData)
+        protected (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAcknowledge(
+            IEndPoint remote, UnionDataList ackData)
         {
             var acknowledger = _acknowledger;
             if (acknowledger == null || !IsValid || !IsStarted)
@@ -128,8 +132,36 @@ namespace Pontifex.Raw.Reliable.Ack
             {
                 try
                 {
-                    IRawReliableAckServerHandler? handler = acknowledger.TryAck(remote, ackData.Acquire());
-                    return handler == null ? null : new StopOnceAckServerHandler(handler);
+                    var result = acknowledger.TryAck(remote, ackData.Acquire());
+                    if (result == null)
+                    {
+                        return null;
+                    }
+
+                    var handler = result.Value.handler;
+                    var ackResponse = result.Value.ackResponse;
+
+                    if (handler == null)
+                    {
+                        ackResponse?.Release();
+                        return null;
+                    }
+
+                    if (ackResponse == null)
+                    {
+                        try
+                        {
+                            handler.OnStopped(new TextFail(Name, "Acknowledger returned no ACK response"));
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                        }
+
+                        return null;
+                    }
+
+                    return (new StopOnceAckServerHandler(handler), ackResponse);
                 }
                 catch (Exception ex)
                 {

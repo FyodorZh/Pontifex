@@ -45,13 +45,13 @@ public interface IRawReliableAckServer : IRawReliableTransport
 public interface IRawReliableAckServerHandler : IRawReliableServerHandler
 {
     void OnConnected(IRawReliableEndpoint endPoint);
-    void FillAckResponse(UnionDataList ackData);
 }
 
-public interface IRawReliableAckServerAcknowledger<out THandler>
+public interface IRawReliableAckServerAcknowledger<THandler>
     where THandler : IRawReliableAckServerHandler
 {
-    THandler? TryAck(UnionDataList ackData);
+    (THandler handler, UnionDataList ackResponse)? TryAck(
+        IEndPoint remote, UnionDataList ackData);
 }
 
 public interface IRawReliableEndpoint : IRawEndpoint
@@ -98,7 +98,7 @@ sending and logical disconnection.
 | **logical connection** | The application-visible connection lifetime from `OnConnected` through `OnDisconnected`. It can end before an underlying physical transport is fully closed. |
 | **accepted send** | A `Send` invocation that returns `SendResult.Ok`. It has entered the transport's outbound delivery responsibility. |
 | **delivery prefix** | The zero or more earliest accepted sends that reach the peer before the connection terminates. |
-| **acknowledger** | The server-side `IRawReliableAckServerAcknowledger` bound by `Init`. It validates ACK data and creates session handlers. |
+| **acknowledger** | The server-side `IRawReliableAckServerAcknowledger` bound by `Init`. It validates ACK data, creates session handlers, and builds the ACK response. |
 | **running** | The period after a successful `Start` and before stopping begins. |
 
 RawReliableAck is connection-oriented: a client has one logical connection per
@@ -111,7 +111,7 @@ principal or session identifier.
 
 | Topic | Guaranteed by RawReliableAck | Application responsibility | Implementation-defined |
 | --- | --- | --- | --- |
-| Admission | ACK data is presented to the server; a non-null handler accepts a session. | Authenticate and authorize inside `TryAck`. | How rejection is observed by the client. |
+| Admission | ACK data is presented to the server; `TryAck` returns a fresh handler and the ACK response for an accepted session. | Authenticate and authorize inside `TryAck`, and build the ACK response there. | How rejection is observed by the client. |
 | Delivery | Accepted sends are delivered at most once, in per-direction order, until termination. | Add application receipts when confirmation is required. | Wire framing and transmission mechanism. |
 | Backpressure | `BufferOverflow` is non-fatal. | Retry later using a newly created buffer and an application backpressure policy. | Queue capacity and drain rate. |
 | Callbacks | Per-connection callbacks are serialized and non-reentrant. | Return promptly, release owned buffers, and protect state shared between sessions. | Callback thread or scheduler. |
@@ -312,8 +312,7 @@ sequenceDiagram
         A-->>ST: null
         Note over ST,CT: Client-visible rejection result is implementation-defined
     else accepted
-        A-->>ST: new session handler
-        ST->>S: FillAckResponse(transport-owned buffer)
+        A-->>ST: fresh session handler + owned ACK response
         ST-->>CT: ACK response
         ST->>S: OnConnected(server endpoint)
         CT->>C: OnConnected(client endpoint, owned ACK response)
@@ -338,8 +337,10 @@ sequenceDiagram
 2. Calls to `TryAck` on a server **MUST NOT** overlap concurrently.
 3. `TryAck` **MUST** return a fresh server handler for each accepted session.
    A handler instance **MUST NOT** serve multiple sessions.
-4. `TryAck` receives ownership of its ACK-data buffer and **MUST** release it
-   exactly once after validation, including on an exceptional path.
+4. `TryAck` receives an additional reference to its ACK-data buffer. The
+   caller keeps and releases its own reference; the acknowledger **MUST**
+   release the received reference exactly once after validation, including on
+   an exceptional path, and **MUST NOT** retain it afterwards.
 5. Returning `null` rejects the connection attempt. The server **MUST NOT**
    cache a null return: a later connection attempt from the same source is
    eligible to invoke `TryAck` again.
@@ -353,26 +354,30 @@ a client-side timeout, or by any other mechanism that terminates the
 establishment attempt. The Direct transport **MUST** send an explicit rejection
 packet to the client. The rejection may or may not be reported to the client
 handler as `AckRejected`.
-6. For an accepted session, the server **MUST** call `FillAckResponse` before
-   its `OnConnected`. The ACK response **MUST** be accepted for outbound
+6. A non-null result contains a fresh session handler and the already-built
+   ACK response. The response **MUST** be acquired from a collectable pool,
+   and the transport owns it after the call: the acknowledger **MUST NOT**
+   retain or release it after returning. A failure while constructing the
+   response is a `TryAck` failure.
+7. For an accepted session, the server **MUST** send the returned ACK response
+   before its `OnConnected`. The ACK response **MUST** be accepted for outbound
    delivery before server `OnConnected` is invoked.
-7. `FillAckResponse` receives transport-owned scratch storage. The handler
-   **MUST** populate it but **MUST NOT** retain or release it.
 8. If a callback fails before the server handler's `OnConnected`, the session
    never became logical and that handler receives exactly one `OnStopped` and
    no `OnConnected` or `OnDisconnected`.
-9. If the populated ACK response exceeds `MessageMaxByteSize`, establishment
-   **MUST** fail. The client **MUST** receive `OnStopped` without
-   `OnConnected`, and the pre-connected server handler receives exactly one
-   `OnStopped` and no `OnConnected` or `OnDisconnected`. The client failure
-   reason is implementation-defined.
+9. The framed ACK response MUST NOT exceed `RawReliableAckInfo.AckMaxByteSize`;
+   it is admitted only if it also fits `MessageMaxByteSize`; otherwise
+   establishment fails with `TextFail`. The client **MUST** receive
+   `OnStopped` without `OnConnected`, and the pre-connected server handler
+   receives exactly one `OnStopped` and no `OnConnected` or
+   `OnDisconnected`. The client failure reason is implementation-defined.
 
 Server acceptance is local. Server `OnConnected` MAY run before the client
 receives the ACK response or runs its own `OnConnected`.
 
 ### 8.3 Handshake callback discipline
 
-`FillAckData`, `TryAck`, and `FillAckResponse` are handshake callbacks. No
+`FillAckData` and `TryAck` are handshake callbacks. No
 endpoint operation is available in them. They **MUST** return promptly;
 expensive authentication, I/O, or construction work **SHOULD** be delegated
 so admission processing is not stalled.
@@ -381,10 +386,9 @@ If `TryAck` throws, the server **MUST** catch and log the exception, release
 and drop the ACK data, and leave no session binding for that connection
 attempt. The transport **MUST NOT** stop or invalidate solely because `TryAck`
 threw. A later connection attempt from the same source is eligible to invoke
-`TryAck` again. If `FillAckResponse` throws, the server **MUST** treat it as
-establishment failure: the pre-connected server handler receives exactly one
-`OnStopped` and no `OnConnected` or `OnDisconnected`, and the client receives
-`OnStopped` without `OnConnected`.
+`TryAck` again. Response construction happens inside `TryAck`, so an exception
+while building the ACK response is a `TryAck` failure and follows the same
+rule.
 
 ## 9. Connection lifecycle
 
@@ -430,16 +434,21 @@ authenticated identity, authorization claim, or proof of peer ownership.
 
 ### 9.3 Server session lifecycle
 
-For each accepted server session, the callback sequence is:
+For each accepted server session whose `OnConnected` returned without throwing,
+the callback sequence is:
 
 ```text
 OnConnected -> OnDisconnected -> OnStopped
 ```
 
 `OnDisconnected` and `OnStopped` **MUST** each occur exactly once for each
-successfully connected server session, in that order. A session that never
+such successfully connected server session, in that order. A session that never
 reaches `OnConnected` receives exactly one `OnStopped` and no
 `OnDisconnected`.
+
+A server handler that throws from `OnConnected` has already received
+`OnConnected`. The endpoint **MUST** stop with an `ExceptionFail` carrying that
+exact exception instance and deliver `OnStopped` without `OnDisconnected`.
 
 The server session is independent of the server transport lifecycle with
 respect to callbacks. A server transport may be stopped while sessions are
@@ -575,8 +584,8 @@ The following ownership rules are normative:
 | --- | --- | --- |
 | `Send(buffer)` | Transport | Caller **MUST** never use or release `buffer` again. |
 | `FillAckData(buffer)` | Transport | Handler populates only; **MUST NOT** retain or release. |
-| `FillAckResponse(buffer)` | Transport | Handler populates only; **MUST NOT** retain or release. |
-| `TryAck(ackData)` | Acknowledger | **MUST** release exactly once after validation. |
+| `TryAck(ackData)` | Acknowledger | Receives an additional reference and **MUST** release it exactly once after validation. The caller keeps and releases its own reference. |
+| ACK response returned by `TryAck` | Transport | Acknowledger **MUST NOT** retain or release it after returning. |
 | client `OnConnected(..., ackResponse)` | Client handler | **MUST** release exactly once. |
 | `OnReceived(receivedBuffer)` | Receiving handler | **MUST** release exactly once. |
 
@@ -584,6 +593,13 @@ Every owner in this table **MUST** eventually release its transferred or owned
 reference exactly once after finishing with it. An implementation MAY take
 additional internal references, but it **MUST** balance those references
 without releasing the owner's reference more than once.
+
+For `TryAck`, the caller's own ACK-data reference and the additional reference
+received by the acknowledger are independent. The acknowledger **MUST** release
+only the reference it received, exactly once, including when it rejects the
+client or throws. The ACK response returned by `TryAck` is owned by the
+transport, which releases it after sending it or when the session fails before
+the response is sent.
 
 ```csharp
 public void OnReceived(UnionDataList receivedBuffer)
@@ -670,6 +686,7 @@ The transport-specific control additionally exposes these members:
 
 ```csharp
 ICheckPointCtl BeforeAcknowledgerGate { get; }
+ICheckPointCtl BeforeAckResponseCommitGate { get; }
 ICheckPointCtl BeforeHandlerConnectedGate { get; }
 ```
 
@@ -677,6 +694,13 @@ ICheckPointCtl BeforeHandlerConnectedGate { get; }
 `TryAck` invocation. It is not hit for malformed, oversized, stopped, or
 otherwise discarded connection attempts. It is not hit for a client transport.
 The gate participates in the global acknowledger serialization rule.
+
+`BeforeAckResponseCommitGate` is hit once after `TryAck` returns the ACK
+response and before that response is accepted for outbound delivery. It is not
+hit for a client transport. If the gate blocks, the server `OnConnected` cannot
+be invoked. It is not hit when `TryAck` fails or the ACK response is oversized.
+No production implementation hits this gate yet; it remains part of the ignored
+conformance work.
 
 `BeforeHandlerConnectedGate` is hit once immediately before a handler's
 `OnConnected(endpoint, ...)` invocation. It is hit for both client and server
@@ -733,13 +757,14 @@ An exception thrown by application logic in `FillAckData`, `OnConnected`, or
 `OnReceived` **MUST** terminate the affected local logical connection with an
 `ExceptionFail` containing that exact exception instance. Every affected local
 teardown callback **MUST** receive that reason. The remote peer's reason
-remains implementation-defined.
+remains implementation-defined. A server handler that throws from `OnConnected`
+has already received `OnConnected`; it receives `OnStopped` without
+`OnDisconnected`.
 
 An exception in `TryAck` **MUST** be caught and logged; it fails the
-individual connection attempt as described in Section 8.3. An exception in
-`FillAckResponse` **MUST** fail establishment: the pre-connected server
-handler receives exactly one `OnStopped` and no `OnConnected` or
-`OnDisconnected`, and the client receives `OnStopped` without `OnConnected`.
+individual connection attempt as described in Section 8.3. Response
+construction happens inside `TryAck`, so an exception while building the ACK
+response follows the same rule.
 
 An exception in `OnDisconnected` or `OnStopped` **MUST NOT** create
 duplicate lifecycle callbacks. The transport **MUST** catch and log the
@@ -843,8 +868,11 @@ Application logic conforms to this specification only if it:
       stopping, or after the transport becomes invalid;
 - [ ] treats transport instances and client sessions as single-use;
 - [ ] authenticates and authorizes connections in `TryAck`;
-- [ ] returns a fresh handler from every accepted `TryAck`;
-- [ ] releases every `TryAck`, `OnConnected` ACK-response, and `OnReceived`
+- [ ] returns a fresh handler and a pool-acquired ACK response from every
+      accepted `TryAck`;
+- [ ] releases the ACK-data reference received by `TryAck` exactly once and
+      never releases or retains the ACK response it returns;
+- [ ] releases every client-side `OnConnected` ACK-response and `OnReceived`
       buffer exactly once, including when processing fails;
 - [ ] never accesses a buffer after passing it to `Send`;
 - [ ] treats `SendResult.Ok` as queue admission rather than a delivery
@@ -874,8 +902,7 @@ An implementation conforms to this specification only if it:
 - [ ] creates exactly one fresh server handler per accepted session;
 - [ ] invokes server `OnConnected` only after its ACK response is accepted for
       outbound delivery;
-- [ ] catches and logs `TryAck` and `FillAckResponse` exceptions without
-      stopping the transport;
+- [ ] catches and logs `TryAck` exceptions without stopping the transport;
 - [ ] handles ACK data and ACK response exceeding `MessageMaxByteSize` as
       establishment failure with the specified callback sequences;
 - [ ] delivers regular messages at most once, in accepted-send order, with

@@ -60,21 +60,25 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
 
         int IRawTransport.MessageMaxByteSize => _core.MessageMaxByteSize;
 
-        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
+            IEndPoint remote, UnionDataList ackData)
         {
             if (_userAcknowledger == null)
             {
                 Log.e("UserAcknowledger is null");
+                ackData.Release();
                 return null;
             }
             Log.i("UserAcknowledger.TryAck(" + ackData + ")");
-            _userHandler = _userAcknowledger.TryAck(remote, ackData);
-            if (_userHandler != null)
+            var result = _userAcknowledger.TryAck(remote, ackData);
+            if (result == null)
             {
-                return this;
+                return null;
             }
 
-            return null;
+            _userHandler = result.Value.handler;
+            Log.i("UserAcknowledger returned the session handler and the ACK response");
+            return (this, result.Value.ackResponse);
         }
 
         void IRawReliableHandler.OnDisconnected(StopReason reason)
@@ -93,12 +97,6 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
         {
             Log.i("UserHandler.OnReceived(" + receivedBuffer + ")");
             _userHandler?.OnReceived(receivedBuffer);
-        }
-
-        void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackResponse)
-        {
-            Log.i("UserHandler.GetAckResponse()");
-            _userHandler?.FillAckResponse(ackResponse);
         }
 
         void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)

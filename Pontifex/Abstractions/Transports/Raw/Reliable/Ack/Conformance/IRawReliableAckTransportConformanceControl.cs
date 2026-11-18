@@ -19,12 +19,18 @@ namespace Pontifex.Raw.Reliable.Ack
         ICheckPointCtl BeforeAcknowledgerGate { get; }
 
         /// <summary>
-        /// Hit once immediately after a server handler's <c>FillAckResponse</c>
-        /// returns and before the ACK response is accepted for outbound delivery.
+        /// Hit once immediately after the acknowledger's <c>TryAck</c> returns
+        /// the ACK response and before that response is accepted for outbound
+        /// delivery.
         /// Not hit for a client transport. If this gate blocks, the server
-        /// <c>OnConnected</c> cannot be invoked. If <c>FillAckResponse</c> throws
-        /// or the ACK response is oversized, this gate is not hit.
+        /// <c>OnConnected</c> cannot be invoked. It is not hit when
+        /// <c>TryAck</c> fails or the ACK response is oversized.
         /// </summary>
+        /// <remarks>
+        /// The ACK response is built by <c>TryAck</c>, not by a handler callback.
+        /// No production implementation hits this gate yet; it remains part of
+        /// the ignored conformance work and is recorded as a known coverage gap.
+        /// </remarks>
         ICheckPointCtl BeforeAckResponseCommitGate { get; }
 
         /// <summary>

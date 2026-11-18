@@ -37,12 +37,6 @@ namespace Pontifex.Raw.Reliable.Ack
         public IRawReliableAckServerHandler Inner { get; }
 
         /// <inheritdoc/>
-        public void FillAckResponse(UnionDataList ackData)
-        {
-            Inner.FillAckResponse(ackData);
-        }
-
-        /// <inheritdoc/>
         public void OnConnected(IRawReliableEndpoint endPoint)
         {
             Inner.OnConnected(endPoint);
