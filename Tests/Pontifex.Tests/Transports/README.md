@@ -420,10 +420,11 @@ ticker behavior is covered by the `RawReliableServerTransport` layer and is not 
   invalid, not started, or has no acknowledger. This covers before-start, after-stop, and after-fail.
 - **TryAcknowledge hand-off**: when started, passes the remote endpoint and the same
   `UnionDataList` with one additional reference to the acknowledger, and returns a stop-once gate
-  wrapping the acknowledger's handler; the gate forwards the handler callbacks and guarantees one
-  `OnStopped`. The caller keeps its own reference; the acknowledger must release the added reference
-  exactly once. A rejection returns `null`. An acknowledger exception is caught/logged, returns
-  `null`, and leaves the transport valid and started.
+  wrapping the acknowledger's handler together with the ACK response the acknowledger built; the
+  gate forwards the handler callbacks and guarantees one `OnStopped`, and ownership of the response
+  transfers to the caller. The caller keeps its own reference; the acknowledger must release the
+  added reference exactly once. A rejection returns `null`. An acknowledger exception is
+  caught/logged, returns `null`, and leaves the transport valid and started.
 - **Ownership**: the caller's buffer remains alive with its original reference count after the
   acknowledger releases; mutations made through the shared list are visible to the caller.
 
@@ -558,8 +559,9 @@ never use reflection. Only these are asserted:
   `AbandonAdmission`, `TryMarkInitialized`, `HasStartBeenAttempted`, `ActiveSessions`, and the
   carrier call counters.
 - `RecordingRawReliableAckServerAcknowledger` records the remote endpoint, the acknowledgement
-  buffer, and its reference count around a configurable behavior. The behavior owns the additional
-  reference; the recorder releases it as a safety net if the behavior does not.
+  buffer, its reference count around a configurable behavior, and the ACK response that behavior
+  returned. The behavior owns the additional reference; the recorder releases it as a safety net if
+  the behavior does not.
 - `TestRawUnreliableTransport : RawUnreliableTransport, IRawUnreliableDebugReliability` supplies the
   inherited abstract members, exposes the typed conformance control, and records the debug-reliability
   call.
