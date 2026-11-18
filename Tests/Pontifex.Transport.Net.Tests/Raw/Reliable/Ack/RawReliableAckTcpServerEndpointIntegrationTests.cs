@@ -67,8 +67,10 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
             var captured = new AcceptCapture();
             using var acceptDone = new ManualResetEventSlim(false);
             IEndPoint? factoryEndPoint = null;
+            UnionDataList? factoryAckData = null;
             int factoryAckCount = -1;
             int factoryAckFirst = -1;
+            int factoryResponseCount = 0;
 
             RawReliableAckTcpServerEndpoint.BeginAccept(
                 "it-server",
@@ -76,11 +78,13 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
                 (endPoint, ackData) =>
                 {
                     Volatile.Write(ref factoryEndPoint, endPoint);
+                    Volatile.Write(ref factoryAckData, ackData);
                     Volatile.Write(ref factoryAckCount, ackData.Elements.Count);
                     Volatile.Write(
                         ref factoryAckFirst,
                         ackData.Elements.Count > 0 ? ackData.Elements[0].Alias.ByteValue : -1);
-                    return serverHandler;
+                    Interlocked.Increment(ref factoryResponseCount);
+                    return (serverHandler, CreateAckResponse(0xCD));
                 },
                 MessageMaxByteSize,
                 BufferCapacityBytes,
@@ -108,20 +112,23 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
 
             Assert.That(server.Start(), Is.True, "the accepted endpoint start request must be accepted");
 
-            Assert.That(serverHandler.FillAckResponseCalled.Wait(Timeout), Is.True,
-                "the server handler must fill the ack response");
-
             Assert.That(serverHandler.Connected.Wait(Timeout), Is.True,
                 "the server handler must observe the logical connection");
             Assert.That(clientHandler.Connected.Wait(Timeout), Is.True,
                 "the client handler must observe the logical connection");
 
+            Assert.That(Volatile.Read(ref factoryResponseCount), Is.EqualTo(1),
+                "the server factory must produce exactly one ACK response");
             Assert.That(Volatile.Read(ref factoryAckCount), Is.EqualTo(1),
                 "the server factory must receive the client ack payload without the frame type");
             Assert.That(Volatile.Read(ref factoryAckFirst), Is.EqualTo(0xAB),
                 "the server factory must receive the client ack data");
             Assert.That(Volatile.Read(ref factoryEndPoint), Is.Not.Null,
                 "the server factory must receive the remote endpoint");
+            UnionDataList? receivedAckData = Volatile.Read(ref factoryAckData);
+            Assert.That(receivedAckData, Is.Not.Null);
+            Assert.That(receivedAckData!.IsAlive, Is.False,
+                "the TCP carrier must release its caller-owned ACK request reference");
 
             Assert.That(clientHandler.AckResponsePayload, Is.EqualTo(new[] { 0xCD }),
                 "the client handler must receive the server ack response payload");
@@ -173,7 +180,7 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
             RawReliableAckTcpServerEndpoint.BeginAccept(
                 "it-server-stop",
                 acceptedSocket,
-                (_, _) => serverHandler,
+                (_, _) => (serverHandler, CreateAckResponse(0xCD)),
                 MessageMaxByteSize,
                 BufferCapacityBytes,
                 Memory,
@@ -445,6 +452,16 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Acquires a fresh ACK response. The created endpoint owns and releases it after the handshake.
+    /// </summary>
+    private static UnionDataList CreateAckResponse(int value)
+    {
+        var response = Memory.CollectablePool.Acquire<UnionDataList>();
+        response.PutLast(new UnionData(value));
+        return response;
+    }
+
     private static void SendRaw(Socket socket, byte[] bytes)
     {
         int offset = 0;
@@ -591,7 +608,6 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
         private readonly List<string> _events = new();
 
         public readonly ManualResetEventSlim Connected = new(false);
-        public readonly ManualResetEventSlim FillAckResponseCalled = new(false);
         public readonly ManualResetEventSlim Stopped = new(false);
 
         public IRawReliableEndpoint? ConnectedEndPoint { get; private set; }
@@ -616,12 +632,6 @@ public sealed class RawReliableAckTcpServerEndpointIntegrationTests
                     return _events.ToArray();
                 }
             }
-        }
-
-        public void FillAckResponse(UnionDataList ackData)
-        {
-            ackData.PutLast(new UnionData(0xCD));
-            FillAckResponseCalled.Set();
         }
 
         public void OnConnected(IRawReliableEndpoint endPoint)

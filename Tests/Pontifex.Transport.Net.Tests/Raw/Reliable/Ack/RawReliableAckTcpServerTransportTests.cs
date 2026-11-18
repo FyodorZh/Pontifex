@@ -77,7 +77,15 @@ public sealed class RawReliableAckTcpServerTransportTests
         try
         {
             ackData.PutLast(new UnionData(1));
-            return transport.ExposedTryAcknowledge(Remote, ackData);
+            var result = transport.ExposedTryAcknowledge(Remote, ackData);
+            if (result == null)
+            {
+                return null;
+            }
+
+            // No endpoint takes ownership here, so the test releases the returned response.
+            result.Value.ackResponse.Release();
+            return result.Value.handler;
         }
         finally
         {
@@ -104,7 +112,8 @@ public sealed class RawReliableAckTcpServerTransportTests
             return TryBeginAdmission();
         }
 
-        public IRawReliableAckServerHandler? ExposedTryAcknowledge(IEndPoint remote, UnionDataList ackData)
+        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? ExposedTryAcknowledge(
+            IEndPoint remote, UnionDataList ackData)
         {
             return TryAcknowledge(remote, ackData);
         }
@@ -124,10 +133,14 @@ public sealed class RawReliableAckTcpServerTransportTests
             _handler = handler;
         }
 
-        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
+            IEndPoint remote, UnionDataList ackData)
         {
             ackData.Release();
-            return _handler;
+
+            // A fresh response per call: the transport owns and releases it after the handshake.
+            UnionDataList ackResponse = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            return (_handler, ackResponse);
         }
     }
 
@@ -156,11 +169,6 @@ public sealed class RawReliableAckTcpServerTransportTests
                     return _events.ToArray();
                 }
             }
-        }
-
-        public void FillAckResponse(UnionDataList ackData)
-        {
-            ackData.PutLast(new UnionData(0xCD));
         }
 
         public void OnConnected(IRawReliableEndpoint endPoint)
