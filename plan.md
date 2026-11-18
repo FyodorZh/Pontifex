@@ -52,8 +52,8 @@ This is an in-process contract refactor. The wire frame types `AckRequestMessage
 - Do not change the wire protocol, frame-type values, `RawReliableAckInfo.AckMaxByteSize`, or the
   client-side handshake.
 - Do not change unrelated behaviour, formatting, or dependencies.
-- Test suites must follow `Tests/RULES.md`: update `Coverage.md` whenever tests are added, removed,
-  renamed, or moved.
+- Test suites must follow `Tests/RULES.md`: each stage that adds, removes, renames, or moves tests
+  must update the owning `Coverage.md` in that same stage.
 - Do not modify the sibling `Pontifex copy` directory or any file outside this repository.
 - Commit one stage at a time. Never commit a failed stage or unrelated files.
 
@@ -78,15 +78,25 @@ This is an in-process contract refactor. The wire frame types `AckRequestMessage
   `MemoryRental.Shared`, preserving source compatibility for existing callers.
 - On a reconnectable reattach there is no session handler response callback anymore, so the
   reconnectable layer reuses the ACK response composed for the original session.
-- `dotnet build` and `dotnet test` work in this environment.
+- `dotnet build` and `dotnet test` work in this environment when NuGet audit is disabled with
+  `-p:NuGetAudit=false`. Without that property, an unreachable `api.nuget.org` produces `NU1900`,
+  which `TreatWarningsAsErrors=true` promotes to an error in the `netstandard2.1` projects.
 - The Direct RawReliableAck conformance test fixture remains `[Ignore]`d; its compilation must still
   succeed.
+- No reconnectable handshake test suite exists in the repository. Stage 4 is therefore verified at
+  compile level, and its runtime behaviour is reviewed rather than automatically tested.
 
 ## Prerequisites
 
 - A clean git working tree before the plan is authored.
 - .NET SDK capable of building `netstandard2.1` and `net10.0` projects.
-- NUnit test packages restored by the existing project references.
+- NuGet packages already restored; use `-p:NuGetAudit=false` on every build and test command to
+  avoid the environment-specific `NU1900` failure.
+- Before Stage 1, run the baseline `dotnet test Pontifex.sln -p:NuGetAudit=false -v minimal` and
+  record any pre-existing failures. Only those pre-existing failures may remain at the end.
+- Before Stage 8, run
+  `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj -p:NuGetAudit=false --filter "FullyQualifiedName~RawReliableAckServer" -v minimal`
+  and record the baseline count. The current baseline is 33 selected tests.
 
 ## Stage 1: Change the core contract and the Pontifex library production pipeline
 
@@ -157,7 +167,8 @@ update every implementation inside `Pontifex/Pontifex.csproj` so that project co
         `SendResult.Ok`.
      5. Sets `_stage = State.LogicallyConnected` and calls `_handler.OnConnected(this)`.
      6. On any exception, sets `_stage = State.LogicallyDisconnected`, logs, and stops with
-        `ExceptionFail`.
+        `ExceptionFail`. Preserve the current exception behaviour exactly: this refactor does not
+        add an `OnDisconnected` notification for a handler that throws from `OnConnected`.
      Use a `using var disposer = ackResponse.AsDisposable()` so the endpoint releases its own
      reference on every path.
    - In `OnConnected`, call `base.OnConnected()`, exchange `_pendingAckResponse` to null, and send
@@ -176,7 +187,11 @@ update every implementation inside `Pontifex/Pontifex.csproj` so that project co
    - Store the handler, then release the returned `ackResponse` with a `using` disposer because this
      converter has no wire-level ACK response channel.
    - Remove the old `FillAckResponse` call.
-10. Search `Pontifex/Pontifex.csproj` sources for remaining `FillAckResponse` references and remove
+10. `Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Conformance/IRawReliableAckTransportConformanceControl.cs`:
+    - Reword the `BeforeAckResponseCommitGate` XML documentation so it refers to the response
+      returned by `TryAck` and not to a handler `FillAckResponse` callback. This is the only
+      `FillAckResponse` reference in the library source outside the files above.
+11. Search `Pontifex/Pontifex.csproj` sources for remaining `FillAckResponse` references and remove
     them.
 
 ### Verification
@@ -184,7 +199,7 @@ update every implementation inside `Pontifex/Pontifex.csproj` so that project co
 Run:
 
 ```bash
-dotnet build Pontifex/Pontifex.csproj -v minimal
+dotnet build Pontifex/Pontifex.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors. The library project must build without relying on any
@@ -244,14 +259,15 @@ Adapt `ServerSideApiFactory` to return the ACK response and remove the handler-s
 ### Verification
 
 ```bash
-dotnet build Api/Pontifex.Api/Pontifex.Api.csproj -v minimal
+dotnet build Api/Pontifex.Api/Pontifex.Api.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors.
 
 ### Definition of done
 
-The Api project builds and no `FillAckResponse` remains in it.
+The Api project builds and no `FillAckResponse` remains in it. This stage is compile-level only; the
+`7777L` response payload is behaviourally asserted by the API test plans in Stage 12.
 
 ### Risks / notes
 
@@ -278,6 +294,12 @@ response callback from `IHandlerWrapper`.
    - Change `TryAck` to return
      `(IRawReliableAckServerHandler handler, UnionDataList ackResponse)?`.
    - Keep `CheckAckData` and wrapper construction.
+   - This class is itself an acknowledger, so it owns the received `ackData` reference:
+     - if `CheckAckData` returns false, release `ackData` and return null;
+     - if `CheckAckData` or wrapper construction throws, release `ackData` and rethrow so the
+       transport logs the failure;
+     - on the delegating path, transfer `ackData` ownership to the wrapped acknowledger and do not
+       release it here.
    - Call the wrapped acknowledger. If it returns a tuple, initialize the wrapper with the wrapped
      handler and return `(wrapper, wrappedAckResponse)`.
    - If the wrapped result is null, return null.
@@ -294,7 +316,7 @@ response callback from `IHandlerWrapper`.
 ### Verification
 
 ```bash
-dotnet build Protocols/Pontifex.Protocol.Zip/Pontifex.Protocol.Zip.csproj -v minimal
+dotnet build Protocols/Pontifex.Protocol.Zip/Pontifex.Protocol.Zip.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors. This also builds `Pontifex.Protocol`.
@@ -302,18 +324,24 @@ Expected: `Build succeeded.` with zero errors. This also builds `Pontifex.Protoc
 Also run:
 
 ```bash
-grep -rn "FillAckResponse" Protocols --include='*.cs' --exclude-dir=obj --exclude-dir=bin
+grep -rn "FillAckResponse" Protocols/Pontifex.Protocol Protocols/Pontifex.Protocol.Zip --include='*.cs' --exclude-dir=obj --exclude-dir=bin
 ```
 
-Expected: no output.
+Expected: no output. Do not grep all of `Protocols` here: the reconnectable project still contains
+the callback until Stage 4.
 
 ### Definition of done
 
 Both protocol projects build and the wrapper chain passes responses without a handler callback.
+This stage is compile-level verification only; there is no protocol-wrapper test project in the
+repository. End-to-end Zip response forwarding is covered indirectly by the final solution test gate
+and remains a known coverage gap.
 
 ### Risks / notes
 
 - The wrapper must not clone or release the response; it only forwards ownership.
+- Releasing the received `ackData` on a `CheckAckData` rejection is a required fix, not optional
+  cleanup.
 
 ## Stage 4: Update the reconnectable protocol
 
@@ -325,9 +353,10 @@ remove `ReconnectableServerLogic.FillAckResponse`.
 ### Inputs
 
 - Stage 1 complete (including `RawReliableAckServer.TryConnectNewClient` returning the tuple).
-- Stage 3 complete for protocol project references.
 - `Protocols/Pontifex.Protocol.Reconnectable/Raw/Reliable/Ack/RawReliableAckReconnectableServer.cs`.
 - `Protocols/Pontifex.Protocol.Reconnectable/Raw/Reliable/Ack/ReconnectableServerLogic.cs`.
+- Stage 3 is not a compile dependency: `Pontifex.Protocol.Reconnectable.csproj` references only
+  `Pontifex.csproj`.
 
 ### Actions
 
@@ -348,6 +377,8 @@ remove `ReconnectableServerLogic.FillAckResponse`.
         `new UnionData(ReconnectableInfo.AckOKResponse)`.
      4. Store `response.Clone(Memory.CollectablePool)` in `_ackResponse`.
      5. Return the composed `response` and release `userAckResponse` in a `finally` block.
+     6. If any step after the acquire throws, release the partially composed `response` in a
+        `catch` block before rethrowing. Do not leave `_ackResponse` pointing at a partial response.
    - `CloneAckResponse` returns `_ackResponse?.Clone(Memory.CollectablePool)`.
    - `ReleaseAckResponse` atomically exchanges the field to null and releases the stored response.
    - Ensure `using System.Threading;` is present for `Interlocked`.
@@ -361,8 +392,12 @@ remove `ReconnectableServerLogic.FillAckResponse`.
      Construct `ReconnectableServerLogic` with the returned handler.
    - After `_sessionsMap.AddSession(logic)` and `logic.Attach(sessionId)`, call
      `logic.CreateAckResponse(userAckResponse)` and keep the returned response.
+   - Wrap `CreateAckResponse` in a `try`/`catch`. On failure, remove the session,
+     call `logic.ReleaseAckResponse()`, notify the user handler once with
+     `OnStopped(new TextFail(...))`, and rethrow so the transport logs the exception.
    - If the logic driver fails to start, remove the session, call
-     `logic.ReleaseAckResponse()`, release the returned ACK response, and return null.
+     `logic.ReleaseAckResponse()`, release the returned ACK response, notify the user handler once
+     with `OnStopped(new TextFail(...))`, and return null.
    - If `AddSession` returns an invalid id, release the user ACK response and notify the user
      handler with `OnStopped(new TextFail(...))` before returning null.
    - In the `logic.OnStopped` event handler, after removing the session, call
@@ -373,19 +408,24 @@ remove `ReconnectableServerLogic.FillAckResponse`.
 ### Verification
 
 ```bash
-dotnet build Protocols/Pontifex.Protocol.Reconnectable/Pontifex.Protocol.Reconnectable.csproj -v minimal
+dotnet build Protocols/Pontifex.Protocol.Reconnectable/Pontifex.Protocol.Reconnectable.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors.
 
 ### Definition of done
 
-The reconnectable project builds, responses are composed before the endpoint starts, and reattach
-returns an owned clone of the stored response.
+The reconnectable project builds, `TryAck` returns a composed response on the initial and reattach
+paths by construction, and no `FillAckResponse` remains. This stage is compile-level verification:
+the repository has no reconnectable handshake test suite, so runtime composition, clone ownership,
+and reattach equality are verified by code review only. Do not claim automated runtime verification
+for this stage.
 
 ### Risks / notes
 
 - `CreateAckResponse` takes ownership of the user response. Do not release it twice.
+- Every `TryAck` failure after `TryConnectNewClient` succeeded must notify the user handler exactly
+  once with `OnStopped`; the carrier otherwise has no handler to notify.
 - `CopyFrom` requires the target list to be empty. Do not prepend metadata before copying.
 - The stored clone must include the metadata so reattach is byte-for-byte equivalent to the initial
   response.
@@ -418,7 +458,8 @@ endpoint.
    - Call `TryAcknowledge(clientEp, ackData)` and keep the tuple result.
    - Release the caller-owned `ackData` reference exactly once immediately after the acknowledger
      call; set the local to null so the outer catch cannot release it twice.
-   - On null result, send the existing rejection frame and reject the channel.
+   - On null result, call `AbandonAdmission()` before sending the existing rejection frame, then
+     reject the channel. Do not drop this existing admission release.
    - On success, extract `handler` and `ackResponse`.
    - Construct `RawReliableAckDirectServerEndpoint` with `handler` and `ackResponse` instead of
      `ackData`.
@@ -431,18 +472,22 @@ endpoint.
 ### Verification
 
 ```bash
-dotnet build Transports/Pontifex.Transport.Direct/Pontifex.Transport.Direct.csproj -v minimal
+dotnet build Transports/Pontifex.Transport.Direct/Pontifex.Transport.Direct.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors.
 
 ### Definition of done
 
-The Direct project builds and the endpoint receives a response, not an ACK request.
+The Direct project builds and the endpoint receives a response, not an ACK request. Runtime response
+routing and rejection cleanup are behaviourally verified in Stage 10, which runs the Direct transport
+tests.
 
 ### Risks / notes
 
 - Every rejection path must release the response exactly once.
+- The null-result path must call `AbandonAdmission()`; `RejectChannel` does not release admission
+  slots.
 - The request list may have been mutated by the acknowledger; do not inspect it after `TryAck`.
 
 ## Stage 6: Update the TCP/Net transport carrier
@@ -461,6 +506,11 @@ the endpoint.
 ### Actions
 
 1. In `RawReliableAckTcpServerEndpoint`:
+   - Rename the constructor parameter `pendingAckData` to `pendingAckResponse`; update its null
+     check and replace `SetPendingAckData(pendingAckData)` with
+     `SetPendingAckResponse(pendingAckResponse)`.
+   - Replace all three `ReleasePendingAckData()` calls (`RunTeardownAsync` twice and
+     `AbortLowLevelAsync` once) with `ReleasePendingAckResponse()`.
    - Change the `BeginAccept` parameter and the `AcceptHandshake` field/constructor parameter from
      `Func<IEndPoint, UnionDataList, IRawReliableAckServerHandler?>` to
      `Func<IEndPoint, UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?>`.
@@ -481,14 +531,15 @@ the endpoint.
 ### Verification
 
 ```bash
-dotnet build Transports/Pontifex.Transport.Net/Pontifex.Transport.Net.csproj -v minimal
+dotnet build Transports/Pontifex.Transport.Net/Pontifex.Transport.Net.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors.
 
 ### Definition of done
 
-The Net project builds and the TCP endpoint receives a response, not an ACK request.
+The Net project builds and the TCP endpoint receives a response, not an ACK request. Runtime factory
+and response routing are behaviourally verified in Stage 11, which runs the Net transport tests.
 
 ### Risks / notes
 
@@ -504,7 +555,10 @@ Make the TestUI acknowledger produce the ACK response and remove the handler res
 
 ### Inputs
 
-- Stage 1 complete.
+- Stages 1–6 complete. `Pontifex.TestUI.csproj` references `Pontifex.Api`,
+  `Pontifex.Protocol.Reconnectable`, `Pontifex.Protocol.Zip`, `Pontifex.Transport.Direct`,
+  `Pontifex.Transport.Net`, and `Pontifex.Factory`, so those projects must already use the new
+  contract.
 - `Pontifex.TestUI/TestLogic/Raw/Reliable/Ack/RawReliableAckServerLogic.cs`.
 
 ### Actions
@@ -514,27 +568,30 @@ Make the TestUI acknowledger produce the ACK response and remove the handler res
    - If the popped element is not the expected request or extra elements remain, release the popped
      element before returning null.
    - On success, release the request element, acquire a `UnionDataList` from
-     `_memory.CollectablePool`, put `new UnionData(AckResponse)` into it, and return
-     `(new Handler(this, _memory, _logger), ackResponse)`.
+     `_memory.CollectablePool`, put `new UnionData(RawReliableAckCommonLogic.AckResponse)` into it,
+     and return `(new Handler(this, _memory, _logger), ackResponse)`. `AckResponse` is a static on
+     `RawReliableAckCommonLogic`, not on the acknowledger class.
 2. Remove `Handler.FillAckResponse`.
 3. Keep all other handler behaviour unchanged.
 
 ### Verification
 
 ```bash
-dotnet build Pontifex.TestUI/Pontifex.TestUI.csproj -v minimal
+dotnet build Pontifex.TestUI/Pontifex.TestUI.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors.
 
 ### Definition of done
 
-TestUI builds and its acknowledger returns the stress-test ACK response.
+TestUI builds and its acknowledger returns the stress-test ACK response by construction. This is
+compile-level verification only; `Pontifex.TestUI` is an executable with no automated test project.
 
 ### Risks / notes
 
 - The existing code only released the popped request on the success path; fix that leak while
   touching the method.
+- Qualify the response constant as `RawReliableAckCommonLogic.AckResponse`.
 
 ## Stage 8: Update Pontifex.Tests for the core server contract
 
@@ -545,7 +602,8 @@ pending-response endpoint model.
 
 ### Inputs
 
-- Stages 1 and 5–6 complete.
+- Stage 1 complete. `Pontifex.Tests.csproj` references only `Pontifex.csproj`; Stages 5–6 are not
+  compile dependencies for this project, although this stage is ordered after them.
 - `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack/Harness/RecordingRawReliableAckServerAcknowledger.cs`
 - `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack/Harness/TestRawReliableAckServerTransport.cs`
 - `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack/RawReliableAckServerTransportTests.cs`
@@ -572,6 +630,9 @@ pending-response endpoint model.
    - Add a helper that creates a pooled empty response from the test `Memory`.
    - Update assertions to check the stop-once gate via `.handler` and the response via
      `.ackResponse`.
+   - In tests that call `ExposedTryAcknowledge` but do not hand the response to an endpoint, release
+     the tuple's `ackResponse` exactly once. Do not release a response after passing it to an
+     endpoint.
    - Replace `StopOnceWrapper_ForwardsLifecycleCallbacks`'s `FillAckResponse` assertion; assert only
      `OnConnected`, `OnReceived`, and `OnDisconnected`.
    - Add tests:
@@ -586,12 +647,28 @@ pending-response endpoint model.
    - Remove the `AckRequestFrame` constant if it becomes unused; keep `AckResponseFrame`.
    - Update `ConnectAndComplete` semantics only as needed: the pending response is sent from
      `OnConnected`.
-6. `RawReliableAckServerEndpointTests`:
-   - Replace `Connect_DoesNotSendAnythingUntilAckRequest` with a test that before `Start` nothing is
-     sent and no handler callback occurs.
+   - Override `OnPendingSendChanged` to maintain an exposed `PendingMessages` counter. This is the
+     admission-order probe for the response-before-`OnConnected` test.
+   - Add `public void ReleasePendingAckResponseForTest() =>
+     ReleasePendingAckResponse();` and call it from `Dispose()` so a response on an endpoint that
+     never starts is released exactly once. The method must be idempotent because the endpoint may
+     already have sent the response.
+6. `RecordingRawReliableAckServerHandler`:
+   - Add `public Action? OnConnectedProbe { get; set; }`.
+   - Invoke the probe at the very start of `OnConnected`, before setting `ConnectedEndPoint` or
+     incrementing `ConnectedCount`, so a test can observe admission state at the handler callback.
+7. `RawReliableAckServerEndpointTests`:
+   - Replace `Connect_DoesNotSendAnythingUntilAckRequest` with
+     `BeforeStart_DoesNotSendOrNotifyHandler`: construct with a response, do not call `Start`,
+     assert `CapturedSends` is empty and `ConnectedCount` is zero. Dispose must release the pending
+     response exactly once.
    - Replace `AckRequest_SendsAckResponseAndCompletesHandshake` with
-     `Connect_SendsPendingAckResponseAndCompletesHandshake`, asserting one framed response with the
-     supplied payload and one handler `OnConnected`.
+     `Connect_SendsPendingAckResponseBeforeOnConnected`, asserting:
+     - one framed response with the supplied payload;
+     - one handler `OnConnected`;
+     - inside `OnConnectedProbe`, `ep.PendingMessages` is greater than zero, proving the response was
+       admitted for outbound delivery before the handler callback. `CapturedSends` may still be
+       filled only after `DrainAll`.
    - Replace `FillAckResponse_Throws_StopsWithExceptionFail` with an oversized-response test:
      construct an oversized response, connect, and assert no `OnConnected`, `TextFail`, and one
      handler `OnStopped` after disconnect completion.
@@ -601,35 +678,55 @@ pending-response endpoint model.
      `UnexpectedAckRequest_StopsWithTextFail`: connect, send an `AckRequestMessage` frame, and
      assert `TextFail`.
    - Remove `AckRequest_RefreshesWatchdog`.
-   - Update all connect-based disconnect/fail tests to create the endpoint with a response.
-   - Release any response buffers created by tests exactly once.
-7. Update test names in `RawReliableAckServerEndpointTests` and `RawReliableAckServerTransportTests`
-   consistently, and update the layer `Coverage.md` in Stage 13.
+   - `Disconnect_WhenLogicallyConnected_NotifiesOnDisconnected`: connect with a response and remove
+     the `ExposedProcessInbound(AckRequestFrame)` call; `ConnectAndComplete` already completes the
+     handshake.
+   - `FailHard_WhenLogicallyConnected_NotifiesDisconnectedThenStopped`: same removal.
+   - `Disconnect_WhenHandshakePending_DoesNotNotifyOnDisconnected`: construct with a response, call
+     `Start(); DrainAll();` without `CompleteConnect()` so the stage remains `Connecting`, then stop.
+     Assert no `OnDisconnected` and the expected `OnStopped`. Do not call `CompleteDisconnect()` on
+     this path; the connecting stop completes through `FinishStop`.
+   - `FailHard_WhenHandshakePending_DoesNotNotifyOnDisconnected`: same setup and assertions using
+     `ExposedFailHard`.
+   - Do not release responses passed to an endpoint; the endpoint owns them. Tests that create a
+     response and never pass it to an endpoint must release it.
+8. Update both owning coverage documents in this same stage:
+   - `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack/Coverage.md`
+   - `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack/Coverage.md`
+   Record every added, removed, renamed, and repurposed test, including the `TextFail` duplicate
+   ACK request expectation.
 
 ### Verification
 
 ```bash
-dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter "FullyQualifiedName~RawReliableAckServer" -v minimal
+dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter "FullyQualifiedName~RawReliableAckServer" -p:NuGetAudit=false -v minimal
 ```
 
-Expected: all selected tests pass, including the updated transport and endpoint suites.
+Expected: all selected tests pass. The baseline is 33 tests; this stage adds four transport tests and
+removes one endpoint watchdog test, so the expected selected count is **36**.
 
 ### Definition of done
 
-The core test project compiles and the RawReliableAck server transport/endpoint tests pass with the
-new contract.
+The core test project compiles, the RawReliableAck server transport/endpoint tests pass with the new
+contract, the ordering probe proves response admission before handler `OnConnected`, and both owning
+`Coverage.md` files are updated in the same stage.
 
 ### Risks / notes
 
 - Endpoint tests must supply exactly one owned response per endpoint.
-- Do not assert on private state; use the existing exposed protected surface and captured sends.
+- The pre-start harness must release the pending response; no production stop path covers a
+  constructed-but-never-started endpoint.
+- Do not assert on private state; use the exposed protected surface, the pending-admission probe,
+  and captured sends.
+- Releasing a response granted to an endpoint is a double release and is forbidden.
 
 ## Stage 9: Update the carrier-independent conformance suite
 
 ### Objective
 
-Keep the ignored RawReliableAck conformance suite compiling and semantically aligned with
-acknowledger-owned responses.
+Keep the ignored RawReliableAck conformance suite compiling after the tuple/response refactor and
+update its source so it would exercise acknowledger-owned responses if the fixture were enabled.
+Runtime conformance behaviour remains intentionally unverified while the fixture is ignored.
 
 ### Inputs
 
@@ -668,12 +765,15 @@ acknowledger-owned responses.
    - Keep `Server_OnConnected_OnlyAfterAckResponseCommited` and
      `AckResponse_ReachesClient_OnConnected`, updating them to acknowledger-produced responses.
    - Update all remaining server-handler creation to return a response.
+4. Update `Tests/Pontifex.Transports.Tests/Raw/Reliable/Ack/Coverage.md` in this same stage for every
+   added, removed, renamed, or repurposed conformance test. State clearly that the suite remains
+   ignored.
 
 ### Verification
 
 ```bash
-dotnet build Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj -v minimal
-dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --filter "FullyQualifiedName~FactoryBindingsTests" -v minimal
+dotnet build Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj -p:NuGetAudit=false -v minimal
+dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --filter "FullyQualifiedName~FactoryBindingsTests" -p:NuGetAudit=false -v minimal
 ```
 
 Expected: build succeeds and the selected non-ignored tests pass. The conformance fixture itself
@@ -681,7 +781,9 @@ remains ignored but must compile.
 
 ### Definition of done
 
-The conformance project compiles, and the non-ignored tests in it pass.
+The conformance project compiles, the non-ignored tests in it pass, and its owning `Coverage.md` is
+updated in the same stage. The conformance fixture remains ignored; no runtime conformance claim is
+made.
 
 ### Risks / notes
 
@@ -717,7 +819,7 @@ Adapt the Direct transport test acknowledger and handler to responses built by t
 ### Verification
 
 ```bash
-dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj -v minimal
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: all Direct transport tests pass.
@@ -752,8 +854,10 @@ Adapt TCP transport and endpoint integration tests to the tuple factory/acknowle
      test does not construct an endpoint.
    - Update any test doubles that expose `TryAcknowledge`.
 2. `RawReliableAckTcpServerEndpointIntegrationTests`:
-   - Change the `BeginAccept` factory lambda to return `(serverHandler, ackResponse)` where
-     `ackResponse` contains `0xCD`.
+   - Change **both** handler-returning `BeginAccept` factory lambdas
+     (`Successful_handshake_carries_ack_data_and_response` and
+     `ServerHandler_ReceivesOnDisconnectedThenOnStopped_OnNormalStop`) to return
+     `(serverHandler, ackResponse)` where `ackResponse` contains `0xCD`.
    - Remove `RecordingAckServerHandler.FillAckResponse` and the `FillAckResponseCalled` event.
    - Replace the `FillAckResponseCalled` assertion with assertions that the factory produced the
      response and the client received `0xCD`.
@@ -763,7 +867,7 @@ Adapt TCP transport and endpoint integration tests to the tuple factory/acknowle
 ### Verification
 
 ```bash
-dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj -v minimal
+dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: all Net transport tests pass.
@@ -785,7 +889,8 @@ Adapt the end-to-end transport plan tests to acknowledger-produced responses.
 
 ### Inputs
 
-- Stages 1–6 complete.
+- Stages 1–7 complete. This project references `Pontifex.Api`, so Stage 2 is also a compile
+  prerequisite.
 - `Tests/Pontifex.Transport.Tests/TestPlans/Raw/Reliable/Ack/Connect_ServerGracefullDisconnect/Connect_ServerGracefullDisconnect.cs`
 - `Tests/Pontifex.Transport.Tests/TestPlans/Raw/Reliable/Ack/HighLoadDataTransfer/HighLoadDataTransfer.cs`
 
@@ -804,7 +909,7 @@ Adapt the end-to-end transport plan tests to acknowledger-produced responses.
 ### Verification
 
 ```bash
-dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj -v minimal
+dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj -p:NuGetAudit=false -v minimal
 ```
 
 Expected: all transport plan tests pass.
@@ -821,8 +926,8 @@ The transport plan test project compiles and passes with acknowledger-produced r
 
 ### Objective
 
-Record the new contract in normative documentation and update all coverage/suite documentation for
-the changed tests.
+Record the new contract in normative documentation and perform a final consistency check over the
+coverage and suite documentation already updated by the test stages.
 
 ### Inputs
 
@@ -830,9 +935,9 @@ the changed tests.
 - `Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Specification.md`
 - `Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Conformance/IRawReliableAckTransportConformanceControl.cs`
 - `Pontifex/Abstractions/Transports/Raw/Reliable/NoAck/Specification.md`
-- `Tests/Pontifex.Transports.Tests/Raw/Reliable/Ack/Coverage.md`
-- `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack/Coverage.md`
-- `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack/Coverage.md`
+- `Tests/Pontifex.Transports.Tests/Raw/Reliable/Ack/Coverage.md` (already updated in Stage 9)
+- `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack/Coverage.md` (already updated in Stage 8)
+- `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack/Coverage.md` (already updated in Stage 8)
 - `Tests/Pontifex.Tests/Transports/README.md`
 
 ### Actions
@@ -847,14 +952,18 @@ the changed tests.
      - fresh handler and fresh response per accepted session;
      - response ownership and pool allocation;
      - response must be accepted for outbound delivery before server `OnConnected`;
-     - oversized response fails establishment;
+     - ACK requests and ACK responses are bounded by `RawReliableAckInfo.AckMaxByteSize` in addition
+       to the general `MessageMaxByteSize`; an oversized response fails establishment;
      - pre-connected handler receives one `OnStopped` on establishment failure.
    - Update Section 8.3 so the handshake callbacks are `FillAckData` and `TryAck`; remove
      `FillAckResponse` exception rules and state that response-construction exceptions are `TryAck`
      failures.
    - Update Section 11.2 ownership table: replace the `FillAckResponse(buffer)` row with the
      returned ACK response row owned by the transport.
-   - Update Section 13.1 exception rules and the Section 16 conformance checklist.
+   - Update Section 13.1 exception rules and the Section 16 conformance checklist. Remove only the
+     `FillAckResponse` exception rule; do not change the existing rule for an exception thrown by
+     `OnConnected`, because this refactor deliberately preserves that pre-existing endpoint
+     behaviour.
    - Search for every remaining `FillAckResponse` mention and rewrite or remove it.
 2. `IRawReliableAckTransportConformanceControl.cs`:
    - Reword `BeforeAckResponseCommitGate` as the gate hit after `TryAck` returns the response and
@@ -862,13 +971,14 @@ the changed tests.
    - State that it is not hit when `TryAck` throws or when the response is oversized.
 3. `NoAck/Specification.md`:
    - Remove the `FillAckResponse` reference from the sentence about equivalent handshake callbacks.
-4. Coverage documents:
-   - Replace `FillAckResponse` rows with `TryAck`-produced response rows.
-   - Rename endpoint tests and update descriptions for pending-response behaviour.
-   - Remove watchdog-refresh coverage for ACK requests.
-   - Record the new duplicate-ACK-request failure reason as `TextFail`.
-   - Update transport-layer rows for tuple hand-off, response ownership, and null-result handling.
-   - Ensure every added/removed/renamed test is reflected in the owning `Coverage.md`.
+4. Coverage consistency check (coverage edits already happened in Stages 8 and 9):
+   - Verify all three coverage files contain the new `TryAck`-produced response rows and no
+     `FillAckResponse` rows.
+   - Verify endpoint test names and descriptions match the pending-response behaviour.
+   - Verify the removed watchdog-refresh test is gone and the duplicate-ACK-request failure is
+     recorded as `TextFail`.
+   - Verify transport-layer rows cover tuple hand-off, response ownership, and null-result handling.
+   - If any of these are missing, fix the owning coverage file here; do not change test code.
 5. `Tests/Pontifex.Tests/Transports/README.md`:
    - Update the `TryAcknowledge hand-off` bullet to say it returns a handler and ACK response and
      that the response ownership transfers to the caller.
@@ -886,20 +996,32 @@ Expected: no output.
 Run a final solution build:
 
 ```bash
-dotnet build Pontifex.sln -v minimal
+dotnet build Pontifex.sln -p:NuGetAudit=false -v minimal
 ```
 
 Expected: `Build succeeded.` with zero errors.
 
+Run the full solution test gate:
+
+```bash
+dotnet test Pontifex.sln -p:NuGetAudit=false -v minimal
+```
+
+Expected: every test project passes. The only permitted exclusion is the ignored
+`DirectRawReliableAckConformanceAdapterTests` fixture. Any failure that also existed in the baseline
+recorded in Prerequisites must be reported, not silently accepted; no new failure is allowed.
+
 ### Definition of done
 
-Documentation matches the new contract, coverage files match the current test set, and the full
-solution builds.
+Documentation matches the new contract, coverage files match the current test set, the full solution
+builds, and the full solution test gate passes with only the known ignored conformance fixture
+excluded.
 
 ### Risks / notes
 
 - `Coverage.md` must describe current coverage, not a changelog.
 - Keep links and directory names correct.
+- Do not weaken a test or skip a project to make the full test gate pass.
 
 ## Global definition of done
 
@@ -911,6 +1033,7 @@ solution builds.
 - Every carrier and wrapper transfers response ownership correctly and releases it exactly once.
 - Reconnectable reattach returns a stored response clone.
 - No `FillAckResponse` references remain outside the plan file.
-- `dotnet build Pontifex.sln` succeeds.
-- All affected test projects pass, with the known ignored conformance fixture still ignored.
+- `dotnet build Pontifex.sln -p:NuGetAudit=false` succeeds.
+- `dotnet test Pontifex.sln -p:NuGetAudit=false` passes, with only the known ignored conformance
+  fixture excluded and no new failures relative to the recorded baseline.
 - One git commit per completed stage.
