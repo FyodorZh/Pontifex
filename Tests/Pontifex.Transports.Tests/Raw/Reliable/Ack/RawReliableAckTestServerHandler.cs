@@ -27,8 +27,6 @@ public abstract class RawReliableAckTestServerHandler : IRawReliableAckServerHan
 
     private int _stoppedCount;
 
-    public virtual void FillAckResponse(UnionDataList ackData) { }
-
     public void OnConnected(IRawReliableEndpoint endpoint)
     {
         Endpoint = endpoint;

@@ -44,9 +44,14 @@ public abstract class RawReliableAckConformanceFixture : IRawReliableAckConforma
     }
 
     public IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> CreateSimpleAcknowledger(
-        Func<UnionDataList, IRawReliableAckServerHandler?> tryAck)
+        Func<UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?> tryAck)
     {
         return new SimpleAcknowledger(tryAck, Logger);
+    }
+
+    public UnionDataList CreateEmptyAckResponse()
+    {
+        return Memory.CollectablePool.Acquire<UnionDataList>();
     }
 
     public IRawReliableAckClient CreateClient()
@@ -135,17 +140,19 @@ public abstract class RawReliableAckConformanceFixture : IRawReliableAckConforma
     /// </summary>
     private sealed class SimpleAcknowledger : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
     {
-        private readonly Func<UnionDataList, IRawReliableAckServerHandler?> _tryAck;
+        private readonly Func<UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?> _tryAck;
         private readonly ILogger _logger;
 
         public SimpleAcknowledger(
-            Func<UnionDataList, IRawReliableAckServerHandler?> tryAck, ILogger logger)
+            Func<UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?> tryAck,
+            ILogger logger)
         {
             _tryAck = tryAck;
             _logger = logger;
         }
 
-        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
+            IEndPoint remote, UnionDataList ackData)
         {
             try
             {

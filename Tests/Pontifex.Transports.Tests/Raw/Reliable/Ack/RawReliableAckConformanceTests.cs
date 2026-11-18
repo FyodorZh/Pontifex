@@ -165,6 +165,23 @@ public abstract class RawReliableAckConformanceTests
         throw new AssertionException($"Unable to construct a UnionDataList of exactly {limit} bytes.");
     }
 
+    // ── ACK response factories ───────────────────────────────────────────
+
+    protected static UnionDataList CreateAckResponse(IRawTransport transport, int value)
+    {
+        var response = transport.Memory.CollectablePool.Acquire<UnionDataList>();
+        response.PutLast(value);
+        return response;
+    }
+
+    protected static UnionDataList CreateOversizedAckResponse(IRawTransport transport)
+    {
+        var response = transport.Memory.CollectablePool.Acquire<UnionDataList>();
+        var bytes = transport.Memory.ByteArraysPool.Acquire(RawReliableAckInfo.AckMaxByteSize + 1);
+        response.PutLast(new UnionData(bytes));
+        return response;
+    }
+
     // ── Probes ───────────────────────────────────────────────────────────
 
     protected sealed class ConcurrencyProbe
@@ -515,31 +532,6 @@ public abstract class RawReliableAckConformanceTests
         }
     }
 
-    protected sealed class OversizedFillAckResponseServerHandler : RawReliableAckTestServerHandler
-    {
-        private readonly IRawTransport _transport;
-
-        public OversizedFillAckResponseServerHandler(
-            IRawTransport transport,
-            IRawReliableAckEndpointTracker? tracker = null)
-            : base(tracker)
-        {
-            _transport = transport;
-        }
-
-        public override void FillAckResponse(UnionDataList ackData)
-        {
-            var bytes = _transport.Memory.ByteArraysPool.Acquire(
-                _transport.MessageMaxByteSize);
-            ackData.PutLast(new UnionData(bytes));
-        }
-
-        public override void OnReceived(UnionDataList message)
-        {
-            message.Release();
-        }
-    }
-
     // ── Throwing handlers ────────────────────────────────────────────────
 
     protected sealed class ThrowingFillAckDataClientHandler : RawReliableAckTestClientHandler
@@ -596,21 +588,6 @@ public abstract class RawReliableAckConformanceTests
                 Interlocked.Increment(ref _deliveredCount);
             }
             finally { message.Release(); }
-        }
-    }
-
-    protected sealed class ThrowingFillAckResponseServerHandler : RawReliableAckTestServerHandler
-    {
-        public ThrowingFillAckResponseServerHandler(IRawReliableAckEndpointTracker? tracker = null) : base(tracker) { }
-
-        public override void FillAckResponse(UnionDataList ackData)
-        {
-            throw new InvalidOperationException("Expected conformance test exception in FillAckResponse.");
-        }
-
-        public override void OnReceived(UnionDataList message)
-        {
-            message.Release();
         }
     }
 
@@ -989,7 +966,7 @@ public abstract class RawReliableAckConformanceTests
         });
 
         Assert.That(client.Init(new RecordingClientHandler()), Is.True);
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.True);
     }
 
     [Test]
@@ -1000,8 +977,8 @@ public abstract class RawReliableAckConformanceTests
 
         Assert.That(client.Init(new RecordingClientHandler()), Is.True);
         Assert.That(client.Init(new RecordingClientHandler()), Is.False);
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.False);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.False);
     }
 
     [Test]
@@ -1010,14 +987,14 @@ public abstract class RawReliableAckConformanceTests
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(new RecordingClientHandler()), Is.True);
         Start(fixture.Server, client);
 
         Assert.Multiple(() =>
         {
             Assert.That(client.Init(new RecordingClientHandler()), Is.False);
-            Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.False);
+            Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.False);
         });
     }
 
@@ -1055,7 +1032,7 @@ public abstract class RawReliableAckConformanceTests
     public void Start_IsOneTime_NormalStopRemainsValid()
     {
         using var fixture = CreateAdapter().CreateFixture();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.True);
 
         Assert.That(fixture.Server.Start(_ => { }), Is.True);
         Assert.That(fixture.Server.Start(_ => { }), Is.False);
@@ -1072,7 +1049,7 @@ public abstract class RawReliableAckConformanceTests
     public async Task Start_ConcurrentCalls_HasExactlyOneWinner()
     {
         using var fixture = CreateAdapter().CreateFixture();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.True);
 
         var starts = Enumerable.Range(0, 8).Select(_ => Task.Run(() => fixture.Server.Start(_ => { })));
         var results = await Task.WhenAll(starts);
@@ -1104,7 +1081,7 @@ public abstract class RawReliableAckConformanceTests
     public async Task InjectUnrecoverableFailure_InvalidatesAndNotifies()
     {
         using var fixture = CreateAdapter().CreateFixture();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.True);
         var control = GetControl<IConformanceControl>(fixture.Server);
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1124,7 +1101,7 @@ public abstract class RawReliableAckConformanceTests
     public void Stop_BeforeStart_IsNoOp_DoesNotConsumeStart()
     {
         using var fixture = CreateAdapter().CreateFixture();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.True);
 
         Assert.That(fixture.Server.Stop(), Is.True);
         Assert.Multiple(() =>
@@ -1139,7 +1116,7 @@ public abstract class RawReliableAckConformanceTests
     public void Start_AfterStop_Fails()
     {
         using var fixture = CreateAdapter().CreateFixture();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return new RecordingServerHandler(); })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse()); })), Is.True);
 
         Assert.That(fixture.Server.Start(_ => { }), Is.True);
         Assert.That(fixture.Server.Stop(), Is.True);
@@ -1155,7 +1132,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1186,7 +1163,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1206,7 +1183,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var handler = new ThrowingOnConnectedClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(handler), Is.True);
         Start(fixture.Server, client);
 
@@ -1225,7 +1202,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var handler = new ThrowingFillAckDataClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(handler), Is.True);
         Start(fixture.Server, client);
 
@@ -1240,7 +1217,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var handler = new OversizedFillAckDataClientHandler(client);
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(handler), Is.True);
         Start(fixture.Server, client);
 
@@ -1279,7 +1256,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new RecordingServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1308,7 +1285,7 @@ public abstract class RawReliableAckConformanceTests
             var handler = new RecordingServerHandler();
             handlers.Enqueue(handler);
             ackData.Release();
-            return handler;
+            return (handler, fixture.CreateEmptyAckResponse());
         })), Is.True);
 
         var firstClient = fixture.CreateClient();
@@ -1337,8 +1314,8 @@ public abstract class RawReliableAckConformanceTests
         {
             ackData.Release();
             return Interlocked.Increment(ref calls) == 1
-                ? firstHandler
-                : new SessionRecordingServerHandler();
+                ? (firstHandler, fixture.CreateEmptyAckResponse())
+                : (new SessionRecordingServerHandler(), fixture.CreateEmptyAckResponse());
         })), Is.True);
 
         var firstClient = fixture.CreateClient();
@@ -1382,7 +1359,7 @@ public abstract class RawReliableAckConformanceTests
             if (ackData.TryPopFirst(out int value))
                 receivedValue = value;
             ackData.Release();
-            return new RecordingServerHandler();
+            return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse());
         })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
@@ -1429,35 +1406,17 @@ public abstract class RawReliableAckConformanceTests
     }
 
     [Test]
-    public void FillAckResponse_Exception_FailsEstablishment()
-    {
-        using var fixture = CreateAdapter().CreateFixture();
-        var client = fixture.CreateClient();
-        var throwingHandler = new ThrowingFillAckResponseServerHandler();
-        var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return throwingHandler; })), Is.True);
-        Assert.That(client.Init(clientHandler), Is.True);
-        Start(fixture.Server, client);
-
-        WaitUntil(() => clientHandler.StoppedReason != null);
-        WaitUntil(() => throwingHandler.StoppedCount == 1);
-        Assert.Multiple(() =>
-        {
-            Assert.That(clientHandler.OnConnectedCalled, Is.False);
-            Assert.That(clientHandler.OnDisconnectedCalled, Is.False);
-            Assert.That(throwingHandler.IsConnected, Is.False);
-            Assert.That(throwingHandler.StoppedReason, Is.Not.Null);
-        });
-    }
-
-    [Test]
     public async Task Server_NeverConnectedHandler_ReceivesExactlyOneOnStopped()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        var neverConnectedHandler = new ThrowingFillAckResponseServerHandler();
+        var neverConnectedHandler = new RecordingServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return neverConnectedHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData =>
+        {
+            ackData.Release();
+            return (neverConnectedHandler, CreateOversizedAckResponse(fixture.Server));
+        })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1475,24 +1434,28 @@ public abstract class RawReliableAckConformanceTests
     }
 
     [Test]
-    public void FillAckResponse_Oversized_FailsEstablishment()
+    public void AckResponse_Oversized_FailsEstablishment()
     {
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
-        var throwingHandler = new OversizedFillAckResponseServerHandler(fixture.Server);
+        var handler = new RecordingServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return throwingHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData =>
+        {
+            ackData.Release();
+            return (handler, CreateOversizedAckResponse(fixture.Server));
+        })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
         WaitUntil(() => clientHandler.StoppedReason != null);
-        WaitUntil(() => throwingHandler.StoppedCount == 1);
+        WaitUntil(() => handler.StoppedCount == 1);
         Assert.Multiple(() =>
         {
             Assert.That(clientHandler.OnConnectedCalled, Is.False);
             Assert.That(clientHandler.OnDisconnectedCalled, Is.False);
-            Assert.That(throwingHandler.IsConnected, Is.False);
-            Assert.That(throwingHandler.StoppedReason, Is.Not.Null);
+            Assert.That(handler.IsConnected, Is.False);
+            Assert.That(handler.StoppedReason, Is.Not.Null);
         });
     }
 
@@ -1505,7 +1468,11 @@ public abstract class RawReliableAckConformanceTests
         var serverHandler = new RecordingServerHandler();
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData =>
+        {
+            ackData.Release();
+            return (serverHandler, fixture.CreateEmptyAckResponse());
+        })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1522,7 +1489,11 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new AckResponseWritingServerHandler(42);
         var clientHandler = new AckResponseRecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData =>
+        {
+            ackData.Release();
+            return (serverHandler, CreateAckResponse(fixture.Server, serverHandler.Value));
+        })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1537,7 +1508,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1554,7 +1525,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1569,7 +1540,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1586,7 +1557,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1605,7 +1576,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1624,7 +1595,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1640,7 +1611,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1663,7 +1634,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1683,7 +1654,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new ServerSendsValuesHandler(fixture, null, 0, 1, 2, 3, 4, 5, 6, 7);
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1700,7 +1671,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new SizeRecordingServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1721,7 +1692,7 @@ public abstract class RawReliableAckConformanceTests
         var expectedResponse = response.Clone(fixture.Server.Memory.CollectablePool);
         var serverHandler = new EchoServerHandler(fixture, expected, response, serverReceived);
         var clientHandler = new AssertContentClientHandler(null, expectedResponse, clientReceived);
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1738,7 +1709,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new SizeRecordingServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1755,7 +1726,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1771,7 +1742,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1787,7 +1758,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1806,7 +1777,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1826,7 +1797,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1842,7 +1813,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1862,7 +1833,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1879,7 +1850,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1896,7 +1867,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new DisconnectOnReceiveServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1921,7 +1892,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new BlockingOnReceivedClientHandler();
         var serverHandler = new ServerSendsValuesHandler(fixture, null, 1, 2);
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1942,7 +1913,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new BlockingOnReceivedClientHandler();
         var serverHandler = new ServerSendsValuesHandler(fixture, null, 1, 2);
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1965,7 +1936,7 @@ public abstract class RawReliableAckConformanceTests
         {
             Interlocked.Increment(ref tryAckCalls);
             ackData.Release();
-            return new RecordingServerHandler();
+            return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse());
         })), Is.True);
 
         var gateHit = control.BeforeAcknowledgerGate.Arm(2);
@@ -1992,7 +1963,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new ThrowingOnReceivedServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2010,7 +1981,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new StopFromReceiveServerHandler(fixture);
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
 
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2037,7 +2008,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2061,7 +2032,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
 
         Start(fixture.Server, client);
@@ -2091,7 +2062,7 @@ public abstract class RawReliableAckConformanceTests
             var handler = new SessionRecordingServerHandler();
             handlers.Enqueue(handler);
             ackData.Release();
-            return handler;
+            return (handler, fixture.CreateEmptyAckResponse());
         })), Is.True);
 
         var firstClient = fixture.CreateClient();
@@ -2127,7 +2098,7 @@ public abstract class RawReliableAckConformanceTests
         {
             Interlocked.Increment(ref called);
             ackData.Release();
-            return new RecordingServerHandler();
+            return (new RecordingServerHandler(), fixture.CreateEmptyAckResponse());
         })), Is.True);
 
         var gateHit = control.BeforeAcknowledgerGate.Arm();
@@ -2150,7 +2121,7 @@ public abstract class RawReliableAckConformanceTests
         var control = GetControl<IRawReliableAckTransportConformanceControl>(client);
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
 
         var gateHit = control.BeforeHandlerConnectedGate.Arm();
@@ -2170,7 +2141,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
 
         var gateHit = control.BeforeHandlerConnectedGate.Arm();
@@ -2189,7 +2160,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2212,7 +2183,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2235,7 +2206,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2258,7 +2229,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2280,7 +2251,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2307,7 +2278,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var serverHandler = new BlockingPreReceiveServerHandler();
         var clientHandler = new RecordingClientHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2328,7 +2299,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -2350,7 +2321,7 @@ public abstract class RawReliableAckConformanceTests
         var client = fixture.CreateClient();
         var clientHandler = new RecordingClientHandler();
         var serverHandler = new RecordingServerHandler();
-        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return serverHandler; })), Is.True);
+        Assert.That(fixture.InitServer(fixture.CreateSimpleAcknowledger(ackData => { ackData.Release(); return (serverHandler, fixture.CreateEmptyAckResponse()); })), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
         WaitForConnectedEndpoint(clientHandler);
@@ -2398,17 +2369,12 @@ public abstract class RawReliableAckConformanceTests
 
     protected sealed class AckResponseWritingServerHandler : RawReliableAckTestServerHandler
     {
-        private readonly int _value;
+        public int Value { get; }
 
         public AckResponseWritingServerHandler(int value, IRawReliableAckEndpointTracker? tracker = null)
             : base(tracker)
         {
-            _value = value;
-        }
-
-        public override void FillAckResponse(UnionDataList ackData)
-        {
-            ackData.PutLast(_value);
+            Value = value;
         }
 
         public override void OnReceived(UnionDataList message)

@@ -5,6 +5,10 @@ the RawReliableAck transport contract. Each implementation supplies a conformanc
 adapter that creates linked server-client topologies. The suite exercises every
 normative requirement in the [RawReliableAck Specification](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Specification.md).
 
+The suite is compiled but remains `[Ignore]`d through its concrete
+`DirectRawReliableAckConformanceAdapterTests` fixture. It records intended coverage only;
+no runtime conformance claim is made while the fixture is ignored.
+
 ## Covered
 
 ### Init lifecycle
@@ -42,7 +46,7 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | Specification area | Coverage |
 | --- | --- |
 | Successful acceptance | `OnConnected` → `OnDisconnected` → `OnStopped` occur exactly once per session in that order. |
-| Never-connected server session | A server handler whose session never reaches `OnConnected` receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`. |
+| Never-connected server session | A server handler whose session never reaches `OnConnected` (for example because the ACK response is rejected) receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`. |
 | Handler freshness | Each accepted session receives a distinct handler instance; a handler never serves multiple sessions. |
 | Session independence | Sessions are independent; stopping the server transport disconnects all sessions. |
 | Session cleanup on reconnection | After a session disconnects, a new connection from the same source triggers a fresh `TryAck` and creates a distinct handler. Old handlers never receive additional callbacks after their final `OnStopped`, which follows their `OnDisconnected`. |
@@ -53,15 +57,14 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | TryAck invocation | `TryAck` is called for each valid connection attempt; receives the client's ACK data. |
 | TryAck serialization | Calls to `TryAck` on a single server never overlap concurrently. |
 | TryAck rejection | Returning null rejects the connection; a later attempt from the same client invokes `TryAck` again. |
-| TryAck acceptance | Returning a handler creates a session; the server invokes `FillAckResponse` before `OnConnected`. |
+| TryAck acceptance | Returning a handler and an ACK response creates a session; the response is admitted for outbound delivery before `OnConnected`. |
 | TryAck exception | Caught and logged; the individual connection attempt fails without stopping the transport. |
-| FillAckResponse exception | Establishment fails; the pre-connected server handler receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`; client receives `OnStopped` without `OnConnected`. |
-| FillAckResponse ownership | The handler populates a transport-owned buffer; must not retain or release it. |
+| ACK response ownership | The acknowledger builds the ACK response, returns ownership to the transport, and must not retain or release it after returning. |
 | FillAckData ownership | The handler populates a transport-owned buffer; must not retain or release it. |
-| Oversized ACK data/response | Handshake data exceeding `MessageMaxByteSize` causes establishment failure with the specified callback sequences. |
+| Oversized ACK data/response | Handshake data exceeding the applicable limit causes establishment failure with the specified callback sequences. The framed ACK response must not exceed `RawReliableAckInfo.AckMaxByteSize` and is admitted only if it also fits `MessageMaxByteSize`. |
 | AckResponse in OnConnected | The client receives the server's ACK response in `OnConnected`; it owns and must release the buffer. |
 | Server OnConnected ordering | Server `OnConnected` is invoked only after the ACK response is accepted for outbound delivery. |
-| ACK response lost before commit | If a failure occurs between `FillAckResponse` returning and the ACK response being committed for outbound delivery, the server handler receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`, and the client receives `OnStopped` without `OnConnected`. |
+| ACK response lost before commit | If a failure occurs between `TryAck` returning the ACK response and the response being committed for outbound delivery, the server handler receives exactly one `OnStopped` and no `OnConnected` or `OnDisconnected`, and the client receives `OnStopped` without `OnConnected`. |
 
 ### Send and SendResult
 | Specification area | Coverage |
@@ -115,7 +118,6 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | Handler exception — OnDisconnected / OnStopped | Caught and logged; no duplicate callbacks created; teardown continues. |
 | Handler exception — FillAckData | Terminates the connection; client receives `OnStopped` without `OnConnected`. |
 | Handler exception — TryAck | Caught and logged; individual connection attempt fails without stopping the transport. |
-| Handler exception — FillAckResponse | Fails establishment; server handler receives exactly one `OnStopped`; client receives `OnStopped` without `OnConnected`. |
 | Stop from callback | `Stop` may be called from any handler callback without deadlock or reentrancy. |
 | OnReceived not before OnConnected | `OnReceived` is never invoked before `OnConnected` returns successfully. |
 
@@ -131,7 +133,7 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | Specification area | Coverage |
 | --- | --- |
 | BeforeAcknowledgerGate | Armed gate blocks `TryAck` invocation; hit exactly once per valid connection attempt on server. |
-| BeforeAckResponseCommitGate | Armed gate blocks the ACK response from being accepted for outbound delivery after `FillAckResponse` returns; hit on server only. Enables testing mid-handshake establishment failure. |
+| BeforeAckResponseCommitGate | Armed gate blocks the ACK response returned by `TryAck` from being accepted for outbound delivery; hit on server only. No production implementation hits this gate yet, so the corresponding test is part of the ignored conformance work. |
 | BeforeHandlerConnectedGate | Armed gate blocks `OnConnected` for both client and server; hit after handshake succeeds but before callback. |
 | BeforeStopStateTransitionGate | Armed gate blocks the Running → Stopping state transition during `Stop`. |
 | BeforeStoppedCallbackGate | Armed gate blocks the `onStopped` callback dispatch. |
@@ -157,6 +159,7 @@ normative requirement in the [RawReliableAck Specification](../../../../../Ponti
 | Requirement | Reason |
 | --- | --- |
 | Buffer ownership verification (TryAck release, callback release, no-post-Send access) | Requires the planned custom `IMemoryRental` test implementation. |
+| ACK-response construction exception | Response construction happens inside `TryAck`, so an exception there is a `TryAck` exception: no handler is returned to the carrier and there is no pre-connected server handler to observe. The former handler-side ACK-response callback test was removed together with that callback. |
 | Logging verification (exceptions caught and logged by transport) | Requires custom observable `ILogSink`; partially addressable via `RawReliableAckConformanceFixtureOptions.Logger`. |
 | BufferOverflow backpressure behavior | Queue capacity and drain rate are implementation-defined; the suite asserts only that `BufferOverflow` is non-fatal. |
 | SendResult precedence ordering | No control over outbound queue fill-to-capacity without implementation-defined queue limits. |

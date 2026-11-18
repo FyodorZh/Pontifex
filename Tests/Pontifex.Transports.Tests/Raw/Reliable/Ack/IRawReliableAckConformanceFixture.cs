@@ -27,10 +27,18 @@ public interface IRawReliableAckConformanceFixture : IDisposable, IRawReliableAc
 
     /// <summary>
     /// Creates a simple acknowledger from a delegate. The delegate receives
-    /// the client's ACK data, inspects it, releases it, and returns a handler
-    /// (to accept) or null (to reject). If the delegate throws, the buffer is
-    /// released and null is returned.
+    /// the client's ACK data, inspects it, releases it, and returns a fresh
+    /// handler plus an owned ACK response (to accept) or null (to reject). The
+    /// transport owns the returned response. If the delegate throws, the
+    /// buffer is released and null is returned.
     /// </summary>
     IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler> CreateSimpleAcknowledger(
-        Func<UnionDataList, IRawReliableAckServerHandler?> tryAck);
+        Func<UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?> tryAck);
+
+    /// <summary>
+    /// Acquires an empty ACK response from the fixture's memory for tests that
+    /// do not care about the response content. The transport owns the returned
+    /// response; the acknowledger must not release or retain it after returning.
+    /// </summary>
+    UnionDataList CreateEmptyAckResponse();
 }
