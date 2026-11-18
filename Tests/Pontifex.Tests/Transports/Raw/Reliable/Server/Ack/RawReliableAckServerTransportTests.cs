@@ -55,8 +55,13 @@ public sealed class RawReliableAckServerTransportTests
         return data;
     }
 
+    private static UnionDataList CreateAckResponse()
+    {
+        return Memory.CollectablePool.Acquire<UnionDataList>();
+    }
+
     private static RecordingRawReliableAckServerAcknowledger CreateAcknowledger(
-        Func<IEndPoint, UnionDataList, IRawReliableAckServerHandler?>? behavior = null)
+        Func<IEndPoint, UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?>? behavior = null)
     {
         return new RecordingRawReliableAckServerAcknowledger(
             behavior ?? (static (_, data) =>
@@ -115,12 +120,12 @@ public sealed class RawReliableAckServerTransportTests
         var first = CreateAcknowledger((_, data) =>
         {
             data.Release();
-            return firstHandler;
+            return (firstHandler, CreateAckResponse());
         });
         var second = CreateAcknowledger((_, data) =>
         {
             data.Release();
-            return secondHandler;
+            return (secondHandler, CreateAckResponse());
         });
 
         Assert.That(transport.Init(first), Is.True);
@@ -130,11 +135,14 @@ public sealed class RawReliableAckServerTransportTests
         UnionDataList data = CreateData(1);
         using var dataDisposer = data.AsDisposable();
 
-        IRawReliableAckServerHandler? result = transport.ExposedTryAcknowledge(Remote, data);
-        Assert.That(result, Is.InstanceOf<StopOnceAckServerHandler>());
-        Assert.That(((StopOnceAckServerHandler)result!).Inner, Is.SameAs(firstHandler));
+        var result = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.handler, Is.InstanceOf<StopOnceAckServerHandler>());
+        Assert.That(((StopOnceAckServerHandler)result.Value.handler).Inner, Is.SameAs(firstHandler));
         Assert.That(first.TryAckCalls, Is.EqualTo(1));
         Assert.That(second.TryAckCalls, Is.Zero);
+
+        result.Value.ackResponse.Release();
     }
 
     [Test]
@@ -206,7 +214,7 @@ public sealed class RawReliableAckServerTransportTests
         var acknowledger = CreateAcknowledger((_, data) =>
         {
             data.Release();
-            return handler;
+            return (handler, CreateAckResponse());
         });
 
         Assert.That(transport.ExposedTryMarkInitialized(), Is.True);
@@ -278,6 +286,7 @@ public sealed class RawReliableAckServerTransportTests
     {
         var transport = Create();
         using var handler = new RecordingRawReliableAckServerHandler(Memory);
+        UnionDataList ackResponse = CreateAckResponse();
         int received = 0;
         var acknowledger = CreateAcknowledger((remote, data) =>
         {
@@ -285,24 +294,29 @@ public sealed class RawReliableAckServerTransportTests
             Assert.That(data.TryPopFirst(out int value), Is.True);
             received = value;
             data.Release();
-            return handler;
+            return (handler, ackResponse);
         });
         InitializeAndStart(transport, acknowledger);
         UnionDataList data = CreateData(42);
         using var dataDisposer = data.AsDisposable();
 
-        IRawReliableAckServerHandler? result = transport.ExposedTryAcknowledge(Remote, data);
+        var result = transport.ExposedTryAcknowledge(Remote, data);
 
-        Assert.That(result, Is.InstanceOf<StopOnceAckServerHandler>());
-        Assert.That(((StopOnceAckServerHandler)result!).Inner, Is.SameAs(handler));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.handler, Is.InstanceOf<StopOnceAckServerHandler>());
+        Assert.That(((StopOnceAckServerHandler)result.Value.handler).Inner, Is.SameAs(handler));
+        Assert.That(result.Value.ackResponse, Is.SameAs(ackResponse));
         Assert.That(received, Is.EqualTo(42));
         Assert.That(acknowledger.TryAckCalls, Is.EqualTo(1));
         Assert.That(acknowledger.LastRemote, Is.SameAs(Remote));
         Assert.That(acknowledger.LastAckData, Is.SameAs(data));
+        Assert.That(acknowledger.LastAckResponse, Is.SameAs(ackResponse));
         Assert.That(acknowledger.RefCountBefore, Is.EqualTo(2));
         Assert.That(acknowledger.ReleasedByBehavior, Is.True);
         Assert.That(acknowledger.RefCountAfterRelease, Is.EqualTo(1));
         Assert.That(data.IsAlive, Is.True);
+
+        ackResponse.Release();
     }
 
     [Test]
@@ -339,7 +353,7 @@ public sealed class RawReliableAckServerTransportTests
         InitializeAndStart(transport, acknowledger);
         UnionDataList data = CreateData(1);
         using var dataDisposer = data.AsDisposable();
-        IRawReliableAckServerHandler? result = null;
+        (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? result = null;
 
         Assert.DoesNotThrow(() => result = transport.ExposedTryAcknowledge(Remote, data));
 
@@ -349,6 +363,49 @@ public sealed class RawReliableAckServerTransportTests
         Assert.That(data.IsAlive, Is.True);
         Assert.That(transport.IsValid, Is.True);
         Assert.That(transport.IsStarted, Is.True);
+    }
+
+    [Test]
+    public void TryAcknowledge_NullResponseWithHandler_ReturnsNullAndNotifiesOnStoppedOnce()
+    {
+        var transport = Create();
+        using var handler = new RecordingRawReliableAckServerHandler(Memory);
+        var acknowledger = CreateAcknowledger((_, data) =>
+        {
+            data.Release();
+            return (handler, null!);
+        });
+        InitializeAndStart(transport, acknowledger);
+        UnionDataList data = CreateData(1);
+        using var dataDisposer = data.AsDisposable();
+
+        var result = transport.ExposedTryAcknowledge(Remote, data);
+
+        Assert.That(result, Is.Null);
+        Assert.That(acknowledger.TryAckCalls, Is.EqualTo(1));
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
+    }
+
+    [Test]
+    public void TryAcknowledge_ResponseWithNullHandler_ReleasesResponseAndReturnsNull()
+    {
+        var transport = Create();
+        UnionDataList ackResponse = CreateAckResponse();
+        var acknowledger = CreateAcknowledger((_, data) =>
+        {
+            data.Release();
+            return (null!, ackResponse);
+        });
+        InitializeAndStart(transport, acknowledger);
+        UnionDataList data = CreateData(1);
+        using var dataDisposer = data.AsDisposable();
+
+        var result = transport.ExposedTryAcknowledge(Remote, data);
+
+        Assert.That(result, Is.Null);
+        Assert.That(acknowledger.TryAckCalls, Is.EqualTo(1));
+        Assert.That(ackResponse.IsAlive, Is.False);
     }
 
     [Test]
@@ -408,19 +465,23 @@ public sealed class RawReliableAckServerTransportTests
     {
         var transport = Create();
         using var handler = new RecordingRawReliableAckServerHandler(Memory);
+        UnionDataList ackResponse = CreateAckResponse();
         var acknowledger = CreateAcknowledger((_, data) =>
         {
             data.Release();
-            return handler;
+            return (handler, ackResponse);
         });
         InitializeAndStart(transport, acknowledger);
         UnionDataList data = CreateData(1);
         using var dataDisposer = data.AsDisposable();
 
-        IRawReliableAckServerHandler? result = transport.ExposedTryAcknowledge(Remote, data);
+        var result = transport.ExposedTryAcknowledge(Remote, data);
 
-        Assert.That(result, Is.TypeOf<StopOnceAckServerHandler>());
-        Assert.That(((StopOnceAckServerHandler)result!).Inner, Is.SameAs(handler));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.handler, Is.TypeOf<StopOnceAckServerHandler>());
+        Assert.That(((StopOnceAckServerHandler)result.Value.handler).Inner, Is.SameAs(handler));
+
+        result.Value.ackResponse.Release();
     }
 
     [Test]
@@ -435,16 +496,12 @@ public sealed class RawReliableAckServerTransportTests
         gate.OnConnected(endpoint);
         gate.OnReceived(receivedData);
         gate.OnDisconnected(disconnectReason);
-        UnionDataList ackData = CreateData(0);
-        using var ackDataDisposer = ackData.AsDisposable();
-        gate.FillAckResponse(ackData);
 
         Assert.That(recording.ConnectedCount, Is.EqualTo(1));
         Assert.That(recording.ConnectedEndPoint, Is.SameAs(endpoint));
         Assert.That(recording.ReceivedCount, Is.EqualTo(1));
         Assert.That(recording.DisconnectedCount, Is.EqualTo(1));
         Assert.That(recording.DisconnectedReason, Is.SameAs(disconnectReason));
-        Assert.That(recording.FillAckResponseCalls, Is.EqualTo(1));
     }
 
     [Test]
@@ -471,20 +528,23 @@ public sealed class RawReliableAckServerTransportTests
     {
         var transport = Create();
         using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        UnionDataList ackResponse = CreateAckResponse();
         var acknowledger = CreateAcknowledger((_, data) =>
         {
             data.Release();
-            return recording;
+            return (recording, ackResponse);
         });
         InitializeAndStart(transport, acknowledger);
         Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
         UnionDataList data = CreateData(1);
         using var dataDisposer = data.AsDisposable();
-        IRawReliableAckServerHandler? handler = transport.ExposedTryAcknowledge(Remote, data);
-        Assert.That(handler, Is.Not.Null);
+        var result = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(result, Is.Not.Null);
+        IRawReliableAckServerHandler handler = result!.Value.handler;
+        result.Value.ackResponse.Release();
 
         transport.ExposedAbandonAdmission(handler, Reason("abandon"));
-        handler!.OnStopped(Reason("second"));
+        handler.OnStopped(Reason("second"));
 
         Assert.That(recording.StoppedCount, Is.EqualTo(1));
         Assert.That(transport.ExposedActiveSessions, Is.Zero);
@@ -495,18 +555,21 @@ public sealed class RawReliableAckServerTransportTests
     {
         var transport = Create();
         using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        UnionDataList ackResponse = CreateAckResponse();
         var acknowledger = CreateAcknowledger((_, data) =>
         {
             data.Release();
-            return recording;
+            return (recording, ackResponse);
         });
         InitializeAndStart(transport, acknowledger);
         Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
         UnionDataList data = CreateData(1);
         using var dataDisposer = data.AsDisposable();
-        IRawReliableAckServerHandler? handler = transport.ExposedTryAcknowledge(Remote, data);
-        Assert.That(handler, Is.Not.Null);
-        var session = new TestRawReliableServerSession(handler!);
+        var result = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(result, Is.Not.Null);
+        IRawReliableAckServerHandler handler = result!.Value.handler;
+        result.Value.ackResponse.Release();
+        var session = new TestRawReliableServerSession(handler);
 
         Assert.That(transport.Stop(Reason("transport")), Is.True);
         Assert.That(
@@ -529,18 +592,21 @@ public sealed class RawReliableAckServerTransportTests
     {
         var transport = Create();
         using var recording = new RecordingRawReliableAckServerHandler(Memory);
+        UnionDataList ackResponse = CreateAckResponse();
         var acknowledger = CreateAcknowledger((_, data) =>
         {
             data.Release();
-            return recording;
+            return (recording, ackResponse);
         });
         InitializeAndStart(transport, acknowledger);
         Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
         UnionDataList data = CreateData(1);
         using var dataDisposer = data.AsDisposable();
-        IRawReliableAckServerHandler? handler = transport.ExposedTryAcknowledge(Remote, data);
-        Assert.That(handler, Is.Not.Null);
-        var session = new TestRawReliableServerSession(handler!);
+        var result = transport.ExposedTryAcknowledge(Remote, data);
+        Assert.That(result, Is.Not.Null);
+        IRawReliableAckServerHandler handler = result!.Value.handler;
+        result.Value.ackResponse.Release();
+        var session = new TestRawReliableServerSession(handler);
         session.Queue.RejectNextSchedule = true;
 
         Assert.That(

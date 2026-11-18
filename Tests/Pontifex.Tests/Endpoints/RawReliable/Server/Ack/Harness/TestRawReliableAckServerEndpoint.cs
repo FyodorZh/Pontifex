@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.Raw.Reliable;
@@ -26,6 +27,7 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
 
     public TestRawReliableAckServerEndpoint(
         IRawReliableAckServerHandler handler,
+        UnionDataList? pendingAckResponse = null,
         IEndPoint? remoteEndPoint = null,
         string transportName = "TestAckServerTransport",
         int messageMaxByteSize = 1024,
@@ -43,6 +45,10 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
             log ?? new Logger([]),
             disconnectTimeout ?? TimeSpan.FromSeconds(30))
     {
+        if (pendingAckResponse != null)
+        {
+            SetPendingAckResponse(pendingAckResponse);
+        }
     }
 
     protected override ISerialActionQueue SerialQueueConstructor(Action<Exception> onError)
@@ -74,7 +80,7 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
 
     public void DrainAll() => _queue!.DrainAll();
 
-    private void CompleteConnect(Action? ifFailed = null)
+    public void CompleteConnect(Action? ifFailed = null)
     {
         FinishConnect(ifFailed ?? NoOp);
         DrainAll();
@@ -102,9 +108,24 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
     public StopReason? LastDisconnectReason { get; private set; }
 
     /// <summary>
+    /// Gets the number of outbound messages currently admitted for delivery. It mirrors the inherited
+    /// pending-send counter through <see cref="OnPendingSendChanged"/>, so a test can probe admission
+    /// order without inspecting private production state.
+    /// </summary>
+    public int PendingMessages => Volatile.Read(ref _pendingMessages);
+
+    private int _pendingMessages;
+
+    /// <summary>
     /// Gets clones of the buffers passed to <see cref="DoSendRaw"/>, in admission order.
     /// </summary>
     public IReadOnlyList<UnionDataList> CapturedSends => _capturedSends;
+
+    protected override void OnPendingSendChanged(int deltaBytes, int deltaMessages)
+    {
+        base.OnPendingSendChanged(deltaBytes, deltaMessages);
+        Interlocked.Add(ref _pendingMessages, deltaMessages);
+    }
 
     #endregion
 
@@ -113,6 +134,12 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
     public void ExposedProcessInbound(UnionDataList framedMessage) => ProcessInboundMessage(framedMessage);
 
     public void ExposedFailHard(StopReason reason) => FailHard(reason);
+
+    /// <summary>
+    /// Releases the pending acknowledgement response through the production path. Idempotent, so it is
+    /// also used by <see cref="Dispose"/> as a safety net for endpoints that were never stopped.
+    /// </summary>
+    public void ReleasePendingAckResponseForTest() => ReleasePendingAckResponse();
 
     #endregion
 
@@ -140,6 +167,8 @@ internal sealed class TestRawReliableAckServerEndpoint : RawReliableAckServerEnd
 
     public void Dispose()
     {
+        ReleasePendingAckResponseForTest();
+
         foreach (UnionDataList buffer in _capturedSends)
         {
             buffer.Release();

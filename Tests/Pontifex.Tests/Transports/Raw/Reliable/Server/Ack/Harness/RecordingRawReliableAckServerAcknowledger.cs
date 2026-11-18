@@ -6,17 +6,17 @@ namespace Pontifex.Tests.Transports;
 
 /// <summary>
 /// Recording acknowledger for the Ack server transport tests. It records the remote endpoint, the
-/// acknowledgement buffer, and the buffer's reference count around the configured behavior. The
-/// behavior owns the additional reference and should release it; the recorder releases it as a safety
-/// net when the behavior does not.
+/// acknowledgement buffer, the buffer's reference count around the configured behavior, and the returned
+/// response. The behavior owns the additional reference and should release it; the recorder releases it as
+/// a safety net when the behavior does not.
 /// </summary>
 internal sealed class RecordingRawReliableAckServerAcknowledger
     : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
 {
-    private readonly Func<IEndPoint, UnionDataList, IRawReliableAckServerHandler?> _behavior;
+    private readonly Func<IEndPoint, UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?> _behavior;
 
     public RecordingRawReliableAckServerAcknowledger(
-        Func<IEndPoint, UnionDataList, IRawReliableAckServerHandler?> behavior)
+        Func<IEndPoint, UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?> behavior)
     {
         _behavior = behavior;
     }
@@ -27,6 +27,8 @@ internal sealed class RecordingRawReliableAckServerAcknowledger
 
     public UnionDataList? LastAckData { get; private set; }
 
+    public UnionDataList? LastAckResponse { get; private set; }
+
     public int RefCountBefore { get; private set; }
 
     public int RefCountAfterBehavior { get; private set; }
@@ -35,7 +37,8 @@ internal sealed class RecordingRawReliableAckServerAcknowledger
 
     public bool ReleasedByBehavior { get; private set; }
 
-    public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+    public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
+        IEndPoint remote, UnionDataList ackData)
     {
         TryAckCalls++;
         LastRemote = remote;
@@ -44,7 +47,9 @@ internal sealed class RecordingRawReliableAckServerAcknowledger
 
         try
         {
-            return _behavior(remote, ackData);
+            var result = _behavior(remote, ackData);
+            LastAckResponse = result?.ackResponse;
+            return result;
         }
         finally
         {

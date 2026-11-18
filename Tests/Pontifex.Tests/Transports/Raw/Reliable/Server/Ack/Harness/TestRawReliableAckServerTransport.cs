@@ -64,7 +64,8 @@ internal sealed class TestRawReliableAckServerTransport : RawReliableAckServerTr
         AbandonAdmission(handler, reason);
     }
 
-    public IRawReliableAckServerHandler? ExposedTryAcknowledge(IEndPoint remote, UnionDataList ackData)
+    public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? ExposedTryAcknowledge(
+        IEndPoint remote, UnionDataList ackData)
     {
         return TryAcknowledge(remote, ackData);
     }

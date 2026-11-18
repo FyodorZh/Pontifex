@@ -33,4 +33,8 @@
       <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <InternalsVisibleTo Include="Pontifex.Transports.Tests" />
+    </ItemGroup>
+
 </Project>
