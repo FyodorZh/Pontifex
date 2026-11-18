@@ -33,11 +33,6 @@ namespace Pontifex.Api
             Log = logger;
         }
 
-        void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackData)
-        {
-            ackData.PutFirst((long)7777);
-        }
-
         void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             _endpoint = endPoint;
