@@ -65,14 +65,17 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
 
         private class ServerAcknowledger : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
         {
-            public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+            public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
+                IEndPoint remote, UnionDataList ackData)
             {
                 using var ackDataDisposer = ackData.AsDisposable();
                 if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) &&
                     AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
                 {
                     ack.Release();
-                    return new ServerHandler();
+                    var ackResponse = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+                    ackResponse.PutFirst(new UnionData(AckResponse));
+                    return (new ServerHandler(), ackResponse);
                 }
 
                 return null;
@@ -82,11 +85,6 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
         private class ServerHandler : IRawReliableAckServerHandler
         {
             private volatile IRawReliableEndpoint? _endpoint;
-
-            public void FillAckResponse(UnionDataList ackResponse)
-            {
-                ackResponse.PutFirst(new UnionData(AckResponse));
-            }
 
             public void OnConnected(IRawReliableEndpoint endPoint)
             {
