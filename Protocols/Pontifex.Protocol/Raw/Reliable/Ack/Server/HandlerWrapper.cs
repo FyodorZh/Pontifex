@@ -46,11 +46,6 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             return _logic.ProcessAckData(ackData);
         }
 
-        void IRawReliableAckServerHandler.FillAckResponse(UnionDataList ackResponse)
-        {
-            _wrappedHandler.FillAckResponse(ackResponse);
-        }
-
         void IRawReliableAckServerHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             _wrappedEndpoint = endPoint;

@@ -30,20 +30,50 @@ namespace Pontifex.Raw.Reliable.Ack.Protocols
             _wrappedAcknowledger = wrappedAcknowledger;
         }
 
-        public IRawReliableAckServerHandler? TryAck(IEndPoint remote, UnionDataList ackData)
+        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
+            IEndPoint remote, UnionDataList ackData)
         {
-            var wrapper = ConstructWrapper();
-            bool isOK = wrapper.CheckAckData(ackData);
-            if (isOK)
+            IHandlerWrapper wrapper;
+            try
             {
-                IRawReliableAckServerHandler? coreHandler = _wrappedAcknowledger.TryAck(remote, ackData);
-                if (coreHandler != null)
+                wrapper = ConstructWrapper();
+                if (!wrapper.CheckAckData(ackData))
                 {
-                    wrapper.Init(coreHandler.Test(_onFail).GetSafe(e => _onFail(e.ToString())));
-                    return wrapper;
+                    // This class is the acknowledger for the received reference: reject it here.
+                    ackData.Release();
+                    return null;
                 }
             }
-            return null;
+            catch
+            {
+                ackData.Release();
+                throw;
+            }
+
+            // Ownership of the additional ackData reference transfers to the wrapped acknowledger.
+            var result = _wrappedAcknowledger.TryAck(remote, ackData);
+            if (result == null)
+            {
+                return null;
+            }
+
+            var handler = result.Value.handler;
+            var ackResponse = result.Value.ackResponse;
+
+            if (handler == null)
+            {
+                ackResponse?.Release();
+                return null;
+            }
+
+            if (ackResponse == null)
+            {
+                handler.OnStopped(new StopReasons.TextFail("RawReliableAck", "Acknowledger returned no ACK response"));
+                return null;
+            }
+
+            wrapper.Init(handler.Test(_onFail).GetSafe(e => _onFail(e.ToString())));
+            return (wrapper, ackResponse);
         }
 
         protected abstract IHandlerWrapper ConstructWrapper();
