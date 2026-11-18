@@ -161,8 +161,9 @@ namespace Pontifex.Raw.Reliable.Ack
     /// outbound source has a single writer (that queue), while socket callbacks may run on socket or
     /// thread-pool threads.</description></item>
     /// <item><description><b>Other notes</b>: The endpoint takes ownership of an already-connected socket
-    /// whose acknowledgement request has been read and validated by <see cref="BeginAccept"/>. The
-    /// endpoint is returned non-started; the caller must call Start or Stop.</description></item>
+    /// whose acknowledgement request has been read, validated, and answered by
+    /// <see cref="BeginAccept"/>, together with the ACK response built for that request. The endpoint is
+    /// returned non-started; the caller must call Start or Stop.</description></item>
     /// </list>
     /// </remarks>
     internal sealed class RawReliableAckTcpServerEndpoint : RawReliableAckServerEndpoint
@@ -206,7 +207,7 @@ namespace Pontifex.Raw.Reliable.Ack
             IMemoryRental memory,
             ILogger log,
             TimeSpan disconnectTimeout,
-            UnionDataList pendingAckData,
+            UnionDataList pendingAckResponse,
             RemoteHalfClosePolicy remoteHalfClosePolicy,
             int receiveBufferSize,
             int messagePartMaxSize,
@@ -227,9 +228,9 @@ namespace Pontifex.Raw.Reliable.Ack
                 throw new ArgumentNullException(nameof(socket));
             }
 
-            if (pendingAckData == null)
+            if (pendingAckResponse == null)
             {
-                throw new ArgumentNullException(nameof(pendingAckData));
+                throw new ArgumentNullException(nameof(pendingAckResponse));
             }
 
             _disconnectTimeout = disconnectTimeout;
@@ -240,7 +241,7 @@ namespace Pontifex.Raw.Reliable.Ack
             _sendSourceInitialCapacity = sendSourceInitialCapacity;
 
             _socket = socket;
-            SetPendingAckData(pendingAckData);
+            SetPendingAckResponse(pendingAckResponse);
         }
 
         /// <summary>
@@ -250,11 +251,13 @@ namespace Pontifex.Raw.Reliable.Ack
         /// <param name="transportName">The name of the transport that owns the endpoint.</param>
         /// <param name="socket">The accepted, connected socket. Ownership transfers to this call on every
         /// outcome; the socket is closed when the handshake does not succeed.</param>
-        /// <param name="handlerFactory">Creates the session handler from the remote endpoint and the borrowed
-        /// acknowledgement request data. The data is owned by the endpoint after the callback returns: the
-        /// factory must not retain it and must release any copy it makes. The factory must be fast and
-        /// non-blocking, because once the completion is claimed the handshake deadline cannot preempt it. A
-        /// null return rejects the session.</param>
+        /// <param name="handlerFactory">Creates the session handler and the ACK response from the remote
+        /// endpoint and the borrowed acknowledgement request data. The handshake keeps and releases its own
+        /// reference to the data after the callback returns; the factory must not retain it and must release
+        /// any copy it makes. The factory must be fast and non-blocking, because once the completion is
+        /// claimed the handshake deadline cannot preempt it. A null return rejects the session; otherwise the
+        /// returned response is owned by the created endpoint, and the returned handler is used only for
+        /// admission-failure notification.</param>
         /// <param name="messageMaxByteSize">The inclusive maximum message size, in bytes, admitted by the
         /// endpoint; must be at least 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted by the endpoint but not
@@ -293,7 +296,8 @@ namespace Pontifex.Raw.Reliable.Ack
         internal static void BeginAccept(
             string transportName,
             Socket socket,
-            Func<IEndPoint, UnionDataList, IRawReliableAckServerHandler?> handlerFactory,
+            Func<IEndPoint, UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?>
+                handlerFactory,
             int messageMaxByteSize,
             long bufferCapacityBytes,
             IMemoryRental memory,
@@ -492,8 +496,11 @@ namespace Pontifex.Raw.Reliable.Ack
         }
 
         /// <summary>
-        /// Completes the acknowledgement handshake for the buffered request, then starts receiving so
-        /// pipelined payload cannot overtake the acknowledgement completion.
+        /// Sends the prebuilt acknowledgement response and then starts receiving. The response is already
+        /// built, so <see cref="RawReliableAckServerEndpoint.OnConnected"/> completes the handshake
+        /// synchronously before the receiver starts; inbound frames remain serialized on the action queue and
+        /// the receiver starts only after the response has been admitted for outbound delivery. This ordering
+        /// keeps pipelined payload from overtaking the acknowledgement completion.
         /// </summary>
         protected override void OnConnected()
         {
@@ -687,7 +694,7 @@ namespace Pontifex.Raw.Reliable.Ack
         {
             try
             {
-                ReleasePendingAckData();
+                ReleasePendingAckResponse();
 
                 var lowLevel = _lowLevel;
                 if (lowLevel != null)
@@ -787,7 +794,7 @@ namespace Pontifex.Raw.Reliable.Ack
             }
             finally
             {
-                ReleasePendingAckData();
+                ReleasePendingAckResponse();
                 DisposeReceiveCompositor();
                 FinishDisconnectOnce();
             }
@@ -818,7 +825,7 @@ namespace Pontifex.Raw.Reliable.Ack
         {
             try
             {
-                ReleasePendingAckData();
+                ReleasePendingAckResponse();
 
                 var lowLevel = _lowLevel;
                 if (lowLevel != null)
@@ -984,7 +991,8 @@ namespace Pontifex.Raw.Reliable.Ack
 
             private readonly string _transportName;
             private readonly Socket _socket;
-            private readonly Func<IEndPoint, UnionDataList, IRawReliableAckServerHandler?> _handlerFactory;
+            private readonly Func<IEndPoint, UnionDataList,
+                (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?> _handlerFactory;
             private readonly int _messageMaxByteSize;
             private readonly long _bufferCapacityBytes;
             private readonly IMemoryRental _memory;
@@ -1011,7 +1019,8 @@ namespace Pontifex.Raw.Reliable.Ack
             public AcceptHandshake(
                 string transportName,
                 Socket socket,
-                Func<IEndPoint, UnionDataList, IRawReliableAckServerHandler?> handlerFactory,
+                Func<IEndPoint, UnionDataList, (IRawReliableAckServerHandler handler, UnionDataList ackResponse)?>
+                    handlerFactory,
                 int messageMaxByteSize,
                 long bufferCapacityBytes,
                 IMemoryRental memory,
@@ -1297,27 +1306,20 @@ namespace Pontifex.Raw.Reliable.Ack
                     return;
                 }
 
-                IRawReliableAckServerHandler? handler;
+                IRawReliableAckServerHandler? handler = null;
+                UnionDataList? ackResponse = null;
                 try
                 {
-                    handler = _handlerFactory(remoteEndPoint, ackData);
-                }
-                catch (Exception ex)
-                {
-                    ackData.Release();
-                    CompleteClaimed(AckAcceptResult.Faulted(_transportName, ex));
-                    return;
-                }
+                    var ackResult = _handlerFactory(remoteEndPoint, ackData);
+                    if (ackResult == null)
+                    {
+                        CompleteClaimed(AckAcceptResult.Rejected(new AckRejected(_transportName)));
+                        return;
+                    }
 
-                if (handler == null)
-                {
-                    ackData.Release();
-                    CompleteClaimed(AckAcceptResult.Rejected(new AckRejected(_transportName)));
-                    return;
-                }
+                    handler = ackResult.Value.handler;
+                    ackResponse = ackResult.Value.ackResponse;
 
-                try
-                {
                     var endpoint = new RawReliableAckTcpServerEndpoint(
                         _transportName,
                         remoteEndPoint,
@@ -1328,19 +1330,29 @@ namespace Pontifex.Raw.Reliable.Ack
                         _memory,
                         _log,
                         _disconnectTimeout,
-                        ackData,
+                        ackResponse,
                         _remoteHalfClosePolicy,
                         _receiveBufferSize,
                         _messagePartMaxSize,
                         _gracefulShutdownDeadline,
                         _sendSourceInitialCapacity);
 
+                    // Ownership of the ACK response transfers to the endpoint.
+                    ackResponse = null;
+
                     CompleteClaimed(AckAcceptResult.Accepted(endpoint, handler));
                 }
                 catch (Exception ex)
                 {
-                    ackData.Release();
+                    ackResponse?.Release();
+                    ackResponse = null;
                     CompleteClaimed(AckAcceptResult.Faulted(_transportName, ex, handler));
+                }
+                finally
+                {
+                    // The handshake keeps and releases its own reference to the acknowledgement data; the
+                    // handler factory received an additional reference and owns that one.
+                    ackData.Release();
                 }
             }
 
