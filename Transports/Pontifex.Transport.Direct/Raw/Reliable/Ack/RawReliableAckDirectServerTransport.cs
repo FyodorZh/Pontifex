@@ -166,6 +166,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             RemoveEntry(entry, true);
 
             UnionDataList? ackData = null;
+            UnionDataList? ackResponse = null;
             bool handedOff = false;
             try
             {
@@ -185,14 +186,16 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
                 ackData = message;
 
-                IRawReliableAckServerHandler? handler = TryAcknowledge(clientEp, ackData);
+                // The acknowledger receives its own reference to the ACK data and owns it. The carrier keeps
+                // its own reference and releases it immediately so the outer catch cannot release it twice.
+                var ackResult = TryAcknowledge(clientEp, ackData);
+                ackData.Release();
+                ackData = null;
 
-                if (handler == null)
+                if (ackResult == null)
                 {
-                    ackData.Release();
-                    ackData = null;
-
                     AbandonAdmission();
+
                     try
                     {
                         SendRejection(entry.Channel);
@@ -206,6 +209,9 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                     return;
                 }
 
+                var handler = ackResult.Value.handler;
+                ackResponse = ackResult.Value.ackResponse;
+
                 RawReliableAckDirectServerEndpoint endpoint;
                 try
                 {
@@ -218,20 +224,20 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                         _bufferCapacityBytes,
                         Memory,
                         Log,
-                        ackData);
+                        ackResponse);
                 }
                 catch (Exception ex)
                 {
                     Log.wtf(ex);
-                    ackData.Release();
-                    ackData = null;
+                    ackResponse.Release();
+                    ackResponse = null;
                     AbandonAdmission(handler, new ExceptionFail(Name, ex, "Failed to create the server endpoint"));
                     RejectChannel(entry.Channel);
                     return;
                 }
 
-                // Ownership of the acknowledgement data and of the channel transfers to the endpoint.
-                ackData = null;
+                // Ownership of the ACK response and of the channel transfers to the endpoint.
+                ackResponse = null;
                 handedOff = true;
 
                 if (!ChannelManager.Instance.Detach(_serverEndPoint, clientEp))
@@ -256,6 +262,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             {
                 Log.wtf(ex);
                 ackData?.Release();
+                ackResponse?.Release();
                 if (!handedOff)
                 {
                     RejectHandshake(entry);

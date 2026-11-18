@@ -13,10 +13,11 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Other notes</b>: The endpoint is created by the server transport only after the
-    /// client's acknowledgement request has been validated. It owns the channel from that point on; the
-    /// channel is detached from the server registry before the endpoint starts.</description></item>
-    /// <item><description><b>Other notes</b>: The pending acknowledgement request is buffered and processed
-    /// once the endpoint becomes connected, mirroring the TCP carrier.</description></item>
+    /// client's acknowledgement request has been validated and the ACK response has been built. It owns the
+    /// channel and the response from that point on; the channel is detached from the server registry before
+    /// the endpoint starts.</description></item>
+    /// <item><description><b>Other notes</b>: The pending acknowledgement response is sent once the endpoint
+    /// becomes connected, mirroring the TCP carrier.</description></item>
     /// </list>
     /// </remarks>
     internal sealed class RawReliableAckDirectServerEndpoint : RawReliableAckServerEndpoint
@@ -48,12 +49,12 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
             long bufferCapacityBytes,
             IMemoryRental memory,
             ILogger log,
-            UnionDataList pendingAckData)
+            UnionDataList pendingAckResponse)
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log,
                 NoIdleTimeout)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
-            SetPendingAckData(pendingAckData ?? throw new ArgumentNullException(nameof(pendingAckData)));
+            SetPendingAckResponse(pendingAckResponse ?? throw new ArgumentNullException(nameof(pendingAckResponse)));
             _onChannelDisposed = OnChannelDisposed;
         }
 
@@ -65,7 +66,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 if (channel == null)
                 {
                     Stop(new TextFail(TransportName, "Server endpoint has no channel"), false);
-                    FinishConnect(ReleasePendingAckData);
+                    FinishConnect(ReleasePendingAckResponse);
                     return;
                 }
 
@@ -76,17 +77,17 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
                 if (channel.IsDisposed)
                 {
                     Stop(new UnknownRemoteIntention(TransportName), false);
-                    FinishConnect(ReleasePendingAckData);
+                    FinishConnect(ReleasePendingAckResponse);
                     return;
                 }
 
-                FinishConnect(ReleasePendingAckData);
+                FinishConnect(ReleasePendingAckResponse);
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
                 Stop(new ExceptionFail(TransportName, ex, "Failed to open server endpoint"), false);
-                FinishConnect(ReleasePendingAckData);
+                FinishConnect(ReleasePendingAckResponse);
             }
         }
 
@@ -144,7 +145,7 @@ namespace Pontifex.Raw.Reliable.Ack.Direct
 
         private void CleanupChannel()
         {
-            ReleasePendingAckData();
+            ReleasePendingAckResponse();
 
             var channel = Interlocked.Exchange(ref _channel, null);
             if (channel == null)
