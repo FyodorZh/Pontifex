@@ -63,13 +63,13 @@ internal sealed class TestRawReliableNoAckServerTransport : RawReliableNoAckServ
 
     public bool ExposedCompleteAdmission(
         IRawReliableServerEndpointImp session,
-        IRawReliableNoAckServerHandler? handler,
+        IRawReliableServerHandler? handler,
         StopReason failureReason)
     {
         return CompleteAdmission(session, handler, failureReason);
     }
 
-    public void ExposedAbandonAdmission(IRawReliableNoAckServerHandler? handler, StopReason reason)
+    public void ExposedAbandonAdmission(IRawReliableServerHandler? handler, StopReason reason)
     {
         AbandonAdmission(handler, reason);
     }

@@ -53,13 +53,13 @@ internal sealed class TestRawReliableAckServerTransport : RawReliableAckServerTr
 
     public bool ExposedCompleteAdmission(
         IRawReliableServerEndpointImp session,
-        IRawReliableAckServerHandler? handler,
+        IRawReliableServerHandler? handler,
         StopReason failureReason)
     {
         return CompleteAdmission(session, handler, failureReason);
     }
 
-    public void ExposedAbandonAdmission(IRawReliableAckServerHandler? handler, StopReason reason)
+    public void ExposedAbandonAdmission(IRawReliableServerHandler? handler, StopReason reason)
     {
         AbandonAdmission(handler, reason);
     }
