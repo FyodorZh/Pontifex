@@ -1175,6 +1175,9 @@ converter.
      message as the handshake response; do not pass it to the application
      handler. Call `OnConnected` only after the response validates.
    - On reject/timeout, stop with `ProtocolMismatch`/`TimeOut`.
+   - The converter endpoint/session mirrors the reliable terminal lifecycle:
+     `OnConnected` -> `OnDisconnected` -> `OnStopped` exactly once; a
+     rejected/never-connected session gets exactly one `OnStopped`.
    - Remove `FillAckData` and the fabricated `7777` response.
 3. In the server:
    - On a new inner session, create the `DeliveryManager`; the first
@@ -1234,7 +1237,10 @@ converter.
    - no `OnConnected` before the handshake response;
    - the handshake message is not delivered to the application;
    - mismatched inner/DM maxes: both endpoints report the agreed min and a
-     `min + 1` send is rejected on both sides.
+     `min + 1` send is rejected on both sides;
+   - a rejected/never-connected session receives exactly one `OnStopped` and
+     no `OnDisconnected`, and an admitted session receives the ordered
+     lifecycle exactly once.
 8. Add `README.md` and `Coverage.md` for the new
    `Tests/Pontifex.Factory.Tests/Converters` suite/layer per `Tests/RULES.md`.
 
@@ -1243,7 +1249,7 @@ converter.
 - `dotnet build Pontifex.sln -v minimal` succeeds.
 - `dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --no-build` passes.
 - `dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Tests.csproj --no-build` passes.
-- `dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --no-build --filter "FullyQualifiedName~RawReliableConverterTests"` passes and reports at least 5 tests.
+- `dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --no-build --filter "FullyQualifiedName~RawReliableConverterTests"` passes and reports at least 6 tests.
 
 **Definition of done.** The converter targets RawReliable and performs the
 handshake; the factory/formula tests pass; the converter test passes.
