@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Scriba;
@@ -19,12 +18,6 @@ namespace Pontifex.Raw.Reliable.NoAck
     /// </remarks>
     public abstract class RawReliableNoAckServerEndpoint : RawReliableServerEndpoint, IRawReliableNoAckServerEndpointImp
     {
-        private readonly IRawReliableNoAckServerHandler _handler;
-
-        private int _connectedNotified;
-
-        private int _disconnectedNotified;
-
         /// <summary>
         /// Initializes a new reliable no-acknowledgement server endpoint with the given transport name, logging,
         /// and memory rental, and the idle-session timeout.
@@ -53,25 +46,6 @@ namespace Pontifex.Raw.Reliable.NoAck
             IMemoryRental memory, ILogger log, TimeSpan disconnectTimeout)
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log, disconnectTimeout)
         {
-            _handler = handler;
-        }
-
-        /// <summary>
-        /// Gets whether the endpoint is logically connected, meaning the low-level connection is up and the
-        /// handler's disconnect notification has not been delivered yet.
-        /// </summary>
-        /// <returns><see langword="true"/> when the endpoint is logically connected; otherwise
-        /// <see langword="false"/>.</returns>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to read concurrently.</description></item>
-        /// <item><description><b>Other notes</b>: Returns false during and after the handler's disconnect
-        /// notification.</description></item>
-        /// </list>
-        /// </remarks>
-        protected override bool GetIsConnected()
-        {
-            return IsLowLevelConnected && _disconnectedNotified == 0;
         }
 
         /// <summary>
@@ -89,15 +63,8 @@ namespace Pontifex.Raw.Reliable.NoAck
         /// </remarks>
         protected override void OnConnected()
         {
-            _connectedNotified = 1;
-            try
+            if (!NotifyConnected())
             {
-                _handler.OnConnected(this);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-                Stop(new ExceptionFail(TransportName, ex, "OnConnected failed"), false);
                 return;
             }
 
@@ -121,7 +88,7 @@ namespace Pontifex.Raw.Reliable.NoAck
         /// </remarks>
         protected override void FailHard(StopReason reason)
         {
-            NotifyDisconnected(reason);
+            NotifyDisconnectedCore(reason);
             base.FailHard(reason);
         }
 
@@ -142,36 +109,7 @@ namespace Pontifex.Raw.Reliable.NoAck
         /// </remarks>
         protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
         {
-            NotifyDisconnected(reason);
-        }
-
-        /// <summary>
-        /// Delivers the handler's logical disconnection notification at most once, and only after the handler
-        /// observed the connection.
-        /// </summary>
-        /// <param name="reason">The reason passed to the handler.</param>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the one-shot latch is
-        /// atomic.</description></item>
-        /// <item><description><b>Other notes</b>: The same latch reports the disconnected state read by
-        /// <see cref="GetIsConnected"/>, so IsConnected is false before and during the handler's notification. A
-        /// handler exception is logged and swallowed.</description></item>
-        /// </list>
-        /// </remarks>
-        private void NotifyDisconnected(StopReason reason)
-        {
-            if (Interlocked.Exchange(ref _disconnectedNotified, 1) == 0 && _connectedNotified != 0)
-            {
-                try
-                {
-                    _handler.OnDisconnected(reason);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                }
-            }
+            NotifyDisconnectedCore(reason);
         }
     }
 }

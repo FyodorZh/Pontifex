@@ -44,4 +44,4 @@
 - The test double's `BeginDisconnect` calls the no-acknowledgement base implementation before recording, which is what raises the logical disconnect notification.
 - `TestRawReliableServerEndpoint.CompleteConnect` is private in the ancestor harness, so this layer's double exposes its own public `CompleteConnect`.
 - The recording handler re-implements `IRawReliableHandler.OnDisconnected` explicitly because the inherited recording member is not virtual; the explicit implementation evaluates the `IsConnected` probe before recording the callback.
-- `NotifyDisconnected` uses a single latch for both the disconnected state read by `IsConnected` and the once-only callback guarantee.
+- The disconnect latch and the once-only notification helper now live on `RawReliableEndpoint` (`NotifyDisconnectedCore`); this layer's `FailHard` and `BeginDisconnect` hooks only delegate to it.
