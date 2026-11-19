@@ -152,7 +152,7 @@ The agreed target is:
 9. `HandshakeMaxByteSize = 128` is a default, configurable per layer; a layer
    may raise it if its payload needs more.
 10. `Reject` carries both server version and server name.
-11. The `RawReliableClientHandlerBase` interface is a temporary migration
+11. The `IRawReliableClientHandlerBase` interface is a temporary migration
     artifact and is removed in Stage 10.
 12. The handshake `name` is the final contract name (`"tcp"`, `"direct"`),
     not the temporary binding scheme name.
@@ -342,8 +342,11 @@ implemented; reject linger is 2 s and configurable.
      `UnionDataList` with elements `[Version, name, messageMaxByteSize]`.
    - `TryParseRequest(UnionDataList data, out string name, out int max)`
      validates exactly three elements and the types.
-   - `BuildResponse(string name, int agreedMax)` and
-     `TryParseResponse(UnionDataList data, out string name, out int max)`.
+   - `BuildResponse(short version, string name, int agreedMax)` returns
+     `[version, name, agreedMax]`, and
+     `TryParseResponse(UnionDataList data, out short version, out string name, out int max)`
+     validates exactly three elements and the types. The client validates the
+     server version from the response.
    - `BuildReject(short serverVersion, string serverName, HandshakeStatus status, string? text)`
      and `TryParseReject(...)`.
    - Name comparison uses UTF-8 content equality.
@@ -352,9 +355,12 @@ implemented; reject linger is 2 s and configurable.
      `UnionDataList? Response`, `int AgreedMaxByteSize`.
 2. Add `InternalsVisibleTo` in `Pontifex/Pontifex.csproj` for
    `Pontifex.Transport.Net` and `Pontifex.Transport.Direct` (for the internal
-   handshake types), plus `Pontifex.Protocol`, `Pontifex.Protocol.Zip`,
+   handshake types), `Pontifex.Protocol`, `Pontifex.Protocol.Zip`,
    `Pontifex.Protocol.Reconnectable`, `Pontifex.Api`, and the test assemblies
-   used by later stages.
+   `Pontifex.Tests`, `Pontifex.Transport.Net.Tests`,
+   `Pontifex.Transport.Direct.Tests`, `Pontifex.Transports.Tests`,
+   `Pontifex.Transport.Tests`, `Pontifex.Factory.Tests`, and
+   `Pontifex.Api.Tests`.
 3. In `Pontifex/Implementations/Endpoints/Raw/RawEndpoint.cs`:
    - Replace the get-only `MessageMaxByteSize` with a
      `private volatile int _messageMaxByteSize;` field, a public getter, and
@@ -362,9 +368,15 @@ implemented; reject linger is 2 s and configurable.
    - The constructor sets the field.
    - `ScheduleToSend` keeps reading the property, so the negotiated value is
      enforced by the existing size check.
-   - `SetMessageMaxByteSizeOnce` throws `InvalidOperationException` if the
-     value is less than 1 or if it is called after the endpoint has reached
-     the connected/stopping stage.
+   - `SetMessageMaxByteSizeOnce` uses a one-shot latch
+     (`Interlocked.Exchange` on a `_messageMaxByteSizeSet` field). It throws
+     `InvalidOperationException` if the value is less than 1, if it was
+     already set, or if the base endpoint stage is `Stopping`/`Stopped`.
+     It must **not** key off the reliable `LogicallyConnected` stage: the
+     client is already in the low-level `Connected` stage while the handshake
+     response is processed. Allowed states are `Starting` and `Started`.
+     The server endpoint constructor sets the agreed value directly and marks
+     the latch.
 4. In `Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableEndpoint.cs`:
    - Add `HandshakeRequestMessage = 7`, `HandshakeResponseMessage = 8`,
      `HandshakeRejectMessage = 9` to `MessageType`. Keep 5/6 for the Ack
@@ -380,23 +392,31 @@ implemented; reject linger is 2 s and configurable.
      `HandshakeSent`. Start a `System.Threading.Timer` for
      `handshakeTimeout`.
    - In `ProcessInboundMessage`, handle `HandshakeResponseMessage` by
-     scheduling a completion action on `_actionQueue`: validate version,
-     validate name, call `SetMessageMaxByteSizeOnce(min(local, server))`,
-     set stage `LogicallyConnected`, call `base.OnConnected()` (start
-     keep-alive), then call the handler's `OnConnected(this)`.
-   - Handle `HandshakeRejectMessage` by scheduling a stop action: parse the
-     status, map `VersionMismatch`/`NameMismatch` to `ProtocolMismatch`,
+     scheduling a completion action on `_actionQueue`: **stop and dispose the
+     handshake timer first**, validate version, validate name, call
+     `SetMessageMaxByteSizeOnce(min(local, server))`, set stage
+     `LogicallyConnected`, call `base.OnConnected()` (start keep-alive), then
+     call the handler's `OnConnected(this)`.
+   - Handle `HandshakeRejectMessage` by scheduling a stop action: stop and
+     dispose the timer, parse the status, map
+     `VersionMismatch`/`NameMismatch` to `ProtocolMismatch`,
      `Rejected`/`CapacityExceeded` to `HandshakeRejected`, `Timeout` to
      `TimeOut`, and do not call `OnConnected`.
-   - On timeout, schedule the same stop action with `TimeOut`.
+   - On timeout, schedule the same stop action with `TimeOut` and dispose the
+     timer.
+   - Add a test that keeps a healthy connection alive past a short configured
+     `handshakeTimeout` and asserts it is still connected with no `OnStopped`
+     (proves the timer is stopped on success).
    - `GetIsConnected` returns `IsLowLevelConnected && stage == LogicallyConnected`.
    - `FailHard`/`BeginDisconnect` set the stage to disconnected and release
      the timer.
 6. In `RawReliableHandshakeServerEndpoint.cs`:
    - Add `SetPendingHandshakeResponse(UnionDataList response)` and
      `ReleasePendingHandshakeResponse()`.
-   - On `OnConnected`, send the pending response and only then call the
-     handler's `OnConnected`; if the response is missing, stop with
+   - On `OnConnected`, send the pending response, call
+     `NotifyConnected()` (arms the connected latch and invokes the handler's
+     `OnConnected`), then call `base.OnConnected()` so the inherited
+     idle-session watchdog initializes; if the response is missing, stop with
      `TextFail`.
    - Release the pending response on `FailHard`, `BeginDisconnect`, and the
      terminal `Stopped` event.
@@ -415,9 +435,10 @@ implemented; reject linger is 2 s and configurable.
    - Port the `BeginAccept`/`AcceptHandshake` flow from
      `RawReliableAckTcpServerEndpoint`:
      read the length prefix, enforce `HandshakeMaxByteSize`, deserialize the
-     request, call `TryHandshake`, build the response or reject, create the
-     endpoint with the pending response and `AgreedMaxByteSize`, and invoke
-     the completion.
+     frame and verify its leading frame type is `HandshakeRequestMessage`
+     before parsing, call `TryHandshake`, build the response or reject, create
+     the endpoint with the pending response and `AgreedMaxByteSize`, and
+     invoke the completion.
    - The server transport's accept path calls `TryBeginAdmission`, tracks the
      handshake socket, calls `BeginAccept`, and on completion calls
      `CompleteAdmission`/`AbandonAdmission`.
@@ -467,9 +488,15 @@ implemented; reject linger is 2 s and configurable.
     - handshake timeout (short configured value) -> `TimeOut`;
     - max-size negotiation chooses the min; both endpoints report the min;
       a send of `min + 1` is rejected on both sides;
-    - reject linger: configure 100 ms, measure the server-side close time and
-      assert it is at least the configured linger; Direct has its own 0-linger
-      test in Stage 3.
+    - reject linger: expose an internal `RejectLinger` property on
+      `RawReliableAdmissionServerTransport`; a constructor-without-parameter
+      test asserts it is exactly 2 s. A second test configures 100 ms and
+      asserts the server-side close time is `>=` 100 ms and `< 1 s` (both a
+      lower and an upper bound, so an infinite or zero linger fails).
+      Direct has its own 0-linger test in Stage 3.
+    - an oversized handshake length prefix is rejected before body allocation
+      and closes the peer (port the existing Ack
+      `OversizePrefix_...` case).
     - handshake frames are not delivered through `OnReceived`.
 
 **Verification.**
@@ -477,6 +504,7 @@ implemented; reject linger is 2 s and configurable.
 - `dotnet build Pontifex.sln -v minimal` succeeds.
 - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj --no-build --logger "console;verbosity=minimal"` passes (existing tests migrated).
 - `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --no-build --logger "console;verbosity=minimal"` passes.
+- `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --no-build --logger "console;verbosity=minimal"` passes (the `tcp-noack` binding path now handshakes).
 - `grep -R -n --include='*.cs' -E "HandshakeRequestMessage|HandshakeResponseMessage|HandshakeRejectMessage" .` shows only `RawReliableEndpoint.cs`, `RawReliableHandshakeClientEndpoint.cs`, `RawReliableHandshakeServerEndpoint.cs`, `RawReliableTcpServerEndpoint.cs`, and the new test file.
 
 **Definition of done.** RawReliable TCP pairs require the handshake; mismatch,
@@ -513,18 +541,26 @@ from the Ack Direct tests.
      sends it. `RejectLinger = TimeSpan.Zero`; the reject frame is delivered
      synchronously and the channel is closed immediately.
    - Binding scheme `"direct-noack"`; type `TransportType.RawReliable`;
-     parameters `id`, `handshake_max_byte_size` (default 128),
-     `handshake_timeout` (default 10).
+     parameters `id`, `handshake_max_byte_size` (default 128). Do not add a
+     Direct handshake timeout: the in-process handshake is synchronous and
+     has no timer; an in-process factory that blocks is the application's
+     responsibility.
    - Keep the Ack Direct files until Stage 10; the new binding uses the
      temporary scheme to avoid a duplicate `"direct"`.
 2. Add `Tests/Pontifex.Transport.Direct.Tests/Raw/Reliable/RawReliable/RawReliableDirectTransportTests.cs`,
-   ported from `RawReliableAckDirectTransportTests`:
+   ported from all ten cases of `RawReliableAckDirectTransportTests`, plus
+   the RawReliable handshake cases:
    - successful handshake and `OnConnected`;
    - bidirectional order;
    - version/name mismatch -> reject without `OnConnected`;
    - factory null -> reject;
    - max-size negotiation;
-   - zero linger (the channel closes immediately).
+   - zero linger (the channel closes immediately);
+   - client disconnect notification and server-stop notification;
+   - client start without a server;
+   - oversized message rejection;
+   - many concurrent clients;
+   - `OnDisconnected` -> `OnStopped` ordering.
 3. Do not change TestUI in this stage; it still uses the Ack Direct carrier.
    Stage 7 migrates TestUI as a whole and registers the RawReliable bindings.
 
@@ -532,7 +568,7 @@ from the Ack Direct tests.
 
 - `dotnet build Pontifex.sln -v minimal` succeeds.
 - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --no-build --logger "console;verbosity=minimal"` passes.
-- `grep -R -n --include='*.cs' -E "RawReliableDirect" Transports Tests` shows the new classes and tests.
+- `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --no-build --filter "FullyQualifiedName~RawReliableDirectTransportTests"` passes and reports at least 11 tests.
 
 **Definition of done.** Direct RawReliable pairs handshake and reject without
 lingering; the Direct Ack tests still pass.
@@ -557,21 +593,30 @@ unit-tested with a fake inner transport. No production protocol uses them yet.
 
 1. In `Pontifex/Implementations/Raw/Reliable/Negotiation/`, add:
    - `RawReliableNegotiation.cs` (internal static): builds/parses the flat
-     envelope `[version, name, ...custom]`, validates it, and builds the
-     reject envelope `[serverVersion, serverName, status, text?]`.
+     envelope with an explicit discriminator:
+     `Request:  [version, name, NegotiationStatus.Request, ...custom]`,
+     `Response: [version, name, NegotiationStatus.Accepted, ...custom]`,
+     `Reject:   [serverVersion, serverName, NegotiationStatus.Rejected, text?]`.
+     The third element is always the status, so a custom value (`int id`,
+     etc.) cannot be mistaken for a status. Validate the status before
+     parsing the custom tail.
    - `NegotiationSession.cs` (internal): a client/server state machine that
      sends a request from `OnConnected`, waits for a response/reject, enforces
      `HandshakeMaxByteSize` (default 128) and `HandshakeTimeout` (default
      10 s), and exposes callbacks for admitted/rejected. The client **sends
      the request immediately** from `OnConnected`; it does not wait for an
      incoming payload. The server consumes the first payload as the request.
-   - `NegotiationStatus` enum.
+     The session owns the request/response `UnionDataList`s and releases each
+     once after the hook returns; hooks must not retain or release them.
+     Accept an optional `Func<DateTime>`/timer seam so the 2 s linger test is
+     deterministic.
+   - `NegotiationStatus` enum: `Request`, `Accepted`, `Rejected`.
 2. In `Protocols/Pontifex.Protocol/Raw/Reliable/` (namespace
    `Pontifex.Raw.Reliable.Protocols`), add:
    - `IRawReliableWrapperLogic` with `OnConnected`, `OnDisconnected`,
      `ProcessReceivedData`, `ProcessSentData`, `GetControls`, and the
      negotiation hooks. The hooks receive the **custom tail** after
-     `version`/`name`, not the full envelope:
+     `version`/`name`/`status`, not the full envelope:
      `void FillNegotiationData(UnionDataList customData)` (client),
      `UnionDataList CreateNegotiationResponse()` (server),
      `bool CheckNegotiationData(UnionDataList customData)` (server).
@@ -595,16 +640,24 @@ unit-tested with a fake inner transport. No production protocol uses them yet.
    - version mismatch;
    - name mismatch;
    - timeout;
-   - reject linger (manual driver/clock, assert 2 s);
+   - reject linger (use the session's clock/timer seam; assert 2 s exactly);
    - no `OnReceived` before `OnConnected`;
-   - `Send` before `OnConnected` is not routed to the inner transport.
+   - `Send` before `OnConnected` is not routed to the inner transport;
+   - **custom-tail round trip**: the client `FillNegotiationData` appends
+     `["k"]`; the server `CheckNegotiationData` observes exactly that tail;
+     the server `CreateNegotiationResponse` returns `["v"]`; the client's
+     admitted callback observes exactly that tail;
+   - **custom-tail rejection**: `CheckNegotiationData` returns `false`; the
+     client receives a reject (distinct stop reason) and no `OnConnected`;
+   - **custom-tail size limit**: a tail that makes the envelope exceed
+     `HandshakeMaxByteSize` is rejected, not truncated.
 4. Add an explicit `ProjectReference` to `Pontifex.Protocol` in
    `Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj`.
 
 **Verification.**
 
 - `dotnet build Pontifex.sln -v minimal` succeeds.
-- `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --no-build --filter "FullyQualifiedName~RawReliableWrapperTests"` passes and reports at least 7 tests.
+- `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --no-build --filter "FullyQualifiedName~RawReliableWrapperTests"` passes and reports at least 10 tests.
 - `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj --no-build --filter "FullyQualifiedName~FactoryBindings"` passes.
 
 **Definition of done.** The wrapper base and negotiation utility compile,
@@ -640,23 +693,32 @@ transport; the Ack Zip binding is deleted.
      `ProcessReceivedData` decompresses; `ProcessSentData` compresses.
    - `CompressorLogic` base changes from `RawReliableAckWrapperLogic` to
      `RawReliableWrapperLogic`.
+   - Add `InternalsVisibleTo` for `Pontifex.Transports.Tests` to
+     `Pontifex.Protocol.Zip.csproj` so the tests can construct the internal
+     Zip logic classes (or make those classes public).
 2. Delete the Ack Zip files and the Ack Zip binding.
 3. Update `Tests/Pontifex.Transports.Tests/FactoryBindingsTests.cs`:
    - Replace the Zip registration with `RawReliableZipBinding`.
    - Change the `zip(tcp(...))` cases to `zip(tcp-noack(...))` and expect
      `RawReliable`.
-   Do not change TestUI in this stage; Stage 7 migrates TestUI as a whole.
-4. Add `Tests/Pontifex.Transports.Tests/Raw/Reliable/Zip/RawReliableZipTests.cs`
-   (fixture `RawReliableZipTests`) with a fake inner transport:
-   - `zip(tcp-noack(...))` connects and round-trips data;
-   - **compression is proven** by asserting the inner transport observed a
-     smaller/different byte stream for a compressible payload (inspect the
+4. Update `Pontifex.TestUI/TransportFactory.cs`: replace the Ack Zip
+   registration/import with `RawReliableZipBinding`. The UI's Ack casts remain
+   until Stage 7, so the Zip formula constructs no transport there
+   temporarily; this build-only change keeps the solution buildable.
+5. Add `Tests/Pontifex.Transports.Tests/Raw/Reliable/Zip/RawReliableZipTests.cs`
+   (fixture `RawReliableZipTests`) with a fake `IRawReliableClient/Server`
+   constructed through the public `RawReliableWrapperClient`/`Server` base and
+   the internal Zip logic:
+   - connects and round-trips data;
+   - **compression is proven** by asserting the fake inner transport observed
+     a smaller/different byte stream for a compressible payload (inspect the
      fake inner transport's captured send buffer), not only that the
      application received the original bytes;
-   - a raw client connecting to a `zip` server is rejected by the `"zip"`
-     negotiation;
+   - a raw client (no `"zip"` negotiation) is rejected by the wrapper;
    - a version mismatch is rejected.
-5. Update the Zip coverage/README docs.
+   Do not use the `zip(tcp-noack(...))` formula in this fake-transport
+   fixture; the formula is covered by `FactoryBindingsTests` item 3.
+6. Update the Zip coverage/README docs.
 
 **Verification.**
 
@@ -676,9 +738,8 @@ and let the inner transport reject oversized compressed output as today.
 ### Stage 6 — Migrate Reconnectable to a RawReliable wrapper
 
 **Objective.** `reconnectable(nested)` is a `RawReliable` wrapper with a
-`"reconnectable"` negotiation dataset carrying session id, generation,
-secret, and the composed response; reattach works; the Ack Reconnectable
-binding is deleted.
+`"reconnectable"` negotiation dataset carrying session id, generation, and
+secret; reattach works; the Ack Reconnectable binding is deleted.
 
 **Inputs.** Stage 5 complete.
 
@@ -693,19 +754,22 @@ binding is deleted.
    - `RawReliableReconnectableClient`/`Server`: implement
      `IRawReliableClient`/`IRawReliableServer`. The client needs a fresh
      inner transport per reconnect attempt, so it uses `NegotiationSession`
-     directly (or a wrapper variant that accepts
-     `Func<IRawReliableClient?>`); do not force the single-instance
-     `RawReliableWrapperClient` base. The server may use the wrapper base or
-     the session directly.
-   - `ReconnectableClientLogic`: `FillNegotiationData` puts
-     `[sessionId.Id, sessionId.Generation, secret]`; the response carries
-     `[id, generation, secret, ...user response]`; expose `OnConnected` only
-     after the negotiation.
+     directly over a `Func<IRawReliableClient?>` inner-transport factory and
+     starts/stops a fresh inner transport for each attempt; do not force the
+     single-instance `RawReliableWrapperClient` base. The server may use the
+     wrapper base or the session directly.
+   - `ReconnectableClientLogic`: the request custom tail is
+     `[sessionId.Id, sessionId.Generation, secret]`; the accepted response
+     tail is `[id, generation, secret]`; expose `OnConnected` only after the
+     negotiation.
    - `ReconnectableServerLogic`: `CheckNegotiationData` parses the request,
      reattaches an existing session or creates a new one, and
-     `CreateNegotiationResponse` returns the composed
-     `[id, generation, secret, ...user response]`. On rejection, release the
-     inner session/handler exactly once (stop-once).
+     `CreateNegotiationResponse` returns `[id, generation, secret]`. There is
+     no user response element: the old ACK-response source is deleted. On
+     rejection, release the inner session/handler exactly once (stop-once).
+   - The full envelope is
+     `[version, name, NegotiationStatus.Request|Accepted, ...tail]`; the
+     status is the discriminator from Stage 4.
    - Remove `AckRequest`/`AckOKResponse` markers from `ReconnectableInfo`;
      the wrapper name/version identifies the layer.
    - Replace the `AckRejected` stop reason in `ReconnectableClientLogic`
@@ -718,15 +782,20 @@ binding is deleted.
 4. Migrate `Tests/Pontifex.Transports.Tests/ReconnectableAckResponseTests.cs`:
    - rename to `ReconnectableNegotiationResponseTests.cs`;
    - replace `ReconnectableInfo.AckOKResponse` assertions with the new
-     negotiation response schema (no marker element; metadata order is
-     id, generation, secret, user response);
+     negotiation response schema: status element `Accepted`, then
+     `id, generation, secret` (three transactional elements). There is no
+     marker element and no user response element;
    - keep the release-lifecycle assertions.
 5. Update `Tests/Pontifex.Transports.Tests/FactoryBindingsTests.cs`:
    - replace the Reconnectable registration with the new binding;
    - change `reconnectable(30, tcp(...))` to
      `reconnectable(30, tcp-noack(...))` and expect `RawReliable`.
-   Do not change TestUI in this stage; Stage 7 migrates TestUI as a whole.
-6. Add `Tests/Pontifex.Transports.Tests/Raw/Reliable/Reconnectable/RawReliableReconnectableTests.cs`
+6. Update `Pontifex.TestUI/TransportFactory.cs`: replace the Ack
+   Reconnectable registration/import with
+   `RawReliableReconnectableBinding`. The UI's Ack casts remain until Stage 7,
+   so the Reconnectable formula constructs no transport there temporarily;
+   this build-only change keeps the solution buildable.
+7. Add `Tests/Pontifex.Transports.Tests/Raw/Reliable/Reconnectable/RawReliableReconnectableTests.cs`
    (fixture `RawReliableReconnectableTests`):
    - first connect establishes a session and transfers data;
    - drop and reconnect with the session id/secret reattaches;
@@ -734,7 +803,7 @@ binding is deleted.
      exactly once (assert stop-once);
    - version/name mismatch is rejected;
    - queued messages survive reattach as today.
-7. Update coverage/README docs.
+8. Update coverage/README docs.
 
 **Verification.**
 
@@ -747,9 +816,10 @@ binding is deleted.
 negotiation; the Ack Reconnectable binding/logic are gone; reattach behaviour
 is preserved; the Ack-response tests are migrated.
 
-**Risks / notes.** The response can exceed 128 bytes if the user response is
-large; raise `handshake_max_byte_size` for this wrapper in the binding/tests.
-Do not change the `DeliverySystem` reliability semantics.
+**Risks / notes.** The response tail is only `id, generation, secret`; the
+default 128 bytes is sufficient. If a future user payload is added, raise
+`handshake_max_byte_size` in the binding/tests. Do not change the
+`DeliverySystem` reliability semantics.
 
 ---
 
@@ -803,11 +873,18 @@ RawReliable transports.
      `IRawReliableServer.Init` and update the `ServerSideApiFactory` lambda
      to the parameterless form (`() => new ServerSideApiInstance<...>`).
    - Rename `TestLogic/Raw/Reliable/Ack/*` to `TestLogic/Raw/Reliable/*`;
-     rename `RawReliableAckServerLogic`/`ClientLogic` to
-     `RawReliableServerLogic`/`ClientLogic`, implement
-     `IRawReliableServerHandler`/`IRawReliableClientHandler`, remove
-     `FillAckData`/`TryAck` and the `AckRequest`/`AckResponse` strings from
-     `RawReliableAckCommonLogic` (rename to `RawReliableCommonLogic`).
+     rename `RawReliableAckServerLogic` to `RawReliableServerLogic` and make
+     it implement
+     `IRawReliableServerHandlerFactory<IRawReliableServerHandler>` with
+     `TryCreate(IEndPoint remote)` returning a fresh nested `Handler` that
+     implements `IRawReliableServerHandler` (`OnConnected`,
+     `OnReceived`, `OnDisconnected`, `OnStopped`); remove
+     `TryAck`/`FillAckData` and the ack response.
+   - Rename `RawReliableAckClientLogic` to `RawReliableClientLogic` and make
+     it implement `IRawReliableClientHandler` with `OnConnected(ep)`;
+     remove `FillAckData`.
+   - Rename `RawReliableAckCommonLogic` to `RawReliableCommonLogic`; remove
+     the `AckRequest`/`AckResponse` strings.
    - Rename `TestApi/Brute/RawReliableAckProtocol.cs` (and the `_Client`/
      `_Server` classes) to `RawReliableProtocol*`; update `ApiFactory.cs`.
    - Rename `Ui/Controls/Types/RawReliableAckClientControlView.cs` to
@@ -892,15 +969,30 @@ converter.
    - Remove `TryAck` and the discarded response.
 4. Use `RawReliableHandshake` for the request/response codec; the converter is
    in the `Pontifex` assembly, so the internal type is accessible. Release
-   the request/response buffers exactly once after they are consumed.
+   the request/response buffers exactly once after they are consumed. The
+   converter's agreed `MessageMaxByteSize` is the inner unreliable transport's
+   `MessageMaxByteSize` (the handshake maximum is 128 bytes); the handshake
+   timeout is 10 s. Apply the inner max to both converter endpoints.
 5. Update `ConvertersGraph.Default` to the new converter.
-6. Update test data:
-   - `BootstrapTestData`, `CompilationTestData`, `CanonicalizationTestData`,
-     `RegistryTestData`, `SemanticsTestData`: keep two distinct types.
-     Set `TypeA = TransportType.RawUnreliableAck` and
-     `TypeB = TransportType.RawReliable` (or another distinct pair), so the
-     injected-graph cast test stays a real conversion. Update the
-     "no conversion path from RawReliableAck" test to the new target.
+6. Update test data with per-harness values that stay mutually distinct:
+   - `BootstrapTestData`: `TypeA = TransportType.RawReliable` (the converter
+     target) and `TypeB = TransportType.RawUnreliableNoAck` (the source).
+     `Compile_WithDefaultConverterGraph_UsesTheBuiltInConversion` registers
+     `alpha` as `RawUnreliableNoAck` and compiles it as `TypeA = RawReliable`,
+     so the default converter is exercised.
+   - `CompilationTestData`: `TypeA = RawReliable`,
+     `TypeB = RawUnreliableNoAck`, `TypeC = RawUnreliableAck`. The
+     no-conversion test uses `TypeA as TypeC` (`RawReliable` ->
+     `RawUnreliableAck`) and asserts the new message
+     `"no conversion path from RawReliable to RawUnreliableAck"`.
+   - `SemanticsTestData`: `TypeA = RawReliable`,
+     `TypeB = RawUnreliableNoAck`, `TypeC = RawUnreliableAck`.
+   - `RegistryTestData`: the same three plus
+     `UnregisteredType = TransportType.RRReliableAck`.
+   - `CanonicalizationTestData`: the same three plus
+     `TypeNotInCatalog = TransportType.RRReliableAck`.
+   All four values in each harness must remain distinct; the catalog and
+   selector tests depend on that.
 7. Add `Tests/Pontifex.Factory.Tests/Converters/RawReliableConverterTests.cs`
    (fixture `RawReliableConverterTests`) with a fake
    `IRawUnreliableNoAckClient/Server`:
@@ -948,6 +1040,13 @@ until Stage 10.
      interface to `IRawReliableServerHandler` only (the Ack marker is gone).
    - Update `RawReliableServerHandlerLoggerTests.cs`:
      `RawAckServerSideEndpointWrapper` -> `RawReliableServerSideEndpointWrapper`.
+   - Update the Stage-1 `RawReliableClientLoggerTests.cs` and
+     `RawReliableServerLoggerTests.cs`: `RawAckClientSideEndpointWrapper`/
+     `RawAckServerSideEndpointWrapper` -> `RawReliable*`.
+   - Delete `Tests/Pontifex.Tests/RawReliableAckServerLoggerTests.cs`; its
+     subject (`RawReliableAckServerLogger`/`IRawReliableAckServer`) is
+     deleted. The Stage-1 `RawReliableServerLoggerTests.cs` keeps the merged
+     logger coverage.
    - The logger stays transparent: no negotiation, no extra round trip, no
      name/version, no `MessageMaxByteSize` change.
 2. Update `Tests/Pontifex.Transports.Tests/FactoryBindingsTests.cs`:
@@ -1026,9 +1125,17 @@ or enum value remains; `tcp`, `direct`, and `log` are `RawReliable`; `zip` and
      `RawReliableTcpInfo.TransportName`, `RawReliableDirectBinding`, and
      `RawReliableLoggerBinding`, plus every formula string in TestUI,
      `FactoryBindingsTests`, `TransportRegistry`, and the transport stacks.
-   - Remove `RawReliableClientHandlerBase` and make
+   - Remove `IRawReliableClientHandlerBase` and make
      `IRawReliableClientHandler` the generic constraint; update the generic
-     transport bases and the `RawReliableClientEndpoint` constructor.
+     transport bases, the `RawReliableClientEndpoint` constructor, and the
+     test doubles/harnesses (`TestRawReliableEndpointClientTransport`,
+     `TestRawReliableHandshakeClientEndpoint`,
+     `RecordingRawReliableClientHandler`) to the final handler, adding
+     `OnConnected` where the recording double needs it.
+   - The dense `TransportType` renumber is the one explicit exception to the
+     "do not change RawUnreliable/RR except for reference updates" constraint:
+     their numeric values shift, but their names, contracts, carriers, and
+     tests are unchanged.
    - Remove `AckRejected`; map any remaining protocol rejections to
      `ProtocolMismatch`/`HandshakeRejected`.
    - Update the test transports that hard-code `Type =>
