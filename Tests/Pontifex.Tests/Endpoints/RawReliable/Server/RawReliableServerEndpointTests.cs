@@ -1,4 +1,5 @@
 using Actuarius.Memory;
+using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 
@@ -163,4 +164,74 @@ public sealed class RawReliableServerEndpointTests
     }
 
     #endregion
+
+    #region Connection notification
+
+    [Test]
+    public void NotifyConnected_ForwardsToHandlerAndMarksConnected()
+    {
+        using var handler = new RecordingRawReliableServerHandler(Memory);
+        using var ep = Create(handler);
+        var reason = new UserIntention("test");
+
+        bool notified = ep.ExposedNotifyConnected();
+        ep.ExposedNotifyDisconnectedCore(reason);
+
+        Assert.That(notified, Is.True);
+        Assert.That(handler.ConnectedCount, Is.EqualTo(1));
+        Assert.That(handler.ConnectedEndPoint, Is.SameAs(ep));
+        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
+        Assert.That(handler.DisconnectedReason, Is.SameAs(reason));
+    }
+
+    [Test]
+    public void NotifyConnected_WhenHandlerThrows_StopsWithExceptionFail()
+    {
+        var handler = new ThrowingRawReliableServerHandler();
+        using var ep = new TestRawReliableServerEndpoint(handler);
+        ep.ConnectAndComplete();
+        var exception = new InvalidOperationException("OnConnected failed");
+        handler.Exception = exception;
+
+        bool notified = ep.ExposedNotifyConnected();
+        ep.DrainAll();
+
+        Assert.That(notified, Is.False);
+        Assert.That(ep.LastDisconnectReason, Is.TypeOf<ExceptionFail>());
+        var fail = (ExceptionFail)ep.LastDisconnectReason!;
+        Assert.That(fail.Source, Is.EqualTo("TestServerTransport"));
+        Assert.That(fail.Exception, Is.SameAs(exception));
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Server handler that throws from <see cref="IRawReliableServerHandler.OnConnected"/>.
+    /// </summary>
+    private sealed class ThrowingRawReliableServerHandler : IRawReliableServerHandler
+    {
+        public Exception Exception { get; set; } = new InvalidOperationException("OnConnected failed");
+
+        public int DisconnectedCount { get; private set; }
+
+        public void OnConnected(IRawReliableEndpoint endPoint)
+        {
+            throw Exception;
+        }
+
+        public void OnReceived(UnionDataList receivedBuffer)
+        {
+            receivedBuffer.Release();
+        }
+
+        public void OnDisconnected(StopReason reason)
+        {
+            DisconnectedCount++;
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+        }
+    }
 }

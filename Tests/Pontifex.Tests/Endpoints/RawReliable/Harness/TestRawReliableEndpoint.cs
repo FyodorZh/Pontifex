@@ -114,6 +114,12 @@ internal sealed class TestRawReliableEndpoint : RawReliableEndpoint, IDisposable
 
     public void ExposedFailHard(StopReason reason) => FailHard(reason);
 
+    public void ExposedMarkConnectedNotified() => MarkConnectedNotified();
+
+    public bool ExposedNotifyConnectedCore(Action onConnected) => NotifyConnectedCore(onConnected);
+
+    public void ExposedNotifyDisconnectedCore(StopReason reason) => NotifyDisconnectedCore(reason);
+
     #endregion
 
     protected override void BeginConnect()

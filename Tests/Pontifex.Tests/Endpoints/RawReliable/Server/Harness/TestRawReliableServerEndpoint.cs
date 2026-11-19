@@ -111,6 +111,10 @@ internal sealed class TestRawReliableServerEndpoint : RawReliableServerEndpoint,
 
     public void ExposedProcessInbound(UnionDataList framedMessage) => ProcessInboundMessage(framedMessage);
 
+    public bool ExposedNotifyConnected() => NotifyConnected();
+
+    public void ExposedNotifyDisconnectedCore(StopReason reason) => NotifyDisconnectedCore(reason);
+
     #endregion
 
     protected override void BeginConnect()

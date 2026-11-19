@@ -406,4 +406,129 @@ public sealed class RawReliableEndpointTests
     }
 
     #endregion
+
+    #region Connection notification
+
+    [Test]
+    public void NotifyDisconnected_WhenConnected_NotifiesOnce()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        var reason = Reason();
+
+        ep.ExposedMarkConnectedNotified();
+        ep.ExposedNotifyDisconnectedCore(reason);
+        ep.ExposedNotifyDisconnectedCore(reason);
+
+        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
+        Assert.That(handler.DisconnectedReason, Is.SameAs(reason));
+    }
+
+    [Test]
+    public void NotifyDisconnected_WhenNeverConnected_DoesNotNotify()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+
+        ep.ExposedNotifyDisconnectedCore(Reason());
+
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+    }
+
+    [Test]
+    public void NotifyDisconnected_WhenHandlerThrows_DoesNotThrowOutOfTheEndpoint()
+    {
+        var handler = new ThrowingRawReliableHandler();
+        using var ep = new TestRawReliableEndpoint(handler);
+
+        ep.ExposedMarkConnectedNotified();
+
+        Assert.DoesNotThrow(() => ep.ExposedNotifyDisconnectedCore(Reason()));
+        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void IsConnected_AfterDisconnectNotification_IsFalse()
+    {
+        var handler = new ProbeRawReliableHandler();
+        using var ep = new TestRawReliableEndpoint(handler);
+        handler.Endpoint = ep;
+        ep.ConnectAndComplete();
+        ep.ExposedMarkConnectedNotified();
+
+        ep.ExposedNotifyDisconnectedCore(Reason());
+
+        Assert.That(ep.IsLowLevelConnected, Is.True);
+        Assert.That(handler.IsConnectedDuringDisconnect, Is.False);
+        Assert.That(ep.IsConnected, Is.False);
+    }
+
+    [Test]
+    public void NotifyConnectedCore_WhenCallbackThrows_StopsWithExceptionFail()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.ConnectAndComplete();
+        var exception = new InvalidOperationException("OnConnected failed");
+
+        bool result = ep.ExposedNotifyConnectedCore(() => throw exception);
+        ep.DrainAll();
+
+        Assert.That(result, Is.False);
+        Assert.That(ep.LastDisconnectReason, Is.TypeOf<ExceptionFail>());
+        var fail = (ExceptionFail)ep.LastDisconnectReason!;
+        Assert.That(fail.Source, Is.EqualTo(ep.ExposedTransportName));
+        Assert.That(fail.Exception, Is.SameAs(exception));
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Reliable handler that throws from <see cref="IRawReliableHandler.OnDisconnected"/>.
+    /// </summary>
+    private sealed class ThrowingRawReliableHandler : IRawReliableHandler
+    {
+        public int DisconnectedCount { get; private set; }
+
+        public void OnReceived(UnionDataList receivedBuffer)
+        {
+            receivedBuffer.Release();
+        }
+
+        public void OnDisconnected(StopReason reason)
+        {
+            DisconnectedCount++;
+            throw new InvalidOperationException("OnDisconnected failed");
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Reliable handler that captures the endpoint's logical connection state from inside
+    /// <see cref="IRawReliableHandler.OnDisconnected"/>.
+    /// </summary>
+    private sealed class ProbeRawReliableHandler : IRawReliableHandler
+    {
+        public IRawReliableEndpoint? Endpoint { get; set; }
+
+        public bool? IsConnectedDuringDisconnect { get; private set; }
+
+        public void OnReceived(UnionDataList receivedBuffer)
+        {
+            receivedBuffer.Release();
+        }
+
+        public void OnDisconnected(StopReason reason)
+        {
+            IsConnectedDuringDisconnect = Endpoint!.IsConnected;
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+        }
+    }
 }

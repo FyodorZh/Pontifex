@@ -17,6 +17,8 @@
 | `PeriodicTick_WithinDisconnectTimeout_DoesNothing` | The watchdog tolerates silence inside the configured timeout. | No stop occurs one second before the deadline. | Time is advanced through the `Now` seam. |
 | `PeriodicTick_AfterDisconnectTimeout_StopsWithTimeOut` | Silence beyond the timeout stops the session. | The endpoint begins a disconnect with `TimeOut`; the handler stop arrives after `FinishDisconnect`. | The comparison is strict `> timeout`. |
 | `PeriodicTick_AfterInboundWithinTimeout_DoesNothing` | Every inbound frame refreshes the idle deadline. | A tick past the original deadline does nothing because the frame reset the timestamp. | The payload frame also exercises normal delivery. |
+| `NotifyConnected_ForwardsToHandlerAndMarksConnected` | `NotifyConnected` forwards to the server handler and arms the shared connected latch. | The handler sees one `OnConnected` with this endpoint, then one `OnDisconnected` after the latch is armed. | The second call is the observable consequence of the armed latch. |
+| `NotifyConnected_WhenHandlerThrows_StopsWithExceptionFail` | A throwing server handler fails the session hard. | The helper returns false and the endpoint stops with an `ExceptionFail` sourced from the transport name; no disconnect is delivered. | Uses a fixture-local throwing `IRawReliableServerHandler`. |
 
 ## Planned
 
