@@ -312,9 +312,9 @@ public sealed class RawReliableNoAckServerTransportTests
         var factory = new RecordingRawReliableNoAckServerHandlerFactory { Handler = recording };
         InitializeAndStart(transport, factory);
         Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
-        IRawReliableNoAckServerHandler? handler = transport.ExposedTryCreateHandler(Remote);
+        IRawReliableNoAckServerHandler handler = transport.ExposedTryCreateHandler(Remote)!;
         Assert.That(handler, Is.Not.Null);
-        var session = new TestRawReliableServerSession(handler!);
+        var session = new TestRawReliableServerSession(handler);
         session.Queue.RejectNextSchedule = true;
 
         Assert.That(
@@ -328,6 +328,12 @@ public sealed class RawReliableNoAckServerTransportTests
 
         Assert.That(recording.StoppedCount, Is.EqualTo(1));
         Assert.That(transport.ExposedActiveSessions, Is.Zero);
+
+        // A second terminal notification through the same gate is ignored, which is the protocol
+        // delta this layer owns.
+        handler.OnStopped(Reason("second"));
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
     }
 
     [Test]
@@ -338,9 +344,9 @@ public sealed class RawReliableNoAckServerTransportTests
         var factory = new RecordingRawReliableNoAckServerHandlerFactory { Handler = recording };
         InitializeAndStart(transport, factory);
         Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
-        IRawReliableNoAckServerHandler? handler = transport.ExposedTryCreateHandler(Remote);
+        IRawReliableNoAckServerHandler handler = transport.ExposedTryCreateHandler(Remote)!;
         Assert.That(handler, Is.Not.Null);
-        var session = new TestRawReliableServerSession(handler!);
+        var session = new TestRawReliableServerSession(handler);
 
         Assert.That(transport.Stop(Reason("transport")), Is.True);
         Assert.That(
@@ -356,6 +362,12 @@ public sealed class RawReliableNoAckServerTransportTests
 
         Assert.That(recording.StoppedCount, Is.EqualTo(1));
         Assert.That(transport.ExposedActiveSessions, Is.Zero);
+
+        // A second terminal notification through the same gate is ignored, which is the protocol
+        // delta this layer owns.
+        handler.OnStopped(Reason("second"));
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
     }
 
     #endregion

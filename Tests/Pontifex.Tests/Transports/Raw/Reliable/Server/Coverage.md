@@ -62,6 +62,12 @@
 | `Ticker_AfterTransportStopped_DoesNotTickSessions` | Ticks after transport stop are ignored. | The session clock is not read and the driver was stopped once. | — |
 | `Ticker_IsNotCreatedWhenStartFails` | A failed start creates no ticker. | The driver factory and driver start are never called. | — |
 | `Ticker_SessionAddedAfterStartIsTicked` | A session added after start is picked up by the ticker. | The new session is ticked on the next tick. | — |
+| `TryBeginAdmission_ReservesSessionAndHandshakeSlots` | Admission reserves one session slot and one handshake slot. | A successful call consumes both gates at their configured limit. | — |
+| `TryBeginAdmission_WhenHandshakeGateFull_ReleasesTheSessionSlot` | A partially failed admission holds no slot afterwards. | When the handshake gate rejects, the already reserved session slot is released. | — |
+| `AbandonAdmission_WithHandler_NotifiesOnStopped` | An abandoned admission notifies the session handler. | The handler observes one `OnStopped` with the supplied reason and both gates are released. | The raw handler has no gate, so a second notification would double-count. |
+| `AbandonAdmission_WithoutHandler_ReleasesBothSlots` | The handler-less abandon overload releases both slots. | The handshake slot and the session slot are released without touching a handler. | — |
+| `CompleteAdmission_WhenSessionCannotStart_NotifiesOnStopped` | A session that cannot start has no terminal notification of its own. | The admission fallback delivers one `OnStopped` and the drained session adds no second one; the slot is released. | Drives the rejected start with `Queue.RejectNextSchedule`, as the protocol tests do. |
+| `CompleteAdmission_WhenSessionStartsWithTransportStopping_DoesNotNotifyOnStopped` | A started session owns its terminal notification. | The admission fallback stays silent immediately after completion; draining the session delivers one `OnStopped`. | Mirrors the protocol test without a stop-once gate. |
 
 ## Planned
 
@@ -88,3 +94,6 @@
   configured limits`) and completes synchronously; it does not assert scheduling order.
 - `OnSessionStopped` is invoked only for sessions that were actually registered. Sessions that
   stop during admission are reported through the `false` return instead.
+- The `#region Admission` tests use `RecordingRawAdmissionServerHandler`, a plain handler without a
+  stop-once gate, so a second `OnStopped` would double-count. They prove the shared admission
+  mechanics; the protocol layers own the stop-once assertions.

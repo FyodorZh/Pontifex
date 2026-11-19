@@ -94,6 +94,23 @@ internal sealed class TestRawReliableServerTransport
         return TryStartAndRegisterSession(session);
     }
 
+    public bool ExposedTryBeginAdmission() => TryBeginAdmission();
+
+    public bool ExposedCompleteAdmission(
+        IRawReliableServerEndpointImp session,
+        IRawReliableServerHandler? handler,
+        StopReason failureReason)
+    {
+        return CompleteAdmission(session, handler, failureReason);
+    }
+
+    public void ExposedAbandonAdmission(IRawReliableServerHandler? handler, StopReason reason)
+    {
+        AbandonAdmission(handler, reason);
+    }
+
+    public void ExposedAbandonAdmission() => AbandonAdmission();
+
     protected override ILogicDriver<IPeriodicLogicDriverCtl> LogicDriverFactory()
     {
         LogicDriverFactoryCalls++;

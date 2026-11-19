@@ -585,6 +585,12 @@ public sealed class RawReliableAckServerTransportTests
 
         Assert.That(recording.StoppedCount, Is.EqualTo(1));
         Assert.That(transport.ExposedActiveSessions, Is.Zero);
+
+        // A second terminal notification through the same gate is ignored, which is the protocol
+        // delta this layer owns.
+        handler.OnStopped(Reason("second"));
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
     }
 
     [Test]
@@ -620,6 +626,12 @@ public sealed class RawReliableAckServerTransportTests
 
         Assert.That(recording.StoppedCount, Is.EqualTo(1));
         Assert.That(transport.ExposedActiveSessions, Is.Zero);
+
+        // A second terminal notification through the same gate is ignored, which is the protocol
+        // delta this layer owns.
+        handler.OnStopped(Reason("second"));
+
+        Assert.That(recording.StoppedCount, Is.EqualTo(1));
     }
 
     #endregion
