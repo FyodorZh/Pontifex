@@ -10,6 +10,7 @@ using Pontifex.Raw.Reliable.Ack.Reconnectable;
 using Pontifex.Raw.Reliable.Ack.Tcp;
 using Pontifex.Raw.Reliable.Ack.Zip;
 using Pontifex.Raw.Reliable.NoAck;
+using Pontifex.Raw.Reliable.NoAck.Logger;
 using Pontifex.Raw.Reliable.NoAck.Tcp;
 using Pontifex.Raw.Unreliable.Ack.Direct;
 using Pontifex.Raw.Unreliable.Ack.Udp;
@@ -40,6 +41,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Server, "zip(tcp(\"127.0.0.1\", 9000), compression_level = 9)", TransportType.RawReliableAck),
         Case(Registration.TransportRole.Server, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
         Case(Registration.TransportRole.Server, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Server, "log-noack(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliableNoAck),
         Case(Registration.TransportRole.Client, "direct(\"node-1\")", TransportType.RawReliableAck),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable-ack(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable-noack(\"node-1\")", TransportType.RawUnreliableNoAck),
@@ -50,7 +52,8 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
         Case(Registration.TransportRole.Client, "zip(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
         Case(Registration.TransportRole.Client, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Client, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck)
+        Case(Registration.TransportRole.Client, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Client, "log-noack(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliableNoAck)
     };
 
     [TestCaseSource(nameof(CompileCases))]
@@ -192,6 +195,7 @@ public sealed class FactoryBindingsTests
         builder.RegisterTransport(RawReliableAckZipBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableAckReconnectableBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableAckLoggerBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableNoAckLoggerBinding.CreateRegistration());
 
         return builder.Build();
     }
