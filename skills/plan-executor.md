@@ -55,27 +55,40 @@ The plan is the only artifact this phase produces. Do not create a separate desi
 5. **Non-goals** — work explicitly out of scope, so no stage drifts into it.
 6. **Assumptions** — every fact taken as given, each tied to its evidence (file, document, or user statement).
 7. **Prerequisites** — tooling, credentials, services, or prior state needed before stage 1.
-8. **Stages** — numbered, ordered, each following the skeleton below.
+8. **Stages** — numbered, ordered review checkpoints, each following the skeleton below.
 9. **Global definition of done** — the verifiable end state of the entire plan.
 
 ### Stage skeleton
 
 Every stage must contain all of the following. A stage missing any of them is not ready for the audit loop.
 
-- **Objective** — what this stage alone achieves.
+- **Objective** — the one coherent outcome this stage delivers.
 - **Inputs** — what must already exist when the stage starts.
 - **Actions** — a numbered, ordered list of concrete changes: exact files, types, members, commands, and configuration. No "update the module appropriately"; name what changes and how.
 - **Verification** — the exact procedure proving the stage worked. Prefer runnable commands with expected results (build, test filter, linter, script). Where verification is manual, state precisely what to inspect and what correct output looks like.
 - **Definition of done** — the observable condition that ends the stage.
 - **Risks / notes** — only where a step is non-obvious or easy to get wrong.
 
-### Sizing rules
+### Granularity rules
 
-- A stage must be independently implementable and independently verifiable.
+A stage is a **review checkpoint**, not a unit of editing. After a stage: the repository is consistent and buildable, the stage's outcome is observable, and a reviewer has a reason to stop. If nobody would want to review there, it is not a stage.
+
+- A stage must deliver one coherent outcome. Do not bundle unrelated outcomes, and do not split one outcome across stages.
+- Split only when the parts have distinct outcomes, distinct verification, or a real risk boundary.
+- Never split by file, type, layer, project, test, or mechanical step. Group mechanical work (renames, moves, boilerplate) into one preparatory stage instead of one stage per edit.
+- Merge adjacent stages when they serve the same outcome, neither is a useful checkpoint alone, combined verification stays unambiguous, and the combined diff stays reviewable. A stage with fewer than three substantive actions, no observable outcome, and the same verification as its neighbour should be merged.
 - A stage must not depend on decisions deferred to a later stage.
-- A stage must be small enough that its diff can be reviewed in one pass.
-- If a stage cannot be verified without the next stage, merge them or re-cut the boundary.
-- Prefer more, smaller stages over fewer, sprawling ones.
+- "Independently verifiable" means checkable at that boundary with the existing toolchain — build, existing tests, lint, or a stated manual inspection. It does not require a new dedicated test or a user-visible feature per stage. Preparatory stages normally verify with the build plus the existing suite.
+- Prefer vertical slices over horizontal layers. "All models, then all services, then all UI" is a fragmentation pattern; one behaviour end to end is a checkpoint.
+- If a plan needs more than roughly eight stages, every stage must state in one line why it is a separate checkpoint. This is a justification requirement, not a hard cap.
+- Default to coherent checkpoints. If the user asks for coarser or finer stages when invoking the skill, honour it without asking.
+
+Fragmentation patterns to avoid:
+
+- one stage per file, type, interface, project, or test class;
+- a separate stage for a documentation or configuration change that belongs to the behaviour it supports;
+- splitting a rename, move, or namespace change across stages;
+- a stage whose only outcome is "the code compiles" when the next stage immediately builds on it and a reviewer gains nothing from stopping there.
 
 ## Phase 2 — Adversarial refinement loop
 
@@ -104,7 +117,7 @@ Each auditor receives the same plan path and iteration number but a different le
 
 1. **Logic and consistency** — contradictions between sections, stages, constraints, and non-goals; scope drift; unstated requirements; assumptions presented as facts without evidence; internal inconsistencies.
 2. **Implementation sufficiency** — missing or underspecified actions that force research, design, or guess-work; wrong paths, type/member names, APIs, commands, or environment assumptions. This lens inspects the repository to confirm references.
-3. **Verifiability and sequencing** — verification that cannot prove the stage's objective; missing expected results; ordering or dependency errors between stages; stages that are not independently implementable or verifiable; gaps in prerequisites and the definition of done.
+3. **Verifiability, sequencing, and granularity** — verification that cannot prove the stage's objective; missing expected results; ordering or dependency errors between stages; stages that are not independently implementable or verifiable; gaps in prerequisites and the definition of done; fragmented adjacent stages that should merge, oversized stages with unrelated outcomes, and boundaries that are not review checkpoints (see the granularity rules in Phase 1).
 
 Use the auditor prompt template below, substituting the lens name and mandate. The auditor reads the plan from disk itself; never paste the plan into the prompt, and never let one auditor see another's report.
 
@@ -133,7 +146,8 @@ Every finding is classified by impact, not by effort or taste.
 - the implementator would have to make a design decision, research, or guess;
 - the fix could change scope, interfaces, public behaviour, ordering, or acceptance criteria;
 - a wrong choice would pass the stage's verification unnoticed;
-- contradictions, missing actions, wrong paths/types/APIs/commands, unprovable verification, or ordering errors.
+- contradictions, missing actions, wrong paths/types/APIs/commands, unprovable verification, or ordering errors;
+- fragmented or oversized stage boundaries: one outcome split into units with no independent review or verification value, or unrelated outcomes bundled into one stage.
 
 **Deferrable** — a concrete, local gap that must be communicated to the implementator but does not need a plan edit:
 
@@ -341,6 +355,7 @@ Status values: `fixed`, `deferred`, `rejected`. For a deferred note, the Resolut
 ## Guardrails
 
 - One plan file, one task. Never span unrelated work in a single plan.
+- A stage is a review checkpoint. Never split by file, layer, type, project, or mechanical step, and never bundle unrelated outcomes.
 - Never write the plan on top of unresolved questions.
 - Never overwrite an existing plan file.
 - Commit the plan before every audit iteration; skip the commit only when the file is unchanged.
