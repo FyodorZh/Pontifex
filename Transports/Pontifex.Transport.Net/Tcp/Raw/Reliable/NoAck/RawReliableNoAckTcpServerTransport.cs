@@ -5,7 +5,6 @@ using System.Threading;
 using Actuarius.Memory;
 using Pontifex.NetSockets;
 using Pontifex.NetSockets.Tcp;
-using Pontifex.Raw.Reliable.Ack.Tcp;
 using Pontifex.StopReasons;
 using Scriba;
 
@@ -27,10 +26,6 @@ namespace Pontifex.Raw.Reliable.NoAck.Tcp
     /// <item><description><b>Stop-once notification</b>: every handler returned by the factory is wrapped in the
     /// transport's stop-once gate, so the session endpoint and the admission-failure fallback share one latch and
     /// the factory's handler observes at most one <see cref="IRawHandler.OnStopped"/>.</description></item>
-    /// <item><description><b>Namespace debt</b>: the shared accept-loop helpers
-    /// <see cref="AsyncServerSocketListener"/> and <see cref="IServerSocketListener"/> still live in
-    /// <c>Pontifex.Raw.Reliable.Ack.Tcp</c>. Reusing them is deliberate; moving them to a carrier-neutral namespace
-    /// is deferred to the future T2a/T2b consolidation.</description></item>
     /// </list>
     /// </remarks>
     public sealed class RawReliableNoAckTcpServerTransport : RawReliableNoAckServerTransport

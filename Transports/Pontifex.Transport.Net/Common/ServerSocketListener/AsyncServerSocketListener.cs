@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Net.Sockets;
 
-namespace Pontifex.Raw.Reliable.Ack.Tcp
+namespace Pontifex.NetSockets.Tcp
 {
     class AsyncServerSocketListener : IServerSocketListener
     {
