@@ -109,20 +109,9 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </remarks>
         protected override void FailHard(StopReason reason)
         {
-            if (_stage == State.LogicallyConnected)
-            {
-                _stage = State.LogicallyDisconnected;
-                try
-                {
-                    _handler.OnDisconnected(reason);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                }
-            }
             _stage = State.LogicallyDisconnected;
-            
+            NotifyDisconnectedCore(reason);
+
             base.FailHard(reason);
         }
 
@@ -202,15 +191,7 @@ namespace Pontifex.Raw.Reliable.Ack
                         // Keep-alive must start only after the ack request, otherwise a ping frame can
                         // reach the server before the handshake frame and the connection is rejected.
                         base.OnConnected();
-                        try
-                        {
-                            _handler.OnConnected(this, message);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.wtf(ex);
-                            Stop(new ExceptionFail(TransportName, ex, "OnConnected failed"), false);
-                        }
+                        NotifyConnectedCore(() => _handler.OnConnected(this, message));
                         break;
 
                     case State.Constructed:
@@ -282,19 +263,8 @@ namespace Pontifex.Raw.Reliable.Ack
         /// </remarks>
         protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
         {
-            if (_stage == State.LogicallyConnected)
-            {
-                _stage = State.LogicallyDisconnected;
-                try
-                {
-                    _handler.OnDisconnected(reason);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                }
-            }
             _stage = State.LogicallyDisconnected;
+            NotifyDisconnectedCore(reason);
         }
     }
 }

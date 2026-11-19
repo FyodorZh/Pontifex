@@ -34,6 +34,12 @@ internal sealed class RecordingRawReliableAckClientHandler : RecordingRawReliabl
     /// </summary>
     public byte[]? AckResponsePayload { get; private set; }
 
+    /// <summary>
+    /// Gets or sets whether <see cref="OnConnected"/> throws after recording the connection and releasing the
+    /// acknowledgement response.
+    /// </summary>
+    public bool ThrowOnConnected { get; set; }
+
     public void FillAckData(UnionDataList ackData)
     {
         FillAckDataCalls++;
@@ -56,5 +62,10 @@ internal sealed class RecordingRawReliableAckClientHandler : RecordingRawReliabl
             : Array.Empty<byte>();
 
         ackResponse.Release();
+
+        if (ThrowOnConnected)
+        {
+            throw new InvalidOperationException("OnConnected test failure");
+        }
     }
 }

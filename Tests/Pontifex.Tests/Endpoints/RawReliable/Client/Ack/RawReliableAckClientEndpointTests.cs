@@ -189,5 +189,27 @@ public sealed class RawReliableAckClientEndpointTests
         Assert.That(handler.StoppedReason, Is.SameAs(reason));
     }
 
+    [Test]
+    public void OnConnected_WhenHandlerThrows_NotifiesDisconnectedThenStopped()
+    {
+        using var handler = new RecordingRawReliableAckClientHandler(Memory) { ThrowOnConnected = true };
+        using var ep = new TestRawReliableAckClientEndpoint(handler);
+        ep.ConnectAndComplete();
+
+        ep.ExposedProcessInbound(TestRawReliableAckClientEndpoint.Frame(Memory, TestRawReliableAckClientEndpoint.AckResponseFrame));
+        ep.DrainAll();
+
+        Assert.That(handler.ConnectedCount, Is.EqualTo(1));
+        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
+        Assert.That(handler.DisconnectedReason, Is.TypeOf<ExceptionFail>());
+        Assert.That(ep.BeginDisconnectCalls, Is.EqualTo(1));
+
+        ep.CompleteDisconnect();
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
+        Assert.That(ep.IsConnected, Is.False);
+    }
+
     #endregion
 }

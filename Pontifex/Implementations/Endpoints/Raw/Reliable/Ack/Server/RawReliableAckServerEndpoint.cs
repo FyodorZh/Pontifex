@@ -16,8 +16,6 @@ namespace Pontifex.Raw.Reliable.Ack
     /// </remarks>
     public abstract class RawReliableAckServerEndpoint : RawReliableServerEndpoint, IRawReliableAckServerEndpointImp
     {
-        private readonly IRawReliableAckServerHandler _handler;
-
         private enum State
         {
             /// <summary>
@@ -111,8 +109,6 @@ namespace Pontifex.Raw.Reliable.Ack
             TimeSpan disconnectTimeout)
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log, disconnectTimeout)
         {
-            _handler = handler;
-
             // A terminal stop may happen before the endpoint is connected, so the pending response is
             // released here as well as from FailHard and BeginDisconnect. The release is idempotent.
             Stopped += OnEndpointStopped;
@@ -154,20 +150,8 @@ namespace Pontifex.Raw.Reliable.Ack
         protected override void FailHard(StopReason reason)
         {
             ReleasePendingAckResponse();
-
-            if (_stage == State.LogicallyConnected)
-            {
-                _stage = State.LogicallyDisconnected;
-                try
-                {
-                    _handler.OnDisconnected(reason);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                }
-            }
             _stage = State.LogicallyDisconnected;
+            NotifyDisconnectedCore(reason);
 
             base.FailHard(reason);
         }
@@ -244,7 +228,8 @@ namespace Pontifex.Raw.Reliable.Ack
                 }
 
                 _stage = State.LogicallyConnected;
-                _handler.OnConnected(this);
+                ServerHandler.OnConnected(this);
+                MarkConnectedNotified();
             }
             catch (Exception ex)
             {
@@ -272,20 +257,8 @@ namespace Pontifex.Raw.Reliable.Ack
         protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
         {
             ReleasePendingAckResponse();
-
-            if (_stage == State.LogicallyConnected)
-            {
-                _stage = State.LogicallyDisconnected;
-                try
-                {
-                    _handler.OnDisconnected(reason);
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                }
-            }
             _stage = State.LogicallyDisconnected;
+            NotifyDisconnectedCore(reason);
         }
 
         /// <summary>

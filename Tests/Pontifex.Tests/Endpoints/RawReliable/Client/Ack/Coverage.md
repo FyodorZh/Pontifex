@@ -21,6 +21,7 @@
 | `Disconnect_WhenHandshakePending_DoesNotNotifyOnDisconnected` | A stop before the handshake completes has no logical disconnect notification. | `OnDisconnected` is not raised; only `OnStopped` follows. | The stage is `AckRequestSent`, not `LogicallyConnected`. |
 | `FailHard_WhenLogicallyConnected_NotifiesDisconnectedThenStopped` | A hard failure of a logically connected endpoint notifies disconnection before stop. | `OnDisconnected` and `OnStopped` both receive the failure reason. | `IsConnected` is already false when the notification runs. |
 | `FailHard_WhenHandshakePending_DoesNotNotifyOnDisconnected` | A hard failure before the handshake completes has no logical disconnect notification. | `OnDisconnected` is not raised; `OnStopped` receives the reason. | — |
+| `OnConnected_WhenHandlerThrows_NotifiesDisconnectedThenStopped` | A handler exception during the connection notification stops the endpoint. | `OnConnected` was observed once, then `OnDisconnected` and `OnStopped` receive `ExceptionFail`, and `IsConnected` is false. | The shared connection helper arms the latch before the handler call, so the throwing path still delivers the disconnect notification. |
 
 ## Planned
 
@@ -28,7 +29,6 @@
 |---|---|---|
 | `FillAckData` producing data above `RawReliableAckInfo.AckMaxByteSize` stops with `TextFail`. | This layer | The oversize guard is not covered. |
 | An inbound ack response above `AckMaxByteSize` stops with `TextFail` and releases the frame. | This layer | The inbound oversize guard is not covered. |
-| `OnConnected` handler throwing stops with `ExceptionFail`. | This layer | The handler callback exception path is not covered. |
 | No ping is sent before the ack request; keep-alive starts only after the handshake. | This layer | The handshake/keep-alive ordering invariant is documented but not asserted. |
 | An ack response received while logically disconnected is released silently. | This layer | The disconnected-stage branch is not covered. |
 
