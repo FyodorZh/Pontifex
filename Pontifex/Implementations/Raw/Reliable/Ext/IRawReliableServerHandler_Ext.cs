@@ -22,12 +22,6 @@ namespace Pontifex.Raw.Reliable
         /// <param name="core">The handler to wrap.</param>
         /// <param name="onFail">Receives a description of a violated invariant.</param>
         /// <returns>The wrapped handler in Debug builds, otherwise <paramref name="core"/>.</returns>
-        /// <summary>
-        /// Wraps the handler with a debug-only invariant checker.
-        /// </summary>
-        /// <param name="core">The handler to wrap.</param>
-        /// <param name="onFail">Receives a description of a violated invariant.</param>
-        /// <returns>The wrapped handler in Debug builds, otherwise <paramref name="core"/>.</returns>
         public static IRawReliableServerHandler Test(this IRawReliableServerHandler core, Action<string> onFail)
         {
 #if DEBUG
@@ -47,20 +41,6 @@ namespace Pontifex.Raw.Reliable
         /// <item><description><c>OnConnected</c> is forwarded unguarded: the specification requires that
         /// its exception reaches the endpoint, which then stops the session with <c>ExceptionFail</c> and
         /// delivers no <c>OnDisconnected</c>.</description></item>
-        /// </list>
-        /// </remarks>
-        /// <param name="core">The handler to wrap.</param>
-        /// <param name="onFail">Receives every exception thrown by a guarded callback.</param>
-        /// <returns>The guard wrapper around <paramref name="core"/>.</returns>
-        /// <summary>
-        /// Wraps the handler so that exceptions thrown by its callbacks are passed to
-        /// <paramref name="onFail"/> instead of escaping.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><c>OnDisconnected</c>, <c>OnReceived</c> and <c>OnStopped</c> are guarded.</description></item>
-        /// <item><description><c>OnConnected</c> is forwarded unguarded; see the specification, which
-        /// requires the exception to reach the endpoint.</description></item>
         /// </list>
         /// </remarks>
         /// <param name="core">The handler to wrap.</param>

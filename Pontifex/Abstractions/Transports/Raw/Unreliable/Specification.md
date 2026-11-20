@@ -101,7 +101,7 @@ session or security principal.
 | Topic | Guaranteed by RawUnreliable | Application responsibility | Implementation-defined |
 | --- | --- | --- | --- |
 | Delivery | Preserves each delivered message's boundary and logical content. Loss, duplication, and reordering are all permitted. | Make operations idempotent; add sequence numbers, deduplication, receipts, retries, or ordering above this layer when required. | Carrier and queue behavior that causes a particular delivery outcome. |
-| Sending | `Ok` means local acceptance only, never peer receipt. Every call consumes its message buffer. | Handle every `SendResult`; retry only with a newly created logical message. | Queue capacity, drain rate, and scheduling. |
+| Sending | `Ok` means local acceptance only, never peer receipt. Every call consumes its non-null, live message buffer; an `InvalidMessage` result leaves a null or dead buffer with the caller. | Handle every `SendResult`; retry only with a newly created logical message. | Queue capacity, drain rate, and scheduling. |
 | Handlers | Each endpoint's callbacks are serialized and non-reentrant. Server endpoints may invoke callbacks concurrently with other server endpoints. | Return promptly, release received buffers, and protect state shared between handlers. | Callback thread or scheduler. |
 | Routing | A client has one configured route. A server creates endpoint routes from valid inbound sources and binds each endpoint to one equal source route while valid. | Return null from the factory to decline a source message; treat endpoint metadata as unauthenticated. | Endpoint representation and carrier addressing. |
 | Endpoint failure | A stopped or internally invalidated endpoint stops its handler callbacks. A server can later create a new endpoint for the same source route. | Observe `OnStopped`; retain no expectation that an invalid endpoint will become valid again. | Endpoint failure detection mechanism and timing. |
@@ -430,15 +430,16 @@ before its endpoint starts, while its endpoint is stopping, after endpoint
 stopping, or while the owning transport is not running **MUST** return `Error`.
 RawUnreliable **MUST NOT** return `NotConnected`.
 
-Every `Send` invocation transfers ownership of its non-null message
-argument to the endpoint's transport regardless of its result. After the call,
-the caller **MUST NOT** read, mutate, retain, release, or retry with that
-`UnionDataList`. The transport **MUST** eventually release the transferred
-reference, including when it rejects the message synchronously. A retry
-requires a new buffer containing the same logical message.
+Every `Send` invocation transfers ownership of its message argument to the
+endpoint's transport for every result except `InvalidMessage`. For every other
+result, including a synchronous rejection, the caller **MUST NOT** read, mutate,
+retain, release, or retry with that `UnionDataList`; the transport **MUST**
+eventually release the transferred reference. On `InvalidMessage` the buffer is
+null or no longer alive and cannot be transferred, so the caller retains
+ownership. A retry requires a new buffer containing the same logical message.
 
 ```csharp
-SendResult result = endpoint.Send(message); // Ownership always transfers.
+SendResult result = endpoint.Send(message); // Transport-owned except on InvalidMessage.
 
 if (result == SendResult.BufferOverflow)
 {

@@ -190,11 +190,15 @@ A client whose `Start` returned true and that terminates before `OnConnected`
 `OnConnected`, `OnReceived`, `OnDisconnected`, and `OnStopped` are serialized
 and non-reentrant for one logical connection. `OnReceived` is never invoked
 after `OnDisconnected`. During and after `OnDisconnected`, `IsConnected` is
-`false` and `RemoteEndPoint` is `null`.
+`false`. `RemoteEndPoint` remains the immutable route metadata supplied when
+the endpoint was created; callers must use `IsConnected`, not a null remote
+endpoint, to determine whether the connection is live.
 
-A server transport stop disconnects every active session. Each session handler
-observes the documented sequence before the transport's own `onStopped`
-callback is invoked.
+A server transport stop disconnects every active session. The transport
+schedules each session handler's terminal notification before invoking its own
+`onStopped` callback. Endpoint callbacks for different sessions may still
+complete asynchronously; this ordering requires notification scheduling, not
+that every session handler has returned before the transport callback begins.
 
 ## 7. Carriers
 
