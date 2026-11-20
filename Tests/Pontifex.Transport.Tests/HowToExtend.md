@@ -5,7 +5,7 @@
 ```
 TransportStacks/                     ← You curate stacks here (data)
        │
-       └── RawReliableAckStacks     ──→  [TestFixtureSource]
+       └── RawReliableStacks     ──→  [TestFixtureSource]
        │       │
        │       ├── ApiPingTests                      ← Test plan (API-based)
        │       ├── ApiConnectDisconnectTests         ← Test plan (API-based)
@@ -26,7 +26,7 @@ Five layers work together:
 
 The flow:
 
-1. NUnit discovers a `[TestFixtureSource]` and calls the source class (e.g. `RawReliableAckStacks`)
+1. NUnit discovers a `[TestFixtureSource]` and calls the source class (e.g. `RawReliableStacks`)
 2. For each `ITransportStack`, NUnit instantiates the test fixture
 3. The fixture constructor stores the stack; each `[Test]` method creates a harness or uses `_stack.GetTransportFactory()`
 4. `TransportFactory` compiles the stack's server and client formulas through `TransportRegistry.Factory`
@@ -55,8 +55,8 @@ static TransportRegistry()
             new FormulaRegistry.TransportTypeInfo(type, type.ToString()));
     }
 
-    builder.RegisterTransport(RawReliableAckDirectBinding.CreateRegistration());
-    builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
+    builder.RegisterTransport(RawReliableDirectBinding.CreateRegistration());
+    builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
     builder.RegisterTransport(RawUnreliableNoAckDirectBinding.CreateRegistration());
     builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
     builder.RegisterTransport(MyNewWebSocketBinding.CreateRegistration());  // ← ADD
@@ -72,14 +72,14 @@ The factory now knows how to compile this transport's formula.
 Create a new file in `TransportStacks/` for the transport type, or add to an existing one.
 Each file is a self-contained `IEnumerable<ITransportStack>` that NUnit uses directly as a `[TestFixtureSource]`.
 
-**Example:** `TransportStacks/RawReliableAckStacks.cs`:
+**Example:** `TransportStacks/RawReliableStacks.cs`:
 
 ```csharp
 using System.Collections;
 
 namespace Pontifex.Tests;
 
-public class RawReliableAckStacks : IEnumerable<ITransportStack>
+public class RawReliableStacks : IEnumerable<ITransportStack>
 {
     public IEnumerator<ITransportStack> GetEnumerator()
     {
@@ -121,31 +121,27 @@ A "test plan" is a set of related tests for one transport abstraction. There are
 
 Create a new fixture class and use `_stack.GetTransportFactory()` to build transports.
 
-**Directory convention:** `TestPlans/{Ack|NoAck}/{Raw|RR}/{Reliable|Unreliable}/{TestPlanName}/{TestName}Tests.cs`
+**Directory convention:** `TestPlans/{Raw|RR}/{Reliable|Unreliable}/{Subject}/{TestPlanName}/{TestName}Tests.cs`
 
-**Example:** `TestPlans/Ack/Raw/Reliable/HighLoadDataTransfer/HighLoadDataTransfer.cs`:
+**Example:** `TestPlans/Raw/Reliable/RawReliable/HighLoadDataTransfer/HighLoadDataTransfer.cs`:
 
 ```csharp
 using System.Collections.Concurrent;
 using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Ack.Raw;
-using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 using Pontifex.Utils;
 
-namespace Pontifex.Raw.Reliable.Ack.Tests
+namespace Pontifex.Raw.Reliable.Tests
 {
-    [TestFixtureSource(typeof(RawReliableAckStacks))]
+    [TestFixtureSource(typeof(RawReliableStacks))]
     public class HighLoadDataTransfer
     {
         private const int MinN = 200;
         private const int MaxN = 2000;
-
-        private static readonly IMultiRefReadOnlyByteArray AckRequest =
-            new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-REQUEST"u8.ToArray());
 
         [Test]
         public async Task Transfer_Load()
@@ -153,8 +149,8 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             var memory = TransportRegistry.Memory;
             var factory = _stack.GetTransportFactory();
 
-            var server = (IRawReliableAckServer)factory.BuildServer();
-            var client = (IRawReliableAckClient)factory.BuildClient();
+            var server = (IRawReliableServer)factory.BuildServer();
+            var client = (IRawReliableClient)factory.BuildClient();
 
             // wire OnReceived handlers, send messages, verify responses
             // ...
@@ -163,7 +159,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
 }
 ```
 
-For raw transport test plans, you handle protocol at the `OnReceived` level using `IRawReliableAckClient`/`IRawReliableAckServer` (or the corresponding interfaces for other abstractions). No API layer is involved.
+For raw transport test plans, you handle protocol at the `OnReceived` level using `IRawReliableClient`/`IRawReliableServer` (or the corresponding interfaces for other abstractions). No API layer is involved.
 
 ### 2B. API-Based Test Plan (tests through ApiRoot)
 
@@ -175,17 +171,16 @@ Every API-based test plan follows the **canonical structure**:
 4. Each client connects, performs work, calls `GracefulShutdown`, asserts no `AnyFail` stop reasons
 5. Three test cases: `Test_Single` (1, 1), `Test_Small` (`GetSmallTestSize()`), `Test_Big` (`GetBigTestSize()`)
 
-**Example:** `TestPlans/Ack/Raw/Reliable/TestProtocols/ApiPing/PingTests.cs`:
+**Example:** `TestPlans/Raw/Reliable/RawReliable/TestProtocols/ApiPing/PingTests.cs`:
 
 ```csharp
 using System.Collections.Concurrent;
 using Archivarius;
-using Pontifex.Ack.Raw;
 using Pontifex.Api;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 
-namespace Pontifex.RawReliableAck.Tests.ApiPing;
+namespace Pontifex.RawReliable.Tests.ApiPing;
 
 // --- API definitions (inline, no separate file) ---
 
@@ -222,7 +217,7 @@ public class PingApiServer : PingApi
 
 // --- Test fixture ---
 
-[TestFixtureSource(typeof(RawReliableAckStacks))]
+[TestFixtureSource(typeof(RawReliableStacks))]
 public class PingTests
 {
     private readonly ITransportStack _stack;
@@ -238,7 +233,7 @@ public class PingTests
         var logger = TransportRegistry.GetLogger(true);
         var factory = _stack.GetTransportFactory(true);
 
-        var serverTransport = (IRawReliableAckServer)factory.BuildServer();
+        var serverTransport = (IRawReliableServer)factory.BuildServer();
         var serverStoppedTcs = new TaskCompletionSource<StopReason>();
 
         var serverFactory = new ServerSideApiFactory<PingApiServer>(
@@ -265,7 +260,7 @@ public class PingTests
                     handler.Connected += _ => connectedTcs.TrySetResult();
                     api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
 
-                    var transport = (IRawReliableAckClient)factory.BuildClient();
+                    var transport = (IRawReliableClient)factory.BuildClient();
                     if (!transport.Init(handler)) { errors.Add("Init failed"); return; }
                     if (!transport.Start(reason => stoppedTcs.TrySetResult(reason))) { errors.Add("Start failed"); return; }
 
@@ -337,7 +332,7 @@ When you need a new API protocol for testing (e.g. a streaming API, a complex st
 
 ### Step A: Define the Protocol
 
-Create a file in `TestPlans/Ack/Raw/Reliable/TestProtocols/YourProtocolName/` together with its test file:
+Create a file in `TestPlans/Raw/Reliable/RawReliable/TestProtocols/YourProtocolName/` together with its test file:
 
 ```csharp
 using Archivarius;
@@ -345,7 +340,7 @@ using Pontifex.Api;
 using Pontifex.Api.Client;
 using Pontifex.Api.Server;
 
-namespace Pontifex.RawReliableAck.Tests.Stream;
+namespace Pontifex.RawReliable.Tests.Stream;
 
 // --- Message structs with proper Archivarius serialization ---
 
@@ -445,7 +440,7 @@ Every API-based test plan must follow the **canonical structure** (see §2B for 
 **Example:**
 
 ```csharp
-[TestFixtureSource(typeof(RawReliableAckStacks))]
+[TestFixtureSource(typeof(RawReliableStacks))]
 public class StreamTests
 {
     private readonly ITransportStack _stack;
@@ -589,9 +584,9 @@ Tests/Pontifex.Transport.Tests/
 │       ├── StaticTransportStack.cs          # Fixed formula
 │       └── DynamicTransportStack.cs         # Formula from provider function, compiled per call
 ├── TransportStacks/                         # Per-type stack catalogs (also NUnit sources)
-│   └── RawReliableAckStacks.cs
+│   └── RawReliableStacks.cs
 ├── TestPlans/                               # All test plans
-│   └── Ack/Raw/Reliable/                    # RawReliableAck test plans
+│   └── Raw/Reliable/RawReliable/                    # RawReliable test plans
 │       ├── TestProtocols/                   # API-based test plans (name prefix 'Api')
 │       │   ├── ApiPing/PingTests.cs         # API + tests in one file (canonical pattern)
 │       │   ├── ApiConnectDisconnect/ConnectDisconnectTests.cs
@@ -610,7 +605,7 @@ Formulas follow the grammar in `Pontifex.TransportFormula/grammar.md`. Wrappers 
 |-----------|-----------------|-------|
 | Direct | `direct("server-name")` | Server name is arbitrary; client uses same name to connect |
 | TCP | `tcp("127.0.0.1", 9000, disconnection_timeout = 60)` | `disconnection_timeout` is optional, in seconds |
-| Convert | `udp("127.0.0.1", 9000) as RawReliableAck` | The cast uses `ConvertersGraph` |
+| Convert | `udp("127.0.0.1", 9000) as RawReliable` | The cast uses `ConvertersGraph` |
 | Zip wrapper | `zip(direct("srv"), compression_level = 9)` | `compression_level` is optional; default 9 |
 | Log wrapper | `log(direct("srv"))` | Wraps the inner transport with logging |
 | Reconnectable | `reconnectable(30, direct("srv"))` | First argument is the reconnect timeout in seconds |

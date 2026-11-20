@@ -63,14 +63,19 @@ namespace Pontifex.Raw.Reliable
             PongMessage = 4,
 
             /// <summary>
-            /// An acknowledgement request.
+            /// A transport handshake request.
             /// </summary>
-            AckRequestMessage = 5,
+            HandshakeRequestMessage = 5,
 
             /// <summary>
-            /// An acknowledgement response.
+            /// A transport handshake response.
             /// </summary>
-            AckResponseMessage = 6
+            HandshakeResponseMessage = 6,
+
+            /// <summary>
+            /// A transport handshake rejection.
+            /// </summary>
+            HandshakeRejectMessage = 7
         }
 
         private enum State

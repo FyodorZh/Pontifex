@@ -1,16 +1,17 @@
 ﻿using System;
-using Actuarius.Memory;
 
-namespace Pontifex.Raw.Reliable.Ack.Reconnectable
+namespace Pontifex.Raw.Reliable.Reconnectable
 {
     public static class ReconnectableInfo
     {
         public const string TransportName = "reconnectable";
 
-        public const int ServerConnectionsLimit = 20000;
-        public static readonly TimeSpan ReconnectionPeriod = TimeSpan.FromSeconds(2.0);
+        public const short NegotiationVersion = 1;
 
-        public static readonly IMultiRefReadOnlyByteArray AckRequest = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("ReconnectableAck"));
-        public static readonly IMultiRefReadOnlyByteArray AckOKResponse = new StaticReadOnlyByteArray(System.Text.Encoding.UTF8.GetBytes("ReconnectableAck-OK"));
+        public const int DefaultHandshakeMaxByteSize = 128;
+
+        public const int ServerConnectionsLimit = 20000;
+
+        public static readonly TimeSpan ReconnectionPeriod = TimeSpan.FromSeconds(2.0);
     }
 }

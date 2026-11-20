@@ -1,37 +1,33 @@
 using System;
-using Actuarius.Memory;
-using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Utils;
+using Pontifex.Raw.Reliable;
 
 namespace Pontifex.Api
 {
-    public class ServerSideApiFactory<TApi> : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
+    /// <summary>
+    /// Server-side Api factory over a reliable raw transport.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><b>Admission</b>: the transport-level admission decides how many sessions exist; the
+    /// Api negotiation (<c>"api"</c>, version <c>1</c>) performed by each
+    /// <see cref="ServerSideApiInstance{TApi}"/> decides whether that session may run the Api.</description></item>
+    /// <item><description><b>Factory contract</b>: every invocation creates a fresh
+    /// <see cref="ServerSideApiInstance{TApi}"/>, so the Api state is never shared between sessions.</description></item>
+    /// </list>
+    /// </remarks>
+    public class ServerSideApiFactory<TApi> : IRawReliableServerHandlerFactory<IRawReliableServerHandler>
         where TApi : IApiRoot
     {
-        private readonly Func<UnionDataList, ServerSideApiInstance<TApi>?> _instanceFactory;
-        private readonly IMemoryRental _memory;
+        private readonly Func<ServerSideApiInstance<TApi>> _instanceFactory;
 
-        public ServerSideApiFactory(Func<UnionDataList, ServerSideApiInstance<TApi>?> instanceFactory, IMemoryRental? memory = null)
+        public ServerSideApiFactory(Func<ServerSideApiInstance<TApi>> instanceFactory)
         {
             _instanceFactory = instanceFactory;
-            _memory = memory ?? MemoryRental.Shared;
         }
-        
-        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(IEndPoint remote, UnionDataList ackData)
-        {
-            using var disposer = ackData.AsDisposable();
-            if (ackData.TryPopFirst(out long apiHash) && apiHash == 777)
-            {
-                ServerSideApiInstance<TApi>? instance = _instanceFactory.Invoke(ackData);
-                if (instance != null)
-                {
-                    UnionDataList ackResponse = _memory.CollectablePool.Acquire<UnionDataList>();
-                    ackResponse.PutFirst((long)7777);
-                    return (instance, ackResponse);
-                }
-            }
 
-            return null;
+        public IRawReliableServerHandler? TryCreate(IEndPoint remote)
+        {
+            return _instanceFactory();
         }
     }
 }

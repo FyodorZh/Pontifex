@@ -30,6 +30,12 @@
     </ItemGroup>
 
     <ItemGroup>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Transports.Tests</_Parameter1>
+      </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\Pontifex.Protocol\Pontifex.Protocol.csproj" />
         <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
     </ItemGroup>

@@ -1,5 +1,4 @@
 using Pontifex.Raw.Reliable;
-using Pontifex.Raw.Reliable.Ack;
 using Scriba;
 using Terminal.Gui.App;
 using Terminal.Gui.ViewBase;

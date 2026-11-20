@@ -19,12 +19,12 @@ namespace Pontifex.TransportFormula.Tests.Canonicalization.Harness;
 // and numeric scalar forms. No mocking library is used.
 internal static class CanonicalizationTestData
 {
-    public static readonly TransportType TypeA = TransportType.RawReliableAck;
-    public static readonly TransportType TypeB = TransportType.RawReliableNoAck;
+    public static readonly TransportType TypeA = TransportType.RawReliable;
+    public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
     public static readonly TransportType TypeC = TransportType.RawUnreliableAck;
 
     // Deliberately absent from the standard type catalog.
-    public static readonly TransportType TypeNotInCatalog = TransportType.RawUnreliableNoAck;
+    public static readonly TransportType TypeNotInCatalog = TransportType.RRReliableAck;
 
     public static readonly TransportTypeSet AnySetValue =
         new(TransportTypeSetKind.Any, Array.Empty<TransportType>());

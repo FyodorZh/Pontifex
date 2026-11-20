@@ -4,14 +4,11 @@ using Actuarius.Memory;
 using Pontifex;
 using Pontifex.Factory;
 using Pontifex.Raw.Reliable;
-using Pontifex.Raw.Reliable.Ack.Direct;
-using Pontifex.Raw.Reliable.Ack.Logger;
-using Pontifex.Raw.Reliable.Ack.Reconnectable;
-using Pontifex.Raw.Reliable.Ack.Tcp;
-using Pontifex.Raw.Reliable.Ack.Zip;
-using Pontifex.Raw.Reliable.NoAck;
-using Pontifex.Raw.Reliable.NoAck.Logger;
-using Pontifex.Raw.Reliable.NoAck.Tcp;
+using Pontifex.Raw.Reliable.Direct;
+using Pontifex.Raw.Reliable.Reconnectable;
+using Pontifex.Raw.Reliable.Logger;
+using Pontifex.Raw.Reliable.Tcp;
+using Pontifex.Raw.Reliable.Zip;
 using Pontifex.Raw.Unreliable.Ack.Direct;
 using Pontifex.Raw.Unreliable.Ack.Udp;
 using Pontifex.Raw.Unreliable.NoAck.Direct;
@@ -29,31 +26,28 @@ public sealed class FactoryBindingsTests
 {
     private static readonly object[] CompileCases =
     {
-        Case(Registration.TransportRole.Server, "direct(\"node-1\")", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Server, "direct(\"node-1\")", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "direct-raw-unreliable-ack(\"node-1\")", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Server, "direct-raw-unreliable-noack(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliableNoAck),
-        Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Server, "tcp-noack(\"127.0.0.1\", 9000)", TransportType.RawReliableNoAck),
+        Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
+        Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "udp-raw-unreliable-ack(\"127.0.0.1\", 9000)", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Server, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
-        Case(Registration.TransportRole.Server, "zip(tcp(\"127.0.0.1\", 9000), compression_level = 9)", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Server, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Server, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Server, "log-noack(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliableNoAck),
-        Case(Registration.TransportRole.Client, "direct(\"node-1\")", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Server, "zip(tcp(\"127.0.0.1\", 9000), compression_level = 9)", TransportType.RawReliable),
+        Case(Registration.TransportRole.Server, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
+        Case(Registration.TransportRole.Server, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
+        Case(Registration.TransportRole.Client, "direct(\"node-1\")", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable-ack(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable-noack(\"node-1\")", TransportType.RawUnreliableNoAck),
-        Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Client, "tcp-noack(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliableNoAck),
+        Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
+        Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "udp-raw-unreliable-ack(\"127.0.0.1\", 9000)", TransportType.RawUnreliableAck),
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
-        Case(Registration.TransportRole.Client, "zip(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Client, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Client, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
-        Case(Registration.TransportRole.Client, "log-noack(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliableNoAck)
+        Case(Registration.TransportRole.Client, "zip(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
+        Case(Registration.TransportRole.Client, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
+        Case(Registration.TransportRole.Client, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable)
     };
 
     [TestCaseSource(nameof(CompileCases))]
@@ -89,9 +83,6 @@ public sealed class FactoryBindingsTests
             factory.Canonicalize("TCP(\"127.0.0.1\", 9000)"),
             Is.EqualTo("tcp(127.0.0.1, 9000)"));
         Assert.That(
-            factory.Canonicalize("TCP-NOACK(\"127.0.0.1\", 9000)"),
-            Is.EqualTo("tcp-noack(127.0.0.1, 9000)"));
-        Assert.That(
             factory.Canonicalize("UDP(\"127.0.0.1\", 9000) AS RRUnreliableNoAck"),
             Is.EqualTo("udp(127.0.0.1, 9000) as RRUnreliableNoAck"));
         Assert.That(
@@ -107,31 +98,31 @@ public sealed class FactoryBindingsTests
 
     [Test]
     [Category("Integration")]
-    public void TcpNoAckBinding_CompilesAndConnects()
+    public void TcpRawReliableBinding_CompilesAndConnects()
     {
         var factory = BuildFactory();
         int port = GetFreeLoopbackPort();
 
-        var serverHandler = new RecordingNoAckServerHandler();
-        var serverHandlerFactory = new RecordingNoAckServerHandlerFactory(serverHandler);
-        var clientHandler = new RecordingNoAckClientHandler();
+        var serverHandler = new RecordingRawReliableServerHandler();
+        var serverHandlerFactory = new RecordingRawReliableServerHandlerFactory(serverHandler);
+        var clientHandler = new RecordingRawReliableClientHandler();
 
         var serverTransport = factory.Compile(
-            $"tcp-noack(\"127.0.0.1\", {port})",
+            $"tcp(\"127.0.0.1\", {port})",
             factory.CreateCompiler(
                 Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
-        Assert.That(serverTransport, Is.InstanceOf<IRawReliableNoAckServer>(),
-            "the server role must compile to a no-acknowledgement server transport");
+        Assert.That(serverTransport, Is.InstanceOf<IRawReliableServer>(),
+            "the server role must compile to a reliable server transport");
 
         var clientTransport = factory.Compile(
-            $"tcp-noack(\"127.0.0.1\", {port})",
+            $"tcp(\"127.0.0.1\", {port})",
             factory.CreateCompiler(
                 Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
-        Assert.That(clientTransport, Is.InstanceOf<IRawReliableNoAckClient>(),
-            "the client role must compile to a no-acknowledgement client transport");
+        Assert.That(clientTransport, Is.InstanceOf<IRawReliableClient>(),
+            "the client role must compile to a reliable client transport");
 
-        var server = (IRawReliableNoAckServer)serverTransport;
-        var client = (IRawReliableNoAckClient)clientTransport;
+        var server = (IRawReliableServer)serverTransport;
+        var client = (IRawReliableClient)clientTransport;
         try
         {
             Assert.That(server.Init(serverHandlerFactory), Is.True);
@@ -184,18 +175,16 @@ public sealed class FactoryBindingsTests
                 new FormulaRegistry.TransportTypeInfo(type, type.ToString()));
         }
 
-        builder.RegisterTransport(RawReliableAckDirectBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableAckDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableNoAckDirectBinding.CreateRegistration());
-        builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
-        builder.RegisterTransport(RawReliableNoAckTcpBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableAckUdpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
         builder.RegisterTransport(RRUnreliableNoAckUdpBinding.CreateRegistration());
-        builder.RegisterTransport(RawReliableAckZipBinding.CreateRegistration());
-        builder.RegisterTransport(RawReliableAckReconnectableBinding.CreateRegistration());
-        builder.RegisterTransport(RawReliableAckLoggerBinding.CreateRegistration());
-        builder.RegisterTransport(RawReliableNoAckLoggerBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableZipBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableReconnectableBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableLoggerBinding.CreateRegistration());
 
         return builder.Build();
     }
@@ -210,23 +199,23 @@ public sealed class FactoryBindingsTests
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
-    private sealed class RecordingNoAckServerHandlerFactory
-        : IRawReliableNoAckServerHandlerFactory<IRawReliableNoAckServerHandler>
+    private sealed class RecordingRawReliableServerHandlerFactory
+        : IRawReliableServerHandlerFactory<IRawReliableServerHandler>
     {
-        private readonly IRawReliableNoAckServerHandler _handler;
+        private readonly IRawReliableServerHandler _handler;
 
-        public RecordingNoAckServerHandlerFactory(IRawReliableNoAckServerHandler handler)
+        public RecordingRawReliableServerHandlerFactory(IRawReliableServerHandler handler)
         {
             _handler = handler;
         }
 
-        public IRawReliableNoAckServerHandler? TryCreate(IEndPoint remote)
+        public IRawReliableServerHandler? TryCreate(IEndPoint remote)
         {
             return _handler;
         }
     }
 
-    private sealed class RecordingNoAckServerHandler : IRawReliableNoAckServerHandler
+    private sealed class RecordingRawReliableServerHandler : IRawReliableServerHandler
     {
         private readonly object _lock = new();
         private readonly List<int> _receivedValues = new();
@@ -282,7 +271,7 @@ public sealed class FactoryBindingsTests
         }
     }
 
-    private sealed class RecordingNoAckClientHandler : IRawReliableNoAckClientHandler
+    private sealed class RecordingRawReliableClientHandler : IRawReliableClientHandler
     {
         private readonly object _lock = new();
         private readonly List<int> _receivedValues = new();

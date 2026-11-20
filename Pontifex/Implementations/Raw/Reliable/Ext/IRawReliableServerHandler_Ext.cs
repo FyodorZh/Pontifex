@@ -1,22 +1,17 @@
 using System;
 using Actuarius.Concurrent;
-using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Raw.Reliable.NoAck;
 using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable
 {
     /// <summary>
-    /// Shared extensions for reliable server handlers, independent of the acknowledgement protocol.
+    /// Shared extensions for reliable server handlers.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Protocol independence</b>: Both <see cref="IRawReliableAckServerHandler"/> and
-    /// <see cref="IRawReliableNoAckServerHandler"/> are marker interfaces over
-    /// <see cref="IRawReliableServerHandler"/>, so one wrapper implementation serves both.</description></item>
     /// <item><description><b>Exception isolation</b>: <c>GetSafe</c> guards <c>OnDisconnected</c>,
     /// <c>OnReceived</c> and <c>OnStopped</c>. It deliberately forwards <c>OnConnected</c> unguarded;
-    /// the acknowledgement specification requires a throw from that callback to reach the endpoint.</description></item>
+    /// the reliable specification requires a throw from that callback to reach the endpoint.</description></item>
     /// </list>
     /// </remarks>
     public static class IRawReliableServerHandler_Ext
@@ -27,22 +22,7 @@ namespace Pontifex.Raw.Reliable
         /// <param name="core">The handler to wrap.</param>
         /// <param name="onFail">Receives a description of a violated invariant.</param>
         /// <returns>The wrapped handler in Debug builds, otherwise <paramref name="core"/>.</returns>
-        public static IRawReliableAckServerHandler Test(this IRawReliableAckServerHandler core, Action<string> onFail)
-        {
-#if DEBUG
-            return new TestServerHandler(core, onFail);
-#else
-            return core;
-#endif
-        }
-
-        /// <summary>
-        /// Wraps the handler with a debug-only invariant checker.
-        /// </summary>
-        /// <param name="core">The handler to wrap.</param>
-        /// <param name="onFail">Receives a description of a violated invariant.</param>
-        /// <returns>The wrapped handler in Debug builds, otherwise <paramref name="core"/>.</returns>
-        public static IRawReliableNoAckServerHandler Test(this IRawReliableNoAckServerHandler core, Action<string> onFail)
+        public static IRawReliableServerHandler Test(this IRawReliableServerHandler core, Action<string> onFail)
         {
 #if DEBUG
             return new TestServerHandler(core, onFail);
@@ -58,39 +38,20 @@ namespace Pontifex.Raw.Reliable
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><c>OnDisconnected</c>, <c>OnReceived</c> and <c>OnStopped</c> are guarded.</description></item>
-        /// <item><description><c>OnConnected</c> is forwarded unguarded: the acknowledgement specification
-        /// requires that its exception reaches the endpoint, which then stops the session with
-        /// <c>ExceptionFail</c> and delivers no <c>OnDisconnected</c>.</description></item>
+        /// <item><description><c>OnConnected</c> is forwarded unguarded: the specification requires that
+        /// its exception reaches the endpoint, which then stops the session with <c>ExceptionFail</c> and
+        /// delivers no <c>OnDisconnected</c>.</description></item>
         /// </list>
         /// </remarks>
         /// <param name="core">The handler to wrap.</param>
         /// <param name="onFail">Receives every exception thrown by a guarded callback.</param>
         /// <returns>The guard wrapper around <paramref name="core"/>.</returns>
-        public static IRawReliableAckServerHandler GetSafe(this IRawReliableAckServerHandler core, Action<Exception> onFail)
+        public static IRawReliableServerHandler GetSafe(this IRawReliableServerHandler core, Action<Exception> onFail)
         {
             return new SafeServerHandler(core, onFail);
         }
 
-        /// <summary>
-        /// Wraps the handler so that exceptions thrown by its callbacks are passed to
-        /// <paramref name="onFail"/> instead of escaping.
-        /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><c>OnDisconnected</c>, <c>OnReceived</c> and <c>OnStopped</c> are guarded.</description></item>
-        /// <item><description><c>OnConnected</c> is forwarded unguarded; see the acknowledgement specification,
-        /// which requires the exception to reach the endpoint.</description></item>
-        /// </list>
-        /// </remarks>
-        /// <param name="core">The handler to wrap.</param>
-        /// <param name="onFail">Receives every exception thrown by a guarded callback.</param>
-        /// <returns>The guard wrapper around <paramref name="core"/>.</returns>
-        public static IRawReliableNoAckServerHandler GetSafe(this IRawReliableNoAckServerHandler core, Action<Exception> onFail)
-        {
-            return new SafeServerHandler(core, onFail);
-        }
-
-        private sealed class SafeServerHandler : IRawReliableAckServerHandler, IRawReliableNoAckServerHandler
+        private sealed class SafeServerHandler : IRawReliableServerHandler
         {
             private readonly IRawReliableServerHandler _handler;
             private readonly Action<Exception> _onException;
@@ -141,9 +102,9 @@ namespace Pontifex.Raw.Reliable
             /// Forwards a logical connect without a guard.
             /// </summary>
             /// <remarks>
-            /// A throw from this callback must reach the endpoint: the acknowledgement specification
-            /// requires the endpoint to stop the session with <c>ExceptionFail</c> and to deliver no
-            /// <c>OnDisconnected</c>. Guarding it here would swallow that throw.
+            /// A throw from this callback must reach the endpoint: the specification requires the endpoint
+            /// to stop the session with <c>ExceptionFail</c> and to deliver no <c>OnDisconnected</c>.
+            /// Guarding it here would swallow that throw.
             /// </remarks>
             public void OnConnected(IRawReliableEndpoint endPoint)
             {
@@ -151,7 +112,7 @@ namespace Pontifex.Raw.Reliable
             }
         }
 
-        private sealed class TestServerHandler : InvariantChecker<TestServerHandler.HandlerState>, IRawReliableAckServerHandler, IRawReliableNoAckServerHandler
+        private sealed class TestServerHandler : InvariantChecker<TestServerHandler.HandlerState>, IRawReliableServerHandler
         {
             public enum HandlerState
             {

@@ -5,7 +5,7 @@ using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 using Terminal.UI;
-using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable;
 using Pontifex.Api;
 using TransportAnalyzer.TestLogic;
 
@@ -13,7 +13,7 @@ namespace Pontifex.Test
 {
     public class ServerWindow : SmartWindow
     {
-        private readonly IRawReliableAckServer? _server;
+        private readonly IRawReliableServer? _server;
         private readonly ILogger _logger;
         
         public ServerWindow(TransportFactory factory, string url, string? api)
@@ -35,7 +35,7 @@ namespace Pontifex.Test
             _server = factory.ConstructServer(url, _logger, MemoryRental.Shared);
             if (api != null)
             {
-                var apiFactory = new ServerSideApiFactory<ApiRoot>((ack) =>
+                var apiFactory = new ServerSideApiFactory<ApiRoot>(() =>
                 {
                     return new ServerSideApiInstance<ApiRoot>(ApiFactory.Construct(api, false, MemoryRental.Shared, _logger), MemoryRental.Shared, _logger);
                 });
@@ -48,7 +48,7 @@ namespace Pontifex.Test
             }
             else
             {
-                if (_server == null || !_server.Init(new RawReliableAckServerLogic(_server.Log, _server.Memory)))
+                if (_server == null || !_server.Init(new RawReliableServerLogic(_server.Log, _server.Memory)))
                 {
                     _logger.e("Failed to construct server");
                     return;

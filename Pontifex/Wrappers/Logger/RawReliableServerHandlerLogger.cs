@@ -1,7 +1,4 @@
 using System;
-using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Raw.Reliable.Ack.Logger;
-using Pontifex.Raw.Reliable.NoAck;
 using Pontifex.Utils;
 using Scriba;
 
@@ -14,9 +11,8 @@ namespace Pontifex.Raw.Reliable.Logger
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item>The wrapper is shared by the Ack and NoAck server loggers; both protocol marker
-    /// interfaces are empty, so one implementation serves both.</item>
-    /// <item>The user handler may be swapped between sessions through <see cref="UserHandler"/>.
+    /// <item>The wrapper serves the reliable server logger; the user handler may be swapped
+    /// between sessions through <see cref="UserHandler"/>.
     /// The wrapper itself is not thread-safe; the owning transport serializes handler
     /// callbacks.</item>
     /// <item>All messages go to the transport logger supplied in the constructor, never to the
@@ -24,8 +20,7 @@ namespace Pontifex.Raw.Reliable.Logger
     /// </list>
     /// </remarks>
     internal sealed class RawReliableServerHandlerLogger :
-        IRawReliableAckServerHandler,
-        IRawReliableNoAckServerHandler
+        IRawReliableServerHandler
     {
         private readonly ILogger _log;
 
@@ -43,7 +38,7 @@ namespace Pontifex.Raw.Reliable.Logger
         public void OnConnected(IRawReliableEndpoint endPoint)
         {
             _log.i("UserHandler.OnConnected()");
-            var endPointWrapper = new RawAckServerSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
+            var endPointWrapper = new RawReliableServerSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
             {
                 _log.i("EndPoint.Send(" + dataToSend + ")");
                 if (endpoint == null)

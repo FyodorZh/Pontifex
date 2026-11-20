@@ -30,6 +30,7 @@
     </ItemGroup>
     
     <ItemGroup>
+      <ProjectReference Include="..\Pontifex.Protocol\Pontifex.Protocol.csproj" />
       <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
     </ItemGroup>
 

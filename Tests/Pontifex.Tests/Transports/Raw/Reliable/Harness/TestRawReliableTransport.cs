@@ -25,7 +25,7 @@ internal sealed class TestRawReliableTransport : RawReliableTransport
 
     public override int MessageMaxByteSize => 1024;
 
-    public override TransportType Type => TransportType.RawReliableAck;
+    public override TransportType Type => TransportType.RawReliable;
 
     protected override bool TryStart()
     {

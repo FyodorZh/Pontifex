@@ -14,7 +14,7 @@ namespace Pontifex.Test
                 case "silent":
                     return new SilentApi();
                 case "brute":
-                    return client ? new RawReliableAckProtocol_Client(memoryRental, logger) : new RawReliableAckProtocol_Server(memoryRental, logger);
+                    return client ? new RawReliableProtocol_Client(memoryRental, logger) : new RawReliableProtocol_Server(memoryRental, logger);
                 case "big":
                     return client ? new BigApiClient(1024 * 1024, logger) : new BigApiServer(logger);
                 default:

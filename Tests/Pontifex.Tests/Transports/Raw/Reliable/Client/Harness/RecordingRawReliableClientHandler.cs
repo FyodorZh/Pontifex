@@ -35,6 +35,17 @@ internal sealed class RecordingRawReliableClientHandler : IRawReliableClientHand
 
     public int DisconnectedCount { get; private set; }
 
+    public int ConnectedCount { get; private set; }
+
+    public IRawReliableEndpoint? ConnectedEndPoint { get; private set; }
+
+    public void OnConnected(IRawReliableEndpoint endPoint)
+    {
+        ConnectedCount++;
+        ConnectedEndPoint = endPoint;
+        _events?.Add("handlerConnected");
+    }
+
     public StopReason? StoppedReason { get; private set; }
 
     public int StoppedCount { get; private set; }

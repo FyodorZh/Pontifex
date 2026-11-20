@@ -32,6 +32,9 @@ namespace Pontifex.Raw
         private long _totalBuffersSize;
         private int _pendingSendMessages;
 
+        private volatile int _messageMaxByteSize;
+        private int _messageMaxByteSizeSet;
+
         private enum State
         {
             Constructed = 0,
@@ -55,7 +58,7 @@ namespace Pontifex.Raw
         public IEndPoint RemoteEndPoint { get; }
 
         /// <inheritdoc/>
-        public int MessageMaxByteSize { get; }
+        public int MessageMaxByteSize => _messageMaxByteSize;
 
         /// <summary>
         /// Gets the name of the transport that owns this endpoint.
@@ -114,7 +117,7 @@ namespace Pontifex.Raw
             }
 
             RemoteEndPoint = remoteEndpoint;
-            MessageMaxByteSize = messageMaxByteSize;
+            _messageMaxByteSize = messageMaxByteSize;
 
             TransportName = transportName;
             Log = log;
@@ -527,6 +530,60 @@ namespace Pontifex.Raw
             }
 
             return SendResult.Ok;
+        }
+
+        /// <summary>
+        /// Applies the negotiated maximum message size exactly once.
+        /// </summary>
+        /// <param name="value">The negotiated inclusive maximum message size; must be at least 1.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the one-shot latch is
+        /// atomic.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The endpoint must be starting or started. A
+        /// value below 1, a second call, or a call while the endpoint is stopping or stopped throws
+        /// <see cref="InvalidOperationException"/>.</description></item>
+        /// <item><description><b>Other notes</b>: A server endpoint that already knows the agreed value at
+        /// construction time seals it with <see cref="MarkMessageMaxByteSizeSet"/> instead, because the base
+        /// constructor stage is not yet starting.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void SetMessageMaxByteSizeOnce(int value)
+        {
+            if (value < 1)
+            {
+                throw new InvalidOperationException("The negotiated message maximum must be at least 1.");
+            }
+
+            if (_currentStage != State.Starting && _currentStage != State.Started)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot set the negotiated message maximum while the endpoint is {_currentStage}.");
+            }
+
+            if (Interlocked.Exchange(ref _messageMaxByteSizeSet, 1) != 0)
+            {
+                throw new InvalidOperationException("The negotiated message maximum is already set.");
+            }
+
+            _messageMaxByteSize = value;
+        }
+
+        /// <summary>
+        /// Seals the message maximum that was supplied to the constructor so that
+        /// <see cref="SetMessageMaxByteSizeOnce"/> cannot change it afterwards.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the latch is
+        /// atomic.</description></item>
+        /// <item><description><b>Other notes</b>: Used by the server endpoint, whose negotiated value is
+        /// already known when the endpoint is constructed.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void MarkMessageMaxByteSizeSet()
+        {
+            Interlocked.Exchange(ref _messageMaxByteSizeSet, 1);
         }
 
         /// <inheritdoc/>

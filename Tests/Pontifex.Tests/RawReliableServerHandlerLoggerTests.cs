@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Raw;
 using Pontifex.Raw.Reliable;
-using Pontifex.Raw.Reliable.Ack.Logger;
 using Pontifex.Raw.Reliable.Logger;
 using Pontifex.Tests.Endpoints;
 using Pontifex.Utils;
@@ -31,7 +30,7 @@ public sealed class RawReliableServerHandlerLoggerTests
 
         Assert.That(userHandler.ConnectedCount, Is.EqualTo(1));
         Assert.That(userHandler.ConnectedEndPoint, Is.Not.SameAs(endpoint));
-        Assert.That(userHandler.ConnectedEndPoint, Is.InstanceOf<RawAckServerSideEndpointWrapper>());
+        Assert.That(userHandler.ConnectedEndPoint, Is.InstanceOf<RawReliableServerSideEndpointWrapper>());
 
         // The wrapper reports failure instead of throwing when it has no core endpoint.
         var nullCoreHandler = new RecordingServerHandler();

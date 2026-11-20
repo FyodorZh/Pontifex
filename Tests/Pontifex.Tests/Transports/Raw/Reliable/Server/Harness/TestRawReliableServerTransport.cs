@@ -39,7 +39,7 @@ internal sealed class TestRawReliableServerTransport
 
     public override int MessageMaxByteSize { get; }
 
-    public override TransportType Type => TransportType.RawReliableAck;
+    public override TransportType Type => TransportType.RawReliable;
 
     public ManualPeriodicLogicDriver Driver { get; } = new();
 
