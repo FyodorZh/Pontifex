@@ -65,7 +65,7 @@
 | `Resolve_WithCoreOneOfTypeSet_AcceptsEitherNestedType` | `parsing.md` §7.5 | A core `OneOf(TypeA, TypeB)` nested parameter accepts both child types. | Complements the `Exactly` rejection test. |
 | `Resolve_WithCoreTransportListRangeAndHomogeneity_EnforcesAll` | `parsing.md` §7.5, §13.3 | Core `Min`, `Max`, and `Homogeneous` values survive the adapter and are enforced by resolution. | Asserts exact messages and phase for `E_SEM_LIST_MIN`, `E_SEM_LIST_MAX`, and `E_SEM_LIST_HOMOGENEITY` in one fixture. |
 | `Compile_WithInjectedConverterGraph_UsesTheGraphForTheCast` | `ITransportFactory` contract | The facade binds the injected converter graph; a changing cast asks it for the conversion and the compiler passes the inner transport factory. | Logger and memory identity (`VoidLogger.Instance`, `MemoryRental.Shared`) is asserted. |
-| `Compile_WithDefaultConverterGraph_UsesTheBuiltInConversion` | `TransportFactoryBootstrap.CreateBuilder` and `ITransportFactory` contracts | A builder created without an argument uses `ConvertersGraph.Default`; the built-in RawUnreliableNoAck → RawReliableAck path converts the transport. | Uses a non-I/O raw-unreliable client and a real `Scriba.Logger`, because the built-in wrapper requires `ILoggerExt`. |
+| `Compile_WithDefaultConverterGraph_UsesTheBuiltInConversion` | `TransportFactoryBootstrap.CreateBuilder` and `ITransportFactory` contracts | A builder created without an argument uses `ConvertersGraph.Default`; the built-in RawUnreliableNoAck → RawReliable path converts the transport. | Uses a non-I/O raw-unreliable client and a real `Scriba.Logger`, because the built-in wrapper requires `ILoggerExt`. |
 
 ## Planned
 

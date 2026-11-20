@@ -56,11 +56,45 @@ namespace Pontifex.StopReasons
     }
 
     /// <summary>
-    /// Ack was not passed
+    /// The remote peer does not implement the same transport protocol contract.
     /// </summary>
-    public sealed class AckRejected : StopReason
+    public sealed class ProtocolMismatch : StopReason
     {
-        public AckRejected(string source) : base(source, "AckRejected") { }
+        private readonly string _text;
+
+        public ProtocolMismatch(string source, string text = "") : base(source, "ProtocolMismatch")
+        {
+            _text = text;
+        }
+
+        public string Text => _text;
+
+        public override void PrintTo(IJsonObject dst)
+        {
+            base.PrintTo(dst);
+            dst.AddElement("Text", _text);
+        }
+    }
+
+    /// <summary>
+    /// The remote peer rejected the transport handshake.
+    /// </summary>
+    public sealed class HandshakeRejected : StopReason
+    {
+        private readonly string _text;
+
+        public HandshakeRejected(string source, string text = "") : base(source, "HandshakeRejected")
+        {
+            _text = text;
+        }
+
+        public string Text => _text;
+
+        public override void PrintTo(IJsonObject dst)
+        {
+            base.PrintTo(dst);
+            dst.AddElement("Text", _text);
+        }
     }
 
     /// <summary>

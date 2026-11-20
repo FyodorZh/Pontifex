@@ -228,6 +228,22 @@ namespace Pontifex.Raw.Reliable
         /// <param name="session">The non-started endpoint. Must be non-null.</param>
         /// <returns><see langword="true"/> when the endpoint was registered; otherwise
         /// <see langword="false"/>.</returns>
+        protected bool TryStartAndRegisterSession(IRawReliableServerEndpointImp session)
+        {
+            return TryStartAndRegisterSession(session, out _);
+        }
+
+        /// <summary>
+        /// Starts and registers a non-started session endpoint whose session slot was already reserved and
+        /// reports whether the endpoint accepted its start.
+        /// </summary>
+        /// <param name="session">The non-started endpoint. Must be non-null.</param>
+        /// <param name="sessionStarted">Receives <see langword="true"/> when <see cref="RawEndpoint.Start"/>
+        /// was accepted, including the transport-stopping path where the endpoint is started only to be
+        /// stopped again; otherwise <see langword="false"/> when the start attempt was rejected or
+        /// threw.</param>
+        /// <returns><see langword="true"/> when the endpoint was registered; otherwise
+        /// <see langword="false"/>.</returns>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Safe to call from any thread. The registry lock is not held
@@ -239,9 +255,14 @@ namespace Pontifex.Raw.Reliable
         /// always mean the slot is free yet. <see cref="RawEndpoint.Start"/> is called at most once on the
         /// endpoint. <see cref="OnSessionStopped"/> is invoked only when the endpoint was successfully
         /// registered.</description></item>
+        /// <item><description><b>Other notes</b>: A session whose start was accepted owns its terminal
+        /// <see cref="IRawHandler.OnStopped"/> notification, even when registration fails afterwards; an
+        /// admission fallback must not preempt it. Only <paramref name="sessionStarted"/> =
+        /// <see langword="false"/> leaves the handler without a terminal notification from the endpoint
+        /// itself.</description></item>
         /// </list>
         /// </remarks>
-        protected bool TryStartAndRegisterSession(IRawReliableServerEndpointImp session)
+        protected bool TryStartAndRegisterSession(IRawReliableServerEndpointImp session, out bool sessionStarted)
         {
             if (session == null)
             {
@@ -259,7 +280,7 @@ namespace Pontifex.Raw.Reliable
 
             if (!alive)
             {
-                TryStartThenStop(session, new TextFail(Name, "Transport is stopping"));
+                sessionStarted = TryStartThenStop(session, new TextFail(Name, "Transport is stopping"));
                 ReleaseSession();
                 return false;
             }
@@ -277,6 +298,8 @@ namespace Pontifex.Raw.Reliable
                 Log.wtf(ex);
                 started = false;
             }
+
+            sessionStarted = started;
 
             isStarted = IsStarted;
             lock (_sessionsLock)
@@ -303,6 +326,133 @@ namespace Pontifex.Raw.Reliable
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Reserves one admission for a new connection: one active-session slot and one concurrent-handshake
+        /// slot.
+        /// </summary>
+        /// <returns><see langword="true"/> when both slots were reserved; otherwise
+        /// <see langword="false"/> with no slots held.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from the carrier's accept callback.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: A successful caller must eventually call
+        /// either
+        /// <see cref="CompleteAdmission(IRawReliableServerEndpointImp, IRawReliableServerHandler, StopReason)"/>
+        /// or <see cref="AbandonAdmission()"/> exactly once, using the handler-aware overloads when it created
+        /// a session handler.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool TryBeginAdmission()
+        {
+            if (!TryReserveSession())
+            {
+                return false;
+            }
+
+            if (!TryBeginHandshake())
+            {
+                ReleaseSession();
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Converts a successful admission into a registered session, notifying the session handler when the
+        /// session could not even be started.
+        /// </summary>
+        /// <param name="session">The non-started session endpoint. Must be non-null.</param>
+        /// <param name="handler">The stop-once gate wrapping the session handler for this admission, or
+        /// <see langword="null"/> when no handler exists.</param>
+        /// <param name="failureReason">The reason passed to the handler's
+        /// <see cref="IRawHandler.OnStopped"/> when the session could not be started.</param>
+        /// <returns><see langword="true"/> when the session was registered; otherwise
+        /// <see langword="false"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
+        /// reserved by <see cref="TryBeginAdmission"/>. The session slot is released by the base transport when
+        /// the session ends, or by
+        /// <see cref="TryStartAndRegisterSession(IRawReliableServerEndpointImp)"/> when registration
+        /// fails.</description></item>
+        /// <item><description><b>Other notes</b>: The handler is notified only when the session did not accept
+        /// its start. A started session owns its terminal notification, including the path where the transport
+        /// is stopping and registration fails; the shared gate deduplicates if both paths fire. A handler
+        /// exception is logged and does not change the admission result.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool CompleteAdmission(IRawReliableServerEndpointImp session,
+            IRawReliableServerHandler? handler, StopReason failureReason)
+        {
+            EndHandshake();
+            bool registered = TryStartAndRegisterSession(session, out bool sessionStarted);
+            if (!sessionStarted)
+            {
+                try
+                {
+                    handler?.OnStopped(failureReason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
+            }
+
+            return registered;
+        }
+
+        /// <summary>
+        /// Releases an admission that will not become a session.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
+        /// reserved by <see cref="TryBeginAdmission"/> that is being rejected, timed out, or aborted. Must not
+        /// be called after
+        /// <see cref="CompleteAdmission(IRawReliableServerEndpointImp, IRawReliableServerHandler, StopReason)"/>.</description></item>
+        /// <item><description><b>Other notes</b>: This overload is for carrier paths where no handler exists.
+        /// A path that created a session handler must use the overload that notifies it.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void AbandonAdmission()
+        {
+            AbandonAdmission(null, new TextFail(Name, "Admission abandoned"));
+        }
+
+        /// <summary>
+        /// Releases an admission that will not become a session and notifies the session handler exactly once.
+        /// </summary>
+        /// <param name="handler">The stop-once gate wrapping the session handler for this admission, or
+        /// <see langword="null"/> when no handler exists.</param>
+        /// <param name="reason">The reason passed to the handler's
+        /// <see cref="IRawHandler.OnStopped"/>.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Preconditions/Postconditions</b>: Must be called exactly once for an admission
+        /// reserved by <see cref="TryBeginAdmission"/> that is being rejected, timed out, or aborted. Must not
+        /// be called after
+        /// <see cref="CompleteAdmission(IRawReliableServerEndpointImp, IRawReliableServerHandler, StopReason)"/>.
+        /// The handshake slot and the session slot are released before the handler is notified.</description></item>
+        /// <item><description><b>Other notes</b>: A handler exception is logged and swallowed. The shared gate
+        /// keeps the notification one-shot if another path already reported the stop.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void AbandonAdmission(IRawReliableServerHandler? handler, StopReason reason)
+        {
+            EndHandshake();
+            ReleaseSession();
+
+            try
+            {
+                handler?.OnStopped(reason);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
         }
 
         /// <summary>
@@ -386,15 +536,17 @@ namespace Pontifex.Raw.Reliable
             }
         }
 
-        private void TryStartThenStop(IRawReliableServerEndpointImp session, StopReason reason)
+        private bool TryStartThenStop(IRawReliableServerEndpointImp session, StopReason reason)
         {
+            bool started;
             try
             {
-                session.Start();
+                started = session.Start();
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
+                started = false;
             }
 
             try
@@ -405,6 +557,8 @@ namespace Pontifex.Raw.Reliable
             {
                 Log.wtf(ex);
             }
+
+            return started;
         }
 
         private void OnSessionEnded(SessionEntry entry, StopReason reason)

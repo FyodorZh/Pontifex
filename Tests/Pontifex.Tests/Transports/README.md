@@ -5,8 +5,9 @@ Black-box contract tests for the abstract transport class hierarchy in `Pontifex
 The suite lives under `Tests/Pontifex.Tests/Transports/` and tests the transport classes
 directly, without carriers, sockets, timers, or wall-clock time. It is the transport-level
 counterpart of the `Endpoints` suite: the same deterministic, public-plus-protected-contract
-approach, applied one layer up. One categorised test uses gated, joined threads to prove the
-admission lock's single-factory-call invariant; see [Categories](#categories).
+approach, applied one layer up. Two categorised tests use gated, joined threads to prove the
+admission lock's and the handler-factory lock's single-call invariants; see
+[Categories](#categories).
 
 ## Suite type
 
@@ -22,9 +23,9 @@ AnyTransport
 └── RawTransport
     ├── RawReliableTransport
     │   ├── RawReliableClientTransport<TClientHandler>
-    │   │   └── RawReliableAckClientTransport
+    │   │   └── RawReliableEndpointClientTransport<TClientHandler>
     │   └── RawReliableServerTransport<TServerHandler>
-    │       └── RawReliableAckServerTransport
+    │       └── RawReliableAdmissionServerTransport
     └── RawUnreliableTransport
         ├── RawUnreliableClientTransport
         └── RawUnreliableServerTransport<TFactory>
@@ -45,17 +46,15 @@ Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md
 - [IRawReliableTransport.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableTransport.cs)
 - [RawReliableClientTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableClientTransport.cs)
 - [IRawReliableClientTransport.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableClientTransport.cs)
-- [IRawReliableClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableClientHandler.cs)
+- [IRawReliableClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClientHandler.cs)
 - [RawReliableServerTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableServerTransport.cs)
 - [IRawReliableServerTransport.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableServerTransport.cs)
 - [IRawReliableServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableServerHandler.cs)
-- [RawReliableAckClientTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckClientTransport.cs)
-- [IRawReliableAckClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Client/IRawReliableAckClient.cs)
-- [IRawReliableAckClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Client/IRawReliableAckClientHandler.cs)
-- [RawReliableAckServerTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckServerTransport.cs)
-- [IRawReliableAckServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServer.cs)
-- [IRawReliableAckServerAcknowledger.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerAcknowledger.cs)
-- [IRawReliableAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerHandler.cs)
+- [RawReliableEndpointClientTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableEndpointClientTransport.cs)
+- [IRawReliableClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClient.cs)
+- [RawReliableAdmissionServerTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableAdmissionServerTransport.cs)
+- [IRawReliableServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServer.cs)
+- [IRawReliableServerHandlerFactory.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServerHandlerFactory.cs)
 - [RawUnreliableTransport.cs](../../../Pontifex/Implementations/Raw/Unreliable/RawUnreliableTransport.cs)
 - [IRawUnreliableTransport.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableTransport.cs)
 - [IRawUnreliableDebugReliability.cs](../../../Pontifex/Implementations/Raw/Unreliable/IRawUnreliableDebugReliability.cs)
@@ -81,8 +80,8 @@ inheritance parent, and coverage file.
 | `RawReliableTransport` | `Pontifex.Raw.Reliable.RawReliableTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable` | `RawTransport` | [`Raw/Reliable/Coverage.md`](Raw/Reliable/Coverage.md) |
 | `RawReliableClientTransport` | `Pontifex.Raw.Reliable.RawReliableClientTransport<TClientHandler>` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client` | `RawReliableTransport` | [`Raw/Reliable/Client/Coverage.md`](Raw/Reliable/Client/Coverage.md) |
 | `RawReliableServerTransport` | `Pontifex.Raw.Reliable.RawReliableServerTransport<TServerHandler>` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server` | `RawReliableTransport` | [`Raw/Reliable/Server/Coverage.md`](Raw/Reliable/Server/Coverage.md) |
-| `RawReliableAckClientTransport` | `Pontifex.Raw.Reliable.Ack.RawReliableAckClientTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client/Ack` | `RawReliableClientTransport<TClientHandler>` | [`Raw/Reliable/Client/Ack/Coverage.md`](Raw/Reliable/Client/Ack/Coverage.md) |
-| `RawReliableAckServerTransport` | `Pontifex.Raw.Reliable.Ack.RawReliableAckServerTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/Ack` | `RawReliableServerTransport<TServerHandler>` | [`Raw/Reliable/Server/Ack/Coverage.md`](Raw/Reliable/Server/Ack/Coverage.md) |
+| `RawReliableEndpointClientTransport` | `Pontifex.Raw.Reliable.RawReliableEndpointClientTransport<TClientHandler>` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client/RawReliableEndpointClientTransport` | `RawReliableClientTransport<TClientHandler>` | [`Raw/Reliable/Client/RawReliableEndpointClientTransport/Coverage.md`](Raw/Reliable/Client/RawReliableEndpointClientTransport/Coverage.md) |
+| `RawReliableAdmissionServerTransport` | `Pontifex.Raw.Reliable.RawReliableAdmissionServerTransport` | `Tests/Pontifex.Tests/Transports/Raw/Reliable/Server/RawReliableAdmissionServerTransport` | `RawReliableServerTransport<TServerHandler>` | [`Raw/Reliable/Server/RawReliableAdmissionServerTransport/Coverage.md`](Raw/Reliable/Server/RawReliableAdmissionServerTransport/Coverage.md) |
 | `RawUnreliableTransport` | `Pontifex.Raw.Unreliable.RawUnreliableTransport` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable` | `RawTransport` | [`Raw/Unreliable/Coverage.md`](Raw/Unreliable/Coverage.md) |
 | `RawUnreliableClientTransport` | `Pontifex.Raw.Unreliable.RawUnreliableClientTransport` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable/Client` | `RawUnreliableTransport` | [`Raw/Unreliable/Client/Coverage.md`](Raw/Unreliable/Client/Coverage.md) |
 | `RawUnreliableServerTransport` | `Pontifex.Raw.Unreliable.RawUnreliableServerTransport<TFactory>` | `Tests/Pontifex.Tests/Transports/Raw/Unreliable/Server` | `RawUnreliableTransport` | [`Raw/Unreliable/Server/Coverage.md`](Raw/Unreliable/Server/Coverage.md) |
@@ -95,7 +94,7 @@ layer table above.
 - Layer name = subject type name.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
 - Test methods = `Scenario_ExpectedResult`, for example
-  `Start_WhenBeginConnectReturnsFalse_DestroysAndNotifiesStopped`.
+  `Start_WhenBeginConnectReturnsFalse_DestroysWithoutNotifyingHandler`.
 - Namespace = `Pontifex.Tests.Transports` for every file in the suite, including harness files.
 - Every fixture carries `[Category("Transports")]`.
 
@@ -124,11 +123,11 @@ Transports/
     │   │   ├── Harness/
     │   │   │   ├── RecordingRawReliableClientHandler.cs
     │   │   │   └── TestRawReliableClientTransport.cs
-    │   │   └── Ack/                                 RawReliableAckClientTransport layer
+    │   │   └── RawReliableEndpointClientTransport/  RawReliableEndpointClientTransport layer
     │   │       ├── Coverage.md
-    │   │       ├── RawReliableAckClientTransportTests.cs
+    │   │       ├── RawReliableEndpointClientTransportTests.cs
     │   │       └── Harness/
-    │   │           └── TestRawReliableAckClientTransport.cs
+    │   │           └── TestRawReliableEndpointClientTransport.cs
     │   └── Server/                                  RawReliableServerTransport layer
     │       ├── Coverage.md
     │       ├── RawReliableServerTransportTests.cs
@@ -137,12 +136,12 @@ Transports/
     │       │   ├── ScriptedSerialActionQueue.cs
     │       │   ├── TestRawReliableServerSession.cs
     │       │   └── TestRawReliableServerTransport.cs
-    │       └── Ack/                                 RawReliableAckServerTransport layer
+    │       └── RawReliableAdmissionServerTransport/ RawReliableAdmissionServerTransport layer
     │           ├── Coverage.md
-    │           ├── RawReliableAckServerTransportTests.cs
+    │           ├── RawReliableAdmissionServerTransportTests.cs
     │           └── Harness/
-    │               ├── RecordingRawReliableAckServerAcknowledger.cs
-    │               └── TestRawReliableAckServerTransport.cs
+    │               ├── RecordingRawReliableAdmissionServerHandlerFactory.cs
+    │               └── TestRawReliableAdmissionServerTransport.cs
     └── Unreliable/                                  RawUnreliableTransport layer
         ├── Coverage.md
         ├── RawUnreliableTransportTests.cs
@@ -171,8 +170,13 @@ drivers.
 - `Raw/Reliable/Harness/` holds `TestRawReliableTransport`.
 - Client-specific harness stays in `Raw/Reliable/Client/Harness/`.
 - Server-specific harness stays in `Raw/Reliable/Server/Harness/`. `ManualPeriodicLogicDriver`
-  is here because it is shared by the server layer and its Ack child.
-- Ack-specific harness stays in the corresponding Ack layer's `Harness/`.
+  is here because it is shared by the server layer and its admission child.
+- Reliable-specific harness stays in the corresponding reliable layer's `Harness/`. The
+  `RawReliableEndpointClientTransport` layer reuses `TestRawReliableHandshakeClientEndpoint` and
+  `RecordingRawReliableHandshakeClientHandler`
+  from `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/RawReliableHandshakeClientEndpoint/Harness`; the
+  `RawReliableAdmissionServerTransport` layer
+  reuses `TestRawReliableServerSession` from the server layer's `Harness/`.
 - The client layer reuses the endpoint double from
   `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness`. Both suites live in the same test
   assembly and the endpoint double is covered by the `Endpoints` suite.
@@ -196,8 +200,8 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`Raw/Reliable/Coverage.md`](Raw/Reliable/Coverage.md) — `RawReliableTransport`
 - [`Raw/Reliable/Client/Coverage.md`](Raw/Reliable/Client/Coverage.md) — `RawReliableClientTransport`
 - [`Raw/Reliable/Server/Coverage.md`](Raw/Reliable/Server/Coverage.md) — `RawReliableServerTransport`
-- [`Raw/Reliable/Client/Ack/Coverage.md`](Raw/Reliable/Client/Ack/Coverage.md) — `RawReliableAckClientTransport`
-- [`Raw/Reliable/Server/Ack/Coverage.md`](Raw/Reliable/Server/Ack/Coverage.md) — `RawReliableAckServerTransport`
+- [`Raw/Reliable/Client/RawReliableEndpointClientTransport/Coverage.md`](Raw/Reliable/Client/RawReliableEndpointClientTransport/Coverage.md) — `RawReliableEndpointClientTransport`
+- [`Raw/Reliable/Server/RawReliableAdmissionServerTransport/Coverage.md`](Raw/Reliable/Server/RawReliableAdmissionServerTransport/Coverage.md) — `RawReliableAdmissionServerTransport`
 - [`Raw/Unreliable/Coverage.md`](Raw/Unreliable/Coverage.md) — `RawUnreliableTransport`
 - [`Raw/Unreliable/Client/Coverage.md`](Raw/Unreliable/Client/Coverage.md) — `RawUnreliableClientTransport`
 - [`Raw/Unreliable/Server/Coverage.md`](Raw/Unreliable/Server/Coverage.md) — `RawUnreliableServerTransport`
@@ -211,10 +215,11 @@ gaps, and deferred-by-design gaps for that layer.
 - Suite root category: `Transports`. Every fixture carries it.
 - Additional filtering categories: `Transports.Concurrency`.
 
-`Transports.Concurrency` marks the one server-layer test that uses real threads to prove the
-single-factory-call invariant of the admission lock. The threads are controlled by gates, joined with
-bounded timeouts, and the gates are always released in `finally`; no test sleeps or polls. The test
-still runs in the default suite because it is deterministic and fast. Any future non-default facet
+`Transports.Concurrency` marks the server-layer tests that use real threads to prove the
+single-factory-call invariant of the admission lock and of the handler-factory lock. The threads are
+controlled by gates, joined with bounded timeouts, and the gates are always released in `finally`;
+no test sleeps or polls. The tests still run in the default suite because they are deterministic
+and fast. Any future non-default facet
 (real I/O, load, timing stress) must go into a separate layer or group with its own declared
 category, not the default suite run.
 
@@ -282,15 +287,16 @@ repeated.
   drives the stop path, where the transport notifies the handler `OnStopped` when it owns the
   notification (see the stop notification matrix). The transport never calls `OnDisconnected`.
 - **Start / connect**: `Start` works only from `Initialized`; it calls `BeginConnect` and, while
-  the state is still `Initialized`, moves to `Connecting`. A `false` from `BeginConnect` fails,
-  destroys, and notifies the handler `OnStopped`; a `BeginConnect` that stops the transport
-  synchronously makes `Start` return `false`.
+  the state is still `Initialized`, moves to `Connecting`. A `false` from `BeginConnect` fails and
+  destroys, and does **not** notify the handler `OnStopped`; a `BeginConnect` that stops the
+  transport synchronously makes `Start` return `false` and likewise notifies no handler.
 - **Connection ownership**: a `BeginConnect` that returns `true` must attach exactly one endpoint
   through `AttachEndpoint`. The endpoint is the single source of truth for connectivity and delivers
   `OnConnected`, `OnDisconnected`, and `OnStopped` to the user handler once the transport enters
   `Connecting`; the transport keeps no connected state of its own and offers no
-  connection-completion hook. A `BeginConnect` that fails leaves the transport `Initialized` and
-  the terminal notification with the transport, even when it already attached an endpoint.
+  connection-completion hook. A `BeginConnect` that fails destroys, detaches, and does not notify
+  the handler, even when it already attached an endpoint; the transport is not left
+  `Initialized`.
 - **IsConnected**: mirrors the attached endpoint and is `false` when no endpoint is attached.
   Without an endpoint it stays `false` after `Start`; with an attached endpoint it follows that
   endpoint, so it can be `true` inside `DestroyTransport` until the base detaches.
@@ -303,8 +309,8 @@ repeated.
   `Initialized` state and still allows a later `Start`. While `Connecting` the order is
   `handler.OnStopped`, `DestroyTransport`, detach, start callback when no endpoint is attached;
   when an endpoint is attached the transport skips its own notification and the endpoint owns it.
-  While `Initialized` it is `DestroyTransport`, detach, `handler.OnStopped` — this also covers a
-  failed `BeginConnect` that already attached an endpoint. The transport never calls
+  While `Initialized` it is `DestroyTransport`, detach, and no handler `OnStopped` — this also
+  covers a failed `BeginConnect` that already attached an endpoint. The transport never calls
   `OnDisconnected`; endpoint-owned transports deliver both connection callbacks from the endpoint.
 - **Handler exception isolation**: exceptions from `OnStopped` are caught, logged, and swallowed at
   this layer; `DestroyTransport`, detach, and the start callback still run, and the transport ends in
@@ -358,44 +364,6 @@ the `RawTransport`/`RawReliableTransport` facades are not repeated.
   session does not prevent the others from ticking. Ticks after the transport stops are ignored, and
   no ticker is created when the start fails. The test double supplies a hand-driven
   `ILogicDriver<IPeriodicLogicDriverCtl>`, so no background thread or real time is involved.
-
-### `RawReliableAckClientTransport` contract matrix
-
-`RawReliableAckClientTransport` is a facade over
-`RawReliableClientTransport<IRawReliableAckClientHandler>`. It only fixes `Type` to
-`RawReliableAck` and exposes `IRawReliableAckClient`; the inherited init, start/connect handoff,
-endpoint ownership, connectivity, and failed-start notifications are covered by the
-`RawReliableClientTransport` layer and are not repeated.
-
-- **Interface exposure**: `IRawReliableAckClient`,
-  `IRawReliableClientTransport<IRawReliableAckClientHandler>`, `IRawReliableTransport`,
-  `IRawTransport`, and `ITransport`.
-- **Type**: `Type` is `TransportType.RawReliableAck`.
-
-### `RawReliableAckServerTransport` contract matrix
-
-The Ack server transport adds the acknowledger lifecycle and the acknowledgement hand-off to
-`RawReliableServerTransport<IRawReliableAckServerHandler>`. The inherited session admission and
-ticker behavior is covered by the `RawReliableServerTransport` layer and is not repeated.
-
-- **Interface / type**: `IRawReliableAckServer`,
-  `IRawReliableServerTransport<IRawReliableAckServerHandler>`, `IRawReliableTransport`,
-  `IRawTransport`, and `ITransport`; `Type` is `TransportType.RawReliableAck`.
-- **Init**: null throws without changing the lifecycle and a later valid `Init` succeeds. The first
-  call succeeds; a second call returns `false` and keeps the first acknowledger. `Init` after a start
-  attempt, after a normal stop, after a failed start, or after a fail returns `false`. `Init` after a
-  stop before the first start succeeds. Concurrent calls have exactly one winner. If a subclass
-  already marked the transport initialized, `Init` returns `false` without installing the
-  acknowledger.
-- **TryAcknowledge gating**: returns `null` without calling the acknowledger when the transport is
-  invalid, not started, or has no acknowledger. This covers before-start, after-stop, and after-fail.
-- **TryAcknowledge hand-off**: when started, passes the remote endpoint and the same
-  `UnionDataList` with one additional reference to the acknowledger, and returns its handler
-  unchanged. The caller keeps its own reference; the acknowledger must release the added reference
-  exactly once. A rejection returns `null`. An acknowledger exception is caught/logged, returns
-  `null`, and leaves the transport valid and started.
-- **Ownership**: the caller's buffer remains alive with its original reference count after the
-  acknowledger releases; mutations made through the shared list are visible to the caller.
 
 ### `RawUnreliableTransport` contract matrix
 
@@ -521,14 +489,6 @@ never use reflection. Only these are asserted:
 - `ScriptedSerialActionQueue : ISerialActionQueue` models the production serial queue's
   one-action-at-a-time and error-routing behavior, and adds `RunImmediately`,
   `RejectNextSchedule`, and `ThrowNextSchedule`.
-- `TestRawReliableAckClientTransport : RawReliableAckClientTransport` supplies the inherited
-  abstract members and adds no behavior.
-- `TestRawReliableAckServerTransport : RawReliableAckServerTransport` supplies the carrier hooks
-  and a hand-driven ticker, and exposes `TryAcknowledge`, `TryMarkInitialized`,
-  `HasStartBeenAttempted`, and the carrier call counters.
-- `RecordingRawReliableAckServerAcknowledger` records the remote endpoint, the acknowledgement
-  buffer, and its reference count around a configurable behavior. The behavior owns the additional
-  reference; the recorder releases it as a safety net if the behavior does not.
 - `TestRawUnreliableTransport : RawUnreliableTransport, IRawUnreliableDebugReliability` supplies the
   inherited abstract members, exposes the typed conformance control, and records the debug-reliability
   call.

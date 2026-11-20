@@ -29,7 +29,7 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
 
     public override int MessageMaxByteSize => 1024;
 
-    public override TransportType Type => TransportType.RawReliableAck;
+    public override TransportType Type => TransportType.RawReliable;
 
     /// <summary>
     /// Gets or sets the result returned from <see cref="BeginConnect"/>.

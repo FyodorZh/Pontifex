@@ -5,7 +5,8 @@ namespace Pontifex.Raw
     public interface IRawEndpoint : IBaseEndpoint
     {        
         /// <summary>
-        /// Gets the remote endpoint address, or null if not connected.
+        /// Gets the endpoint's immutable remote address, or null when the endpoint was created
+        /// without one.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
@@ -36,9 +37,11 @@ namespace Pontifex.Raw
         /// the transport's linearization order for those calls. Send does not wait
         /// for network delivery or peer handling; it returns after validation and
         /// outbound admission.
-        /// Ownership of <paramref name="bufferToSend"/> transfers to the transport
-        /// unconditionally, regardless of the returned SendResult. The caller MUST
-        /// NOT read, mutate, retain, release, or retry using that buffer afterward.
+        /// Ownership of <paramref name="bufferToSend"/> transfers to the transport for every
+        /// result except InvalidMessage. On InvalidMessage the buffer is null or no longer alive
+        /// and cannot be transferred, so the caller retains ownership. For every other result,
+        /// the caller MUST NOT read, mutate, retain, release, or retry using that buffer
+        /// afterward. A retry requires a new buffer.
         /// </summary>
         /// <remarks>
         /// <para><b>Reliable behaviour:</b>

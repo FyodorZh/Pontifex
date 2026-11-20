@@ -53,8 +53,9 @@ internal sealed class TestRawReliableEndpoint : RawReliableEndpoint, IDisposable
     public const byte DisconnectFrame = (byte)MessageType.DisconnectMessage;
     public const byte PingFrame = (byte)MessageType.PingMessage;
     public const byte PongFrame = (byte)MessageType.PongMessage;
-    public const byte AckRequestFrame = (byte)MessageType.AckRequestMessage;
-    public const byte AckResponseFrame = (byte)MessageType.AckResponseMessage;
+    public const byte HandshakeRequestFrame = (byte)MessageType.HandshakeRequestMessage;
+    public const byte HandshakeResponseFrame = (byte)MessageType.HandshakeResponseMessage;
+    public const byte HandshakeRejectFrame = (byte)MessageType.HandshakeRejectMessage;
 
     #region Queue and lifecycle control
 
@@ -113,6 +114,12 @@ internal sealed class TestRawReliableEndpoint : RawReliableEndpoint, IDisposable
     public void ExposedProcessInbound(UnionDataList framedMessage) => ProcessInboundMessage(framedMessage);
 
     public void ExposedFailHard(StopReason reason) => FailHard(reason);
+
+    public void ExposedMarkConnectedNotified() => MarkConnectedNotified();
+
+    public bool ExposedNotifyConnectedCore(Action onConnected) => NotifyConnectedCore(onConnected);
+
+    public void ExposedNotifyDisconnectedCore(StopReason reason) => NotifyDisconnectedCore(reason);
 
     #endregion
 

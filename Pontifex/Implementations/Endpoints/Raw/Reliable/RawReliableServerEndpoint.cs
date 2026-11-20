@@ -17,6 +17,7 @@ namespace Pontifex.Raw.Reliable
     public abstract class RawReliableServerEndpoint : RawReliableEndpoint, IRawReliableServerEndpointImp
     {
         private readonly TimeSpan _disconnectTimeout;
+        private readonly IRawReliableServerHandler _handler;
         private readonly AtomicBox<DateTime> _lastInboundMessage = new();
 
         private volatile bool _timeInitialized;
@@ -56,6 +57,39 @@ namespace Pontifex.Raw.Reliable
                 throw new ArgumentException(nameof(disconnectTimeout));
             }
             _disconnectTimeout = disconnectTimeout;
+            _handler = handler;
+        }
+
+        /// <summary>
+        /// Gets the server handler that receives the connection lifecycle notifications and inbound messages
+        /// for this session.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently; the reference is immutable.</description></item>
+        /// <item><description><b>Other notes</b>: The handler is retained, not disposed, by the endpoint.</description></item>
+        /// </list>
+        /// </remarks>
+        protected IRawReliableServerHandler ServerHandler => _handler;
+
+        /// <summary>
+        /// Notifies the server handler of the logical connection and arms the shared connected latch.
+        /// </summary>
+        /// <returns><see langword="true"/> when the handler returned normally; <see langword="false"/> when it
+        /// threw and the endpoint was stopped with an <see cref="ExceptionFail"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the endpoint stop is
+        /// serialized on the serial action queue.</description></item>
+        /// <item><description><b>Other notes</b>: When this method returns <see langword="true"/> the handler has
+        /// observed the connection and a later <see cref="NotifyDisconnectedCore"/> call delivers the logical
+        /// disconnect notification. When it returns <see langword="false"/> the endpoint is already
+        /// stopping.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool NotifyConnected()
+        {
+            return NotifyConnectedCore(() => _handler.OnConnected(this));
         }
 
         /// <summary>

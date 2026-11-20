@@ -30,7 +30,12 @@
     </ItemGroup>
     
     <ItemGroup>
+      <ProjectReference Include="..\Pontifex.Protocol\Pontifex.Protocol.csproj" />
       <ProjectReference Include="..\..\Pontifex\Pontifex.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Pontifex.Transports.Tests" />
     </ItemGroup>
 
 </Project>

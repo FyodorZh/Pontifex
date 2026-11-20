@@ -10,7 +10,7 @@ namespace Pontifex.Tests.Transports;
 /// Black-box contract tests for <see cref="RawReliableClientTransport{TClientHandler}"/>, exercised
 /// through the extended public + protected surface exposed by <see cref="TestRawReliableClientTransport"/>.
 /// Covers initialization, the start/connect handoff, endpoint ownership and connectivity, the
-/// failed-start notification path, and handler exception isolation.
+/// failed-start non-notification path, and handler exception isolation.
 /// </summary>
 [Category("Transports")]
 public sealed class RawReliableClientTransportTests
@@ -238,7 +238,7 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void Start_WhenBeginConnectReturnsFalse_DestroysAndNotifiesStopped()
+    public void Start_WhenBeginConnectReturnsFalse_DestroysWithoutNotifyingHandler()
     {
         var transport = Create();
         using var handler = CreateHandler(transport);
@@ -254,20 +254,20 @@ public sealed class RawReliableClientTransportTests
 
         Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(handler.StoppedReason, Is.Null);
         Assert.That(handler.DisconnectedCount, Is.Zero);
-        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
+        Assert.That(callbackReason, Is.TypeOf<TextFail>());
         Assert.That(transport.IsValid, Is.False);
         Assert.That(transport.IsConnected, Is.False);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
         {
-            "beginConnect", "destroyTransport", "handlerStopped", "startCallback"
+            "beginConnect", "destroyTransport", "startCallback"
         }));
     }
 
     [Test]
-    public void Start_WhenBeginConnectAttachesEndpointAndReturnsFalse_NotifiesHandlerAndDetaches()
+    public void Start_WhenBeginConnectAttachesEndpointAndReturnsFalse_DetachesWithoutNotifyingHandler()
     {
         var transport = Create();
         using var handler = CreateHandler(transport);
@@ -287,27 +287,25 @@ public sealed class RawReliableClientTransportTests
             transport.EventLog.Add("startCallback");
         }), Is.False);
 
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(handler.StoppedReason, Is.Null);
         Assert.That(handler.DisconnectedCount, Is.Zero);
-        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
+        Assert.That(callbackReason, Is.TypeOf<TextFail>());
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
         Assert.That(transport.EndpointDuringDestroy, Is.SameAs(endpoint));
         Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
         Assert.That(transport.IsConnected, Is.False);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
         {
-            "beginConnect", "destroyTransport", "handlerStopped", "startCallback"
+            "beginConnect", "destroyTransport", "startCallback"
         }));
     }
 
     [Test]
-    public void Start_WhenBeginConnectReturnsFalseAndOnStoppedThrows_StillDestroys()
+    public void Start_WhenBeginConnectReturnsFalse_StillDestroys()
     {
         var transport = Create();
         using var handler = CreateHandler(transport);
-        var exception = new InvalidOperationException("stopped failure");
-        handler.StoppedException = exception;
         Assert.That(transport.Init(handler), Is.True);
         transport.BeginConnectBehavior = static () => false;
         StopReason? callbackReason = null;
@@ -318,16 +316,16 @@ public sealed class RawReliableClientTransportTests
             transport.EventLog.Add("startCallback");
         }), Is.False);
 
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.ThrownStoppedException, Is.SameAs(exception));
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(handler.ThrownStoppedException, Is.Null);
+        Assert.That(callbackReason, Is.TypeOf<TextFail>());
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.LastDestroyReason, Is.SameAs(handler.StoppedReason));
+        Assert.That(transport.LastDestroyReason, Is.SameAs(callbackReason));
         Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
         Assert.That(transport.IsValid, Is.False);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
         {
-            "beginConnect", "destroyTransport", "handlerStopped", "startCallback"
+            "beginConnect", "destroyTransport", "startCallback"
         }));
     }
 
@@ -353,6 +351,7 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
         Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
         Assert.That(transport.IsValid, Is.False);
+        Assert.That(handler.StoppedCount, Is.Zero);
     }
 
     [Test]
@@ -378,14 +377,14 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.BeginConnectCalls, Is.EqualTo(1));
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
         Assert.That(transport.LastDestroyReason, Is.SameAs(reason));
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedReason, Is.SameAs(reason));
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(handler.StoppedReason, Is.Null);
         Assert.That(callbackReason, Is.SameAs(reason));
         Assert.That(transport.IsValid, Is.True);
         Assert.That(transport.IsConnected, Is.False);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
         {
-            "beginConnect", "destroyTransport", "handlerStopped", "startCallback"
+            "beginConnect", "destroyTransport", "startCallback"
         }));
     }
 
@@ -440,18 +439,17 @@ public sealed class RawReliableClientTransportTests
     }
 
     [Test]
-    public void IsConnected_IsFalseDuringOnStopped_WhenStartFails()
+    public void IsConnected_IsFalseAfterFailedStart_WithoutHandlerStopped()
     {
         var transport = Create();
         using var handler = CreateHandler(transport);
-        handler.IsConnectedProbe = () => transport.IsConnected;
         Assert.That(transport.Init(handler), Is.True);
         transport.BeginConnectBehavior = static () => false;
 
         Assert.That(transport.Start(_ => { }), Is.False);
 
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.IsConnectedDuringStopped, Is.False);
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(transport.IsConnected, Is.False);
     }
 
     [Test]

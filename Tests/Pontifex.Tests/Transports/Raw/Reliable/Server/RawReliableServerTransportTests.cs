@@ -13,8 +13,8 @@ namespace Pontifex.Tests.Transports;
 /// Black-box contract tests for <see cref="RawReliableServerTransport{TServerHandler}"/>, exercised
 /// through the extended public + protected surface exposed by
 /// <see cref="TestRawReliableServerTransport"/>. Covers initialization, the bounded handshake and
-/// session gates, session admission, the session registry and its terminal notification, the transport
-/// stop delta, and the shared session ticker.
+/// session gates, session admission, the shared admission helpers, the session registry and its
+/// terminal notification, the transport stop delta, and the shared session ticker.
 /// </summary>
 [Category("Transports")]
 public sealed class RawReliableServerTransportTests
@@ -962,6 +962,115 @@ public sealed class RawReliableServerTransportTests
         transport.Driver.Tick();
 
         Assert.That(fixture.Session.NowReadCount, Is.EqualTo(reads + 1));
+    }
+
+    #endregion
+
+    #region Admission
+
+    [Test]
+    public void TryBeginAdmission_ReservesSessionAndHandshakeSlots()
+    {
+        var transport = Create(maxConcurrentHandshakes: 1, maxActiveSessions: 1);
+        InitializeAndStart(transport);
+
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+
+        Assert.That(transport.ExposedActiveSessions, Is.EqualTo(1));
+        Assert.That(transport.ExposedTryBeginHandshake(), Is.False);
+        Assert.That(transport.ExposedTryReserveSession(), Is.False);
+    }
+
+    [Test]
+    public void TryBeginAdmission_WhenHandshakeGateFull_ReleasesTheSessionSlot()
+    {
+        var transport = Create(maxConcurrentHandshakes: 1, maxActiveSessions: 1);
+        InitializeAndStart(transport);
+        Assert.That(transport.ExposedTryBeginHandshake(), Is.True);
+
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.False);
+
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
+        Assert.That(transport.ExposedTryReserveSession(), Is.True);
+    }
+
+    [Test]
+    public void AbandonAdmission_WithHandler_NotifiesOnStopped()
+    {
+        var transport = Create(maxConcurrentHandshakes: 1, maxActiveSessions: 1);
+        var handler = new RecordingRawAdmissionServerHandler();
+        InitializeAndStart(transport);
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+        var reason = Reason("abandon");
+
+        transport.ExposedAbandonAdmission(handler, reason);
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.LastStopReason, Is.SameAs(reason));
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
+        Assert.That(transport.ExposedTryBeginHandshake(), Is.True);
+        Assert.That(transport.ExposedTryReserveSession(), Is.True);
+    }
+
+    [Test]
+    public void AbandonAdmission_WithoutHandler_ReleasesBothSlots()
+    {
+        var transport = Create(maxConcurrentHandshakes: 1, maxActiveSessions: 1);
+        InitializeAndStart(transport);
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+
+        Assert.DoesNotThrow(() => transport.ExposedAbandonAdmission());
+
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
+        Assert.That(transport.ExposedTryBeginHandshake(), Is.True);
+        Assert.That(transport.ExposedTryReserveSession(), Is.True);
+    }
+
+    [Test]
+    public void CompleteAdmission_WhenSessionCannotStart_NotifiesOnStopped()
+    {
+        var transport = Create();
+        var handler = new RecordingRawAdmissionServerHandler();
+        var session = new TestRawReliableServerSession(handler);
+        InitializeAndStart(transport);
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+        session.Queue.RejectNextSchedule = true;
+
+        Assert.That(
+            transport.ExposedCompleteAdmission(
+                session, handler, new TextFail(transport.Name, "Failed to start or register a session")),
+            Is.False);
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+
+        session.DrainAll();
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
+    }
+
+    [Test]
+    public void CompleteAdmission_WhenSessionStartsWithTransportStopping_DoesNotNotifyOnStopped()
+    {
+        var transport = Create();
+        var handler = new RecordingRawAdmissionServerHandler();
+        var session = new TestRawReliableServerSession(handler);
+        InitializeAndStart(transport);
+        Assert.That(transport.ExposedTryBeginAdmission(), Is.True);
+
+        Assert.That(transport.Stop(Reason("transport")), Is.True);
+        Assert.That(
+            transport.ExposedCompleteAdmission(
+                session, handler, new TextFail(transport.Name, "Failed to start or register a session")),
+            Is.False);
+
+        // The accepted session owns the terminal notification, so the admission fallback stays silent.
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(transport.ExposedActiveSessions, Is.Zero);
+
+        session.DrainAll();
+
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
     }
 
     #endregion

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
@@ -12,6 +13,21 @@ namespace Pontifex.Raw.Reliable
     /// <item><description><b>Other notes</b>: Connection stages are held in volatile fields. Derived classes
     /// supply the transport-specific connect and disconnect work and must drive completion through
     /// FinishConnect and FinishDisconnect.</description></item>
+    /// <item><description><b>Handler stop rule</b>: a reliable endpoint that was started delivers the
+    /// handler's terminal notification exactly once. The situation decides which callbacks the handler
+    /// observes:
+    /// <list type="table">
+    /// <listheader><term>Situation</term><description>Handler callbacks</description></listheader>
+    /// <item><term>The transport's Start returns false</term><description>none</description></item>
+    /// <item><term>Start returned true, but the connection failed before OnConnected</term>
+    /// <description>exactly one OnStopped</description></item>
+    /// <item><term>OnConnected was delivered</term>
+    /// <description>OnConnected, then OnDisconnected, then OnStopped, each exactly once</description></item>
+    /// <item><term>A server handler was created, but its session endpoint cannot be created, started, or
+    /// admitted</term><description>exactly one OnStopped</description></item>
+    /// </list>
+    /// The terminal notification is once-only even when a stop completion follows a hard
+    /// failure.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawReliableEndpoint : RawEndpoint, IRawReliableEndpointImp
@@ -47,14 +63,19 @@ namespace Pontifex.Raw.Reliable
             PongMessage = 4,
 
             /// <summary>
-            /// An acknowledgement request.
+            /// A transport handshake request.
             /// </summary>
-            AckRequestMessage = 5,
+            HandshakeRequestMessage = 5,
 
             /// <summary>
-            /// An acknowledgement response.
+            /// A transport handshake response.
             /// </summary>
-            AckResponseMessage = 6
+            HandshakeResponseMessage = 6,
+
+            /// <summary>
+            /// A transport handshake rejection.
+            /// </summary>
+            HandshakeRejectMessage = 7
         }
 
         private enum State
@@ -66,14 +87,20 @@ namespace Pontifex.Raw.Reliable
             Disconnected
         }
 
+        private readonly IRawReliableHandler _handler;
+
         private volatile State _currentStage;
+
+        private int _connectedNotified;
+
+        private int _disconnectedNotified;
 
         /// <inheritdoc/>
         public bool IsLowLevelConnected => _currentStage == State.Connected;
 
         /// <summary>
         /// Gets whether the endpoint is logically connected. The default implementation returns
-        /// <see cref="IsLowLevelConnected"/>.
+        /// <see cref="IsLowLevelConnected"/> while the logical disconnect notification has not been delivered.
         /// </summary>
         /// <returns><see langword="true"/> when the endpoint is logically connected; otherwise
         /// <see langword="false"/>.</returns>
@@ -82,10 +109,11 @@ namespace Pontifex.Raw.Reliable
         /// <item><description><b>Thread safety</b>: Safe to read concurrently; overrides must preserve that
         /// property.</description></item>
         /// <item><description><b>Other notes</b>: Overrides may add protocol-specific conditions, such as a
-        /// completed handshake.</description></item>
+        /// completed handshake. The notification latch makes the predicate false before and during the
+        /// handler's logical disconnect notification (see <see cref="IRawReliableHandler.OnDisconnected"/>).</description></item>
         /// </list>
         /// </remarks>
-        protected virtual bool GetIsConnected() => IsLowLevelConnected;
+        protected virtual bool GetIsConnected() => IsLowLevelConnected && Volatile.Read(ref _disconnectedNotified) == 0;
 
         /// <inheritdoc/>
         public bool IsConnected => GetIsConnected();
@@ -115,6 +143,97 @@ namespace Pontifex.Raw.Reliable
             int messageMaxByteSize, long bufferCapacityBytes, IMemoryRental memory, ILogger log)
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log)
         {
+            _handler = handler;
+        }
+
+        /// <summary>
+        /// Gets the handler that receives inbound messages and connection lifecycle notifications.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently; the reference is immutable.</description></item>
+        /// <item><description><b>Other notes</b>: The base raw layer retains the same handler instance; this
+        /// property only exposes it to the reliable layers that raise the logical notifications.</description></item>
+        /// </list>
+        /// </remarks>
+        protected IRawReliableHandler Handler => _handler;
+
+        /// <summary>
+        /// Arms the connected latch so that a later logical disconnect notification is delivered.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the latch is atomic.</description></item>
+        /// <item><description><b>Other notes</b>: Call it only after the handler observed the connection. It does
+        /// not notify the handler; <see cref="NotifyConnectedCore"/> both arms the latch and invokes the
+        /// callback.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void MarkConnectedNotified()
+        {
+            Volatile.Write(ref _connectedNotified, 1);
+        }
+
+        /// <summary>
+        /// Arms the connected latch, invokes the handler's connection callback, and fails the endpoint hard when
+        /// the callback throws.
+        /// </summary>
+        /// <param name="onConnected">The callback that notifies the handler of the logical connection.</param>
+        /// <returns><see langword="true"/> when the callback returned normally; <see langword="false"/> when it
+        /// threw and the endpoint was stopped with an <see cref="ExceptionFail"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the endpoint stop is
+        /// serialized on the serial action queue.</description></item>
+        /// <item><description><b>Other notes</b>: The latch is armed before the callback runs, so a callback
+        /// that throws still permits the later logical disconnect notification. Implementations that must not
+        /// deliver a disconnect after a failed connection arm the latch separately with
+        /// <see cref="MarkConnectedNotified"/>.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool NotifyConnectedCore(Action onConnected)
+        {
+            MarkConnectedNotified();
+            try
+            {
+                onConnected();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                Stop(new ExceptionFail(TransportName, ex, "OnConnected failed"), false);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Delivers the handler's logical disconnection notification at most once, and only after the handler
+        /// observed the connection.
+        /// </summary>
+        /// <param name="reason">The reason passed to the handler.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the one-shot latch is
+        /// atomic.</description></item>
+        /// <item><description><b>Other notes</b>: The same latch reports the disconnected state read by
+        /// <see cref="GetIsConnected"/>, so IsConnected is false before and during the handler's notification. A
+        /// handler exception is logged and swallowed.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void NotifyDisconnectedCore(StopReason reason)
+        {
+            if (Interlocked.Exchange(ref _disconnectedNotified, 1) == 0 && Volatile.Read(ref _connectedNotified) != 0)
+            {
+                try
+                {
+                    _handler.OnDisconnected(reason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
+            }
         }
 
         /// <summary>
@@ -127,8 +246,9 @@ namespace Pontifex.Raw.Reliable
         /// <item><description><b>Thread safety</b>: Invoked on the thread that executed the failing
         /// action.</description></item>
         /// <item><description><b>Other notes</b>: The base implementation transitions the stage to Stopped and
-        /// delivers the handler's stop notification when the endpoint had started. The handler receives no
-        /// disconnect notification on this path.</description></item>
+        /// delivers the handler's stop notification at most once, from the starting, started, or stopping
+        /// stage; a constructed or already stopped endpoint stays silent. The handler receives no disconnect
+        /// notification on this path.</description></item>
         /// </list>
         /// </remarks>
         protected override void FailHard(StopReason reason)

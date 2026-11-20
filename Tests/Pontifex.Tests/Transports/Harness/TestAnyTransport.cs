@@ -22,7 +22,7 @@ internal sealed class TestAnyTransport : AnyTransport
     {
     }
 
-    public override TransportType Type => TransportType.RawReliableAck;
+    public override TransportType Type => TransportType.RawReliable;
 
     /// <summary>
     /// Gets or sets the result returned from <see cref="TryStart"/>.

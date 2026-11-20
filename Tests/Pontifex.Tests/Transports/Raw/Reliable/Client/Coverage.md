@@ -6,7 +6,7 @@
 - **Inheritance parent:** `Pontifex.Raw.Reliable.RawReliableTransport`
 - **Contract:** [RawReliableClientTransport.cs](../../../../../../Pontifex/Implementations/Raw/Reliable/RawReliableClientTransport.cs),
   [IRawReliableClientTransport.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableClientTransport.cs),
-  [IRawReliableClientHandler.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableClientHandler.cs),
+  [IRawReliableClientHandler.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClientHandler.cs),
   [IRawReliableEndpoint.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableEndpoint.cs)
 
 ## Covered tests
@@ -23,13 +23,14 @@
 | `Init_AfterCompletedStop_FailsWithoutAdditionalNotification` | `Init` after a completed stop cannot revive the transport. | No additional handler notification or destruction occurs. | The second handler is never stored. |
 | `Start_WithoutInit_FailsWithoutTransportHooksOrHandlerNotifications` | `Start` requires successful initialization. | `BeginConnect` does not run and no handler callback occurs. | The base start callback still observes the failure. |
 | `Start_WhenInitialized_BeginsConnectAndStaysValid` | A valid `Start` runs `BeginConnect`. | The transport stays valid but not connected. | No endpoint is attached by the double. |
-| `Start_WhenBeginConnectReturnsFalse_DestroysAndNotifiesStopped` | A rejected `BeginConnect` fails and cleans up. | `OnStopped` runs once, destruction runs, and no ready callback occurs. | No endpoint is attached, so the transport owns the handler notification. |
-| `Start_WhenBeginConnectAttachesEndpointAndReturnsFalse_NotifiesHandlerAndDetaches` | A rejected `BeginConnect` may already have attached its endpoint. | The transport still notifies `OnStopped`, destroys with the endpoint attached, and detaches it. | A failed `BeginConnect` never hands lifecycle ownership to the endpoint, so the transport supplies the terminal notification. |
-| `Start_WhenBeginConnectReturnsFalseAndOnStoppedThrows_StillDestroys` | A throwing `OnStopped` is isolated during start failure. | Destruction still runs and the start callback receives the stop reason. | The handler records its thrown exception for assertion. |
-| `Start_WhenBeginConnectReturnsFalseAndDestroyThrows_StillDetaches` | A throwing `DestroyTransport` is isolated. | The attached endpoint is detached, `Start` returns false, and no exception escapes. | Detachment is owned by the base class. |
-| `Start_WhenBeginConnectStopsTransport_ReturnsFalseAndDestroys` | A synchronous stop during `BeginConnect` beats the start path. | The transport is destroyed and the handler sees the supplied stop reason. | — |
+| `Start_WhenBeginConnectReturnsFalse_DestroysWithoutNotifyingHandler` | A rejected `BeginConnect` fails and cleans up. | Destruction runs, no ready callback occurs, and the client handler's `OnStopped` is **not** invoked. | No endpoint is attached. A transport `Start` that returns `false` does not notify the handler; `callbackReason` is the `TryStart` `TextFail`, not a handler reason. |
+| `Start_WhenBeginConnectAttachesEndpointAndReturnsFalse_DetachesWithoutNotifyingHandler` | A rejected `BeginConnect` may already have attached its endpoint. | The transport destroys with the endpoint attached, detaches it, and does not notify the handler `OnStopped`. | A failed `BeginConnect` never hands lifecycle ownership to the endpoint, so no owner notifies the handler. The event log is `beginConnect`, `destroyTransport`, `startCallback`. |
+| `Start_WhenBeginConnectReturnsFalse_StillDestroys` | A failed start destroys carrier resources without a handler notification. | `DestroyTransport` runs with the start failure reason, and the handler records neither a stop callback nor a thrown exception. | The former throwing-handler premise is gone: the handler is not invoked on this path at all. |
+| `Start_WhenBeginConnectReturnsFalseAndDestroyThrows_StillDetaches` | A throwing `DestroyTransport` is isolated during start failure. | The attached endpoint is detached, `Start` returns false, and no exception escapes. | Detachment is owned by the base class; the handler still receives no `OnStopped`. |
+| `Start_WhenBeginConnectStopsTransport_ReturnsFalseAndDestroys` | A synchronous stop during `BeginConnect` beats the start path. | The transport is destroyed, the start callback sees the supplied stop reason, and the client handler is not notified. | The stop runs while the start is in progress, so the transport must not add its own handler notification. |
+| `Start_WhenAttachedEndpointStopsDuringBeginConnect_ReturnsTrueAndStopsAfterReady` | A stop that completes on the attached endpoint during `BeginConnect` is observed after the start becomes ready. | `Start` returns true, `DestroyTransport` runs once with the endpoint's reason, and the client handler receives no `OnStopped`. | The endpoint is attached and stopped before `BeginConnect` returns. The lifecycle already belongs to the endpoint, so the transport must not duplicate the handler notification; the start callback receives the same reason. |
 | `IsConnected_WithAttachedEndpoint_DelegatesToEndpoint` | Connectivity is owned by the attached endpoint. | `IsConnected` follows the endpoint's own connection state and ignores the transport lifecycle. | The endpoint double is shared with the `Endpoints` suite. |
-| `IsConnected_IsFalseDuringOnStopped_WhenStartFails` | The failed-start stop path observes `IsConnected == false`. | No endpoint is attached, so connectivity is false during the handler callback. | — |
+| `IsConnected_IsFalseAfterFailedStart_WithoutHandlerStopped` | The failed-start path observes `IsConnected == false`. | No endpoint is attached, so connectivity is false, and the client handler receives no `OnStopped`. | — |
 | `IsConnected_IsFalseInsideDestroyTransport` | `DestroyTransport` observes the attached endpoint, not transport-derived state. | An endpoint that never connected reports `IsConnected == false` during destruction. | A connected endpoint reports `true` inside destruction; see `DestroyTransport_SeesAttachedEndpointBeforeBaseDetaches`. |
 | `AttachEndpoint_WithNull_Throws` | An endpoint attachment requires a non-null endpoint. | `ArgumentNullException` is thrown and nothing is attached. | — |
 | `AttachEndpoint_WhenAlreadyAttached_ThrowsAndKeepsFirst` | Only one endpoint may be attached. | The second attachment throws and the first endpoint remains attached. | — |
@@ -64,6 +65,9 @@
   `RecordingRawReliableClientHandler` records callbacks, reasons, and configurable exceptions.
 - `RecordingRawReliableClientHandler` and the transport share an event log so callback ordering
   can be asserted without sleeping.
+- A transport `Start` that returns `false` never invokes the client handler's `OnStopped`. The
+  failure is reported only through `Start`'s return value and the start callback, which carries the
+  `TryStart` or synchronous-stop reason; the transport-level reason is not a handler reason.
 - The layer reuses `TestRawReliableClientEndpoint` from
   `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness` for endpoint-attachment tests.
   Both suites live in the same test assembly; the endpoint double is covered by the `Endpoints`

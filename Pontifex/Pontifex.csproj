@@ -32,6 +32,42 @@
       <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
           <_Parameter1>Pontifex.Tests</_Parameter1>
       </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Transport.Net</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Transport.Direct</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Protocol</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Protocol.Zip</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Protocol.Reconnectable</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Api</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Transport.Net.Tests</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Transport.Direct.Tests</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Transports.Tests</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Transport.Tests</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Factory.Tests</_Parameter1>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+          <_Parameter1>Pontifex.Api.Tests</_Parameter1>
+      </AssemblyAttribute>
     </ItemGroup>
 
     <ItemGroup>

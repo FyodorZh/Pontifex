@@ -39,7 +39,7 @@ internal sealed class TestRawReliableServerTransport
 
     public override int MessageMaxByteSize { get; }
 
-    public override TransportType Type => TransportType.RawReliableAck;
+    public override TransportType Type => TransportType.RawReliable;
 
     public ManualPeriodicLogicDriver Driver { get; } = new();
 
@@ -93,6 +93,23 @@ internal sealed class TestRawReliableServerTransport
     {
         return TryStartAndRegisterSession(session);
     }
+
+    public bool ExposedTryBeginAdmission() => TryBeginAdmission();
+
+    public bool ExposedCompleteAdmission(
+        IRawReliableServerEndpointImp session,
+        IRawReliableServerHandler? handler,
+        StopReason failureReason)
+    {
+        return CompleteAdmission(session, handler, failureReason);
+    }
+
+    public void ExposedAbandonAdmission(IRawReliableServerHandler? handler, StopReason reason)
+    {
+        AbandonAdmission(handler, reason);
+    }
+
+    public void ExposedAbandonAdmission() => AbandonAdmission();
 
     protected override ILogicDriver<IPeriodicLogicDriverCtl> LogicDriverFactory()
     {

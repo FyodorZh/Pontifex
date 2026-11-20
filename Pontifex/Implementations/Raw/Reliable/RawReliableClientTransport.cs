@@ -21,8 +21,9 @@ namespace Pontifex.Raw.Reliable
     /// own.</description></item>
     /// <item><description><b>Handler fallback notifications</b>: the transport owns the terminal stop
     /// notification until a <see cref="BeginConnect"/> succeeds and the lifecycle moves to connecting.
-    /// It therefore notifies its handler itself when no endpoint is attached or when the start attempt
-    /// failed, even if that attempt already attached an endpoint.</description></item>
+    /// It therefore notifies its handler itself when no endpoint is attached or when the transport is
+    /// stopped while connecting. A start attempt that fails destroys its carrier resources without
+    /// notifying the handler, even if that attempt already attached an endpoint.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawReliableClientTransport<TClientHandler> : RawReliableTransport, IRawReliableClientTransport<TClientHandler>
@@ -43,6 +44,8 @@ namespace Pontifex.Raw.Reliable
         private IRawReliableClientEndpointImp? _attachedEndpoint;
 
         private bool _startInProgress;
+
+        private int _startFailed;
 
         private StopReason? _pendingEndpointStopReason;
 
@@ -81,11 +84,11 @@ namespace Pontifex.Raw.Reliable
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Other notes</b>: For the connecting state the handler stop
-        /// notification runs first when the transport owns it (no attached endpoint); for the
-        /// initialized state this method runs before the handler stop notification. The attached
-        /// endpoint, when present, is available through <see cref="AttachedEndpoint"/>. The base class
-        /// detaches it after this method returns; implementations must not detach it
-        /// themselves.</description></item>
+        /// notification runs first when the transport owns it (no attached endpoint). For the initialized
+        /// state, which covers a failed start, this method only releases carrier resources: the attached
+        /// endpoint, when present, is available through <see cref="AttachedEndpoint"/> and the handler's
+        /// OnStopped is not invoked. The base class detaches the endpoint after this method returns;
+        /// implementations must not detach it themselves.</description></item>
         /// </list>
         /// </remarks>
         protected abstract void DestroyTransport(StopReason reason);
@@ -148,6 +151,7 @@ namespace Pontifex.Raw.Reliable
                 }
 
                 Interlocked.Exchange(ref _pendingEndpointStopReason, null);
+                Volatile.Write(ref _startFailed, 1);
                 Fail("TryStart", "Transport implementation failed to begin connection process");
                 return false;
             }
@@ -273,24 +277,38 @@ namespace Pontifex.Raw.Reliable
 
                 try
                 {
-                    DestroyTransport(reason);
+                    // A failed start destroys its carrier resources without notifying the handler: the
+                    // start attempt never handed the lifecycle to an endpoint, and the start itself
+                    // reported the failure to the caller.
+                    bool notifyHandler = !Volatile.Read(ref _startInProgress) &&
+                                         Volatile.Read(ref _startFailed) == 0;
+
+                    try
+                    {
+                        DestroyTransport(reason);
+                    }
+                    finally
+                    {
+                        DetachEndpoint();
+                    }
+
+                    if (notifyHandler && _handler != null)
+                    {
+                        try
+                        {
+                            _handler.OnStopped(reason);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                        }
+                    }
                 }
                 finally
                 {
-                    DetachEndpoint();
-                }
-
-                // A failed start never hands the lifecycle to an endpoint, even if it attached one.
-                if (_handler != null)
-                {
-                    try
-                    {
-                        _handler.OnStopped(reason);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
-                    }
+                    // Consume the failed-start marker so a throwing DestroyTransport cannot leave it
+                    // latched.
+                    Volatile.Write(ref _startFailed, 0);
                 }
             }
         }
