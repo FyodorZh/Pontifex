@@ -8,7 +8,7 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Raw.Reliable.Ack.Reconnectable
+namespace Pontifex.Raw.Reliable.Reconnectable
 {
     abstract class ReconnectableBaseLogic<TEndpoint> : IPeriodicLogic, IRawReliableHandler, IRawReliableEndpoint, IEndPoint
         where TEndpoint : class, IRawReliableEndpoint
@@ -44,6 +44,8 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
         private readonly DeliverySystem mDelivery;
         private readonly ThreadSafeDateTime mLastActivityTime = new ThreadSafeDateTime();
         private readonly ThreadSafeDateTime mLastSendingTime = new ThreadSafeDateTime();
+
+        private int mLastMessageMaxByteSize;
 
         // --
 
@@ -238,6 +240,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
             mWasConnected = true;
 
             _underlyingEndpoint = underlyingTransportEndpoint;
+            mLastMessageMaxByteSize = underlyingTransportEndpoint.MessageMaxByteSize;
             mIntentions.Put(new IntentionToConnect(isFirstConnection));
 
             Log.i($"'{(isFirstConnection ? "Connected" : "Reconnected")}' to remote endpoint '{(underlyingTransportEndpoint.RemoteEndPoint?.ToString() ?? "null")}'");
@@ -262,7 +265,12 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         void IRawHandler.OnStopped(StopReason reason)
         {
-            // Derived classes (client and server) re-implement this member.
+            OnInnerStopped(reason);
+        }
+
+        protected virtual void OnInnerStopped(StopReason reason)
+        {
+            // Derived classes decide whether a physical stop is terminal or retryable.
         }
 
         protected void OnConnectionStopped(StopReason reason)
@@ -286,7 +294,7 @@ namespace Pontifex.Raw.Reliable.Ack.Reconnectable
 
         public bool IsConnected => _underlyingEndpoint != null;
 
-        public int MessageMaxByteSize => _underlyingEndpoint?.MessageMaxByteSize ?? throw new NotImplementedException("TODO: Cache previous session message size");
+        public int MessageMaxByteSize => _underlyingEndpoint?.MessageMaxByteSize ?? mLastMessageMaxByteSize;
 
         SendResult IRawEndpoint.Send(UnionDataList bufferToSend)
         {

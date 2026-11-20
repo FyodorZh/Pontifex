@@ -1,7 +1,6 @@
 using System;
-using Pontifex.Raw.Reliable.Ack;
 
-namespace Pontifex.Raw.Reliable.Ack.Reconnectable
+namespace Pontifex.Raw.Reliable.Reconnectable
 {
     internal class LogicEndpoint<TEndpoint> : IEndPoint
         where TEndpoint : class, IRawReliableEndpoint

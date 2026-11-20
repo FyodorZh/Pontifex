@@ -1,4 +1,4 @@
-namespace Pontifex.Raw.Reliable.Ack.Reconnectable
+namespace Pontifex.Raw.Reliable.Reconnectable
 {
     internal abstract class Intention
     {

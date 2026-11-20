@@ -2,7 +2,7 @@
 using Actuarius.Memory;
 using Pontifex.Utils;
 
-namespace Pontifex.Raw.Reliable.Ack.Reconnectable
+namespace Pontifex.Raw.Reliable.Reconnectable
 {
     internal class DeliverySystem
     {

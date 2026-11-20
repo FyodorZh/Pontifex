@@ -6,7 +6,7 @@ using Pontifex.Factory;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack.Direct;
 using Pontifex.Raw.Reliable.Ack.Logger;
-using Pontifex.Raw.Reliable.Ack.Reconnectable;
+using Pontifex.Raw.Reliable.Reconnectable;
 using Pontifex.Raw.Reliable.Ack.Tcp;
 using Pontifex.Raw.Reliable.Logger;
 using Pontifex.Raw.Reliable.Tcp;
@@ -38,7 +38,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Server, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
         Case(Registration.TransportRole.Server, "zip(tcp-noack(\"127.0.0.1\", 9000), compression_level = 9)", TransportType.RawReliable),
-        Case(Registration.TransportRole.Server, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Server, "reconnectable(30, tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
         Case(Registration.TransportRole.Server, "log-noack(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "direct(\"node-1\")", TransportType.RawReliableAck),
@@ -50,7 +50,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliableNoAck),
         Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
         Case(Registration.TransportRole.Client, "zip(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliable),
-        Case(Registration.TransportRole.Client, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
+        Case(Registration.TransportRole.Client, "reconnectable(30, tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliableAck),
         Case(Registration.TransportRole.Client, "log-noack(tcp-noack(\"127.0.0.1\", 9000))", TransportType.RawReliable)
     };
@@ -97,8 +97,8 @@ public sealed class FactoryBindingsTests
             factory.Canonicalize("ZIP(TCP-NOACK(\"127.0.0.1\", 9000), compression_level = 1)"),
             Is.EqualTo("zip(tcp-noack(127.0.0.1, 9000), compression_level=1)"));
         Assert.That(
-            factory.Canonicalize("RECONNECTABLE(30, TCP(\"127.0.0.1\", 9000))"),
-            Is.EqualTo("reconnectable(30, tcp(127.0.0.1, 9000))"));
+            factory.Canonicalize("RECONNECTABLE(30, TCP-NOACK(\"127.0.0.1\", 9000))"),
+            Is.EqualTo("reconnectable(30, tcp-noack(127.0.0.1, 9000))"));
         Assert.That(
             factory.Canonicalize("LOG(TCP(\"127.0.0.1\", 9000))"),
             Is.EqualTo("log(tcp(127.0.0.1, 9000))"));
@@ -192,7 +192,7 @@ public sealed class FactoryBindingsTests
         builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
         builder.RegisterTransport(RRUnreliableNoAckUdpBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableZipBinding.CreateRegistration());
-        builder.RegisterTransport(RawReliableAckReconnectableBinding.CreateRegistration());
+        builder.RegisterTransport(RawReliableReconnectableBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableAckLoggerBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableLoggerBinding.CreateRegistration());
 
