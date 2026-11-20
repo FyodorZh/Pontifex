@@ -22,6 +22,11 @@ namespace Pontifex.Raw.Reliable.Protocols
     /// observes exactly one <c>OnStopped</c> and no <c>OnDisconnected</c>.</description></item>
     /// <item><description><b>Ownership</b>: the wrapper owns the negotiation envelopes. The logic hooks receive
     /// only the custom tail and must not retain or release it.</description></item>
+    /// <item><description><b>Per-session logic</b>: the preferred constructor takes a logic factory and creates a
+    /// fresh logic instance for every accepted session. A session-scoped logic may release state in
+    /// <c>OnDisconnected</c> (for example a compressor), so it must not be shared between sequential sessions.
+    /// The single-instance constructor is retained for stateless logic and for tests; it shares one instance
+    /// across every session.</description></item>
     /// </list>
     /// </remarks>
     public class RawReliableWrapperServer : RawReliableTransport, IRawReliableServer
@@ -35,7 +40,7 @@ namespace Pontifex.Raw.Reliable.Protocols
 
         private readonly object _factoryLock = new object();
 
-        private IRawReliableWrapperLogic? _logic;
+        private Func<IRawReliableWrapperLogic>? _logicFactory;
         private IRawReliableServerHandlerFactory<IRawReliableServerHandler>? _factory;
         private bool _initialized;
 
@@ -54,10 +59,30 @@ namespace Pontifex.Raw.Reliable.Protocols
             IRawReliableWrapperLogic logic, short version = RawReliableNegotiation.DefaultVersion,
             int handshakeMaxByteSize = RawReliableNegotiation.DefaultMaxByteSize,
             TimeSpan? rejectLinger = null)
-            : this(typeName, negotiationName, inner, inner.Log, inner.Memory, version, handshakeMaxByteSize,
-                rejectLinger, null)
+            : this(typeName, negotiationName, inner, inner.Log, inner.Memory, CreateSharedFactory(logic),
+                version, handshakeMaxByteSize, rejectLinger, null)
         {
-            SetupLogic(logic);
+        }
+
+        /// <summary>
+        /// Initializes a wrapper server that creates a fresh logic instance for every accepted session.
+        /// </summary>
+        /// <param name="typeName">The display name of the wrapper transport.</param>
+        /// <param name="negotiationName">The layer negotiation name. Must be non-null.</param>
+        /// <param name="inner">The wrapped reliable server. Must be non-null.</param>
+        /// <param name="logicFactory">Creates the layer logic for one accepted session. Must be non-null and
+        /// must not return <see langword="null"/>.</param>
+        /// <param name="version">The layer negotiation version.</param>
+        /// <param name="handshakeMaxByteSize">The inclusive maximum negotiation envelope size.</param>
+        /// <param name="rejectLinger">How long a rejected session stays open, or <see langword="null"/> for the
+        /// two-second default.</param>
+        public RawReliableWrapperServer(string typeName, string negotiationName, IRawReliableServer inner,
+            Func<IRawReliableWrapperLogic> logicFactory, short version = RawReliableNegotiation.DefaultVersion,
+            int handshakeMaxByteSize = RawReliableNegotiation.DefaultMaxByteSize,
+            TimeSpan? rejectLinger = null)
+            : this(typeName, negotiationName, inner, inner.Log, inner.Memory, logicFactory,
+                version, handshakeMaxByteSize, rejectLinger, null)
+        {
         }
 
         /// <summary>
@@ -68,8 +93,8 @@ namespace Pontifex.Raw.Reliable.Protocols
             ILogger logger, IMemoryRental memory, short version = RawReliableNegotiation.DefaultVersion,
             int handshakeMaxByteSize = RawReliableNegotiation.DefaultMaxByteSize,
             TimeSpan? rejectLinger = null)
-            : this(typeName, negotiationName, inner, logger, memory, version, handshakeMaxByteSize, rejectLinger,
-                null)
+            : this(typeName, negotiationName, inner, logger, memory, null, version, handshakeMaxByteSize,
+                rejectLinger, null)
         {
         }
 
@@ -79,15 +104,26 @@ namespace Pontifex.Raw.Reliable.Protocols
         internal RawReliableWrapperServer(string typeName, string negotiationName, IRawReliableServer inner,
             IRawReliableWrapperLogic logic, short version, int handshakeMaxByteSize, TimeSpan? rejectLinger,
             INegotiationClock? clock)
-            : this(typeName, negotiationName, inner, inner.Log, inner.Memory, version, handshakeMaxByteSize,
-                rejectLinger, clock)
+            : this(typeName, negotiationName, inner, inner.Log, inner.Memory, CreateSharedFactory(logic),
+                version, handshakeMaxByteSize, rejectLinger, clock)
         {
-            SetupLogic(logic);
+        }
+
+        /// <summary>
+        /// Initializes a wrapper server with an explicit time seam and a per-session logic factory. Intended
+        /// for deterministic tests.
+        /// </summary>
+        internal RawReliableWrapperServer(string typeName, string negotiationName, IRawReliableServer inner,
+            Func<IRawReliableWrapperLogic> logicFactory, short version, int handshakeMaxByteSize,
+            TimeSpan? rejectLinger, INegotiationClock? clock)
+            : this(typeName, negotiationName, inner, inner.Log, inner.Memory, logicFactory,
+                version, handshakeMaxByteSize, rejectLinger, clock)
+        {
         }
 
         private RawReliableWrapperServer(string typeName, string negotiationName, IRawReliableServer inner,
-            ILogger logger, IMemoryRental memory, short version, int handshakeMaxByteSize,
-            TimeSpan? rejectLinger, INegotiationClock? clock)
+            ILogger logger, IMemoryRental memory, Func<IRawReliableWrapperLogic>? logicFactory, short version,
+            int handshakeMaxByteSize, TimeSpan? rejectLinger, INegotiationClock? clock)
             : base(typeName, logger, memory, new RawReliableConformanceControl())
         {
             if (negotiationName == null)
@@ -106,6 +142,7 @@ namespace Pontifex.Raw.Reliable.Protocols
             _handshakeMaxByteSize = handshakeMaxByteSize;
             _rejectLinger = rejectLinger ?? RawReliableNegotiation.DefaultRejectLinger;
             _clock = clock ?? NegotiationClock.Shared;
+            _logicFactory = logicFactory;
         }
 
         /// <inheritdoc/>
@@ -117,12 +154,18 @@ namespace Pontifex.Raw.Reliable.Protocols
         /// <summary>
         /// Sets the layer logic once, before the transport is started.
         /// </summary>
+        /// <remarks>
+        /// The supplied instance is shared by every accepted session. Use the logic-factory constructor when
+        /// the logic owns session-scoped state.
+        /// </remarks>
         protected void SetupLogic(IRawReliableWrapperLogic logic)
         {
             if (logic == null)
             {
                 throw new ArgumentNullException(nameof(logic));
             }
+
+            var factory = CreateSharedFactory(logic);
 
             lock (_locker)
             {
@@ -131,8 +174,18 @@ namespace Pontifex.Raw.Reliable.Protocols
                     throw new InvalidOperationException("The wrapper logic must be set before start.");
                 }
 
-                _logic = logic;
+                _logicFactory = factory;
             }
+        }
+
+        private static Func<IRawReliableWrapperLogic> CreateSharedFactory(IRawReliableWrapperLogic logic)
+        {
+            if (logic == null)
+            {
+                throw new ArgumentNullException(nameof(logic));
+            }
+
+            return () => logic;
         }
 
         /// <inheritdoc/>
@@ -159,7 +212,7 @@ namespace Pontifex.Raw.Reliable.Protocols
         /// <inheritdoc/>
         protected override bool TryStart()
         {
-            if (!_initialized || _logic == null)
+            if (!_initialized || _logicFactory == null)
             {
                 Fail("TryStart", "Wrapper server is not initialized");
                 return false;
@@ -225,10 +278,27 @@ namespace Pontifex.Raw.Reliable.Protocols
 
             public IRawReliableServerHandler? TryCreate(IEndPoint remote)
             {
-                var logic = _wrapper._logic;
+                var logicFactory = _wrapper._logicFactory;
                 var factory = _wrapper._factory;
-                if (logic == null || factory == null || !_wrapper.IsStarted)
+                if (logicFactory == null || factory == null || !_wrapper.IsStarted)
                 {
+                    return null;
+                }
+
+                IRawReliableWrapperLogic? logic;
+                try
+                {
+                    logic = logicFactory();
+                }
+                catch (Exception ex)
+                {
+                    _wrapper.Log.wtf(ex);
+                    return null;
+                }
+
+                if (logic == null)
+                {
+                    _wrapper.Log.e("The wrapper logic factory returned null");
                     return null;
                 }
 

@@ -7,7 +7,7 @@ using Pontifex.Raw.Reliable.Ack.Direct;
 using Pontifex.Raw.Reliable.Ack.Logger;
 using Pontifex.Raw.Reliable.Ack.Reconnectable;
 using Pontifex.Raw.Reliable.Ack.Tcp;
-using Pontifex.Raw.Reliable.Ack.Zip;
+using Pontifex.Raw.Reliable.Zip;
 using Scriba;
 using FormulaRegistry = Pontifex.TransportFormula.Registry;
 
@@ -29,7 +29,7 @@ namespace Pontifex.Test
 
             builder.RegisterTransport(RawReliableAckDirectBinding.CreateRegistration());
             builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
-            builder.RegisterTransport(RawReliableAckZipBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableZipBinding.CreateRegistration());
             builder.RegisterTransport(RawReliableAckReconnectableBinding.CreateRegistration());
             builder.RegisterTransport(RawReliableAckLoggerBinding.CreateRegistration());
 
