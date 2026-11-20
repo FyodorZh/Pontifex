@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
-using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable;
 using Pontifex.Api;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 
-namespace Pontifex.Raw.Reliable.Ack.Tests
+namespace Pontifex.Raw.Reliable.Tests
 {
     public class ConnectDisconnectApi : ApiRoot
     {
@@ -18,7 +18,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
     {
     }
 
-    [TestFixtureSource(typeof(RawReliableAckStacks))]
+    [TestFixtureSource(typeof(RawReliableStacks))]
     public class ConnectDisconnect
     {
         private readonly ITransportStack _stack;
@@ -75,11 +75,11 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             var logger = TransportRegistry.GetLogger(true);
             var factory = _stack.GetTransportFactory(true);
 
-            var serverTransport = (IRawReliableAckServer)factory.BuildServer();
+            var serverTransport = (IRawReliableServer)factory.BuildServer();
             var serverStoppedTcs = new TaskCompletionSource<StopReason>();
 
             var serverFactory = new ServerSideApiFactory<ConnectDisconnectApiServer>(
-                _ => new TestServerSideApiInstance<ConnectDisconnectApiServer>(new ConnectDisconnectApiServer(), memory, logger));
+                () => new TestServerSideApiInstance<ConnectDisconnectApiServer>(new ConnectDisconnectApiServer(), memory, logger));
 
             Assert.That(serverTransport.Init(serverFactory), Is.True,
                 $"{_stack.Id}: ServerTransport.Init failed");
@@ -104,7 +104,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                         handler.Connected += _ => connectedTcs.TrySetResult();
                         api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
 
-                        var transport = (IRawReliableAckClient)factory.BuildClient();
+                        var transport = (IRawReliableClient)factory.BuildClient();
 
                         if (!transport.Init(handler))
                         {

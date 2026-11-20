@@ -1,41 +1,64 @@
 using System.Collections.Concurrent;
-using System.Threading;
 using Archivarius;
-using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable;
 using Pontifex.Api;
 using Pontifex.Api.Client;
 using Pontifex.Api.Server;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 
-namespace Pontifex.Raw.Reliable.Ack.Tests;
+namespace Pontifex.Raw.Reliable.Tests;
 
-public struct KickMessage : IDataStruct
+public struct PingRequest : IDataStruct
 {
+    public int Seq;
+
     public void Serialize(ISerializer serializer)
     {
+        serializer.Add(ref Seq);
     }
 }
 
-public class KickApi : ApiRoot
+public struct PongResponse : IDataStruct
 {
-    public readonly S2CMessageDecl<KickMessage> Kick = new();
+    public int Seq;
+
+    public void Serialize(ISerializer serializer)
+    {
+        serializer.Add(ref Seq);
+    }
 }
 
-public class KickApiClient : KickApi
+public class PingApi : ApiRoot
 {
+    public readonly RRDecl<PingRequest, PongResponse> Ping = new();
 }
 
-public class KickApiServer : KickApi
+public class PingApiClient : PingApi
 {
+    public Task<PongResponse> SendPing(int seq)
+    {
+        return Ping.RequestAsync(new PingRequest { Seq = seq });
+    }
 }
 
-[TestFixtureSource(typeof(RawReliableAckStacks))]
-public class ConnectReceiveKick
+public class PingApiServer : PingApi
+{
+    public PingApiServer()
+    {
+        Ping.SetProcessor(r =>
+        {
+            r.Response(new PongResponse { Seq = r.Data.Seq });
+        });
+    }
+}
+
+[TestFixtureSource(typeof(RawReliableStacks))]
+public class Ping
 {
     private readonly ITransportStack _stack;
 
-    public ConnectReceiveKick(ITransportStack stack)
+    public Ping(ITransportStack stack)
     {
         _stack = stack;
     }
@@ -69,13 +92,13 @@ public class ConnectReceiveKick
     }
 
     /// <summary>
-    /// Runs the core connect-receive-kick scenario: <paramref name="clientCount"/> concurrent
-    /// clients connect. The server sends a kick message then gracefully disconnects.
-    /// Asserts every client receives the kick and observes a non-error stop reason.
+    /// Runs the core ping scenario: <paramref name="clientCount"/> concurrent clients each
+    /// send 100 sequential pings and verify each response carries the correct sequence number.
     /// </summary>
-    private async Task RunConnectReceiveKick(int clientCount, int concurrency)
+    private async Task RunPing(int clientCount, int concurrency)
     {
-        Console.WriteLine($"Run '{clientCount}' connect-receive-kick clients using '{concurrency}' tasks");
+        const int pingCount = 100;
+        Console.WriteLine($"Run '{clientCount}' clients, '{pingCount}' sequential pings each, using '{concurrency}' tasks");
 
         // Generous, load-scaled timeouts: on slow or shared CI machines the connection
         // handshake and teardown of hundreds of concurrent TCP clients can take much
@@ -88,26 +111,11 @@ public class ConnectReceiveKick
         var logger = TransportRegistry.GetLogger(true);
         var factory = _stack.GetTransportFactory(true);
 
-        var serverTransport = (IRawReliableAckServer)factory.BuildServer();
+        var serverTransport = (IRawReliableServer)factory.BuildServer();
         var serverStoppedTcs = new TaskCompletionSource<StopReason>();
 
-        var kickCount = 0;
-
-        var serverFactory = new ServerSideApiFactory<KickApiServer>(ackData =>
-        {
-            var api = new KickApiServer();
-            var instance = new TestServerSideApiInstance<KickApiServer>(api, memory, logger);
-            instance.ApiStarted += _ =>
-            {
-                Interlocked.Increment(ref kickCount);
-                var fireAndForget = Task.Run(() =>
-                {
-                    api.Kick.Send(new KickMessage());
-                    api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
-                });
-            };
-            return instance;
-        });
+        var serverFactory = new ServerSideApiFactory<PingApiServer>(
+            () => new TestServerSideApiInstance<PingApiServer>(new PingApiServer(), memory, logger));
 
         Assert.That(serverTransport.Init(serverFactory), Is.True,
             $"{_stack.Id}: ServerTransport.Init failed");
@@ -123,18 +131,16 @@ public class ConnectReceiveKick
             {
                 try
                 {
-                    var api = new KickApiClient();
+                    var api = new PingApiClient();
                     var handler = new ClientSideApi(api, memory, logger);
                     var connectedTcs = new TaskCompletionSource();
-                    var kickedTcs = new TaskCompletionSource();
                     var disconnectedTcs = new TaskCompletionSource<StopReason>();
                     var stoppedTcs = new TaskCompletionSource<StopReason>();
 
                     handler.Connected += _ => connectedTcs.TrySetResult();
-                    api.Kick.SetProcessor(_ => kickedTcs.TrySetResult());
                     api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
 
-                    var transport = (IRawReliableAckClient)factory.BuildClient();
+                    var transport = (IRawReliableClient)factory.BuildClient();
 
                     if (!transport.Init(handler))
                     {
@@ -149,7 +155,18 @@ public class ConnectReceiveKick
                     }
 
                     await WaitWithTimeout("connect", connectedTcs.Task, connectTimeout, ct);
-                    await WaitWithTimeout("kick", kickedTcs.Task, shutdownTimeout, ct);
+
+                    for (var i = 0; i < pingCount; i++)
+                    {
+                        var response = await api.SendPing(i);
+                        if (response.Seq != i)
+                        {
+                            errors.Add($"{_stack.Id}: Ping {i} response has Seq={response.Seq}, expected {i}");
+                            return;
+                        }
+                    }
+
+                    api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
 
                     var disconnectReason = await WaitWithTimeout("disconnect", disconnectedTcs.Task, shutdownTimeout, ct);
                     if (disconnectReason is AnyFail)
@@ -169,8 +186,6 @@ public class ConnectReceiveKick
         Assert.That(errors, Is.Empty,
             $"{_stack.Id}: {errors.Count}/{clientCount} clients failed. " +
             $"First error: {errors.FirstOrDefault()}");
-        Assert.That(kickCount, Is.EqualTo(clientCount),
-            $"{_stack.Id}: Server should have kicked {clientCount} clients, got {kickCount}");
 
         serverTransport.Stop(new UserIntention("test", "complete"));
         var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -179,17 +194,17 @@ public class ConnectReceiveKick
     }
 
     /// <summary>
-    /// A single client connects, receives a kick, and gracefully disconnects.
+    /// A single client connects, sends 100 sequential pings, and verifies responses.
     /// </summary>
     [Test]
     [Category("Small")]
     public async Task Test_Single()
     {
-        await RunConnectReceiveKick(1, 1);
+        await RunPing(1, 1);
     }
 
     /// <summary>
-    /// Small-scale concurrent connect-receive-kick test using
+    /// Small-scale concurrent ping test using
     /// <see cref="ITransportStack.GetSmallTestSize"/> parameters.
     /// </summary>
     [Test]
@@ -197,11 +212,11 @@ public class ConnectReceiveKick
     public async Task Test_Small()
     {
         var (count, concurrency) = _stack.GetSmallTestSize();
-        await RunConnectReceiveKick(count, concurrency);
+        await RunPing(count, concurrency);
     }
 
     /// <summary>
-    /// Large-scale concurrent connect-receive-kick test using
+    /// Large-scale concurrent ping test using
     /// <see cref="ITransportStack.GetBigTestSize"/> parameters.
     /// </summary>
     [Test]
@@ -209,6 +224,6 @@ public class ConnectReceiveKick
     public async Task Test_Big()
     {
         var (count, concurrency) = _stack.GetBigTestSize();
-        await RunConnectReceiveKick(count, concurrency);
+        await RunPing(count, concurrency);
     }
 }

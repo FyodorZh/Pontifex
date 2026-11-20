@@ -4,12 +4,11 @@ using Actuarius.Memory;
 using Pontifex.Utils;
 using Pontifex;
 using Pontifex.Raw.Reliable;
-using Pontifex.Raw.Reliable.Ack;
 using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class RawReliableAckClientLogic : RawReliableAckCommonLogic, IRawReliableAckClientHandler
+    class RawReliableClientLogic : RawReliableCommonLogic, IRawReliableClientHandler
     {
         private volatile IRawReliableEndpoint? _endpoint;
 
@@ -27,29 +26,15 @@ namespace TransportAnalyzer.TestLogic
             return $"MessageId={Interlocked.Read(ref _receiveId)}";
         }
 
-        public RawReliableAckClientLogic(IMemoryRental memoryRental, ILogger logger, int unconfirmedTicks = 1, long lastTickId = -1)
+        public RawReliableClientLogic(IMemoryRental memoryRental, ILogger logger, int unconfirmedTicks = 1, long lastTickId = -1)
             : base(memoryRental, logger)
         {
             _unconfirmedTicks = unconfirmedTicks;
             _lastTickId = lastTickId;
         }
 
-        public void FillAckData(UnionDataList ackData)
+        public void OnConnected(IRawReliableEndpoint endPoint)
         {
-            ackData.PutFirst(new UnionData(AckRequest));
-        }
-
-        public void OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
-        {
-            using var ackResponseDisposer = ackResponse.AsDisposable();
-            if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) || !AckResponse.EqualByContent(response))
-            {
-                response?.Release();
-                endPoint.Disconnect(new Pontifex.StopReasons.TextFail("stress-test", "Wrong ack response"));
-                return;
-            }
-            response.Release();
-
             Connected?.Invoke(endPoint);
             _endpoint = endPoint;
             var thread = new Thread(Work) { IsBackground = true };

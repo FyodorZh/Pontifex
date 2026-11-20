@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using Actuarius.Memory;
 using Pontifex.Factory;
 using Pontifex.Factory.Registration;
-using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Raw.Reliable.Ack.Direct;
-using Pontifex.Raw.Reliable.Ack.Logger;
-using Pontifex.Raw.Reliable.Ack.Tcp;
+using Pontifex.Raw.Reliable;
+using Pontifex.Raw.Reliable.Direct;
+using Pontifex.Raw.Reliable.Logger;
 using Pontifex.Raw.Reliable.Reconnectable;
+using Pontifex.Raw.Reliable.Tcp;
 using Pontifex.Raw.Reliable.Zip;
 using Scriba;
 using FormulaRegistry = Pontifex.TransportFormula.Registry;
@@ -27,16 +27,16 @@ namespace Pontifex.Test
                     new FormulaRegistry.TransportTypeInfo(type, type.ToString()));
             }
 
-            builder.RegisterTransport(RawReliableAckDirectBinding.CreateRegistration());
-            builder.RegisterTransport(RawReliableAckTcpBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableDirectBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
             builder.RegisterTransport(RawReliableZipBinding.CreateRegistration());
             builder.RegisterTransport(RawReliableReconnectableBinding.CreateRegistration());
-            builder.RegisterTransport(RawReliableAckLoggerBinding.CreateRegistration());
+            builder.RegisterTransport(RawReliableLoggerBinding.CreateRegistration());
 
             _factory = builder.Build();
         }
 
-        public IRawReliableAckServer? ConstructServer(
+        public IRawReliableServer? ConstructServer(
             string formula,
             ILogger logger,
             IMemoryRental memoryRental)
@@ -45,10 +45,10 @@ namespace Pontifex.Test
                 TransportRole.Server,
                 logger,
                 memoryRental);
-            return _factory.Compile(formula, compiler) as IRawReliableAckServer;
+            return _factory.Compile(formula, compiler) as IRawReliableServer;
         }
 
-        public IRawReliableAckClient? ConstructClient(
+        public IRawReliableClient? ConstructClient(
             string formula,
             ILogger logger,
             IMemoryRental memoryRental)
@@ -57,7 +57,7 @@ namespace Pontifex.Test
                 TransportRole.Client,
                 logger,
                 memoryRental);
-            return _factory.Compile(formula, compiler) as IRawReliableAckClient;
+            return _factory.Compile(formula, compiler) as IRawReliableClient;
         }
     }
 }

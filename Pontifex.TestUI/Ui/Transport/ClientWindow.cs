@@ -5,7 +5,7 @@ using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 using Terminal.UI;
-using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable;
 using Pontifex.Api;
 using TransportAnalyzer.TestLogic;
 
@@ -13,7 +13,7 @@ namespace Pontifex.Test
 {
     public sealed class ClientWindow : SmartWindow
     {
-        private readonly IRawReliableAckClient? _transport;
+        private readonly IRawReliableClient? _transport;
         private readonly ILogger _logger;
         
         public ClientWindow(TransportFactory factory, string url, string? startApi)
@@ -48,7 +48,7 @@ namespace Pontifex.Test
 
             if (startApi == null)
             {
-                var clientLogic = new RawReliableAckClientLogic(_transport.Memory, _transport.Log, 1);
+                var clientLogic = new RawReliableClientLogic(_transport.Memory, _transport.Log, 1);
                 clientLogic.Connected += endpoint => { controlsPanel.SetEndpoint(endpoint); };
                 clientLogic.Disconnected += _ => { controlsPanel.SetEndpoint(null); };
 

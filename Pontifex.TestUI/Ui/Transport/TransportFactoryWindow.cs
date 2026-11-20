@@ -189,11 +189,11 @@ namespace Pontifex.Test
             string cmd = "";
             if (_directTransport.CheckedState == CheckState.Checked)
             {
-                cmd = "direct(\"123\")";
+                cmd = "direct-noack(\"123\")";
             }
             else if (_tcpTransport.CheckedState == CheckState.Checked)
             {
-                cmd = $"tcp(\"{_tcpUdpAddressField.Text}\", {_tcpUdpPortField.Text})";
+                cmd = $"tcp-noack(\"{_tcpUdpAddressField.Text}\", {_tcpUdpPortField.Text})";
             }
             else
             {
@@ -206,7 +206,7 @@ namespace Pontifex.Test
             if (_zipProtocol.CheckedState == CheckState.Checked) 
                 cmd = "zip(" + cmd + ", compression_level = 9)";
             if (_loggerProtocol.CheckedState == CheckState.Checked) 
-                cmd = "log(" + cmd + ")";
+                cmd = "log-noack(" + cmd + ")";
             
             _urlField.Text = cmd;
 

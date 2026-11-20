@@ -3,18 +3,15 @@ using Scriba;
 
 namespace TransportAnalyzer.TestLogic
 {
-    abstract class RawReliableAckCommonLogic
+    abstract class RawReliableCommonLogic
     {
         const int MinN = 200;
         const int MaxN = 2000;
 
-        public static readonly IMultiRefReadOnlyByteArray AckRequest = new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-REQUEST"u8.ToArray());
-        public static readonly IMultiRefReadOnlyByteArray AckResponse = new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-OK"u8.ToArray());
-
         public ILogger Log { get; }
         public IMemoryRental Memory { get; }
 
-        protected RawReliableAckCommonLogic(IMemoryRental memory, ILogger logger)
+        protected RawReliableCommonLogic(IMemoryRental memory, ILogger logger)
         {
             Log = logger;
             Memory = memory;

@@ -2,24 +2,18 @@ using System.Collections.Concurrent;
 using System.Threading;
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Raw.Reliable.Ack;
+using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
 using Pontifex.Utils;
 
-namespace Pontifex.Raw.Reliable.Ack.Tests
+namespace Pontifex.Raw.Reliable.Tests
 {
-    [TestFixtureSource(typeof(RawReliableAckStacks))]
+    [TestFixtureSource(typeof(RawReliableStacks))]
     public class HighLoadDataTransfer
     {
         private const int MinN = 200;
         private const int MaxN = 2000;
-
-        private static readonly IMultiRefReadOnlyByteArray AckRequest =
-            new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-REQUEST"u8.ToArray());
-
-        private static readonly IMultiRefReadOnlyByteArray AckResponse =
-            new StaticReadOnlyByteArray("STRESS-LOGIC-ACK-OK"u8.ToArray());
 
         private readonly ITransportStack _stack;
 
@@ -56,7 +50,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             return true;
         }
 
-        private class ClientHandler : IRawReliableAckClientHandler
+        private class ClientHandler : IRawReliableClientHandler
         {
             private readonly IMemoryRental _memory;
             private readonly int _unconfirmedTicks;
@@ -76,24 +70,8 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                 _completedTcs = completedTcs;
             }
 
-            public void FillAckData(UnionDataList ackData)
+            public void OnConnected(IRawReliableEndpoint endPoint)
             {
-                ackData.PutFirst(new UnionData(AckRequest));
-            }
-
-            public void OnConnected(IRawReliableEndpoint endPoint, UnionDataList ackResponse)
-            {
-                using var ackResponseDisposer = ackResponse.AsDisposable();
-                if (!ackResponse.TryPopFirst(out IMultiRefReadOnlyByteArray? response) ||
-                    !AckResponse.EqualByContent(response))
-                {
-                    response?.Release();
-                    endPoint.Disconnect(new TextFail("stress-test", "Wrong ack response"));
-                    return;
-                }
-
-                response.Release();
-
                 _endpoint = endPoint;
                 var thread = new Thread(Work) { IsBackground = true };
                 thread.Start();
@@ -155,33 +133,22 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             }
         }
 
-        private class ServerAcknowledger : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
+        private class ServerFactory : IRawReliableServerHandlerFactory<IRawReliableServerHandler>
         {
             private readonly IMemoryRental _memory;
 
-            public ServerAcknowledger(IMemoryRental memory)
+            public ServerFactory(IMemoryRental memory)
             {
                 _memory = memory;
             }
 
-            public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(
-                IEndPoint remote, UnionDataList ackData)
+            public IRawReliableServerHandler? TryCreate(IEndPoint remote)
             {
-                using var ackDataDisposer = ackData.AsDisposable();
-                if (ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack) &&
-                    AckRequest.EqualByContent(ack) && ackData.Elements.Count == 0)
-                {
-                    ack.Release();
-                    var ackResponse = _memory.CollectablePool.Acquire<UnionDataList>();
-                    ackResponse.PutFirst(new UnionData(AckResponse));
-                    return (new ServerHandler(_memory), ackResponse);
-                }
-
-                return null;
+                return new ServerHandler(_memory);
             }
         }
 
-        private class ServerHandler : IRawReliableAckServerHandler
+        private class ServerHandler : IRawReliableServerHandler
         {
             private readonly IMemoryRental _memory;
             private volatile IRawReliableEndpoint? _endpoint;
@@ -274,11 +241,11 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
             var memory = TransportRegistry.Memory;
             var factory = _stack.GetTransportFactory(clientCount <= 1);
 
-            var serverTransport = (IRawReliableAckServer)factory.BuildServer();
-            var serverAcknowledger = new ServerAcknowledger(memory);
+            var serverTransport = (IRawReliableServer)factory.BuildServer();
+            var serverFactory = new ServerFactory(memory);
             var serverStoppedTcs = new TaskCompletionSource<StopReason>();
 
-            Assert.That(serverTransport.Init(serverAcknowledger), Is.True,
+            Assert.That(serverTransport.Init(serverFactory), Is.True,
                 $"{_stack.Id}: ServerTransport.Init failed");
             Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
                 $"{_stack.Id}: ServerTransport.Start failed");
@@ -296,7 +263,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tests
                         var clientHandler = new ClientHandler(memory, unconfirmedTicks: 10,
                             lastTickId, clientCompletedTcs);
                         var clientStoppedTcs = new TaskCompletionSource<StopReason>();
-                        var clientTransport = (IRawReliableAckClient)factory.BuildClient();
+                        var clientTransport = (IRawReliableClient)factory.BuildClient();
 
                         if (!clientTransport.Init(clientHandler))
                         {

@@ -5,11 +5,10 @@ using Pontifex.Utils;
 using Scriba;
 using Pontifex;
 using Pontifex.Raw.Reliable;
-using Pontifex.Raw.Reliable.Ack;
 
 namespace TransportAnalyzer.TestLogic
 {
-    class RawReliableAckServerLogic : IRawReliableAckServerAcknowledger<IRawReliableAckServerHandler>
+    class RawReliableServerLogic : IRawReliableServerHandlerFactory<IRawReliableServerHandler>
     {
         private readonly ConcurrentDictionary<IClientHandler, IClientHandler> mClients = new ConcurrentDictionary<IClientHandler, IClientHandler>();
 
@@ -19,7 +18,7 @@ namespace TransportAnalyzer.TestLogic
         private readonly ILogger _logger;
         private readonly IMemoryRental _memory;
 
-        public RawReliableAckServerLogic(ILogger logger, IMemoryRental memory)
+        public RawReliableServerLogic(ILogger logger, IMemoryRental memory)
         {
             _logger = logger;
             _memory = memory;
@@ -39,23 +38,9 @@ namespace TransportAnalyzer.TestLogic
             evt?.Invoke(handler);
         }
 
-        public (IRawReliableAckServerHandler handler, UnionDataList ackResponse)? TryAck(IEndPoint remote, UnionDataList ackData)
+        public IRawReliableServerHandler? TryCreate(IEndPoint remote)
         {
-            using var ackDataDisposer = ackData.AsDisposable();
-            if (!ackData.TryPopFirst(out IMultiRefReadOnlyByteArray? ack))
-            {
-                return null;
-            }
-
-            using var ackDisposer = ack.AsDisposable();
-            if (!RawReliableAckCommonLogic.AckRequest.EqualByContent(ack) || ackData.Elements.Count != 0)
-            {
-                return null;
-            }
-
-            var ackResponse = _memory.CollectablePool.Acquire<UnionDataList>();
-            ackResponse.PutFirst(new UnionData(RawReliableAckCommonLogic.AckResponse));
-            return (new Handler(this, _memory, _logger), ackResponse);
+            return new Handler(this, _memory, _logger);
         }
 
         ICollection<IClientHandler> Clients => mClients.Values;
@@ -67,17 +52,17 @@ namespace TransportAnalyzer.TestLogic
             void Disconnect(StopReason reason);
         }
 
-        private class Handler : RawReliableAckCommonLogic, IRawReliableAckServerHandler, IClientHandler
+        private class Handler : RawReliableCommonLogic, IRawReliableServerHandler, IClientHandler
         {
             private volatile IRawReliableEndpoint? mEndpoint;
 
             private long mReceiveId = 0;
 
-            private readonly RawReliableAckServerLogic mOwner;
+            private readonly RawReliableServerLogic mOwner;
 
             private string mText = "<connecting>";
 
-            public Handler(RawReliableAckServerLogic owner, IMemoryRental memoryRental, ILogger logger)
+            public Handler(RawReliableServerLogic owner, IMemoryRental memoryRental, ILogger logger)
                 :base(memoryRental, logger)
             {
                 mOwner = owner;
@@ -112,7 +97,6 @@ namespace TransportAnalyzer.TestLogic
                         return;
                     }
                     using var dataDisposer = data.AsDisposable();
-
 
                     
                     var toSend = Memory.CollectablePool.Acquire<UnionDataList>();

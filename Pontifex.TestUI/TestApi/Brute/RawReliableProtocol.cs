@@ -19,23 +19,23 @@ namespace TransportAnalyzer.TestLogic
         }
     }
 
-    public class RawReliableAckProtocol : ApiRoot
+    public class RawReliableProtocol : ApiRoot
     {
         public readonly RRDecl<Int2, Int2> EP = new RRDecl<Int2, Int2>();
         
         public ILogger Log { get; }
         public IMemoryRental Memory { get; }
 
-        protected RawReliableAckProtocol(IMemoryRental memory, ILogger logger)
+        protected RawReliableProtocol(IMemoryRental memory, ILogger logger)
         {
             Log = logger;
             Memory = memory;
         }
     }
 
-    public class RawReliableAckProtocol_Server : RawReliableAckProtocol
+    public class RawReliableProtocol_Server : RawReliableProtocol
     {
-        public RawReliableAckProtocol_Server(IMemoryRental memory, ILogger logger) 
+        public RawReliableProtocol_Server(IMemoryRental memory, ILogger logger) 
             : base(memory, logger)
         {
             EP.SetProcessor(request =>
@@ -53,9 +53,9 @@ namespace TransportAnalyzer.TestLogic
         }
     }
 
-    public class RawReliableAckProtocol_Client : RawReliableAckProtocol
+    public class RawReliableProtocol_Client : RawReliableProtocol
     {
-        public RawReliableAckProtocol_Client(IMemoryRental memory, ILogger logger) 
+        public RawReliableProtocol_Client(IMemoryRental memory, ILogger logger) 
             : base(memory, logger)
         {
             Connected += () => Task.Run(Test);
