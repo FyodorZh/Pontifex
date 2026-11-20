@@ -569,7 +569,11 @@ implemented; reject linger is 2 s and configurable.
       the handshake response.
     - `Tests/Pontifex.Transport.Net.Tests/Raw/Reliable/RawReliable/RawReliableTcpClientEndpointIntegrationTests.cs`:
       the raw peer must read the handshake request and write a valid
-      response before `OnConnected` is expected.
+      response before `OnConnected` is expected. Raw-peer tests must use
+      symbolic frame constants derived from `MessageType` (for example a
+      derived helper exposing `(byte)MessageType.HandshakeRequestMessage`),
+      not hard-coded `7`/`8`/`9`: Stage 10 renumbers those members to
+      `5`/`6`/`7`.
     - Update the owning `Coverage.md` files for the migrated
       handshake-completion cases (`Tests/Pontifex.Tests/Endpoints/...` and
       `.../Transports/...`) per `Tests/RULES.md` COVERAGE-11.
@@ -1398,7 +1402,12 @@ or enum value remains; `tcp`, `direct`, and `log` are `RawReliable`; `zip` and
      `HandshakeRejectMessage` to 5/6/7. Update the neutral harnesses
      `TestRawReliableEndpoint`, `TestRawReliableClientEndpoint`, and
      `TestRawReliableServerEndpoint` to remove/replace `AckRequestFrame`/
-     `AckResponseFrame` with the handshake frame constants.
+     `AckResponseFrame` with the handshake frame constants. Also update the
+     raw-peer integration tests
+     `Tests/Pontifex.Transport.Net.Tests/Raw/Reliable/RawReliable/RawReliableTcpClientEndpointIntegrationTests.cs`
+     and `RawReliableTcpHandshakeIntegrationTests.cs` if they contain numeric
+     frame literals; the Stage 2 requirement is symbolic constants, and this
+     is the bridge that keeps them valid after the renumber.
    - Update the test transports that hard-code `Type =>
      TransportType.RawReliableAck` (`TestAnyTransport`,
      `TestRawReliableTransport`, `TestRawReliableClientTransport`,
@@ -1410,10 +1419,15 @@ or enum value remains; `tcp`, `direct`, and `log` are `RawReliable`; `zip` and
      the Stage 7 `RawReliableStacks.cs` is the final one.
    - Remove any remaining `TestPlans/Raw/Reliable/Ack/**` directories.
    - Update `TransportRegistry`, `TestHarness`, namespaces, categories.
-6. Update documentation:
+6. Update documentation and comments:
    - Replace/publish a single `Pontifex/Abstractions/Transports/Raw/Reliable/Specification.md`
      describing the handshake, reject, version/name/max, wrapper negotiation,
      and the no-ACK architecture. Delete the old Ack/NoAck spec files.
+   - Sweep comments and XML docs for old names so the final greps pass:
+     the converter harness comment in
+     `Tests/Pontifex.Factory.Tests/Bootstrap/Harness/FakeRawUnreliableNoAckClient.cs`,
+     the `tcp-noack`/`log-noack` doc literals in the renamed carrier files,
+     and the Ack-named XML docs in `IRawReliableServerHandler_Ext.cs`.
    - Update the Protocol/Api/Transport readmes and `Coverage.md` files.
 7. Final verification:
    - `dotnet build Pontifex.sln -v minimal` succeeds.
