@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.Raw;
 using Pontifex.Raw.Reliable;
-using Pontifex.Raw.Reliable.Ack.Logger;
 using Pontifex.Raw.Reliable.Logger;
 using Pontifex.Tests.Endpoints;
 using Pontifex.Utils;
@@ -58,12 +57,32 @@ public sealed class RawReliableClientLoggerTests
 
         Assert.That(userHandler.ConnectedCount, Is.EqualTo(1));
         Assert.That(userHandler.ConnectedEndPoint, Is.Not.SameAs(endPoint));
-        Assert.That(userHandler.ConnectedEndPoint, Is.InstanceOf<RawAckClientSideEndpointWrapper>());
+        Assert.That(userHandler.ConnectedEndPoint, Is.InstanceOf<RawReliableClientSideEndpointWrapper>());
         Assert.That(userHandler.ReceivedCount, Is.EqualTo(1));
         Assert.That(userHandler.DisconnectedCount, Is.EqualTo(1));
         Assert.That(userHandler.DisconnectedReason, Is.SameAs(Reason));
         Assert.That(userHandler.StoppedCount, Is.EqualTo(1));
         Assert.That(userHandler.StoppedReason, Is.SameAs(Reason));
+    }
+
+    [Test]
+    public void OnConnected_IsTransparentAndForwardsTheMessageMaxByteSizeUnchanged()
+    {
+        const int coreMaxByteSize = 4096;
+        var consumer = new RecordingLogConsumer();
+        var core = new FakeRawReliableClient(CreateLog(consumer));
+        var logger = new RawReliableClientLogger(core);
+        var userHandler = new RecordingClientHandler();
+        ((IRawReliableClient)logger).Init(userHandler);
+
+        var endPoint = new RecordingReliableEndpoint(coreMaxByteSize);
+        ((IRawReliableClientHandler)logger).OnConnected(endPoint);
+
+        // The logger adds no handshake or payload of its own and keeps the negotiated limit.
+        Assert.That(endPoint.SendCount, Is.Zero);
+        Assert.That(userHandler.ConnectedCount, Is.EqualTo(1));
+        Assert.That(userHandler.ConnectedEndPoint, Is.Not.SameAs(endPoint));
+        Assert.That(userHandler.ConnectedEndPoint!.MessageMaxByteSize, Is.EqualTo(coreMaxByteSize));
     }
 
     private static Logger CreateLog(RecordingLogConsumer consumer)
@@ -167,6 +186,34 @@ public sealed class RawReliableClientLoggerTests
         public SendResult Send(UnionDataList bufferToSend) => SendResult.Error;
 
         public bool Disconnect(StopReason reason) => false;
+
+        public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
+        {
+        }
+    }
+
+    private sealed class RecordingReliableEndpoint : IRawReliableEndpoint
+    {
+        public RecordingReliableEndpoint(int messageMaxByteSize)
+        {
+            MessageMaxByteSize = messageMaxByteSize;
+        }
+
+        public int SendCount { get; private set; }
+
+        public IEndPoint? RemoteEndPoint => null;
+
+        public int MessageMaxByteSize { get; }
+
+        public bool IsConnected => true;
+
+        public SendResult Send(UnionDataList bufferToSend)
+        {
+            SendCount++;
+            return SendResult.Ok;
+        }
+
+        public bool Disconnect(StopReason reason) => true;
 
         public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
         {

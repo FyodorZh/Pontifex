@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
-using Pontifex.Raw.Reliable.Ack.Logger;
 using Pontifex.Utils;
 using Scriba;
 
@@ -15,7 +14,7 @@ namespace Pontifex.Raw.Reliable.Logger
     /// <item>Every transport call and every handler callback is logged to the wrapped
     /// transport's <see cref="ITransport.Log"/>.</item>
     /// <item>The endpoint handed to <see cref="IRawReliableClientHandler.OnConnected"/> is wrapped through
-    /// <see cref="RawAckClientSideEndpointWrapper"/> so that <c>Send</c> and <c>Disconnect</c>
+    /// <see cref="RawReliableClientSideEndpointWrapper"/> so that <c>Send</c> and <c>Disconnect</c>
     /// calls are logged too.</item>
     /// <item>The wrapper is not thread-safe; the owning transport serializes handler
     /// callbacks.</item>
@@ -102,7 +101,7 @@ namespace Pontifex.Raw.Reliable.Logger
         void IRawReliableClientHandler.OnConnected(IRawReliableEndpoint endPoint)
         {
             _core.Log.i("UserHandler.OnConnected(" + endPoint + ")");
-            var endPointWrapper = new RawAckClientSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
+            var endPointWrapper = new RawReliableClientSideEndpointWrapper(endPoint, (endpoint, dataToSend) =>
             {
                 _core.Log.i("EndPoint.Send(" + dataToSend + ")");
                 if (endpoint == null)

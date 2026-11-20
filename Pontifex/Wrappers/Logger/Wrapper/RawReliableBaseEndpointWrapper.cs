@@ -3,15 +3,15 @@ using System.Collections.Generic;
 using Pontifex.Endpoints;
 using Pontifex.Utils;
 
-namespace Pontifex.Raw.Reliable.Ack.Logger
+namespace Pontifex.Raw.Reliable.Logger
 {
-    public abstract class RawAckBaseEndpointWrapper : IRawReliableEndpoint
+    public abstract class RawReliableBaseEndpointWrapper : IRawReliableEndpoint
     {
         private volatile IRawReliableEndpoint? _core;
         private readonly Func<IRawReliableEndpoint?, UnionDataList, SendResult> _sender;
         private readonly Func<IRawReliableEndpoint?, StopReason, bool> _disconnector;
 
-        protected RawAckBaseEndpointWrapper(IRawReliableEndpoint? core, 
+        protected RawReliableBaseEndpointWrapper(IRawReliableEndpoint? core, 
             Func<IRawReliableEndpoint?, UnionDataList, SendResult> sender, 
             Func<IRawReliableEndpoint?, StopReason, bool> disconnector)
         {
@@ -20,7 +20,7 @@ namespace Pontifex.Raw.Reliable.Ack.Logger
             _disconnector = disconnector;
         }
 
-        // public void SetCore(IRawAckBaseEndpoint core)
+        // public void SetCore(IRawReliableBaseEndpoint core)
         // {
         //     _core = core;
         // }

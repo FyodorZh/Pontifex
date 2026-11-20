@@ -237,7 +237,7 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=End
 - Transports, carriers, sockets, networks, threads, timers, and real time. Those belong to the
   transport suite in `Tests/Pontifex.Tests/Transports` and the conformance project
   `Tests/Pontifex.Transports.Tests`.
-- Wrapper endpoints (`RawAckBaseEndpointWrapper` and its descendants) and converter endpoints.
+- Wrapper endpoints (`RawReliableBaseEndpointWrapper` and its descendants) and converter endpoints.
 - The conformance architecture: `IConformanceControl`, transport-level controls, failure injection, and
   the conformance role of `GetControls`. Tests may arm an endpoint's gate counters purely as an observable
   to pin delivery counts; `CheckPoint` behaviour itself belongs to its own suite.

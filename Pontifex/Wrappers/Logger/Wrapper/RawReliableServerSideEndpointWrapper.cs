@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using Pontifex.Utils;
 
-namespace Pontifex.Raw.Reliable.Ack.Logger
+namespace Pontifex.Raw.Reliable.Logger
 {
-    public class RawAckServerSideEndpointWrapper : RawAckBaseEndpointWrapper, IRawReliableEndpoint
+    public class RawReliableServerSideEndpointWrapper : RawReliableBaseEndpointWrapper, IRawReliableEndpoint
     {
         private readonly IControl[] _controls;
         
-        public RawAckServerSideEndpointWrapper(IRawReliableEndpoint? core,  
+        public RawReliableServerSideEndpointWrapper(IRawReliableEndpoint? core,  
             Func<IRawReliableEndpoint?, UnionDataList, SendResult> sender, 
             Func<IRawReliableEndpoint?, StopReason, bool> disconnector,
             IControl[] controls)
