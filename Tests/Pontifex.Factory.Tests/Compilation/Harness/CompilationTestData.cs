@@ -18,8 +18,8 @@ namespace Pontifex.Factory.Tests.Compilation.Harness;
 // library is used and no production state is inspected.
 internal static class CompilationTestData
 {
-    public static readonly TransportType TypeA = TransportType.RawReliableAck;
-    public static readonly TransportType TypeB = TransportType.RawReliable;
+    public static readonly TransportType TypeA = TransportType.RawReliable;
+    public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
     public static readonly TransportType TypeC = TransportType.RawUnreliableAck;
 
     public static SourceSpan ZeroSpan => new SourceSpan(0, 0);

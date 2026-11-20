@@ -7,7 +7,7 @@ using Scriba;
 namespace Pontifex.Factory.Tests.Bootstrap.Harness
 {
     // Minimal raw-unreliable client used only to exercise the built-in
-    // RawUnreliableNoAck -> RawReliableAck converter through the default graph.
+    // RawUnreliableNoAck -> RawReliable converter through the default graph.
     // It performs no I/O and never starts a thread.
     internal sealed class FakeRawUnreliableNoAckClient : IRawUnreliableNoAckClient
     {

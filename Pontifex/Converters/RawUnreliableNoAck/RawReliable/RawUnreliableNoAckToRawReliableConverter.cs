@@ -5,10 +5,10 @@ using Scriba;
 
 namespace Pontifex.Converters
 {
-    public class RawUnreliableNoAckToRawReliableAckConverter : ITransportConverter
+    public class RawUnreliableNoAckToRawReliableConverter : ITransportConverter
     {
         public TransportType From => TransportType.RawUnreliableNoAck;
-        public TransportType To => TransportType.RawReliableAck;
+        public TransportType To => TransportType.RawReliable;
 
         public Func<ITransport> Convert(Func<ITransport> innerTransportCtor, IMemoryRental? memoryOverride = null, ILogger? loggerOverride = null)
         {
@@ -18,7 +18,7 @@ namespace Pontifex.Converters
 
                 if (transport is IRawUnreliableNoAckClient client)
                 {
-                    return new RawUnreliableNoAckToRawReliableAckClient(
+                    return new RawUnreliableNoAckToRawReliableClient(
                         client,
                         memoryOverride,
                         loggerOverride);
@@ -26,7 +26,7 @@ namespace Pontifex.Converters
 
                 if (transport is IRawUnreliableNoAckServer server)
                 {
-                    return new RawUnreliableNoAckToRawReliableAckServer(
+                    return new RawUnreliableNoAckToRawReliableServer(
                         server,
                         memoryOverride,
                         loggerOverride);

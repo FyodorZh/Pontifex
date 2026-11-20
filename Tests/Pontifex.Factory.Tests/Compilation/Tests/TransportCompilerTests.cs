@@ -1250,7 +1250,7 @@ public sealed class TransportCompilerTests
         Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Building));
         Assert.That(
             exception.Error.Message,
-            Is.EqualTo("no conversion path from RawReliableAck to RawUnreliableAck"));
+            Is.EqualTo("no conversion path from RawReliable to RawUnreliableAck"));
         Assert.That(registration.InvocationCount, Is.EqualTo(1));
         Assert.That(converters.Calls, Has.Count.EqualTo(1));
     }

@@ -18,8 +18,8 @@ namespace Pontifex.TransportFormula.Tests.Semantics.Harness;
 // with a single candidate). No mocking library is used.
 internal static class SemanticsTestData
 {
-    public static readonly TransportType TypeA = TransportType.RawReliableAck;
-    public static readonly TransportType TypeB = TransportType.RawReliable;
+    public static readonly TransportType TypeA = TransportType.RawReliable;
+    public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
     public static readonly TransportType TypeC = TransportType.RawUnreliableAck;
 
     public const string ParameterValidatorReason = "value must not be 'bad'";

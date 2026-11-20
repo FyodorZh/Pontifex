@@ -12,8 +12,8 @@ namespace Pontifex.Factory.Tests.Bootstrap.Harness
     // harness, so the metadata helpers are local.
     internal static class BootstrapTestData
     {
-        public static readonly TransportType TypeA = TransportType.RawReliableAck;
-        public static readonly TransportType TypeB = TransportType.RawReliable;
+        public static readonly TransportType TypeA = TransportType.RawReliable;
+        public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
 
         public static ITransportFactoryBuilder NewBuilder()
         {
