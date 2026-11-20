@@ -22,13 +22,18 @@
 | `OnConnected_WhenHandlerThrows_StopsWithExceptionFail` | A handler exception during the connection notification stops the endpoint. | `OnConnected` was observed once, then `OnDisconnected` and `OnStopped` receive `ExceptionFail`, and keep-alive is not started. | The connection latch is set before the handler call, so the throwing path still delivers the disconnect notification. |
 | `HandshakeTimeout_WithoutResponse_StopsWithTimeOutAndNeverConnects` | The handshake deadline stops an endpoint whose response never arrives. | The manual timer is fired, the endpoint stops with `TimeOut`, and no connection or disconnect notification is raised. | The deadline is driven by the manual timer seam, so the test is deterministic. |
 | `HandshakeResponse_StopsTimer_AndConnectionStaysHealthy` | A successful response cancels the deadline. | The timer is disposed, the endpoint stays connected, and a late timer fire does nothing. | Proves the timer is released on success rather than only on teardown. |
+| `HandshakeResponse_WithVersionMismatch_StopsWithProtocolMismatch` | A response from a different protocol version is a protocol mismatch. | The endpoint stops with `ProtocolMismatch` and never connects. | — |
+| `HandshakeResponse_WithNameMismatch_StopsWithProtocolMismatch` | A response from a different handshake name is a protocol mismatch. | The endpoint stops with `ProtocolMismatch` and never connects. | — |
+| `HandshakeResponse_WithNonPositiveMaximum_StopsWithProtocolMismatch` | A negotiated maximum below 1 is malformed. | The endpoint stops with `ProtocolMismatch` and never connects. | The parser accepts the shape; the endpoint applies the semantic `serverMax < 1` guard. |
+| `HandshakeResponse_Malformed_StopsWithProtocolMismatch` | A response that does not parse is a protocol mismatch. | The endpoint stops with `ProtocolMismatch` and never connects. | The frame type is valid; the payload is truncated. |
+| `HandshakeResponse_Oversized_StopsWithTextFail` | A response above `HandshakeMaxByteSize` is rejected before parsing. | The endpoint stops with `TextFail` and never connects. | — |
+| `HandshakeReject_MapsStatusToStopReason` | The reject status table maps to typed stop reasons. | Version/name/unknown map to `ProtocolMismatch`, rejected/capacity to `HandshakeRejected`, and timeout to `TimeOut`. | One parameterized row covers the six statuses. |
 | `HandshakeReject_MapsNameMismatchToProtocolMismatch` | A protocol mismatch reject maps to the typed stop reason. | A `NameMismatch` reject stops the endpoint with `ProtocolMismatch` and no connection notification. | The reject status mapping is owned by this layer. |
 
 ## Planned
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| An `OnDisconnected` handler exception is logged and swallowed, so the stop still completes. | This layer | The exception isolation in the disconnect notification is not covered. |
 | A `FailHard` before the start attempt notifies no reliable callback. | This layer | The constructed-stage hard failure is owned by the root layer; the reliable-specific latch state is not asserted. |
 
 ## Deferred by design
@@ -38,7 +43,6 @@
 | The inherited keep-alive background loop. | Keep-alive is disabled in the reliable client double; the loop wrapper uses real time and is out of scope. |
 | Real transport connect and teardown. | Covered by the transport suites and the carrier integration tests. |
 | Real timing and socket failures. | The suite uses deterministic seams. |
-| A Direct `RawReliable` carrier. | Both the `tcp` and `direct` RawReliable carriers exist. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
 
 ## Notes

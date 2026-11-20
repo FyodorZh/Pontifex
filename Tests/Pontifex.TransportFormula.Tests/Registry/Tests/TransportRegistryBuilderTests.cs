@@ -350,6 +350,29 @@ public sealed class TransportRegistryBuilderTests
     }
 
     [Test]
+    public void RegisterTransport_WithSharedStructSchema_ValidatesItOnceAndReusesIt()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+        var shared = RegistryTestData.Schema(
+            RegistryTestData.CreateStringField("value", required: true));
+
+        builder.RegisterTransport(RegistryTestData.Registration(
+            "alpha",
+            RegistryTestData.TypeA,
+            Array.Empty<string>(),
+            RegistryTestData.CreateStructParam("first", shared),
+            RegistryTestData.CreateStructParam("second", shared)));
+
+        var constructor = builder.Build().FindCanonical("alpha")!;
+        var first = ((StructParam)constructor.Params[0]).Schema;
+        var second = ((StructParam)constructor.Params[1]).Schema;
+
+        Assert.That(first, Is.SameAs(second),
+            "one source schema instance must produce one normalized instance");
+        Assert.That(first.Fields.Select(f => f.Name), Is.EqualTo(new[] { "value" }));
+    }
+
+    [Test]
     public void RegisterTransport_NormalizesArrayFieldMetadata()
     {
         var builder = RegistryTestData.NewStandardBuilder();

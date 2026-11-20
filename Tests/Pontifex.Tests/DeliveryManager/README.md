@@ -22,12 +22,12 @@ Root subject group (tightly coupled by composition):
 - `Pontifex.Delivery.MessageMerger`
 - `Pontifex.Delivery.RetryDeliveryScheduler`
 
-The group is one subject because the components have no independent life: `DeliveryManager`
-constructs the serializer, deduplicator, dispatcher, splitter, merger, and packer in its own
-constructor; `DeliverySortingManager` wraps a delivery manager; `DeliveryDispatcher` consumes an
-`IDeliveryAttemptScheduler`; and `DeliverySorter<TParcel>` is the ordering primitive underneath
-`DeliverySortingManager`. Testing one component's contract without the others would leave the
-composed contract unproven.
+The group is one subject because the components are composed and sequenced by `DeliveryManager` in
+production: `DeliveryManager` constructs the serializer, deduplicator, dispatcher, splitter,
+merger, and packer in its own constructor; `DeliverySortingManager` wraps a delivery manager; and
+`DeliveryDispatcher` consumes an `IDeliveryAttemptScheduler`. The ordering and retry primitives are
+still constructed standalone in their own fixtures so their contracts can be pinned in isolation,
+but they have no independent production lifecycle.
 
 ## Contract references
 
@@ -98,15 +98,15 @@ There are currently no groups under `Tests/`.
 
 ## Harness layout and sharing
 
-Harness contains stubs, recording doubles, test buffers, and manual drivers. The doubles are
+Harness contains an abstract fixture base and a pool-tracking adapter. The doubles are
 hand-written.
 
-- `Harness/TrackedResources.cs` wraps the per-test byte-array and collectable pools and attaches a
-  `MultiRefResourceMonitor` to every rented resource. `TrackedFixture` creates it per test and
-  asserts at teardown that every resource was released exactly once.
+- `Harness/TrackedResources.cs` wraps the per-test byte-array and collectable pools. It tracks
+  `IMultiRefResource_Debug` instances, de-duplicated by monitor identity, and asserts at fixture
+  teardown that every tracked resource was released exactly once.
 - `Harness/TrackedFixture.cs` is the base class for fixtures that use the pools. It creates a
   fresh `MemoryRental` per test, exposes `Pool` and `CPool`, lets a test register cleanup actions
-  (`AddCleanup`) and captured messages (`TrackCaptured`), and fails the test if a rented resource
+  (`AddCleanup`) and captured messages (`TrackCaptured`), and fails the test if a tracked resource
   is still alive or was released twice.
 - Double classes that are used by one fixture stay nested in that fixture (for example
   `RetryDeliverySchedulerTests.StubDeliveryTask`); they use no pools and do not derive from

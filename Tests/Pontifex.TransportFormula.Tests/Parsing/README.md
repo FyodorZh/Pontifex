@@ -2,9 +2,9 @@
 
 Contract tests for the Transport Formula lexical and syntax layer. The suite proves
 that the lexer and parser implement `grammar.md` and the parsing portions of
-`parsing.md` exactly: tokenization, quoted-string decoding, contextual `as`,
-AST shapes and spans, and every lexical and syntax error code, message, and
-offset.
+`parsing.md`: tokenization, quoted-string decoding, contextual `as`, AST shapes and
+spans, and the lexical and syntax error codes, messages, and offsets exercised by
+the deterministic corpus and conformance matrix.
 
 ## Suite type
 
@@ -24,9 +24,6 @@ production code. `InternalsVisibleTo("Pontifex.TransportFormula.Tests")` is part
 production project; no test-only production seam exists.
 
 ## Contract references
-
-Paths below reflect the split layout: formula sources live under
-`Pontifex.TransportFormula`, runtime sources under `Pontifex.Factory`.
 
 - [grammar.md](../../../Pontifex.TransportFormula/grammar.md) — normative syntax.
 - [parsing.md](../../../Pontifex.TransportFormula/parsing.md) — lexing, parser algorithms,

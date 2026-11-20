@@ -124,9 +124,9 @@ deferred by design. This README does not duplicate volatile coverage status.
 dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
   --filter "TestCategory=LowLevelTcpSocket"
 
-# Debug correctness (excludes Release-only probes)
+# Debug correctness (excludes Release-only, loopback, and real-timer facets)
 dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
-  -c Debug --filter "TestCategory=LowLevelTcpSocket&TestCategory!=LowLevelTcpSocket.Allocation&TestCategory!=LowLevelTcpSocket.Load"
+  -c Debug --filter "TestCategory=LowLevelTcpSocket&TestCategory!=LowLevelTcpSocket.Allocation&TestCategory!=LowLevelTcpSocket.Load&TestCategory!=LowLevelTcpSocket.Loopback&TestCategory!=LowLevelTcpSocket.Timing"
 
 # calibrated allocation budgets/baselines (Release only)
 dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
@@ -139,6 +139,14 @@ dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csp
 # harness self-tests only (excluded from the suite root category)
 dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
   --filter "TestCategory=LowLevelTcpSocket.Harness"
+
+# real loopback TCP facet
+dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
+  --filter "TestCategory=LowLevelTcpSocket.Loopback"
+
+# real timer/wall-clock deadline smokes
+dotnet test "Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj" \
+  --filter "TestCategory=LowLevelTcpSocket.Timing"
 ```
 
 ## Pinned dependency versions
@@ -359,9 +367,15 @@ through its fixture and the facet on the method.
   (`LowLevelTcpSocket.Load`) — calibrated managed-allocation probes/baselines and longer
   throughput/latency/retention probes. Both are calibrated for Release and must be run there; the
   Debug correctness run excludes them.
+- `TestCategories.Loopback` (`LowLevelTcpSocket.Loopback`) — the real loopback TCP fixtures
+  (`LoopbackSocketTests`, `LoopbackHalfClosePolicyTests`). They use real sockets, the real SPSC
+  source, and the installed pool; the deterministic correctness filter excludes them.
+- `TestCategories.Timing` (`LowLevelTcpSocket.Timing`) — deadline smokes that use the production
+  `SystemDeadlineScheduler` with real 40–200 ms budgets. They are load-sensitive and are excluded
+  from the deterministic correctness filter.
 
-Real loopback-socket checks (real TCP, real SPSC source, installed pool) are the methods of
-`Composition/LoopbackSocketTests`; they run in the normal suite and need no dedicated category.
+The remaining tests use scripted accessors, manual deadline/teardown seams, and a deterministic
+scheduler. Real loopback and real-timer checks are non-default facets per `Tests/RULES.md` TEST-10.
 
 Measurement fixtures: `AllocationMeasurer` (warmup + per-thread counter + thread-migration check),
 `NoCopyReceiveConsumer` (counts bytes/ops without copying or storing payload, releases in

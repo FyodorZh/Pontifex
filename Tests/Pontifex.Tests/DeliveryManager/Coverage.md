@@ -93,13 +93,13 @@
 | `ProcessIncoming_MalformedDeliveryReport_ReturnsFalse` | A non-user packet with an invalid report is rejected. | Malformed acknowledgements do not confirm deliveries. | The report declares five confirmations but carries none. |
 | `ProcessOutgoing_ProducesBuffer` | A scheduled message is emitted on the next pump. | Scheduling feeds the outgoing queue. | The captured message is released by the fixture. |
 | `RoundTrip_SingleChunk_ReceivedFires` | A single-chunk message is delivered with its id and payload. | End-to-end send/receive through two managers. | Payload is copied out; the handler owns and releases the received buffer inside the callback. |
-| `DuplicateInbound_ReceivedFiresOnce` | A retransmitted message is delivered once. | Inbound deduplication is active at the facade level. | The same wire message is processed twice. |
+| `DuplicateInbound_ReceivedFiresOnce` | A retransmitted message is delivered once. | The handler observes one message, and the duplicate still produces one outgoing delivery report. | The report assertion proves the ACK-always rule for duplicates; the report is a `false`-discriminated packet. |
 | `AckRoundTrip_DeliveredFires` | An acknowledgement round trip fires `Delivered` on the sender. | Delivery confirmation crosses the two managers. | Acknowledged id equals the scheduled id. |
 | `DeliveryFailure_FiresFailedToDeliver` | An unacknowledged message reports failure after retries. | The retry timeout is observable through the facade. | Timeout 50 ms, base interval 100 ms, second pump 200 ms later. |
 | `Clear_ThenProcessOutgoing_ProducesNothing` | `Clear` discards scheduled outgoing work. | A reset prevents stale transmissions. | — |
 | `ProcessIncoming_AfterClear_StillProcesses` | `Clear` does not break the inbound path. | Outgoing reset and inbound processing are independent. | A message scheduled before `Clear` is still delivered inbound. |
 | `MultipleSends_AllReceived` | Multiple scheduled messages are all delivered. | The pipeline handles a small burst. | Five messages, delivered through one pump. |
-| `ProcessIncoming_GarbageBytes_ReturnsFalse` | Malformed/truncated wire data is rejected. | Garbage does not throw or fire events. | The test supplies a `ushort` followed by a byte that cannot complete a message. |
+| `ProcessIncoming_GarbageBytes_ReturnsFalse` | The `isUser` discriminator must be a `bool`. | A packet whose first element is not a `bool` is rejected without delivering or throwing. | The test supplies a `ushort` first element, so the packet fails at the discriminator before it reaches the packer; the later receive guards are listed as planned. |
 | `ProcessIncoming_WireChunkIdBeyondWindow_ReturnsFalse` | A wire chunk id jump beyond the deduplication window is an overflow. | The facade rejects the packet without delivering or throwing. | Chunk id 2,000 against the 1,024-entry window. |
 | `ScheduleDelivery_EmptyData_RoundTripsEmptyPayload` | Zero-byte user data is valid. | Empty payloads survive packing, dispatch, and delivery. | The received payload is observed as an empty element list. |
 | `ProcessOutgoing_WithoutSchedule_ProducesNothing` | An idle manager emits nothing. | The pump is side-effect-free when there is no work. | — |
@@ -115,6 +115,7 @@
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|
 | `Flush_WhenEmpty_ProducesNothing` | Flushing with no confirmations emits nothing. | The reporter has no phantom output. | — |
+| `Flush_WhenMaximumIsSmallerThanOneConfirmation_EmitsOnePerPacket` | A tiny message budget must still make progress. | Two confirmations are emitted as two packets instead of looping on a zero-sized batch. | The computed batch size is clamped to one confirmation. |
 | `Flush_SingleReport_StartsWithDiscriminatorAndClears` | A flush prepends the non-user discriminator and clears pending confirmations. | The report is ready to send and is emitted once. | Message size 100 fits both confirmations in one packet. |
 | `Flush_WhenConfirmationsExceedPacket_SplitsIntoBatches` | Confirmations are split by the packet capacity. | Five confirmations with a two-per-packet limit produce 2 + 2 + 1. | Packet limit is derived from `(19 - 4 - 4) / 5 = 2`; removing the safety-margin subtraction would give 3. |
 | `Clear_DropsPendingConfirmations` | `Clear` discards accumulated confirmations. | Reset suppresses a pending report. | — |
@@ -183,8 +184,11 @@
 | `TryPeekDeliveryInfo_Empty_ReturnsFalse` | An empty list has no delivery info. | Malformed input is rejected. | — |
 | `TryPeekDeliveryInfo_SingleMissingId_ReturnsFalse` | A single-chunk prefix requires an id. | Truncated input is rejected. | — |
 | `TryPeekDeliveryInfo_MultiTruncated_ReturnsFalse` | A multi-chunk prefix requires a part id and an id. | Truncated multi-chunk input is rejected. | — |
+| `TryUnpackUserMessage_Empty_ReturnsFalse` | A user message requires a parts number. | An empty body is rejected. | — |
+| `TryUnpackUserMessage_SingleMissingId_ReturnsFalse` | A single-chunk body requires the delivery id. | A body with only the parts number is rejected. | — |
+| `TryUnpackUserMessage_MultiMissingPayload_ReturnsFalse` | A multi-chunk body requires a payload element. | A body with part id and delivery id but no payload is rejected. | — |
 | `Clear_DoesNotThrow` | `Clear` is safe on a packer with no partial inbound state. | Reset does not destabilise the packer. | The packer has just produced outbound chunks. |
-| `Pack_ReleasesDataOnSuccess` | A successful pack consumes the caller's data list. | The caller must not release the input after a successful pack. | Observed through the tracked pool: the input list's reference count reaches zero. |
+| `Pack_ReleasesDataOnSuccess` | A successful pack consumes the caller's data list. | The caller must not release the input after a successful pack. | The test reads the input list's `IMultiRefResource_Debug.RefCount` directly; the tracked pool is not involved. |
 
 ### MessageSplitter
 
@@ -211,7 +215,11 @@
 
 ## Planned
 
-No known missing tests in this layer. New gaps must be added here with an owner and a reason.
+| Missing test or gap | Owner | Reason |
+|---|---|---|
+| Facade `BufferOverflow` → `FailedToDeliver` translation. | This layer | The dispatcher capacity case is deferred, but the facade's event translation and release ownership on that path are untested. |
+| Late acknowledgement after retry exhaustion. | This layer | The failed → late-ACK transition must not fire `Delivered`; the dispatcher-level failure test stops at `FailedToDeliver`. |
+| `Deduplicator` with a non-positive capacity. | This layer | The constructor accepts any capacity; capacity zero would overflow on the first fill. The production manager never passes it. |
 
 ## Deferred by design
 
@@ -221,7 +229,7 @@ No known missing tests in this layer. New gaps must be added here with an owner 
 | Real time, sleeping, timers, and wall clock. | Every scheduling entry point accepts an explicit `DateTime`; the default suite stays deterministic. |
 | Real transports, sockets, and networks. | Covered by the transport and endpoint suites; this suite tests the delivery subsystem in isolation. |
 | Wire compatibility with an independent peer implementation. | Interoperability is an integration concern, not a unit contract of these types. |
-| Production capacity values (5,000 pending deliveries, 1,024 dedup window). | Tests use small capacities to stay fast and deterministic; the arithmetic and boundary behaviour are covered at small scale. |
+| Production capacity values (5,000 pending deliveries, 1,024 dedup window). | Most tests use small capacities to stay fast and deterministic. The deduplication-window and wire-chunk-id wrap tests use the production constants where the constant itself is the contract. |
 | Shared primitives `DeliveryId`, `UnionDataList`, and zig-zag varint encoding. | They have loose tests at the project root and are not part of this suite's selected subject group. |
 | Dispatcher buffer overflow at the production capacity. | Reaching 5,000 pending deliveries adds no contract meaning beyond the small-capacity overflow test. |
 | `DeliveryInfoSerializer.CreateDeliveryReport` with a count larger than the supplied list. | The method is a trusted internal API; an out-of-range count is a programming error, not a recoverable input. |

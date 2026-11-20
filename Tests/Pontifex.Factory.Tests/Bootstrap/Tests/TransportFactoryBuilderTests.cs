@@ -38,10 +38,17 @@ namespace Pontifex.Factory.Tests.Bootstrap
             var first = BootstrapTestData.NewBuilder();
             var second = TransportFactoryBootstrap.CreateBuilder();
 
-            first.Build();
+            first.RegisterTransport(BootstrapTestData.CoreRegistration(
+                "alpha",
+                BootstrapTestData.TypeA,
+                _ => new FakeTransport(BootstrapTestData.TypeA)));
+            var firstFactory = first.Build();
 
-            // The second builder never registered the types, so its factory must
-            // not see them; this proves there is no hidden static registry.
+            Assert.That(firstFactory.Resolve("alpha()").Error, Is.Null,
+                "the first builder must resolve the transport it registered");
+
+            // The second builder never registered the transport, so its factory must
+            // not see it; this proves there is no hidden static registry.
             var result = second.Build().Resolve("alpha()");
 
             Assert.That(result.Formula, Is.Null);
@@ -69,6 +76,23 @@ namespace Pontifex.Factory.Tests.Bootstrap
             var exception = Assert.Throws<RegistrationException>(
                 () => builder.Registry.RegisterType(
                     new TransportTypeInfo(BootstrapTestData.TypeA, "TypeX")));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_BUILDER_SEALED"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
+            Assert.That(exception.Error.Message, Is.EqualTo("registry builder has already been built"));
+        }
+
+        [Test]
+        public void RegisterTransport_AfterBuild_ThrowsBuilderSealed()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+            builder.Build();
+
+            var exception = Assert.Throws<RegistrationException>(
+                () => builder.RegisterTransport(BootstrapTestData.CoreRegistration(
+                    "late",
+                    BootstrapTestData.TypeA,
+                    _ => new FakeTransport(BootstrapTestData.TypeA))));
 
             Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_BUILDER_SEALED"));
             Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));

@@ -267,6 +267,48 @@ public sealed class RawReliableWrapperTests
     }
 
     [Test]
+    public void ServerVersionMismatch_RejectsClientSkipsFactoryAndDisconnectsAfterLinger()
+    {
+        using var pair = new WrapperPair(clientVersion: 2);
+        pair.Start();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ClientHandler.ConnectedCount, Is.Zero);
+            Assert.That(pair.ClientHandler.Events, Is.EqualTo(new[] { "stopped" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.Factory.Calls, Is.Zero);
+            Assert.That(pair.ServerHandler, Is.Null);
+            Assert.That(Payload.Describe(pair.ServerSession!.Endpoint.Sent[0]), Is.EqualTo(
+                new[] { "h:1", "s:layer", "b:2", "s:version mismatch" }));
+            Assert.That(pair.Clock.PendingDelays, Is.EqualTo(new[] { TimeSpan.FromSeconds(2) }));
+        });
+
+        pair.Clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.That(pair.ServerSession!.Endpoint.Connected, Is.False,
+            "the linger must disconnect the inner session exactly once");
+        Assert.That(pair.Clock.PendingCount, Is.Zero);
+    }
+
+    [Test]
+    public void ServerNameMismatch_RejectsClientSkipsFactory()
+    {
+        using var pair = new WrapperPair(clientName: "other");
+        pair.Start();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ClientHandler.ConnectedCount, Is.Zero);
+            Assert.That(pair.ClientHandler.Events, Is.EqualTo(new[] { "stopped" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.Factory.Calls, Is.Zero);
+            Assert.That(pair.ServerHandler, Is.Null);
+            Assert.That(Payload.Describe(pair.ServerSession!.Endpoint.Sent[0]), Is.EqualTo(
+                new[] { "h:1", "s:layer", "b:2", "s:name mismatch" }));
+        });
+    }
+
+    [Test]
     public void CustomTailRejection_StopsClientWithHandshakeRejectedAndSkipsFactory()
     {
         var serverLogic = new RecordingWrapperLogic(Log, MemoryRental.Shared) { CheckResult = false };

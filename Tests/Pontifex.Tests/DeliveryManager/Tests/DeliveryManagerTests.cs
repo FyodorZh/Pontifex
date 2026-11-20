@@ -144,6 +144,11 @@ namespace Pontifex.Tests.Delivery
             receiver.ProcessIncoming(msg);
 
             Assert.That(received, Is.EqualTo(1));
+
+            var reports = Capture(receiver);
+            Assert.That(reports, Has.Count.EqualTo(1));
+            Assert.That(reports[0].TryPopFirst(out bool isUser), Is.True);
+            Assert.That(isUser, Is.False);
         }
 
         [Test]

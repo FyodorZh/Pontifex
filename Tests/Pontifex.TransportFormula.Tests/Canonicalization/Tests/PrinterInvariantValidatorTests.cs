@@ -13,6 +13,55 @@ namespace Pontifex.TransportFormula.Tests.Canonicalization;
 public sealed class PrinterInvariantValidatorTests
 {
     [Test]
+    public void Validate_WhenNestedTransportMissesRequiredParameter_ReportsNestedScheme()
+    {
+        var alpha = AlphaConstructor();
+        var input = Param(alpha, "input");
+        var beta = CanonicalizationTestData.Constructor(
+            "beta",
+            CanonicalizationTestData.TypeB,
+            CanonicalizationTestData.TransportParam(
+                "value",
+                CanonicalizationTestData.AnySet(),
+                required: true,
+                positional: true));
+        var nested = CanonicalizationTestData.Transport(beta);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                alpha,
+                CanonicalizationTestData.Bind(input, nested)));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_MISSING_REQUIRED_PARAM",
+            "resolved transport 'beta' is missing required parameter 'value'");
+    }
+
+    [Test]
+    public void Validate_WhenFormulaRootIsNull_ReportsUnspecifiedInvariantViolation()
+    {
+        AssertPrinterError(
+            new ResolvedFormula(null!),
+            "E_PRN_INCONSISTENT_TREE",
+            "resolved tree is inconsistent: unspecified invariant violation");
+    }
+
+    [Test]
+    public void Validate_WhenCastInnerIsNull_ReportsUnspecifiedInvariantViolation()
+    {
+        var cast = new ResolvedCast(
+            null!,
+            CanonicalizationTestData.TypeA,
+            new SourceSpan(0, 0));
+
+        AssertPrinterError(
+            CanonicalizationTestData.Formula(cast),
+            "E_PRN_INCONSISTENT_TREE",
+            "resolved tree is inconsistent: unspecified invariant violation");
+    }
+
+    [Test]
     public void Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam()
     {
         var constructor = AlphaConstructor();

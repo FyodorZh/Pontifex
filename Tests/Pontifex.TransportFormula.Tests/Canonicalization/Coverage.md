@@ -111,6 +111,9 @@
 | Test | Subject | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|---|
 | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam` | `PrinterInvariantValidator` | §10, §13.5 | A missing required parameter reports `E_PRN_MISSING_REQUIRED_PARAM`. | — |
+| `Validate_WhenNestedTransportMissesRequiredParameter_ReportsNestedScheme` | `PrinterInvariantValidator` | §10 depth-first validation | A missing required parameter inside a nested transport is reported for the nested scheme. | Proves validation recurses into expression-valued parameters. |
+| `Validate_WhenFormulaRootIsNull_ReportsUnspecifiedInvariantViolation` | `PrinterInvariantValidator` | §10.1, §13.5 | A null formula root is reported as an inconsistent tree with the unspecified-invariant detail. | Reachable only by constructing the DTO directly; the resolver never produces it. |
+| `Validate_WhenCastInnerIsNull_ReportsUnspecifiedInvariantViolation` | `PrinterInvariantValidator` | §10.1, §13.5 | A cast with a null inner expression is reported as an inconsistent tree with the unspecified-invariant detail. | Complements the null-root guard. |
 | `Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder` | `PrinterInvariantValidator` | §10, §13.5 | Multiple missing required parameters report the first in declaration order. | — |
 | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam` | `PrinterInvariantValidator` | §10, §13.5 | A provided parameter absent from metadata reports `E_PRN_UNKNOWN_PARAM`. | — |
 | `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference` | `PrinterInvariantValidator` | §10.2, §13.5 | A structurally equal but recreated parameter is unknown; matching is by reference. | — |
@@ -235,7 +238,8 @@ phase `Printing`, and no span.
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| None currently identified. | Canonicalization layer | New tests are added with the contract change that requires them. |
+| `StringParam` printability (`EnsurePrintable`) at validator level. | Canonicalization layer | CR is only tested through struct fields and array elements. |
+| Remaining accessor-kind and non-identifier-name branches. | Canonicalization layer | String-field, nested-struct-field, and non-identifier names are not combined with a violation. |
 
 ## Deferred by design
 
@@ -267,9 +271,10 @@ phase `Printing`, and no span.
   a null span.
 - Parameterized methods count as one row in this table; their `TestCaseData`
   rows cover the individual examples listed in the description.
-- The standard registry fixture is the `parsing.md` §14 registry plus named
-  harness extensions documented in the suite README. Extensions exist only to
-  reach canonicalization branches the §14 table does not exercise.
+- The standard registry fixture follows the `parsing.md` §14 registry shape for
+  `alpha`, `beta`, `gamma`, `outer`, and `structy`, with named harness extensions
+  for numeric and array cases. It is not a verbatim copy: `dual` and
+  `numberStruct.nested` are not registered.
 - Registration lowercases scheme names. The §14 name `emptyStruct` is therefore
   printed as `emptystruct`; the expected output reflects the normalized metadata
   view required by `parsing.md` §6.1 and §10.2.

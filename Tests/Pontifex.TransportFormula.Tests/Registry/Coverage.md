@@ -52,7 +52,8 @@
 | `RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange` | §6.5, §6.7 rule 7, §13.4 | Decimal field ranges are validated in schema order. | Exact message asserted. |
 | `RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst` | §6.7 rules 5, 7 | Parameter scalar ranges are validated before struct schemas. | Cross-pass order. |
 | `RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst` | §6.7 rules 5-6 | A full scalar-range pass precedes the transport-list-range pass. | Later scalar error wins over an earlier list error. |
-| `RegisterTransport_NormalizesArrayFieldMetadata` | §6.5, §6.7 rule 7 | Array fields keep names, order, count ranges, element types, and element ranges. | `StringType` validators are preserved. |
+| `RegisterTransport_NormalizesArrayFieldMetadata` | §6.5, §6.7 rule 7 | Array fields keep names, order, count ranges, element types, and element ranges. | A `StringType` validator is retained (asserted non-null); its invocation is not observed here. |
+| `RegisterTransport_WithSharedStructSchema_ValidatesItOnceAndReusesIt` | §6.7 rule 7 — each distinct `StructSchema` instance is visited once | One source schema referenced by two parameters produces one normalized schema instance shared by both parameters. | The validator uses a reference-keyed memo; identity assertion proves the second visit reused the first result. |
 | `RegisterTransport_WithNegativeArrayMinimum_ThrowsInvalidArrayRange` | §6.5, §6.7 rule 7, §13.4 | A negative array minimum is rejected with the unbounded maximum spelling. | Exact message asserted. |
 | `RegisterTransport_WithArrayMaximumBelowMinimum_ThrowsInvalidArrayRange` | §6.5, §6.7 rule 7, §13.4 | `Max < Min` for an array field is rejected with both bounds. | Exact message asserted. |
 | `RegisterTransport_WithUnsortedIntegerArrayElementRange_ThrowsInvalidIntegerRange` | §6.5, §6.7 rule 7, §13.4 | Unsorted integer array element bounds reach `E_REG_INVALID_INTEGER_RANGE`. | Exact message asserted. |
@@ -130,7 +131,9 @@ phase `Registration`, and no span.
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| None currently identified. | Registry layer | New tests are added with the contract change that requires them. |
+| Expected-member ordering across parameters and within one set. | Registry layer | The only ordering test has one parameter with one expected member. |
+| Registry-layer null/invalid guards. | Registry layer | Null `TransportTypeInfo`, null registration/constructor, `GetCanonicalName` outside the catalog, and null scheme are defensive branches. |
+| `Min == Max` range boundaries. | Registry layer | Only inverted bounds are tested. |
 
 ## Deferred by design
 
@@ -138,6 +141,7 @@ phase `Registration`, and no span.
 |---|---|
 | Two catalog entries with the same `TransportType` value and different names. | `parsing.md` §6.6 requires unique names, not unique type values; the behavior for repeated values is unspecified, so the suite does not pin it. The implementation keeps the first canonical name for type-to-name lookup. |
 | Unsupported custom `Param` or `StructField` subclasses. | The public DTO contract defines `StringParam`, `TransportParam`, `TransportListParam`, `StructParam` and `StringField`, `NestedStructField` only; a foreign subtype is outside the contract. |
+| Self-referencing (cyclic) `StructSchema`. | `StructSchema` copies its field list in the constructor, so a field cannot reference its own schema through the public API. The validator's cycle-safe memo is therefore unobservable from this suite. |
 | Invalid `SuggestedAliases` identifiers. | `SuggestedAliases` are hints and are not registered or validated as part of the registration catalogue; only aliases passed to `RegisterTransport` are policy. |
 | Concurrency and concurrent reads. | The built registry is an immutable snapshot, but proving thread-safety, throughput, and allocation behavior is non-functional and belongs to a stress category. |
 | Culture-sensitive case folding. | `grammar.md` §3 and `parsing.md` §6.6 define ASCII identifiers and ASCII case-insensitive lookup. |

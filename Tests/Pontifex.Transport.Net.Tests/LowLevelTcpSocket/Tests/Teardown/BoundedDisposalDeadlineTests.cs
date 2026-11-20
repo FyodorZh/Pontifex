@@ -227,6 +227,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
         }
 
         [Test]
+        [Category(TestCategories.Timing)]
         public async Task BoundedDisposeAsync_ForceFinalizesWithPendingSend()
         {
             using var harness = new LowLevelSocketHarness();
@@ -245,6 +246,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
         }
 
         [Test]
+        [Category(TestCategories.Timing)]
         public async Task BoundedDisposeAsync_ForceFinalizesWithPendingReceive()
         {
             using var harness = new LowLevelSocketHarness();

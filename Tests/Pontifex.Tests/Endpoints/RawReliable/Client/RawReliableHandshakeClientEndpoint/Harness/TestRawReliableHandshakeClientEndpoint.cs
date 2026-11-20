@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.Raw.Reliable;
@@ -102,6 +103,29 @@ internal sealed class TestRawReliableHandshakeClientEndpoint : RawReliableHandsh
             messageMaxByteSize ?? _messageMaxByteSize);
         response.PutFirst((byte)MessageType.HandshakeResponseMessage);
         ExposedProcessInbound(response);
+        DrainAll();
+    }
+
+    /// <summary>
+    /// Feeds a handshake response with an arbitrary agreed maximum, including values below 1 that the
+    /// production builder rejects.
+    /// </summary>
+    public void FeedHandshakeResponse(short version, string name, int messageMaxByteSize)
+    {
+        var response = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+        response.PutLast(new UnionData(version));
+        response.PutLast(new UnionData(new MultiRefByteArray(Encoding.UTF8.GetBytes(name))));
+        response.PutLast(new UnionData(messageMaxByteSize));
+        FeedHandshakeResponsePayload(response);
+    }
+
+    /// <summary>
+    /// Feeds an arbitrary payload as a handshake-response frame through the inbound dispatch.
+    /// </summary>
+    public void FeedHandshakeResponsePayload(UnionDataList payload)
+    {
+        payload.PutFirst((byte)MessageType.HandshakeResponseMessage);
+        ExposedProcessInbound(payload);
         DrainAll();
     }
 

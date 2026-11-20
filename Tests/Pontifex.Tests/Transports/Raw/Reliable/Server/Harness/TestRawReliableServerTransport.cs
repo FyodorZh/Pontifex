@@ -23,6 +23,7 @@ internal sealed class TestRawReliableServerTransport
         int maxActiveSessions = 2,
         int tickPeriodMs = 100,
         int messageMaxByteSize = 1024,
+        bool disconnectionByTimeoutCheck = true,
         ILogger? logger = null,
         IMemoryRental? memory = null)
         : base(
@@ -35,7 +36,12 @@ internal sealed class TestRawReliableServerTransport
             tickPeriodMs)
     {
         MessageMaxByteSize = messageMaxByteSize;
+        _disconnectionByTimeoutCheck = disconnectionByTimeoutCheck;
     }
+
+    private readonly bool _disconnectionByTimeoutCheck;
+
+    protected override bool DisconnectionByTimeoutCheck => _disconnectionByTimeoutCheck;
 
     public override int MessageMaxByteSize { get; }
 

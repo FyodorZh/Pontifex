@@ -146,6 +146,16 @@ namespace Pontifex.Factory.Tests.Bootstrap
         }
 
         [Test]
+        public void Canonicalize_WithNullFormula_ThrowsEmptyInput()
+        {
+            var exception = Assert.Throws<FactoryException>(
+                () => NewFactory().Canonicalize(null!));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_SYN_EMPTY_INPUT"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Parsing));
+        }
+
+        [Test]
         public void Compile_WithValidFormula_PassesResolvedTreeToTheCompiler()
         {
             var compiler = new RecordingCompiler();
@@ -182,6 +192,26 @@ namespace Pontifex.Factory.Tests.Bootstrap
             Assert.That(exception!.Error.Code, Is.EqualTo("E_SEM_UNKNOWN_SCHEME"));
             Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Resolution));
             Assert.That(compiler.Calls, Is.Zero);
+        }
+
+        [Test]
+        public void Compile_WithNullFormula_ThrowsEmptyInputWithoutInvokingTheCompiler()
+        {
+            var compiler = new RecordingCompiler();
+
+            var exception = Assert.Throws<FactoryException>(
+                () => NewFactory().Compile(null!, compiler));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_SYN_EMPTY_INPUT"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Parsing));
+            Assert.That(compiler.Calls, Is.Zero);
+        }
+
+        [Test]
+        public void Compile_WithNullCompiler_ThrowsArgumentNullException()
+        {
+            Assert.Throws<ArgumentNullException>(
+                () => NewFactory().Compile<string>("alpha(1)", null!));
         }
 
         [Test]

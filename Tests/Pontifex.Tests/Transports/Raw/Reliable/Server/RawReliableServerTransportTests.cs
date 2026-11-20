@@ -25,13 +25,15 @@ public sealed class RawReliableServerTransportTests
         string name = "TestRawReliableServerTransport",
         int maxConcurrentHandshakes = 2,
         int maxActiveSessions = 2,
-        int tickPeriodMs = 100)
+        int tickPeriodMs = 100,
+        bool disconnectionByTimeoutCheck = true)
     {
         return new TestRawReliableServerTransport(
             name,
             maxConcurrentHandshakes,
             maxActiveSessions,
-            tickPeriodMs);
+            tickPeriodMs,
+            disconnectionByTimeoutCheck: disconnectionByTimeoutCheck);
     }
 
     private static SessionFixture CreateSession()
@@ -219,7 +221,7 @@ public sealed class RawReliableServerTransportTests
     }
 
     [Test]
-    public void Start_AfterStopBeforeFirstStart_StillStarts()
+    public void Stop_BeforeStart_DoesNotCallStopCarrierAndAllowsStart()
     {
         var transport = Create();
         Initialize(transport);
@@ -227,7 +229,9 @@ public sealed class RawReliableServerTransportTests
         Assert.That(transport.Stop(Reason()), Is.True);
 
         Assert.That(transport.StopCarrierCalls, Is.Zero);
+        Assert.That(transport.Driver.FinishCalls, Is.Zero);
         Assert.That(transport.IsValid, Is.True);
+        Assert.That(transport.IsStarted, Is.False);
 
         Assert.That(transport.Start(_ => { }), Is.True);
 
@@ -358,6 +362,7 @@ public sealed class RawReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void ConcurrentAdmissionAttempts_NeverExceedConfiguredLimits()
     {
         var transport = Create(maxConcurrentHandshakes: 8, maxActiveSessions: 8);
@@ -735,17 +740,6 @@ public sealed class RawReliableServerTransportTests
     }
 
     [Test]
-    public void Stop_WhenStarted_FinishesDriverSoAThreadBasedDriverCanReleaseItsThread()
-    {
-        var transport = Create();
-        InitializeAndStart(transport);
-
-        Assert.That(transport.Stop(Reason()), Is.True);
-
-        Assert.That(transport.Driver.FinishCalls, Is.EqualTo(1));
-    }
-
-    [Test]
     public void Stop_WhenStarted_StopsEveryRegisteredSessionWithTransportReasonAndNotGentle()
     {
         var transport = Create(maxActiveSessions: 2);
@@ -789,23 +783,6 @@ public sealed class RawReliableServerTransportTests
         Assert.That(fixture.Handler.StoppedReason, Is.SameAs(sessionReason));
         Assert.That(transport.OnSessionStoppedCalls, Is.EqualTo(1));
         Assert.That(transport.ExposedActiveSessions, Is.Zero);
-    }
-
-    [Test]
-    public void Stop_BeforeStart_DoesNotCallStopCarrierAndAllowsStart()
-    {
-        var transport = Create();
-        Initialize(transport);
-
-        Assert.That(transport.Stop(Reason()), Is.True);
-
-        Assert.That(transport.StopCarrierCalls, Is.Zero);
-        Assert.That(transport.Driver.FinishCalls, Is.Zero);
-        Assert.That(transport.IsValid, Is.True);
-        Assert.That(transport.IsStarted, Is.False);
-
-        Assert.That(transport.Start(_ => { }), Is.True);
-        Assert.That(transport.StartCarrierCalls, Is.EqualTo(1));
     }
 
     [Test]
@@ -936,13 +913,10 @@ public sealed class RawReliableServerTransportTests
     }
 
     [Test]
-    public void Ticker_IsNotCreatedWhenStartFails()
+    public void Ticker_WhenDisconnectionByTimeoutCheckIsDisabled_IsNotCreatedAfterStart()
     {
-        var transport = Create();
-        transport.StartCarrierBehavior = static () => false;
-        Initialize(transport);
-
-        Assert.That(transport.Start(_ => { }), Is.False);
+        var transport = Create(disconnectionByTimeoutCheck: false);
+        InitializeAndStart(transport);
 
         Assert.That(transport.LogicDriverFactoryCalls, Is.Zero);
         Assert.That(transport.Driver.StartCalls, Is.Zero);

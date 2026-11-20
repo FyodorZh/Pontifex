@@ -15,6 +15,10 @@ converter types:
 - `RawUnreliableNoAckToRawReliableClient`
 - `RawUnreliableNoAckToRawReliableServer`
 
+The internal `ConverterHandshake` helper is part of the same subject group because the client and
+server encode and decode their handshake through it. The suite file abbreviates the group to
+`RawReliableConverterTests`.
+
 Root subject: the built-in converter group above.
 
 ## Contract references
@@ -67,7 +71,7 @@ There are no groups. All test files live directly under `Tests/`.
 
 `Harness/` contains hand-written doubles only:
 
-- `FakeRawUnreliableNetwork`, `FakeRawUnreliableNoAckClient`,
+- `FakeRawUnreliableNetwork`, `FakeEndPoint`, `FakeRawUnreliableNoAckClient`,
   `FakeRawUnreliableNoAckServer`, and the client/server endpoints — a
   synchronous in-process raw-unreliable pair. They create no sockets or
   background threads; every send is delivered on the caller's thread.
@@ -75,8 +79,6 @@ There are no groups. All test files live directly under `Tests/`.
   delivery-manager wire format directly. It lets a test send a handcrafted
   handshake request or withhold/replace a handshake response without a second
   converter.
-- `RecordingRawUnreliableHandler` — a raw-unreliable handler that records
-  received payloads and can answer with a scripted callback.
 - `RecordingRawReliableClientHandler`, `RecordingRawReliableServerHandler`, and
   `RecordingRawReliableServerHandlerFactory` — recording application handlers
   that expose lifecycle counts, ordered lifecycle entries, endpoint references,
@@ -138,8 +140,10 @@ changes shape, see [Tests/RULES.md](../../RULES.md).
 
 ## Out of scope
 
-- Generic converter-graph path selection and compilation wiring; those belong
-  to the `Factory.Bootstrap` and `Factory.Compilation` suites.
+- Generic converter-graph path selection and compilation wiring; the loose
+  `Tests/Pontifex.Factory.Tests/ConvertersGraphTests.cs` covers path selection,
+  and bootstrap/compilation wiring belongs to the `Factory.Bootstrap` and
+  `Factory.Compilation` suites.
 - Real unreliable carriers (UDP, direct), real sockets, loss, reordering, and
   duplication. This suite uses a synchronous pair and exercises the handshake
   and lifecycle contracts only.

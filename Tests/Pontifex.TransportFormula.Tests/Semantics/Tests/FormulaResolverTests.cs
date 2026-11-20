@@ -91,6 +91,32 @@ public sealed class FormulaResolverTests
     }
 
     [Test]
+    public void Resolve_WithTopLevelExpectedType_SelectsMatchingAlias()
+    {
+        var formula = SemanticsAssertions.ResolveSucceeds(
+            SemanticsTestData.StandardResolver(),
+            "alpha(x)",
+            SemanticsTestData.Exactly(SemanticsTestData.TypeB));
+        var root = SemanticsAssertions.AsTransport(formula.Root);
+
+        Assert.That(root.Constructor.Name, Is.EqualTo("beta"));
+        Assert.That(root.Type, Is.EqualTo(SemanticsTestData.TypeB));
+    }
+
+    [Test]
+    public void Resolve_WithTopLevelExpectedTypeWithoutVariant_ReportsNoVariant()
+    {
+        SemanticsAssertions.ResolveError(
+            SemanticsTestData.StandardResolver(),
+            "alpha(x)",
+            SemanticsTestData.Exactly(SemanticsTestData.TypeC),
+            "E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE",
+            0,
+            "scheme 'alpha' has no variant for expected transport type TypeC; "
+            + "available: alpha (TypeA), beta (TypeB)");
+    }
+
+    [Test]
     public void Resolve_ForUnionExpectedSet_PrefersCanonicalAfterFiltering()
     {
         var formula = SemanticsAssertions.ResolveSucceeds(

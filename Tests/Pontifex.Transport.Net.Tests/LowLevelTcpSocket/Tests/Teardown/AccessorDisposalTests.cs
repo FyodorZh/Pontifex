@@ -34,6 +34,21 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
         }
 
         [Test]
+        public async Task Close_AfterConstruction_PublishesDisposedAndDisposesAccessor()
+        {
+            using var harness = new LowLevelSocketHarness();
+
+            harness.Socket.Close();
+
+            var result = await TestWait.GetResultAsync(harness.Socket.Completion);
+
+            Assert.That(result.Reason, Is.EqualTo(SocketCompletionReason.Disposed),
+                "Close is the best-effort synchronous alias for Dispose");
+            Assert.That(harness.Accessor.DisposeCount, Is.EqualTo(1),
+                "the reserved physical teardown disposes the accessor exactly once");
+        }
+
+        [Test]
         public async Task LocalDispose_DisposalFailure_IsSecondary()
         {
             using var harness = new LowLevelSocketHarness();

@@ -18,7 +18,7 @@
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|
-| `TryLex_WithAllWhitespaceKinds_SkipsThemAndReportsEndOfInput` | `grammar.md` §3 WS; `parsing.md` §3.1 | SP, HTAB, CR, and LF are insignificant and the input ends with one EOF token at input length. | EOF has zero length and empty text. |
+| `TryLex_WithAllWhitespaceKinds_SkipsThemAndReportsEndOfInput` | `grammar.md` §3 WS; `parsing.md` §3.1 | SP, HTAB, CR, and LF are insignificant and the input ends with one EOF token at input length. | EOF has zero length; its text is not asserted. |
 | `TryLex_WithSurroundingWhitespace_ProducesTokensAtUtf16Offsets` | `parsing.md` §3.1–3.2; offset model | Whitespace is skipped between tokens and token offsets are 0-based UTF-16 offsets. | Exact offsets are asserted. |
 | `TryLex_ForBareScalarExamples_ProducesOneWordToken` | `grammar.md` §4.1; `parsing.md` §3.2 | Maximal bare runs become one `Word`; identifier shape is not imposed by the lexer. | Parameterized cases: `alpha`, `alpha-beta`, `alpha_beta`, `127.0.0.1:9000`, `a\b`, `a|b`, `a+b`, `as`, `123`. |
 | `TryLex_ForPunctuation_ProducesExpectedKindsAtConsecutiveOffsets` | `parsing.md` §3.1 | Every punctuation character maps one-to-one to its token kind at a one-code-unit span. | — |
@@ -36,6 +36,8 @@
 | `TryLex_WithInvalidEscapeOfSurrogatePair_RendersPairInMessage` | `parsing.md` §3.3, §13.1 | A backslash followed by a valid surrogate pair is one invalid escape and renders both code units in the message. | Exact message asserted. |
 | `TryLex_WithUnpairedSurrogateBeforeRawLineFeed_ReturnsInvalidUnicode` | `parsing.md` §13.1 precedence | An unpaired surrogate is reported before a following raw newline. | — |
 | `TryLex_WithBackslashBeforeLineFeed_ReturnsInvalidEscapeNotRawNewline` | `parsing.md` §13.1 precedence | A backslash consumes the following code unit even when it is CR/LF, so invalid-escape wins over raw-newline. | — |
+| `TryLex_WithBackslashBeforeCarriageReturn_ReturnsInvalidEscapeNotRawNewline` | `parsing.md` §13.1 precedence, §14.5 | A backslash followed by CR is an invalid escape at the backslash; it is not reported as a raw newline. | Completes the CR/LF pair required by the conformance matrix. |
+| `TryLex_WithNullSource_ReturnsEmptyInputError` | `FormulaLexer.TryLex` null input | A null source is treated as empty input and reported as `E_SYN_EMPTY_INPUT` with phase `Parsing`. | Undocumented boundary retained for parity with `FormulaParser.Parse(null)`. |
 | `TryLex_WithBackslashBeforeUnpairedSurrogate_ReturnsInvalidEscapeNotInvalidUnicode` | `parsing.md` §13.1 precedence | A backslash consumes an unpaired surrogate, so invalid-escape wins over invalid-Unicode. | — |
 | `TryLex_WithBackslashAtEndOfInput_ReturnsUnterminatedAtOpeningQuote` | `parsing.md` §3.3, §13.1 | A trailing backslash in a quoted string is unterminated, reported at the opening quote. | — |
 | `TryLex_WithUnterminatedQuotedString_ReturnsErrorAtOpeningQuote` | `parsing.md` §3.3, §13.1 | EOF before the closing quote reports at the opening quote, wherever it occurs. | Parameterized cases: `alpha("x` at 6 and `alpha(1) "unterminated` at 9. |
@@ -58,6 +60,7 @@
 | `Punctuation_FormatsCharacterInSingleQuotes` | `parsing.md` §3.4 | Punctuation displays as `'<char>'`. | — |
 | `Escape_WithUnpairedHighSurrogate_ReturnsUnicodeEscape` | `parsing.md` §3.4, §13.1 | Escape-sequence rendering handles an unpaired surrogate as one code unit. | Used by `E_LEX_INVALID_ESCAPE` message formatting. |
 | `EndOfInput_IsTheDocumentedMarker` | `parsing.md` §3.4 | EOF displays as `<end of input>`. | — |
+| `Parse_WithNullSource_ReturnsEmptyInputError` | `FormulaParser.Parse` null input | A null source is treated as empty input and returned as `E_SYN_EMPTY_INPUT` with phase `Parsing`. | Matches the lexer's null boundary; no exception is thrown. |
 | `Parse_ForEmptyCall_ProducesEmptyArgumentList` | `grammar.md` §5 | `name()` is a valid zero-argument transport declaration. | — |
 | `Parse_ForBareScalarWithAddressLikeText_ProducesUnquotedScalar` | `grammar.md` §3, §4.1 | Bare words with `.` and `:` remain one scalar. | — |
 | `Parse_ForMultipleQuotedScalars_UsesDecodedTextAndQuotedFlag` | `grammar.md` §4.2; AST §4 | Comma, equals, and empty quoted scalars decode correctly and set `WasQuoted`. | — |
@@ -109,6 +112,9 @@ The message column is the exact expected `FactoryError.Message`.
 | `ArgumentStartsWithComma` | `alpha(,)` | `E_SYN_UNEXPECTED_TOKEN` | 6 | `expected a value or ')', got ','` |
 | `UnterminatedArgumentStartsWithComma` | `alpha(,` | `E_SYN_UNEXPECTED_TOKEN` | 6 | `expected a value or ')', got ','` |
 | `MissingArgumentAfterComma` | `alpha(a,,b)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected a value, got ','` |
+| `NamedArgumentMissingValue` | `alpha(p=)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected a value, got ')'` |
+| `NamedArgumentValueIsComma` | `alpha(p=,q=1)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected a value, got ','` |
+| `StructFieldMissingValue` | `alpha({p=})` | `E_SYN_UNEXPECTED_TOKEN` | 9 | `expected a value, got '}'` |
 | `ListStartsWithComma` | `alpha([,])` | `E_SYN_UNEXPECTED_TOKEN` | 7 | `expected a value, got ','` |
 | `MissingCommaBetweenArguments` | `alpha(a b)` | `E_SYN_UNEXPECTED_TOKEN` | 8 | `expected ',' or ')', got 'b'` |
 | `PositionalAfterNamed` | `alpha(p=1, a)` | `E_SYN_POSITIONAL_AFTER_NAMED` | 11 | `positional argument is not allowed after a named argument` |
@@ -136,7 +142,8 @@ The message column is the exact expected `FactoryError.Message`.
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| None currently identified. | Parsing layer | New tests are added with the contract change that requires them. |
+| `as` used as a named-argument or struct-field name. | Parsing layer | The grammar allows `as` in name positions; only its keyword, scheme, value, and cast uses are tested. |
+| `TokenCursor.Match`/`MatchWord` and the remaining punctuation display branches. | Parsing layer | The members have no call site outside the class and the corpus never makes `(`, `)`, `]`, or `=` the offending token. |
 
 ## Deferred by design
 

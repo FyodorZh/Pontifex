@@ -27,6 +27,8 @@
 | `Resolve_ForPositionalPrefixAndNamedSuffix_BindsBoth` | `FormulaResolver` | §7.4, §14.1 | A positional prefix followed by a named suffix binds all supplied parameters. | — |
 | `Resolve_ForAliasSelectedByExpectedType_ReturnsAliasConstructor` | `FormulaResolver` | §7.3, §14.1 | `outer` expects `Exactly(TypeB)`, so the alias group for `alpha` filters out canonical alpha and selects beta. | Alias selection is context-sensitive. |
 | `Resolve_ForAliasOnlySchemeWithExpectedType_SelectsMatchingAlias` | `FormulaResolver` | §7.3, §7.6 | An alias-only scheme with two candidates is narrowed by the parameter expected set to the surviving constructor. | Harness `needsC` provides the expected `TypeC` context. |
+| `Resolve_WithTopLevelExpectedType_SelectsMatchingAlias` | `FormulaResolver` | §7.1 | The caller-supplied expected set narrows the root scheme: `alpha(x)` selects the `beta` variant when `TypeB` is expected. | Complements the parameter-level expected-set rows. |
+| `Resolve_WithTopLevelExpectedTypeWithoutVariant_ReportsNoVariant` | `FormulaResolver` | §7.1, §13.3 | A root-level expected set with no matching candidate reports `E_SEM_NO_VARIANT_FOR_EXPECTED_TYPE` at offset 0 with the available list. | The same selector error as the parameter case, reached through the root entry point. |
 | `Resolve_ForUnionExpectedSet_PrefersCanonicalAfterFiltering` | `FormulaResolver` | §7.3 | When canonical and alias candidates both survive a `OneOf` filter, canonical preference selects the canonical constructor. | — |
 | `Resolve_ForCastThatChangesType_ReturnsResolvedCast` | `FormulaResolver` | §7.2, §8 | A changing cast produces `ResolvedCast` with `Type == Target` and `Inner.Type != Target`. | — |
 | `Resolve_ForIdentityCast_CollapsesToInnerTransportWithFullCastSpan` | `FormulaResolver` | §7.2, §8 | An identity cast collapses to the inner transport and retains the full cast expression span. | No cast node exists in the resolved tree. |
@@ -214,7 +216,9 @@ phase `Resolution`, offset, and zero-length span.
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| None currently identified. | Semantics layer | New tests are added with the contract change that requires them. |
+| Remaining shape-matrix cells. | Semantics layer | Decimal parameter receiving a struct, numeric fields receiving a list or struct, and struct-shaped string/decimal array elements are not enumerated. |
+| Inclusive list/array count maxima. | Semantics layer | Only `single` (min = max = 1) proves an inclusive upper bound; `gamma`/`counts` at the maximum are not accepted. |
+| §14.3 row `outer(beta(x) as TypeA)`. | Semantics layer | The cast-target mismatch matrix is covered for `TypeC`, not this exact row. |
 
 ## Deferred by design
 

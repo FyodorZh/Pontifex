@@ -15,6 +15,32 @@ namespace Pontifex.Tests.Raw.Reliable.Zip;
 public sealed class RawReliableZipTests
 {
     [Test]
+    public void Binding_DeclaresZipSchemeAndParameterSurface()
+    {
+        var registration = RawReliableZipBinding.CreateRegistration();
+
+        Assert.That(registration.Name, Is.EqualTo("zip"));
+        Assert.That(registration.Type, Is.EqualTo(Pontifex.TransportType.RawReliable));
+        Assert.That(registration.Aliases, Is.Empty);
+        Assert.That(registration.Parameters, Has.Count.EqualTo(2));
+
+        var nested = (Pontifex.Factory.Registration.NestedTransportParameter)registration.Parameters[0];
+        Assert.That(nested.Name, Is.EqualTo("nested"));
+        Assert.That(nested.Required, Is.True);
+        Assert.That(nested.Positional, Is.True);
+        Assert.That(nested.Expected.Kind.ToString(), Is.EqualTo("Exactly"));
+        Assert.That(nested.Expected.Types, Has.Count.EqualTo(1));
+        Assert.That(nested.Expected.Types[0], Is.EqualTo(Pontifex.TransportType.RawReliable));
+
+        var level = (Pontifex.Factory.Registration.IntegerParameter)registration.Parameters[1];
+        Assert.That(level.Name, Is.EqualTo("compression_level"));
+        Assert.That(level.Required, Is.False);
+        Assert.That(level.Positional, Is.False);
+        Assert.That(level.Type.Min, Is.Zero);
+        Assert.That(level.Type.Max, Is.EqualTo(9L));
+    }
+
+    [Test]
     public void AcceptedNegotiation_RoundTripsDataInBothDirections()
     {
         using var pair = new ZipPair();
@@ -30,7 +56,8 @@ public sealed class RawReliableZipTests
             Assert.That(serverHandler!.ConnectedCount, Is.EqualTo(1));
             Assert.That(pair.ClientHandler.Endpoint!.IsConnected, Is.True);
             Assert.That(serverHandler.Endpoint!.IsConnected, Is.True);
-            Assert.That(pair.ClientHandler.Endpoint.MessageMaxByteSize, Is.EqualTo(4096));
+            Assert.That(pair.ClientHandler.Endpoint!.MessageMaxByteSize, Is.EqualTo(4096));
+            Assert.That(serverHandler.Endpoint!.MessageMaxByteSize, Is.EqualTo(4096));
         });
 
         Assert.That(ZipPayload.Describe(pair.InnerClient.Endpoint!.Sent[0]), Is.EqualTo(

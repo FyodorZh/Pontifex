@@ -347,6 +347,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
         }
 
         [Test]
+        [Category(TestCategories.Timing)]
         public async Task ImmediateShutdownDeadline_ForceFinalizesPendingSend()
         {
             using var harness = new LowLevelSocketHarness();

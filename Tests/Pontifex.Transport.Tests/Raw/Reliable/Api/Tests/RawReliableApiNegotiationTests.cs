@@ -114,6 +114,7 @@ public sealed class RawReliableApiNegotiationTests
                 new[] { "h:1", "s:api", "b:0", "i:42" }));
             Assert.That(pair.ClientConnectedCount, Is.EqualTo(1));
             Assert.That(pair.ServerApiStartedCount, Is.EqualTo(1));
+            Assert.That(pair.ClientDisconnectedCount, Is.Zero);
             Assert.That(pair.ClientDisconnectReason, Is.Null);
         });
     }

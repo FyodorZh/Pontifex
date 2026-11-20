@@ -20,16 +20,16 @@ Contract references:
 | `ClientApi_WithWrongVersionResponse_RaisesDisconnectedOnceAndNoConnected` | A response version different from the requested version is a protocol mismatch. | The client never raises `Connected`, raises `Disconnected` exactly once, and the reason is `ProtocolMismatch`. | The server-side envelope is replaced before delivery, so the server still accepts its own side; only the client validates the version. |
 | `ClientApi_WithWrongNameResponse_RaisesDisconnectedOnceAndNoConnected` | A response name different from `"api"` is a protocol mismatch. | The client never raises `Connected`, raises `Disconnected` exactly once with `ProtocolMismatch`. | Name comparison is by UTF-8 content. |
 | `ClientApi_FirstOutboundPayload_IsTheApiNegotiationRequest` | The client sends its Api negotiation request immediately on transport connect. | The first and only outbound payload is `[1, "api", Request]` before any application traffic. | The fake peer drops the request, so the Api stays unadmitted. The pending negotiation deadline is disposed with the transport. |
-| `ServerApi_WithAppendedNegotiationElements_AdmitsTheSession` | The server validates name/version only and ignores appended elements. | A client whose `AppendNegotiationData` appends `int 42` sends `[1, "api", Request, 42]`; the server admits the session, the client raises `Connected` once, and the Api starts once. | The hook is append-only and its count is one per connect. Proves the reserved custom-tail space cannot break admission. |
+| `ServerApi_WithAppendedNegotiationElements_AdmitsTheSession` | The server validates name/version only and ignores appended elements. | A client whose `AppendNegotiationData` appends `int 42` sends `[1, "api", Request, 42]`; the server admits the session, the client raises `Connected` once, the Api starts once, and no disconnect callback fires. | The hook is append-only and its count is one per connect. Proves the reserved custom-tail space cannot break admission and that admission produces no spurious terminal callback. |
 
 ## Planned
 
 | Missing test | Owning layer |
 | --- | --- |
 | A user `AppendNegotiationData` hook exception and the resulting stop path. | `RawReliableApiNegotiation`. |
-| A fabricated status value in the third element (unknown discriminator) rejected before the custom tail is parsed. | `RawReliableApiNegotiation` (the shared session's behaviour is already covered by the wrapper suite). |
+| A fabricated status value in the third element (unknown discriminator) rejected before the custom tail is parsed. | `RawReliableApiNegotiation` (not covered by the wrapper suite; it is a genuine gap here). |
 | `ClientSideApi` delivering admitted application data into the `TransportPipeSystem`. | `RawReliableApiNegotiation` (requires a declared Api pipe; the Api pipe suite covers pipes over in-memory transports). |
-| Concurrent Api sessions on one `ServerSideApiFactory` with independent instances. | `RawReliableApiNegotiation` (the synchronous fake cannot overlap factory calls deterministically). |
+| Concurrent Api sessions on one `ServerSideApiFactory` with independent instances. | `RawReliableApiNegotiation` (only the overlap clause needs a concurrency harness; per-session freshness is sequential and remains untested because the harness factory returns one shared instance). |
 
 ## Deferred By Design
 

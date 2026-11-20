@@ -401,56 +401,6 @@ internal sealed class FakeServerEndpoint : IRawUnreliableEndpoint
 }
 
 /// <summary>
-/// A raw-unreliable handler that records the first received payload and can answer it with a scripted
-/// callback. The callback owns the incoming buffer.
-/// </summary>
-internal sealed class RecordingRawUnreliableHandler : IRawUnreliableHandler
-{
-    private readonly Action<RecordingRawUnreliableHandler, IRawUnreliableEndpoint, UnionDataList>? _onReceived;
-
-    public RecordingRawUnreliableHandler(
-        Action<RecordingRawUnreliableHandler, IRawUnreliableEndpoint, UnionDataList>? onReceived = null)
-    {
-        _onReceived = onReceived;
-    }
-
-    public IRawUnreliableEndpoint? Endpoint { get; private set; }
-
-    public int ReceivedCount { get; private set; }
-
-    public UnionDataList? LastReceived { get; private set; }
-
-    public List<UnionDataList> Received { get; } = new List<UnionDataList>();
-
-    public void OnStarted(IRawUnreliableEndpoint endpoint)
-    {
-        Endpoint = endpoint;
-    }
-
-    public void OnReceived(UnionDataList data)
-    {
-        ReceivedCount++;
-        LastReceived = data;
-        Received.Add(data);
-        _onReceived?.Invoke(this, Endpoint!, data);
-    }
-
-    public void OnStopped(StopReason reason)
-    {
-    }
-
-    public void DisposeReceived()
-    {
-        foreach (var data in Received)
-        {
-            data.Release();
-        }
-
-        Received.Clear();
-    }
-}
-
-/// <summary>
 /// A scripted raw-unreliable peer that speaks the delivery-manager wire format directly, so tests can
 /// send handcrafted handshake payloads and decode the converter's responses without a second converter.
 /// </summary>

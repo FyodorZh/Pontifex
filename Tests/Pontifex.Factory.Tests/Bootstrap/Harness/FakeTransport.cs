@@ -27,7 +27,7 @@ namespace Pontifex.Factory.Tests.Bootstrap.Harness
 
         public string Name { get; }
 
-        public bool IsValid { get; set; } = true;
+        public bool IsValid { get; } = true;
 
         public bool IsStarted { get; private set; }
 

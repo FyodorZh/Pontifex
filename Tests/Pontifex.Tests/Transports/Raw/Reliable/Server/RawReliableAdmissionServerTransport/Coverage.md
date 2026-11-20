@@ -38,7 +38,6 @@
 | Gap | Reason |
 |---|---|
 | Inherited session admission, registry, transport stop, and ticker behaviour. | Covered once by `RawReliableServerTransportTests`; not repeated here. |
-| A Direct `RawReliable` carrier. | Both the `tcp` and `direct` RawReliable carriers exist. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
 | Real carrier accept loops and end-to-end sessions. | Carrier and integration behaviour belong to the carrier suites. |
 | Logging verification for factory exceptions. | Requires a custom observable `ILogSink`; the transport-level policy is already covered. |

@@ -76,6 +76,24 @@ public sealed class TransportCompilerTests
     }
 
     [Test]
+    public void Compile_WithKnownSchemeWrongType_ThrowsBuildExceptionConstructorNotFound()
+    {
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+        var formula = CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                CompilationTestData.Constructor("alpha", CompilationTestData.TypeB)));
+
+        var exception = Assert.Throws<BuildException>(() => compiler.Compile(formula))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_BLD_CONSTRUCTOR_NOT_FOUND"));
+        Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Building));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo("transport constructor 'alpha' is not registered"));
+    }
+
+    [Test]
     public void Compile_WithUnknownConstructorInMixedCase_ReportsNormalizedScheme()
     {
         var compiler = Compiler(CompilationTestData.NewRegistry());
@@ -137,7 +155,7 @@ public sealed class TransportCompilerTests
     // --- Build context ---------------------------------------------------
 
     [Test]
-    public void Compile_PassesRoleLoggerMemoryToCreate()
+    public void Compile_WithClientRole_PassesRoleLoggerMemoryToCreate()
     {
         var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
         var compiler = CompilationTestData.NewCompiler(
@@ -199,6 +217,27 @@ public sealed class TransportCompilerTests
 
         var context = registration.LastContext!;
         Assert.That(context.TryGetString("path", out _), Is.False);
+    }
+
+    [Test]
+    public void Compile_WithPresentEmptyString_ReturnsTrueAndEmptyValue()
+    {
+        var param = CompilationTestData.StringParam("path", positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "alpha",
+            CompilationTestData.TypeA,
+            param);
+        var registration = new RecordingRegistration("alpha", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(
+                constructor,
+                CompilationTestData.Scalar(param, string.Empty))));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetString("path", out var value), Is.True);
+        Assert.That(value, Is.EqualTo(string.Empty));
     }
 
     [Test]

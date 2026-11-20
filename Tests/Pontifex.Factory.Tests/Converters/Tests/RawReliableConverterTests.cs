@@ -207,6 +207,23 @@ public sealed class RawReliableConverterTests
     }
 
     [Test]
+    public void Handshake_WhenServerMaximumIsSmaller_ClientLowersToIt()
+    {
+        const int clientInnerMax = 140;
+        const int serverInnerMax = 100;
+        using var pair = CreatePair(clientInnerMax, serverInnerMax);
+
+        WaitConnected(pair.ClientHandler, "client");
+        WaitConnected(pair.ServerHandler, "server");
+
+        var expected = Math.Min(DeliveryMax(clientInnerMax), DeliveryMax(serverInnerMax));
+        Assert.That(expected, Is.EqualTo(DeliveryMax(serverInnerMax)),
+            "precondition: the server side is the smaller maximum");
+        Assert.That(pair.ClientHandler.Endpoint!.MessageMaxByteSize, Is.EqualTo(expected));
+        Assert.That(pair.ServerHandler.Endpoint!.MessageMaxByteSize, Is.EqualTo(expected));
+    }
+
+    [Test]
     public void AdmittedSession_DeliversTheOrderedLifecycleExactlyOnce()
     {
         using var pair = CreatePair();

@@ -4,7 +4,9 @@ Black-box contract tests for the Api negotiation layer that `Pontifex.Api` runs
 on top of an already-admitted reliable raw transport: `ClientSideApi`,
 `ServerSideApiFactory`, and `ServerSideApiInstance`. Every test runs over
 hand-written fake reliable transports with synchronous, caller-driven
-delivery: no real time, timers, sockets, or networks.
+delivery: no real time is awaited, and there are no real sockets or networks.
+The shared negotiation session still arms cancellable timers on the production
+clock; disposal cancels them.
 
 ## Suite type
 

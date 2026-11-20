@@ -256,8 +256,11 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
         Assert.That(handler.StoppedCount, Is.Zero);
         Assert.That(handler.StoppedReason, Is.Null);
+        Assert.That(handler.ThrownStoppedException, Is.Null);
         Assert.That(handler.DisconnectedCount, Is.Zero);
         Assert.That(callbackReason, Is.TypeOf<TextFail>());
+        Assert.That(transport.LastDestroyReason, Is.SameAs(callbackReason));
+        Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
         Assert.That(transport.IsValid, Is.False);
         Assert.That(transport.IsConnected, Is.False);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
@@ -295,34 +298,6 @@ public sealed class RawReliableClientTransportTests
         Assert.That(transport.EndpointDuringDestroy, Is.SameAs(endpoint));
         Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
         Assert.That(transport.IsConnected, Is.False);
-        Assert.That(transport.EventLog, Is.EqualTo(new[]
-        {
-            "beginConnect", "destroyTransport", "startCallback"
-        }));
-    }
-
-    [Test]
-    public void Start_WhenBeginConnectReturnsFalse_StillDestroys()
-    {
-        var transport = Create();
-        using var handler = CreateHandler(transport);
-        Assert.That(transport.Init(handler), Is.True);
-        transport.BeginConnectBehavior = static () => false;
-        StopReason? callbackReason = null;
-
-        Assert.That(transport.Start(r =>
-        {
-            callbackReason = r;
-            transport.EventLog.Add("startCallback");
-        }), Is.False);
-
-        Assert.That(handler.StoppedCount, Is.Zero);
-        Assert.That(handler.ThrownStoppedException, Is.Null);
-        Assert.That(callbackReason, Is.TypeOf<TextFail>());
-        Assert.That(transport.DestroyTransportCalls, Is.EqualTo(1));
-        Assert.That(transport.LastDestroyReason, Is.SameAs(callbackReason));
-        Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
-        Assert.That(transport.IsValid, Is.False);
         Assert.That(transport.EventLog, Is.EqualTo(new[]
         {
             "beginConnect", "destroyTransport", "startCallback"

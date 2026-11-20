@@ -8,9 +8,11 @@ using Pontifex.TransportFormula.Semantics.Internal;
 
 namespace Pontifex.TransportFormula.Tests.Semantics.Harness;
 
-// Centralised assertions for the semantics suite. Error helpers always assert
-// phase Resolution, a zero-length span, the exact code, the exact message, and
-// the documented offset.
+// Centralised assertions for the semantics suite. The resolver-level error
+// helpers always assert phase Resolution, a zero-length span, the exact code,
+// the exact message, and the documented offset. The component-level helpers
+// (ValidateParamsError/ValidateStructError) assert code and message only because
+// those components do not own the public span.
 internal static class SemanticsAssertions
 {
     public static ResolvedFormula ResolveSucceeds(

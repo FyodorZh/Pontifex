@@ -30,6 +30,7 @@ Root subject: `Pontifex.Raw.Reliable.Protocols.RawReliableWrapperClient`,
 - [IRawReliableClientHandler.cs](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClientHandler.cs)
 - [IRawReliableServerHandler.cs](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableServerHandler.cs)
 - [IRawReliableServerHandlerFactory.cs](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServerHandlerFactory.cs)
+- [RawReliable Specification](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Specification.md) — normative envelope, deadline, linger, and `TryCreate` clauses.
 
 The wrapper envelope is flat:
 `[version (short), name (UTF-8 string), NegotiationStatus (byte), ...custom layer elements]`.
@@ -48,11 +49,13 @@ directory, and coverage file.
 
 ## Naming conventions
 
+- Layer name = `<Subject>`; this suite has one root layer, `RawReliableWrapper`.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
 - Namespace = `Pontifex.Tests.Raw.Reliable.Protocol`.
 - Test methods = `Scenario_ExpectedResult`, for example
   `CustomTailRejection_StopsClientWithHandshakeRejectedAndSkipsFactory`.
 - Every fixture carries `[Category("Protocol")]`.
+- There are no groups; all tests live directly under `Tests/`.
 
 ## Directory layout
 
@@ -77,12 +80,16 @@ All harness types are hand-written (no mocking library) and test-only:
   the ten-second deadline and the two-second rejection linger are advanced
   explicitly. `PendingDelays` and `PendingCount` expose what is scheduled;
   `Advance`/`FireNext` fire due callbacks in due-time order.
-- `FakeReliableTransport.cs` contains the scripted `IRawReliableClient`,
-  `IRawReliableServer`, `IRawReliableEndpoint`, and one server-session driver.
-  Delivery is synchronous and caller-driven; outbound payloads are cloned into
-  `Sent` for assertions and released with `ReleaseSent`.
+- `FakeReliableTransport.cs` contains the scripted `FakeReliableClient`,
+  `FakeReliableServer`, `FakeReliableEndpoint`, `FakeEndPoint`, `Payload`, the
+  `FakeServerSession` driver, and the recording
+  `RecordingRawReliableClientHandler`/`RecordingRawReliableServerHandler`
+  application handlers. Delivery is synchronous and caller-driven; outbound
+  payloads are cloned into `Sent` for assertions and released with
+  `ReleaseSent`.
 - `RecordingWrapperLogic` records every negotiation hook, the connected and
   disconnected hooks, and lets a test script the fill/check/response tails.
+- `RecordingServerFactory` counts `TryCreate` calls and captures the remote.
 - `WrapperPair` links one fake client and one fake server through the public
   wrapper transports, including the deferred server factory.
 

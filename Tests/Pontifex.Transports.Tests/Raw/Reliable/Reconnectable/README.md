@@ -4,8 +4,10 @@ Contract tests for the `reconnectable` reliable wrapper: it negotiates its own
 `"reconnectable"` dataset over any `RawReliable` transport, keeps one logical
 session alive across physical reconnections, and reattaches a returning client
 by session id and secret. Every test runs over hand-written fake reliable
-transports and a manual negotiation clock and periodic driver: no real time,
-timers, sockets, or networks.
+transports and a manual negotiation clock and periodic driver: the suite awaits
+no real time, timers, sockets, or networks. The subject still reads
+`DateTime.UtcNow` for its disconnect timeout and report cadence; tests keep the
+elapsed time below those thresholds.
 
 ## Suite type
 
