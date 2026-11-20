@@ -4,7 +4,6 @@ using Actuarius.Memory;
 using Pontifex.Raw;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Raw.Reliable.NoAck;
 using Pontifex.Utils;
 
 namespace Pontifex.Tests;
@@ -158,14 +157,14 @@ public sealed class RawReliableServerHandlerExtTests
 
     #endregion
 
-    #region GetSafe(IRawReliableNoAckServerHandler) forwarding
+    #region GetSafe(IRawReliableServerHandler) forwarding
 
     [Test]
-    public void GetSafeNoAck_OnConnected_ForwardsEndpoint()
+    public void GetSafeBase_OnConnected_ForwardsEndpoint()
     {
         Exception? reported = null;
-        var core = new RecordingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new RecordingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
         var endpoint = new StubReliableEndpoint();
 
         safe.OnConnected(endpoint);
@@ -179,11 +178,11 @@ public sealed class RawReliableServerHandlerExtTests
     }
 
     [Test]
-    public void GetSafeNoAck_OnDisconnected_ForwardsReason()
+    public void GetSafeBase_OnDisconnected_ForwardsReason()
     {
         Exception? reported = null;
-        var core = new RecordingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new RecordingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
 
         safe.OnDisconnected(Reason);
 
@@ -196,11 +195,11 @@ public sealed class RawReliableServerHandlerExtTests
     }
 
     [Test]
-    public void GetSafeNoAck_OnReceived_ForwardsBuffer()
+    public void GetSafeBase_OnReceived_ForwardsBuffer()
     {
         Exception? reported = null;
-        var core = new RecordingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new RecordingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
         UnionDataList buffer = AcquireBuffer();
         try
         {
@@ -221,11 +220,11 @@ public sealed class RawReliableServerHandlerExtTests
     }
 
     [Test]
-    public void GetSafeNoAck_OnStopped_ForwardsReason()
+    public void GetSafeBase_OnStopped_ForwardsReason()
     {
         Exception? reported = null;
-        var core = new RecordingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new RecordingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
 
         safe.OnStopped(Reason);
 
@@ -239,14 +238,14 @@ public sealed class RawReliableServerHandlerExtTests
 
     #endregion
 
-    #region GetSafe(IRawReliableNoAckServerHandler) exceptions
+    #region GetSafe(IRawReliableServerHandler) exceptions
 
     [Test]
-    public void GetSafeNoAck_OnConnected_WhenHandlerThrows_PropagatesAndDoesNotCallOnFail()
+    public void GetSafeBase_OnConnected_WhenHandlerThrows_PropagatesAndDoesNotCallOnFail()
     {
         Exception? reported = null;
-        var core = new ThrowingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new ThrowingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
 
         var actual = Assert.Throws<InvalidOperationException>(() => safe.OnConnected(new StubReliableEndpoint()));
 
@@ -255,11 +254,11 @@ public sealed class RawReliableServerHandlerExtTests
     }
 
     [Test]
-    public void GetSafeNoAck_OnDisconnected_WhenHandlerThrows_CallsOnFail()
+    public void GetSafeBase_OnDisconnected_WhenHandlerThrows_CallsOnFail()
     {
         Exception? reported = null;
-        var core = new ThrowingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new ThrowingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
 
         Assert.DoesNotThrow(() => safe.OnDisconnected(Reason));
 
@@ -267,11 +266,11 @@ public sealed class RawReliableServerHandlerExtTests
     }
 
     [Test]
-    public void GetSafeNoAck_OnReceived_WhenHandlerThrows_CallsOnFail()
+    public void GetSafeBase_OnReceived_WhenHandlerThrows_CallsOnFail()
     {
         Exception? reported = null;
-        var core = new ThrowingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new ThrowingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
         UnionDataList buffer = AcquireBuffer();
         try
         {
@@ -286,11 +285,11 @@ public sealed class RawReliableServerHandlerExtTests
     }
 
     [Test]
-    public void GetSafeNoAck_OnStopped_WhenHandlerThrows_CallsOnFail()
+    public void GetSafeBase_OnStopped_WhenHandlerThrows_CallsOnFail()
     {
         Exception? reported = null;
-        var core = new ThrowingNoAckServerHandler();
-        IRawReliableNoAckServerHandler safe = core.GetSafe(e => reported = e);
+        var core = new ThrowingServerHandler();
+        IRawReliableServerHandler safe = core.GetSafe(e => reported = e);
 
         Assert.DoesNotThrow(() => safe.OnStopped(Reason));
 
@@ -347,7 +346,7 @@ public sealed class RawReliableServerHandlerExtTests
         }
     }
 
-    private sealed class RecordingNoAckServerHandler : IRawReliableNoAckServerHandler
+    private sealed class RecordingServerHandler : IRawReliableServerHandler
     {
         public int ConnectedCount { get; private set; }
 
@@ -403,7 +402,7 @@ public sealed class RawReliableServerHandlerExtTests
         public void OnStopped(StopReason reason) => throw Error;
     }
 
-    private sealed class ThrowingNoAckServerHandler : IRawReliableNoAckServerHandler
+    private sealed class ThrowingServerHandler : IRawReliableServerHandler
     {
         public InvalidOperationException Error { get; } = new("handler failed");
 

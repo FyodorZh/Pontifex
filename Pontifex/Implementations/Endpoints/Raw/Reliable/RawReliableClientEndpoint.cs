@@ -52,7 +52,7 @@ namespace Pontifex.Raw.Reliable
         /// endpoint.</description></item>
         /// </list>
         /// </remarks>
-        protected RawReliableClientEndpoint(string transportName, IEndPoint remoteEndPoint, IRawReliableClientHandler handler, 
+        protected RawReliableClientEndpoint(string transportName, IEndPoint remoteEndPoint, IRawReliableClientHandlerBase handler, 
             int messageMaxByteSize, long bufferCapacityBytes, IMemoryRental memory, ILogger log,
             PingOptions? pingOptions)
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log)

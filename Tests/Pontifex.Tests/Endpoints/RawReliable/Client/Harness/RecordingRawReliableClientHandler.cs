@@ -8,7 +8,7 @@ namespace Pontifex.Tests.Endpoints;
 /// cloning from <see cref="RecordingRawReliableHandler"/> and implements the client-side handler interface.
 /// It is the base for the acknowledgement client recording handler.
 /// </summary>
-internal class RecordingRawReliableClientHandler : RecordingRawReliableHandler, IRawReliableClientHandler
+internal class RecordingRawReliableClientHandler : RecordingRawReliableHandler, IRawReliableClientHandlerBase
 {
     public RecordingRawReliableClientHandler(IMemoryRental memory)
         : base(memory)

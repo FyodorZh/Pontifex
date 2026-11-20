@@ -2,7 +2,7 @@ using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable.Ack
 {
-    public interface IRawReliableAckClientHandler : IRawReliableClientHandler
+    public interface IRawReliableAckClientHandler : IRawReliableClientHandlerBase
     {
         /// <summary>
         /// Logical connection. Informs the business logic that the transport is fully configured

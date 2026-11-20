@@ -19,7 +19,7 @@ namespace Pontifex.Factory.Tests.Compilation.Harness;
 internal static class CompilationTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliableAck;
-    public static readonly TransportType TypeB = TransportType.RawReliableNoAck;
+    public static readonly TransportType TypeB = TransportType.RawReliable;
     public static readonly TransportType TypeC = TransportType.RawUnreliableAck;
 
     public static SourceSpan ZeroSpan => new SourceSpan(0, 0);

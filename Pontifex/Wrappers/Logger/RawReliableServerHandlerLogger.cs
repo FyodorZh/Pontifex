@@ -1,7 +1,6 @@
 using System;
 using Pontifex.Raw.Reliable.Ack;
 using Pontifex.Raw.Reliable.Ack.Logger;
-using Pontifex.Raw.Reliable.NoAck;
 using Pontifex.Utils;
 using Scriba;
 
@@ -14,8 +13,8 @@ namespace Pontifex.Raw.Reliable.Logger
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item>The wrapper is shared by the Ack and NoAck server loggers; both protocol marker
-    /// interfaces are empty, so one implementation serves both.</item>
+    /// <item>The wrapper is shared by the reliable server loggers; the protocol marker
+    /// interface is empty, so one implementation serves both.</item>
     /// <item>The user handler may be swapped between sessions through <see cref="UserHandler"/>.
     /// The wrapper itself is not thread-safe; the owning transport serializes handler
     /// callbacks.</item>
@@ -24,8 +23,7 @@ namespace Pontifex.Raw.Reliable.Logger
     /// </list>
     /// </remarks>
     internal sealed class RawReliableServerHandlerLogger :
-        IRawReliableAckServerHandler,
-        IRawReliableNoAckServerHandler
+        IRawReliableAckServerHandler
     {
         private readonly ILogger _log;
 

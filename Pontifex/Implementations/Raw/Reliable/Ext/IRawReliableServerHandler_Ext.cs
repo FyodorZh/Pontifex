@@ -1,7 +1,6 @@
 using System;
 using Actuarius.Concurrent;
 using Pontifex.Raw.Reliable.Ack;
-using Pontifex.Raw.Reliable.NoAck;
 using Pontifex.Utils;
 
 namespace Pontifex.Raw.Reliable
@@ -11,9 +10,9 @@ namespace Pontifex.Raw.Reliable
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Protocol independence</b>: Both <see cref="IRawReliableAckServerHandler"/> and
-    /// <see cref="IRawReliableNoAckServerHandler"/> are marker interfaces over
-    /// <see cref="IRawReliableServerHandler"/>, so one wrapper implementation serves both.</description></item>
+    /// <item><description><b>Protocol independence</b>: <see cref="IRawReliableAckServerHandler"/> is a marker
+    /// interface over <see cref="IRawReliableServerHandler"/>, so one wrapper implementation serves both the
+    /// base contract and the acknowledgement contract.</description></item>
     /// <item><description><b>Exception isolation</b>: <c>GetSafe</c> guards <c>OnDisconnected</c>,
     /// <c>OnReceived</c> and <c>OnStopped</c>. It deliberately forwards <c>OnConnected</c> unguarded;
     /// the acknowledgement specification requires a throw from that callback to reach the endpoint.</description></item>
@@ -42,7 +41,7 @@ namespace Pontifex.Raw.Reliable
         /// <param name="core">The handler to wrap.</param>
         /// <param name="onFail">Receives a description of a violated invariant.</param>
         /// <returns>The wrapped handler in Debug builds, otherwise <paramref name="core"/>.</returns>
-        public static IRawReliableNoAckServerHandler Test(this IRawReliableNoAckServerHandler core, Action<string> onFail)
+        public static IRawReliableServerHandler Test(this IRawReliableServerHandler core, Action<string> onFail)
         {
 #if DEBUG
             return new TestServerHandler(core, onFail);
@@ -85,12 +84,12 @@ namespace Pontifex.Raw.Reliable
         /// <param name="core">The handler to wrap.</param>
         /// <param name="onFail">Receives every exception thrown by a guarded callback.</param>
         /// <returns>The guard wrapper around <paramref name="core"/>.</returns>
-        public static IRawReliableNoAckServerHandler GetSafe(this IRawReliableNoAckServerHandler core, Action<Exception> onFail)
+        public static IRawReliableServerHandler GetSafe(this IRawReliableServerHandler core, Action<Exception> onFail)
         {
             return new SafeServerHandler(core, onFail);
         }
 
-        private sealed class SafeServerHandler : IRawReliableAckServerHandler, IRawReliableNoAckServerHandler
+        private sealed class SafeServerHandler : IRawReliableAckServerHandler
         {
             private readonly IRawReliableServerHandler _handler;
             private readonly Action<Exception> _onException;
@@ -151,7 +150,7 @@ namespace Pontifex.Raw.Reliable
             }
         }
 
-        private sealed class TestServerHandler : InvariantChecker<TestServerHandler.HandlerState>, IRawReliableAckServerHandler, IRawReliableNoAckServerHandler
+        private sealed class TestServerHandler : InvariantChecker<TestServerHandler.HandlerState>, IRawReliableAckServerHandler
         {
             public enum HandlerState
             {

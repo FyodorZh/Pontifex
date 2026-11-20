@@ -23,7 +23,7 @@ internal sealed class TestRawReliableClientEndpoint : RawReliableClientEndpoint,
     private DateTime _now = new(2000, 1, 1);
 
     public TestRawReliableClientEndpoint(
-        IRawReliableClientHandler handler,
+        IRawReliableClientHandlerBase handler,
         IEndPoint? remoteEndPoint = null,
         string transportName = "TestClientTransport",
         int messageMaxByteSize = 1024,
