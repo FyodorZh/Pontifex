@@ -46,7 +46,8 @@ internal sealed class TestRawReliableEndpointClientTransport
             handler,
             transportName: Name,
             memory: Memory,
-            log: Log);
+            log: Log,
+            handshakeName: "test-transport");
         LastCreatedEndpoint = endpoint;
         return endpoint;
     }

@@ -1,5 +1,8 @@
 using System;
+using System.Threading;
 using Actuarius.Memory;
+using Pontifex.StopReasons;
+using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable
@@ -26,6 +29,11 @@ namespace Pontifex.Raw.Reliable
 
         private readonly object _factoryLock = new();
 
+        private readonly string _handshakeName;
+        private readonly int _handshakeMaxByteSize;
+        private readonly TimeSpan _handshakeTimeout;
+        private readonly TimeSpan _rejectLinger;
+
         private bool _initAttempted;
 
         private IRawReliableServerHandlerFactory<IRawReliableServerHandler>? _factory;
@@ -44,17 +52,74 @@ namespace Pontifex.Raw.Reliable
         /// <param name="maxActiveSessions">The maximum number of admitted sessions; must be at least 1.</param>
         /// <param name="tickPeriodMs">The period of the shared session ticker in milliseconds; must be at least
         /// 1.</param>
+        /// <param name="handshakeName">The transport handshake name. Must be non-null.</param>
+        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame; must be at least
+        /// 1.</param>
+        /// <param name="handshakeTimeout">The server handshake deadline, or <see langword="null"/> for the
+        /// ten-second default. <see cref="Timeout.InfiniteTimeSpan"/> disables the deadline.</param>
+        /// <param name="rejectLinger">How long a rejected socket stays open after the reject frame is written,
+        /// or <see langword="null"/> for the two-second default; must not be negative.</param>
         protected RawReliableAdmissionServerTransport(
             string typeName,
             ILogger logger,
             IMemoryRental memory,
             int maxConcurrentHandshakes,
             int maxActiveSessions,
-            int tickPeriodMs)
+            int tickPeriodMs,
+            string handshakeName,
+            int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize,
+            TimeSpan? handshakeTimeout = null,
+            TimeSpan? rejectLinger = null)
             : base(typeName, logger, memory, new RawReliableConformanceControl(),
                 maxConcurrentHandshakes, maxActiveSessions, tickPeriodMs)
         {
+            if (handshakeName == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeName));
+            }
+
+            if (handshakeMaxByteSize < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeMaxByteSize));
+            }
+
+            var resolvedTimeout = handshakeTimeout ?? TimeSpan.FromSeconds(10);
+            if (resolvedTimeout != Timeout.InfiniteTimeSpan && resolvedTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeTimeout));
+            }
+
+            var resolvedLinger = rejectLinger ?? TimeSpan.FromSeconds(2);
+            if (resolvedLinger < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(rejectLinger));
+            }
+
+            _handshakeName = handshakeName;
+            _handshakeMaxByteSize = handshakeMaxByteSize;
+            _handshakeTimeout = resolvedTimeout;
+            _rejectLinger = resolvedLinger;
         }
+
+        /// <summary>
+        /// Gets the transport handshake name.
+        /// </summary>
+        internal string HandshakeName => _handshakeName;
+
+        /// <summary>
+        /// Gets the inclusive maximum size of a handshake frame.
+        /// </summary>
+        internal int HandshakeMaxByteSize => _handshakeMaxByteSize;
+
+        /// <summary>
+        /// Gets the server handshake deadline.
+        /// </summary>
+        internal TimeSpan HandshakeTimeout => _handshakeTimeout;
+
+        /// <summary>
+        /// Gets how long a rejected socket stays open after the reject frame is written.
+        /// </summary>
+        internal TimeSpan RejectLinger => _rejectLinger;
 
         /// <inheritdoc/>
         /// <remarks>
@@ -90,6 +155,101 @@ namespace Pontifex.Raw.Reliable
                 _initAttempted = true;
                 return true;
             }
+        }
+
+        /// <summary>
+        /// Validates a client's transport handshake and, when it is accepted, creates its session handler and
+        /// the handshake response.
+        /// </summary>
+        /// <param name="remote">The remote endpoint of the connecting client.</param>
+        /// <param name="request">The borrowed handshake request without its frame type. The caller retains
+        /// ownership and releases it after this method returns.</param>
+        /// <returns>The handshake outcome. An accepted outcome owns the response and wraps the handler in
+        /// <see cref="StopOnceServerHandler"/>; every other status is a reject and owns
+        /// nothing.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from the carrier's accept callback; factory
+        /// calls are serialized by the same lock as <see cref="TryCreateHandler"/>.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: The version and name are validated before
+        /// the factory is called. An advertised maximum that is below 1 or below
+        /// <see cref="HandshakeMaxByteSize"/> is rejected with
+        /// <see cref="RawReliableHandshake.HandshakeStatus.CapacityExceeded"/> so the server can always send
+        /// its response.</description></item>
+        /// </list>
+        /// </remarks>
+        internal HandshakeOutcome TryHandshake(IEndPoint remote, UnionDataList request)
+        {
+            if (!RawReliableHandshake.TryReadRequest(request, out short version, out string name,
+                    out int requestMax))
+            {
+                return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.Rejected);
+            }
+
+            if (version != RawReliableHandshake.Version)
+            {
+                return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.VersionMismatch);
+            }
+
+            if (!RawReliableHandshake.NameEquals(name, _handshakeName))
+            {
+                return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.NameMismatch);
+            }
+
+            if (requestMax < 1 || requestMax < _handshakeMaxByteSize)
+            {
+                return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.CapacityExceeded);
+            }
+
+            var factory = _factory;
+            if (factory == null || !IsValid || !IsStarted)
+            {
+                return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.Rejected);
+            }
+
+            IRawReliableServerHandler? handler;
+            lock (_factoryLock)
+            {
+                try
+                {
+                    handler = factory.TryCreate(remote);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                    handler = null;
+                }
+            }
+
+            if (handler == null)
+            {
+                return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.Rejected);
+            }
+
+            int agreedMax = Math.Min(requestMax, MessageMaxByteSize);
+            UnionDataList response;
+            try
+            {
+                response = RawReliableHandshake.BuildResponse(
+                    RawReliableHandshake.Version, _handshakeName, agreedMax);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                try
+                {
+                    handler.OnStopped(new ExceptionFail(Name, ex, "Failed to build the handshake response"));
+                }
+                catch (Exception stopEx)
+                {
+                    Log.wtf(stopEx);
+                }
+
+                return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.Rejected);
+            }
+
+            return new HandshakeOutcome(RawReliableHandshake.HandshakeStatus.Accepted,
+                new StopOnceServerHandler(handler), response, agreedMax);
         }
 
         /// <summary>

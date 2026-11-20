@@ -31,6 +31,21 @@ namespace Pontifex.Raw.Reliable.Tcp
                         "disconnection_timeout",
                         required: false,
                         positional: false,
+                        new IntegerType(0, long.MaxValue)),
+                    new IntegerParameter(
+                        "handshake_max_byte_size",
+                        required: false,
+                        positional: false,
+                        new IntegerType(1, long.MaxValue)),
+                    new IntegerParameter(
+                        "handshake_timeout",
+                        required: false,
+                        positional: false,
+                        new IntegerType(1, long.MaxValue)),
+                    new IntegerParameter(
+                        "reject_linger",
+                        required: false,
+                        positional: false,
                         new IntegerType(0, long.MaxValue))
                 },
                 Create);
@@ -46,6 +61,24 @@ namespace Pontifex.Raw.Reliable.Tcp
                 disconnectTimeout = TimeSpan.FromSeconds(timeoutSeconds);
             }
 
+            int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize;
+            if (context.TryGetInt64("handshake_max_byte_size", out var handshakeMax))
+            {
+                handshakeMaxByteSize = checked((int)handshakeMax);
+            }
+
+            var handshakeTimeout = TimeSpan.FromSeconds(10);
+            if (context.TryGetInt64("handshake_timeout", out var handshakeTimeoutSeconds))
+            {
+                handshakeTimeout = TimeSpan.FromSeconds(handshakeTimeoutSeconds);
+            }
+
+            var rejectLinger = TimeSpan.FromMilliseconds(2000);
+            if (context.TryGetInt64("reject_linger", out var rejectLingerMs))
+            {
+                rejectLinger = TimeSpan.FromMilliseconds(rejectLingerMs);
+            }
+
             return context.Role == TransportRole.Server
                 ? new RawReliableTcpServerTransport(
                     ipAddress,
@@ -54,14 +87,21 @@ namespace Pontifex.Raw.Reliable.Tcp
                     disconnectTimeout,
                     null,
                     context.Logger,
-                    context.Memory)
+                    context.Memory,
+                    handshakeName: RawReliableTcpInfo.HandshakeName,
+                    handshakeMaxByteSize: handshakeMaxByteSize,
+                    handshakeTimeout: handshakeTimeout,
+                    rejectLinger: rejectLinger)
                 : new RawReliableTcpClientTransport(
                     ipAddress,
                     port,
                     disconnectTimeout,
                     null,
                     context.Logger,
-                    context.Memory);
+                    context.Memory,
+                    handshakeName: RawReliableTcpInfo.HandshakeName,
+                    handshakeMaxByteSize: handshakeMaxByteSize,
+                    handshakeTimeout: handshakeTimeout);
         }
     }
 }

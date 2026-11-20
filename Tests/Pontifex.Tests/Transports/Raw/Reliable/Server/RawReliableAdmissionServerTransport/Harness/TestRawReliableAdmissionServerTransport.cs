@@ -22,14 +22,22 @@ internal sealed class TestRawReliableAdmissionServerTransport : RawReliableAdmis
         int tickPeriodMs = 100,
         int messageMaxByteSize = 1024,
         ILogger? logger = null,
-        IMemoryRental? memory = null)
+        IMemoryRental? memory = null,
+        string handshakeName = "test-handshake",
+        int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize,
+        TimeSpan? handshakeTimeout = null,
+        TimeSpan? rejectLinger = null)
         : base(
             typeName,
             logger ?? new Logger([]),
             memory ?? MemoryRental.Shared,
             maxConcurrentHandshakes,
             maxActiveSessions,
-            tickPeriodMs)
+            tickPeriodMs,
+            handshakeName,
+            handshakeMaxByteSize,
+            handshakeTimeout,
+            rejectLinger)
     {
         MessageMaxByteSize = messageMaxByteSize;
     }

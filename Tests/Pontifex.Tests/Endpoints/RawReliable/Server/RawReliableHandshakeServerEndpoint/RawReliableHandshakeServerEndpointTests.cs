@@ -25,7 +25,9 @@ public sealed class RawReliableHandshakeServerEndpointTests
 
     private static TestRawReliableHandshakeServerEndpoint Create(RecordingRawReliableHandshakeServerHandler handler)
     {
-        return new TestRawReliableHandshakeServerEndpoint(handler, disconnectTimeout: DisconnectTimeout);
+        var endpoint = new TestRawReliableHandshakeServerEndpoint(handler, disconnectTimeout: DisconnectTimeout);
+        endpoint.SetHandshakeResponse();
+        return endpoint;
     }
 
     private static UserIntention Reason(string source = "test")
@@ -44,6 +46,36 @@ public sealed class RawReliableHandshakeServerEndpointTests
         Assert.That(handler.ConnectedCount, Is.EqualTo(1));
         Assert.That(handler.ConnectedEndPoint, Is.SameAs(ep));
         Assert.That(ep.IsConnected, Is.True);
+    }
+
+    [Test]
+    public void Connect_SendsPendingHandshakeResponseBeforeOnConnected()
+    {
+        using var handler = new RecordingRawReliableHandshakeServerHandler(Memory);
+        using var ep = Create(handler);
+
+        ep.ConnectAndComplete();
+
+        Assert.That(ep.CapturedSends, Has.Count.EqualTo(1));
+        Assert.That(ep.CapturedSends[0].Elements[0].Alias.ByteValue,
+            Is.EqualTo(RawReliableFrameTypes.HandshakeResponse));
+        Assert.That(handler.ConnectedCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Connect_WithoutPendingResponse_StopsWithoutOnConnected()
+    {
+        using var handler = new RecordingRawReliableHandshakeServerHandler(Memory);
+        using var ep = new TestRawReliableHandshakeServerEndpoint(
+            handler, disconnectTimeout: DisconnectTimeout);
+
+        ep.ConnectAndComplete();
+        ep.CompleteDisconnect();
+
+        Assert.That(handler.ConnectedCount, Is.Zero,
+            "a session whose handshake response cannot be sent must not be admitted");
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
+        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
     }
 
     [Test]
@@ -89,7 +121,7 @@ public sealed class RawReliableHandshakeServerEndpointTests
     }
 
     [Test]
-    public void Stop_WhileConnecting_ReportsConnectionThenTearsDown()
+    public void Stop_WhileConnecting_DeliversStoppedWithoutConnectedNotification()
     {
         using var handler = new RecordingRawReliableHandshakeServerHandler(Memory);
         using var ep = Create(handler);
@@ -103,15 +135,15 @@ public sealed class RawReliableHandshakeServerEndpointTests
 
         ep.CompleteConnect();
 
-        Assert.That(handler.ConnectedCount, Is.EqualTo(1));
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.Events, Is.EqualTo(new[] { "connected", "disconnected" }));
+        Assert.That(handler.ConnectedCount, Is.Zero,
+            "a stop before the handshake response is admitted must not admit the session");
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+        Assert.That(handler.Events, Is.Empty);
 
         ep.CompleteDisconnect();
 
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
         Assert.That(handler.StoppedReason, Is.SameAs(reason));
-        Assert.That(handler.Events, Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
     }
 
     [Test]

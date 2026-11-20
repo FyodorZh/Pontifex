@@ -51,6 +51,23 @@ internal sealed class TestRawReliableHandshakeServerEndpoint : RawReliableHandsh
 
     protected override DateTime Now => _now;
 
+    #region Handshake
+
+    /// <summary>
+    /// Sets the pending handshake response that <see cref="RawReliableHandshakeServerEndpoint.OnConnected"/>
+    /// sends. Must be called before the connect is completed.
+    /// </summary>
+    public void SetHandshakeResponse(short? version = null, string? name = null, int? messageMaxByteSize = null)
+    {
+        var response = RawReliableHandshake.BuildResponse(
+            version ?? RawReliableHandshake.Version,
+            name ?? "test-handshake",
+            messageMaxByteSize ?? MessageMaxByteSize);
+        SetPendingHandshakeResponse(response);
+    }
+
+    #endregion
+
     #region Clock control
 
     public void AdvanceNow(TimeSpan delta) => _now += delta;

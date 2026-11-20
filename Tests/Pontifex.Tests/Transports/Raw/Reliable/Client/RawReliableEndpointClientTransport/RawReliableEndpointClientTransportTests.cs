@@ -55,6 +55,7 @@ public sealed class RawReliableEndpointClientTransportTests
         Assert.That(transport.IsConnected, Is.False);
 
         endpoint.CompleteConnect();
+        endpoint.CompleteHandshake();
 
         Assert.That(transport.IsConnected, Is.True);
         Assert.That(handler.ConnectedCount, Is.EqualTo(1));
@@ -70,6 +71,7 @@ public sealed class RawReliableEndpointClientTransportTests
 
         using var endpoint = transport.LastCreatedEndpoint!;
         endpoint.CompleteConnect();
+        endpoint.CompleteHandshake();
         Assert.That(transport.IsConnected, Is.True);
 
         var reason = new UserIntention("test");

@@ -17,9 +17,9 @@ namespace Pontifex.Raw.Reliable.Tcp
     /// <item><description><b>Thread safety</b>: Lifecycle calls are serialized by the base transport lock;
     /// the endpoint performs its own connect/teardown work on its serial action queue and socket
     /// threads.</description></item>
-    /// <item><description><b>No handshake</b>: the connection becomes logical as soon as the socket connects. The
-    /// canonical scheme is <c>tcp-noack</c>; the transport never uses the acknowledgement <c>tcp</c>
-    /// name.</description></item>
+    /// <item><description><b>Handshake</b>: the client sends the transport handshake immediately after the socket
+    /// connects and becomes logically connected only after a matching response. The temporary binding scheme is
+    /// <c>tcp-noack</c>; the handshake name is the final contract name <c>tcp</c>.</description></item>
     /// <item><description><b>Other notes</b>: The transport owns one endpoint per start. A direct
     /// <see cref="ITransport.Stop"/> is a hard stop; a gentle logical disconnect is requested from the
     /// connected <see cref="IRawReliableEndpoint"/> returned to the handler.</description></item>
@@ -47,6 +47,9 @@ namespace Pontifex.Raw.Reliable.Tcp
         private readonly TimeSpan _connectTimeout;
         private readonly TimeSpan _gracefulShutdownDeadline;
         private readonly int _sendSourceInitialCapacity;
+        private readonly string _handshakeName;
+        private readonly int _handshakeMaxByteSize;
+        private readonly TimeSpan _handshakeTimeout;
 
         public override int MessageMaxByteSize => _messageMaxByteSize;
 
@@ -76,6 +79,11 @@ namespace Pontifex.Raw.Reliable.Tcp
         /// for the default.</param>
         /// <param name="sendSourceInitialCapacity">The initial capacity of the outbound source, or
         /// <see langword="null"/> for the default.</param>
+        /// <param name="handshakeName">The transport handshake name sent to the server.</param>
+        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame, or
+        /// <see langword="null"/> for the default.</param>
+        /// <param name="handshakeTimeout">The handshake deadline, or <see langword="null"/> for the
+        /// default. <see cref="Timeout.InfiniteTimeSpan"/> disables the deadline.</param>
         public RawReliableTcpClientTransport(
             IPAddress ipAddress,
             int port,
@@ -90,7 +98,10 @@ namespace Pontifex.Raw.Reliable.Tcp
             int? messagePartMaxSize = null,
             TimeSpan? connectTimeout = null,
             TimeSpan? gracefulShutdownDeadline = null,
-            int? sendSourceInitialCapacity = null)
+            int? sendSourceInitialCapacity = null,
+            string handshakeName = RawReliableTcpInfo.HandshakeName,
+            int? handshakeMaxByteSize = null,
+            TimeSpan? handshakeTimeout = null)
             : base(RawReliableTcpInfo.TransportName, logger, memory)
         {
             if (ipAddress == null)
@@ -162,6 +173,23 @@ namespace Pontifex.Raw.Reliable.Tcp
                 throw new ArgumentOutOfRangeException(nameof(sendSourceInitialCapacity));
             }
 
+            if (handshakeName == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeName));
+            }
+
+            if (handshakeMaxByteSize.HasValue && handshakeMaxByteSize.Value < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeMaxByteSize));
+            }
+
+            if (handshakeTimeout.HasValue &&
+                handshakeTimeout.Value != Timeout.InfiniteTimeSpan &&
+                handshakeTimeout.Value <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeTimeout));
+            }
+
             _remoteEndPoint = new IPEndPoint(ipAddress, port);
             _managedRemoteEndPoint = new IpEndPoint(_remoteEndPoint);
             _disconnectTimeout = disconnectTimeout;
@@ -174,6 +202,15 @@ namespace Pontifex.Raw.Reliable.Tcp
             _connectTimeout = connectTimeout ?? DefaultConnectTimeout;
             _gracefulShutdownDeadline = gracefulShutdownDeadline ?? DefaultGracefulShutdownDeadline;
             _sendSourceInitialCapacity = sendSourceInitialCapacity ?? DefaultSendSourceInitialCapacity;
+            _handshakeName = handshakeName;
+            _handshakeMaxByteSize = handshakeMaxByteSize ?? RawReliableHandshake.DefaultMaxByteSize;
+            _handshakeTimeout = handshakeTimeout ?? TimeSpan.FromSeconds(10);
+
+            if (_messageMaxByteSize < _handshakeMaxByteSize)
+            {
+                throw new ArgumentOutOfRangeException(nameof(messageMaxSize),
+                    "The message maximum must be at least the handshake maximum.");
+            }
         }
 
         public override string ToString()
@@ -207,7 +244,10 @@ namespace Pontifex.Raw.Reliable.Tcp
                 _messagePartMaxSize,
                 _connectTimeout,
                 _gracefulShutdownDeadline,
-                _sendSourceInitialCapacity);
+                _sendSourceInitialCapacity,
+                _handshakeName,
+                _handshakeMaxByteSize,
+                _handshakeTimeout);
         }
 
         private RawReliableClientEndpoint.PingOptions? BuildPingOptions()

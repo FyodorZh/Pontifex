@@ -12,10 +12,12 @@
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|
-| `Connect_NotifiesHandler` | The logical connection is reported to the session handler once. | `OnConnected` receives the endpoint and `IsConnected` becomes true. | The inherited watchdog start is not re-tested here; the ancestor layer owns it. |
+| `Connect_NotifiesHandler` | The logical connection is reported to the session handler once. | `OnConnected` receives the endpoint and `IsConnected` becomes true. | The harness sets the pending response before completing the connect. |
+| `Connect_SendsPendingHandshakeResponseBeforeOnConnected` | The prebuilt handshake response is the first outbound frame. | The captured send is a `HandshakeResponseMessage` and the handler connection follows it. | The frame type is read through a symbol derived from the protected `MessageType` enum, not a hard-coded number. |
+| `Connect_WithoutPendingResponse_StopsWithoutOnConnected` | A session whose handshake response cannot be sent is not admitted. | The handler receives no connection notification and the endpoint stops with `TextFail`. | Covers the missing-response branch required by the accept contract. |
 | `PeriodicTick_WhenIdle_NotifiesDisconnectedThenStopped` | An idle session times out and delivers the documented callback sequence. | The `TimeOut` reason reaches `OnDisconnected` and `OnStopped` once the disconnect completes. | The ancestor layer already proves the timeout decision; this test covers the reliable notification delta. |
 | `Stop_WhenConnected_NotifiesDisconnectedThenStopped` | A stop of a connected session delivers the documented callback sequence. | The reason reaches `OnDisconnected` and `OnStopped`, and the observed order is connected, disconnected, stopped. | The double calls the base `BeginDisconnect` before recording. |
-| `Stop_WhileConnecting_ReportsConnectionThenTearsDown` | A stop latched while connecting still reports the connection first. | The observed order is connected then disconnected before the disconnect completes, and stopped afterwards. | The inherited reliable stage reports the connection before teardown; the harness exposes a public `CompleteConnect`. |
+| `Stop_WhileConnecting_DeliversStoppedWithoutConnectedNotification` | A stop latched while connecting prevents the handshake response from being admitted. | No connection or disconnect notification is raised, and the completed teardown delivers one stop. | The inherited response send fails with `NotConnected`, so the session is not admitted. |
 | `FailHard_WhenConnected_NotifiesDisconnectedThenStopped` | A hard failure of a connected session notifies disconnection before stop. | `OnDisconnected` and `OnStopped` both receive the failure reason and `IsConnected` is false. | The `FailHard` override notifies before the base terminal stop notification. |
 | `FailHard_WhenConnecting_NotifiesStoppedOnly` | A hard failure before the connection completes has no logical disconnect notification. | `OnDisconnected` is not raised; `OnStopped` receives the reason. | The connection notification latch is still clear. |
 | `Disconnect_WhenConnected_MakesIsConnectedFalseDuringOnDisconnected` | `IsConnected` is false during the handler's disconnect notification. | The probe reads false from inside `OnDisconnected`. | The disconnect latch is set before the callback; the inherited low-level stage is already disconnecting. |
@@ -41,6 +43,6 @@
 ## Notes
 
 - The test double's `BeginDisconnect` calls the reliable base implementation before recording, which is what raises the logical disconnect notification.
-- `TestRawReliableServerEndpoint.CompleteConnect` is private in the ancestor harness, so this layer's double exposes its own public `CompleteConnect`.
+- `SetHandshakeResponse` builds the pending response from the harness message maximum; it must be called before `CompleteConnect`, because the endpoint sends it from `OnConnected` and stops without admission when it is missing or unsendable.
 - The recording handler re-implements `IRawReliableHandler.OnDisconnected` explicitly because the inherited recording member is not virtual; the explicit implementation evaluates the `IsConnected` probe before recording the callback.
 - The disconnect latch and the once-only notification helper live on `RawReliableEndpoint` (`NotifyDisconnectedCore`); this layer's `FailHard` and `BeginDisconnect` hooks only delegate to it.

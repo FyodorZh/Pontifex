@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -12,17 +13,17 @@ namespace Pontifex.Raw.Reliable.Tcp
 {
     /// <summary>
     /// Reliable TCP server transport. Accepts sockets through the shared asynchronous
-    /// listener and admits each accepted endpoint into the shared reliable server registry without an
-    /// acknowledgement handshake.
+    /// listener, runs the transport handshake, and admits each accepted endpoint into the shared reliable
+    /// server registry.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Thread safety</b>: Lifecycle calls are serialized by the base transport lock. The
-    /// accept loop and session callbacks may run on socket or thread-pool threads; the transport gates and
-    /// registries are safe for concurrent use.</description></item>
-    /// <item><description><b>No handshake</b>: the accepted socket is already connected, so the handler factory is
-    /// invoked immediately and the endpoint is created in the same accept callback. There are no handshake sockets
-    /// to track and no accept-result hand-off.</description></item>
+    /// accept loop, handshake callbacks, and session callbacks may run on socket or thread-pool threads; the
+    /// transport gates and registries are safe for concurrent use.</description></item>
+    /// <item><description><b>Transport handshake</b>: the accepted socket is not admitted until its handshake
+    /// request has been read and validated. A rejected peer receives a reject frame, then the socket stays open
+    /// for the configured reject linger before it is closed.</description></item>
     /// <item><description><b>Stop-once notification</b>: every handler returned by the factory is wrapped in the
     /// transport's stop-once gate, so the session endpoint and the admission-failure fallback share one latch and
     /// the factory's handler observes at most one <see cref="IRawHandler.OnStopped"/>.</description></item>
@@ -35,10 +36,17 @@ namespace Pontifex.Raw.Reliable.Tcp
 
         private static readonly TimeSpan DefaultGracefulShutdownDeadline = TimeSpan.FromSeconds(10);
 
+        private readonly object _handshakeSocketsLock = new();
+        private readonly HashSet<Socket> _handshakeSockets = new();
+
         private readonly TimeSpan _disconnectTimeout;
         private readonly int _messageMaxByteSize;
         private readonly long _bufferCapacityBytes;
         private readonly int _backlog;
+        private readonly string _handshakeName;
+        private readonly int _handshakeMaxByteSize;
+        private readonly TimeSpan _handshakeTimeout;
+        private readonly TimeSpan _rejectLinger;
         private readonly RemoteHalfClosePolicy _remoteHalfClosePolicy;
         private readonly int _receiveBufferSize;
         private readonly int _messagePartMaxSize;
@@ -75,6 +83,13 @@ namespace Pontifex.Raw.Reliable.Tcp
         /// the default. <see cref="Timeout.InfiniteTimeSpan"/> waits indefinitely.</param>
         /// <param name="sendSourceInitialCapacity">The initial capacity of the outbound source, or
         /// <see langword="null"/> for the default.</param>
+        /// <param name="handshakeName">The transport handshake name used by the listener.</param>
+        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame, or
+        /// <see langword="null"/> for the default.</param>
+        /// <param name="handshakeTimeout">The server handshake deadline, or <see langword="null"/> for the
+        /// default. <see cref="Timeout.InfiniteTimeSpan"/> disables the deadline.</param>
+        /// <param name="rejectLinger">How long a rejected socket stays open after the reject frame is written,
+        /// or <see langword="null"/> for the default.</param>
         public RawReliableTcpServerTransport(
             IPAddress ipAddress,
             int port,
@@ -91,9 +106,17 @@ namespace Pontifex.Raw.Reliable.Tcp
             int? receiveBufferSize = null,
             int? messagePartMaxSize = null,
             TimeSpan? gracefulShutdownDeadline = null,
-            int? sendSourceInitialCapacity = null)
+            int? sendSourceInitialCapacity = null,
+            string handshakeName = RawReliableTcpInfo.HandshakeName,
+            int? handshakeMaxByteSize = null,
+            TimeSpan? handshakeTimeout = null,
+            TimeSpan? rejectLinger = null)
             : base(RawReliableTcpInfo.TransportName, logger, memory,
-                Math.Max(1, handshakeLimit), Math.Max(1, connectionsLimit), tickPeriodMs ?? 100)
+                Math.Max(1, handshakeLimit), Math.Max(1, connectionsLimit), tickPeriodMs ?? 100,
+                handshakeName,
+                handshakeMaxByteSize ?? RawReliableHandshake.DefaultMaxByteSize,
+                handshakeTimeout,
+                rejectLinger)
         {
             if (ipAddress == null)
             {
@@ -168,11 +191,21 @@ namespace Pontifex.Raw.Reliable.Tcp
             _messageMaxByteSize = messageMaxSize ?? RawReliableTcpInfo.DefaultMessageMaxSize;
             _bufferCapacityBytes = bufferCapacityBytes ?? RawReliableTcpInfo.DefaultBufferCapacity;
             _backlog = backlog;
+            _handshakeName = HandshakeName;
+            _handshakeMaxByteSize = HandshakeMaxByteSize;
+            _handshakeTimeout = HandshakeTimeout;
+            _rejectLinger = RejectLinger;
             _remoteHalfClosePolicy = remoteHalfClosePolicy;
             _receiveBufferSize = receiveBufferSize ?? DefaultReceiveBufferSize;
             _messagePartMaxSize = messagePartMaxSize ?? DefaultReceiveBufferSize;
             _gracefulShutdownDeadline = resolvedGracefulShutdownDeadline;
             _sendSourceInitialCapacity = sendSourceInitialCapacity ?? DefaultSendSourceInitialCapacity;
+
+            if (_messageMaxByteSize < _handshakeMaxByteSize)
+            {
+                throw new ArgumentOutOfRangeException(nameof(messageMaxSize),
+                    "The message maximum must be at least the handshake maximum.");
+            }
         }
 
         /// <inheritdoc/>
@@ -243,6 +276,7 @@ namespace Pontifex.Raw.Reliable.Tcp
         protected override void StopCarrier(StopReason reason)
         {
             StopListener();
+            CloseHandshakeSockets();
         }
 
         private void StopListener()
@@ -281,17 +315,17 @@ namespace Pontifex.Raw.Reliable.Tcp
         }
 
         /// <summary>
-        /// Admits one accepted socket as a reliable session.
+        /// Starts the transport handshake for one accepted socket.
         /// </summary>
-        /// <param name="socket">The accepted, connected socket. Ownership transfers to the endpoint on success;
-        /// every other path closes it.</param>
+        /// <param name="socket">The accepted, connected socket. Ownership transfers to the handshake engine;
+        /// every rejection path closes it.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Runs on the listener's accept callback thread. The admission
         /// gates and the handler factory are safe for concurrent use.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: Every reserved admission is completed or
-        /// abandoned exactly once. A handler created by the factory observes one <c>OnStopped</c> if the session
-        /// is never started, and the endpoint owns the terminal notification otherwise.</description></item>
+        /// abandoned exactly once. The handshake socket is tracked until the completion callback runs or the
+        /// transport stops.</description></item>
         /// </list>
         /// </remarks>
         private void OnClientConnected(Socket socket)
@@ -308,48 +342,23 @@ namespace Pontifex.Raw.Reliable.Tcp
                 return;
             }
 
-            IEndPoint remote;
+            TrackHandshakeSocket(socket);
             try
             {
-                EndPoint? remoteEndPoint = socket.RemoteEndPoint;
-                if (remoteEndPoint == null)
-                {
-                    AbandonAdmission();
-                    RejectSocket(socket);
-                    return;
-                }
-
-                remote = new IpEndPoint(remoteEndPoint);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-                AbandonAdmission();
-                RejectSocket(socket);
-                return;
-            }
-
-            var handler = TryCreateHandler(remote);
-            if (handler == null)
-            {
-                AbandonAdmission();
-                RejectSocket(socket);
-                return;
-            }
-
-            RawReliableTcpServerEndpoint endpoint;
-            try
-            {
-                endpoint = new RawReliableTcpServerEndpoint(
+                RawReliableTcpServerEndpoint.BeginAccept(
                     Name,
-                    remote,
                     socket,
-                    handler,
+                    TryHandshake,
+                    _handshakeName,
+                    _handshakeMaxByteSize,
                     _messageMaxByteSize,
                     _bufferCapacityBytes,
                     Memory,
                     Log,
                     _disconnectTimeout,
+                    _rejectLinger,
+                    result => OnHandshakeCompleted(socket, result),
+                    _handshakeTimeout,
                     _remoteHalfClosePolicy,
                     _receiveBufferSize,
                     _messagePartMaxSize,
@@ -359,15 +368,67 @@ namespace Pontifex.Raw.Reliable.Tcp
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                AbandonAdmission(handler, new ExceptionFail(Name, ex, "Failed to create the server endpoint"));
+                UntrackHandshakeSocket(socket);
+                AbandonAdmission();
                 RejectSocket(socket);
+            }
+        }
+
+        private void OnHandshakeCompleted(Socket socket, RawReliableTcpServerEndpoint.TcpHandshakeResult result)
+        {
+            UntrackHandshakeSocket(socket);
+
+            if (result.Status == RawReliableTcpServerEndpoint.TcpHandshakeStatus.Accepted)
+            {
+                CompleteAdmission(result.Endpoint!, result.Handler,
+                    new TextFail(Name, "Failed to start or register a TCP session"));
                 return;
             }
 
-            if (!CompleteAdmission(endpoint, handler,
-                    new TextFail(Name, "Failed to start or register a TCP session")))
+            AbandonAdmission(result.Handler,
+                result.Reason ?? new TextFail(Name, "The transport handshake failed"));
+
+            if (result.Status == RawReliableTcpServerEndpoint.TcpHandshakeStatus.Faulted &&
+                result.Error != null)
             {
-                Log.e("Failed to start or register a reliable TCP session");
+                Log.wtf(result.Error);
+            }
+        }
+
+        private void TrackHandshakeSocket(Socket socket)
+        {
+            lock (_handshakeSocketsLock)
+            {
+                _handshakeSockets.Add(socket);
+            }
+        }
+
+        private void UntrackHandshakeSocket(Socket socket)
+        {
+            lock (_handshakeSocketsLock)
+            {
+                _handshakeSockets.Remove(socket);
+            }
+        }
+
+        private void CloseHandshakeSockets()
+        {
+            Socket[] snapshot;
+            lock (_handshakeSocketsLock)
+            {
+                if (_handshakeSockets.Count == 0)
+                {
+                    return;
+                }
+
+                snapshot = new Socket[_handshakeSockets.Count];
+                _handshakeSockets.CopyTo(snapshot);
+                _handshakeSockets.Clear();
+            }
+
+            for (int i = 0; i < snapshot.Length; i++)
+            {
+                RejectSocket(snapshot[i]);
             }
         }
 

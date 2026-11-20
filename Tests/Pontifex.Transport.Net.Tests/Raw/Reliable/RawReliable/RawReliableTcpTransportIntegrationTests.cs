@@ -16,8 +16,9 @@ namespace Pontifex.Tests.Raw.Reliable.RawReliable;
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item><description><b>No handshake</b>: the server admits a connection as soon as the socket is accepted and the
-/// handler factory admits it. There is no acknowledgement request, response, or deadline on either side.</description></item>
+/// <item><description><b>Transport handshake</b>: the server admits a connection only after its handshake request
+/// is validated. Both sides complete the mandatory version/name/capacity negotiation before any handler observes
+/// <c>OnConnected</c>.</description></item>
 /// <item><description><b>Coverage</b>: connect, bidirectional order, send-in-OnConnected from both sides, rejection
 /// by a null factory result, transport stop from both sides, graceful disconnect, idle watchdog, keep-alive, empty
 /// and oversized messages, and a handler-initiated disconnect are covered here.</description></item>
@@ -30,6 +31,8 @@ public sealed class RawReliableTcpTransportIntegrationTests
 
     private const int MessageMaxByteSize = 1024 * 1024;
     private const long BufferCapacityBytes = 1024 * 1024;
+
+    private const string HandshakeName = "tcp";
 
     private static IMemoryRental Memory => MemoryRental.Shared;
 
@@ -327,7 +330,8 @@ public sealed class RawReliableTcpTransportIntegrationTests
             Memory,
             bufferCapacityBytes: BufferCapacityBytes,
             tickPeriodMs: serverTickPeriodMs,
-            gracefulShutdownDeadline: serverGracefulShutdownDeadline);
+            gracefulShutdownDeadline: serverGracefulShutdownDeadline,
+            handshakeName: HandshakeName);
 
         var client = new RawReliableTcpClientTransport(
             IPAddress.Loopback,
@@ -337,7 +341,8 @@ public sealed class RawReliableTcpTransportIntegrationTests
             Log,
             Memory,
             pingPeriod: clientPingPeriod,
-            bufferCapacityBytes: BufferCapacityBytes);
+            bufferCapacityBytes: BufferCapacityBytes,
+            handshakeName: HandshakeName);
 
         var pair = new Pair(server, client, factory, clientHandler);
         try

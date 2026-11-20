@@ -14,7 +14,7 @@
 |---|---|---|---|
 | `EndpointClientTransport_ExposesReliableClientContract` | The reliable client facade narrows the client transport to the reliable contracts. | It is assignable to `IRawReliableClient`, `IRawReliableClientTransport<IRawReliableClientHandler>`, `IRawReliableTransport`, `IRawTransport`, and `ITransport`. | — |
 | `EndpointClientTransport_HasRawReliableTransportType` | The facade fixes the transport type. | `Type` is `TransportType.RawReliable`. | — |
-| `Start_CreatesAndStartsEndpoint` | The facade creates and attaches one endpoint and starts it. | One endpoint is created, it is the attached endpoint, and connectivity comes from that endpoint only; completing the endpoint connect raises the handler's `OnConnected` and makes the transport connected. | Reuses the Endpoints-suite handshake endpoint and handler doubles. |
+| `Start_CreatesAndStartsEndpoint` | The facade creates and attaches one endpoint and starts it. | One endpoint is created, it is the attached endpoint, and connectivity comes from that endpoint only; completing the endpoint connect and handshake raises the handler's `OnConnected` and makes the transport connected. | Reuses the Endpoints-suite handshake endpoint and handler doubles; the handshake response is supplied explicitly. |
 | `Stop_DestroysAttachedEndpoint` | Teardown stops the attached endpoint. | The endpoint receives the stop with the transport reason, observes `OnDisconnected` and `OnStopped` once, and the transport is detached and no longer started. | The endpoint double needs an explicit disconnect completion, as in the Endpoints suite. |
 
 ## Planned

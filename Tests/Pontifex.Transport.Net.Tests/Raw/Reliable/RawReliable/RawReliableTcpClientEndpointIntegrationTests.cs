@@ -16,12 +16,12 @@ namespace Pontifex.Tests.Raw.Reliable.RawReliable;
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item><description><b>No handshake</b>: the client handler must observe <c>OnConnected</c> as soon as the
-/// socket connects, and the first decoded frame must be a payload or control frame sent by the endpoint, not an
-/// acknowledgement request.</description></item>
+/// <item><description><b>Transport handshake</b>: the raw peer reads the handshake request and writes a valid
+/// response before the client handler is expected to observe <c>OnConnected</c>. Handshake frames are consumed
+/// by the endpoint and are never delivered through <c>OnReceived</c>.</description></item>
 /// <item><description><b>Coverage</b>: connect, send, receive, graceful disconnect, remote disconnect, remote
 /// close, graceful stop, and the not-connected send rejection are covered here. The reliable server
-/// carrier is covered separately in Stage 9.</description></item>
+/// carrier is covered by the server transport integration tests.</description></item>
 /// </list>
 /// </remarks>
 [Category("Integration")]
@@ -32,8 +32,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
     private const int MessageMaxByteSize = 1024 * 1024;
     private const long BufferCapacityBytes = 1024 * 1024;
 
-    private const byte PayloadFrame = 1; // RawReliableEndpoint.MessageType.PayloadMessage
-    private const byte DisconnectFrame = 2; // RawReliableEndpoint.MessageType.DisconnectMessage
+    private const string HandshakeName = "tcp";
 
     private static IMemoryRental Memory => MemoryRental.Shared;
 
@@ -62,13 +61,15 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
 
             acceptedSocket = AcceptWithTimeout(listener, Timeout);
 
+            CompleteRawHandshake(acceptedSocket);
+
             Assert.That(handler.Connected.Wait(Timeout), Is.True,
                 "the client handler must observe the logical connection");
             Assert.That(handler.ConnectedCount, Is.EqualTo(1));
             Assert.That(handler.Endpoint, Is.SameAs(client),
                 "the client handler must be given the connecting endpoint");
             Assert.That(client.IsConnected, Is.True,
-                "the endpoint must be connected without any acknowledgement step");
+                "the endpoint must be connected after the transport handshake");
         }
         finally
         {
@@ -101,7 +102,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
             try
             {
                 Assert.That(frame.Elements.Count, Is.EqualTo(2));
-                Assert.That(frame.Elements[0].Alias.ByteValue, Is.EqualTo(PayloadFrame),
+                Assert.That(frame.Elements[0].Alias.ByteValue, Is.EqualTo(RawReliableFrameTypes.Payload),
                     "the first decoded value must be the payload frame type");
                 Assert.That(frame.Elements[1].Alias.IntValue, Is.EqualTo(42),
                     "the decoded payload must match the sent value");
@@ -132,7 +133,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
         {
             client = ConnectEndpoint(listener, handler, out acceptedSocket);
 
-            SendFrame(acceptedSocket!, new UnionData(PayloadFrame), new UnionData(7));
+            SendFrame(acceptedSocket!, new UnionData(RawReliableFrameTypes.Payload), new UnionData(7));
 
             Assert.That(handler.ReceivedCount.Wait(Timeout), Is.True,
                 "the client handler must receive the raw peer payload");
@@ -159,7 +160,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
         {
             client = ConnectEndpoint(listener, handler, out acceptedSocket);
 
-            SendFrame(acceptedSocket!, new UnionData(DisconnectFrame));
+            SendFrame(acceptedSocket!, new UnionData(RawReliableFrameTypes.Disconnect));
 
             Assert.That(handler.Stopped.Wait(Timeout), Is.True,
                 "the client handler must observe the stop after a remote disconnect");
@@ -229,7 +230,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
             try
             {
                 Assert.That(frame.Elements.Count, Is.GreaterThan(0));
-                Assert.That(frame.Elements[0].Alias.ByteValue, Is.EqualTo(DisconnectFrame),
+                Assert.That(frame.Elements[0].Alias.ByteValue, Is.EqualTo(RawReliableFrameTypes.Disconnect),
                     "a graceful stop must send a disconnect frame");
             }
             finally
@@ -261,7 +262,8 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
             BufferCapacityBytes,
             Memory,
             Log,
-            pingOptions: null);
+            pingOptions: null,
+            handshakeName: HandshakeName);
 
         var message = Memory.CollectablePool.Acquire<UnionDataList>();
         message.PutLast(new UnionData(1));
@@ -286,6 +288,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
             Assert.That(client.Start(), Is.True, "the client start request must be accepted");
 
             acceptedSocket = AcceptWithTimeout(listener, Timeout);
+            CompleteRawHandshake(acceptedSocket);
 
             // Read the graceful disconnect frame before waiting for the terminal notification: the endpoint
             // keeps the connection open until its graceful shutdown deadline expires.
@@ -293,7 +296,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
             try
             {
                 Assert.That(frame.Elements.Count, Is.GreaterThan(0));
-                Assert.That(frame.Elements[0].Alias.ByteValue, Is.EqualTo(DisconnectFrame),
+                Assert.That(frame.Elements[0].Alias.ByteValue, Is.EqualTo(RawReliableFrameTypes.Disconnect),
                     "the graceful shutdown started from OnConnected must send a disconnect frame");
             }
             finally
@@ -334,7 +337,8 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
             Log,
             pingOptions: null,
             connectTimeout: Timeout,
-            gracefulShutdownDeadline: TimeSpan.FromSeconds(2));
+            gracefulShutdownDeadline: TimeSpan.FromSeconds(2),
+            handshakeName: HandshakeName);
     }
 
     private static RawReliableTcpClientEndpoint ConnectEndpoint(
@@ -346,6 +350,7 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
         Assert.That(client.Start(), Is.True, "the client start request must be accepted");
 
         acceptedSocket = AcceptWithTimeout(listener, Timeout);
+        CompleteRawHandshake(acceptedSocket);
         Assert.That(handler.Connected.Wait(Timeout), Is.True,
             "the client handler must observe the logical connection");
 
@@ -356,6 +361,43 @@ public sealed class RawReliableTcpClientEndpointIntegrationTests
     {
         // Arm the receive timeout before any reset can be observed; setting it after an RST can throw.
         socket.ReceiveTimeout = (int)Timeout.TotalMilliseconds;
+    }
+
+    private static void CompleteRawHandshake(Socket socket, short? version = null, string? name = null,
+        int? messageMaxByteSize = null)
+    {
+        UnionDataList request = ReadFrame(socket);
+        try
+        {
+            Assert.That(request.Elements.Count, Is.EqualTo(4),
+                "the handshake request must carry a frame type and three values");
+            Assert.That(request.Elements[0].Alias.ByteValue,
+                Is.EqualTo(RawReliableFrameTypes.HandshakeRequest),
+                "the first frame from a connecting client must be the handshake request");
+        }
+        finally
+        {
+            request.Release();
+        }
+
+        var response = RawReliableHandshake.BuildResponse(
+            version ?? RawReliableHandshake.Version,
+            name ?? HandshakeName,
+            messageMaxByteSize ?? MessageMaxByteSize);
+        response.PutFirst(RawReliableFrameTypes.HandshakeResponse);
+
+        IMultiRefByteArray? frame = null;
+        try
+        {
+            frame = UnionDataListCompositor.Encode(response, Memory.ByteArraysPool);
+            Assert.That(frame, Is.Not.Null, "the handshake response must be encodable");
+            SendAll(socket, frame!);
+        }
+        finally
+        {
+            frame?.Release();
+            response.Release();
+        }
     }
 
     private static Socket AcceptWithTimeout(TcpListener listener, TimeSpan timeout)

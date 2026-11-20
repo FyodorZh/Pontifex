@@ -90,6 +90,7 @@ Endpoints/
 ├── Coverage.md                              RawEndpoint layer
 ├── Harness/
 │   ├── ManualSerialActionQueue.cs
+│   ├── RawReliableFrameTypes.cs
 │   ├── RecordingLogConsumer.cs
 │   ├── RecordingRawHandler.cs
 │   ├── TestBuffers.cs
@@ -116,6 +117,7 @@ Endpoints/
 │   │   └── RawReliableHandshakeClientEndpoint/
 │   │       ├── Coverage.md                  RawReliableHandshakeClientEndpoint layer
 │   │       ├── Harness/
+│   │       │   ├── ManualHandshakeTimer.cs
 │   │       │   ├── RecordingRawReliableHandshakeClientHandler.cs
 │   │       │   └── TestRawReliableHandshakeClientEndpoint.cs
 │   │       └── RawReliableHandshakeClientEndpointTests.cs

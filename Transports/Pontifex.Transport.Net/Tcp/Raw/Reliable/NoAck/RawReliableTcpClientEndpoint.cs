@@ -20,9 +20,9 @@ namespace Pontifex.Raw.Reliable.Tcp
     /// <item><description><b>Thread safety</b>: Lifecycle hooks run on the base serial action queue; the
     /// outbound source has a single writer (that queue), while socket callbacks may run on socket or
     /// thread-pool threads.</description></item>
-    /// <item><description><b>No handshake</b>: unlike the acknowledgement carrier, there is no request/response
-    /// exchange. The socket connection is the logical connection, so the handler observes <c>OnConnected</c> as
-    /// soon as the reliable stage connects and inbound frames are not admitted before that point.</description></item>
+    /// <item><description><b>Transport handshake</b>: the socket connect starts the handshake; the handler
+    /// observes <c>OnConnected</c> only after the server response is accepted. Inbound frames are dispatched
+    /// while the response is awaited so the handshake response is not dropped.</description></item>
     /// <item><description><b>Other notes</b>: The endpoint creates and owns the socket and the low-level
     /// transport, keeping the inherited keep-alive behavior from the reliable endpoint base.</description></item>
     /// </list>
@@ -75,7 +75,10 @@ namespace Pontifex.Raw.Reliable.Tcp
             int messagePartMaxSize = DefaultReceiveBufferSize,
             TimeSpan? connectTimeout = null,
             TimeSpan? gracefulShutdownDeadline = null,
-            int sendSourceInitialCapacity = 10)
+            int sendSourceInitialCapacity = 10,
+            string handshakeName = RawReliableTcpInfo.HandshakeName,
+            int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize,
+            TimeSpan? handshakeTimeout = null)
             : base(
                 transportName,
                 remoteEndPoint,
@@ -84,7 +87,10 @@ namespace Pontifex.Raw.Reliable.Tcp
                 bufferCapacityBytes,
                 memory,
                 log,
-                pingOptions)
+                pingOptions,
+                handshakeName,
+                handshakeMaxByteSize,
+                handshakeTimeout)
         {
             if (remoteEndPoint == null)
             {
@@ -160,16 +166,15 @@ namespace Pontifex.Raw.Reliable.Tcp
         }
 
         /// <summary>
-        /// Notifies the handler of the logical connection and then starts receiving. There is no handshake, so
-        /// the connection completes together with the socket connect.
+        /// Starts the transport handshake and then starts receiving, so the handshake response is dispatched.
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Called on the serial action queue.</description></item>
         /// <item><description><b>Other notes</b>: The receiver starts only when the endpoint is still running after
-        /// the handler notification. A handler exception or a handler-initiated disconnect stops the endpoint
-        /// synchronously, so the receiver must not be started for it. The inherited keep-alive behavior is started
-        /// by the base implementation without any handshake delay.</description></item>
+        /// the handshake request was admitted. A handler exception or a handler-initiated disconnect stops the
+        /// endpoint synchronously, so the receiver must not be started for it. The inherited keep-alive behavior
+        /// is started by the handshake completion, not here.</description></item>
         /// </list>
         /// </remarks>
         protected override void OnConnected()

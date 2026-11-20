@@ -70,7 +70,22 @@ namespace Pontifex.Raw.Reliable
             /// <summary>
             /// An acknowledgement response.
             /// </summary>
-            AckResponseMessage = 6
+            AckResponseMessage = 6,
+
+            /// <summary>
+            /// A transport handshake request.
+            /// </summary>
+            HandshakeRequestMessage = 7,
+
+            /// <summary>
+            /// A transport handshake response.
+            /// </summary>
+            HandshakeResponseMessage = 8,
+
+            /// <summary>
+            /// A transport handshake rejection.
+            /// </summary>
+            HandshakeRejectMessage = 9
         }
 
         private enum State
