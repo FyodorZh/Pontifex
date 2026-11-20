@@ -8,9 +8,8 @@ namespace Pontifex.Raw.Reliable.Direct
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Other notes</b>: The temporary scheme is <c>direct-noack</c> until the
-    /// acknowledgement Direct carrier is removed; the handshake name is the final contract name
-    /// <c>direct</c>.</description></item>
+    /// <item><description><b>Other notes</b>: The canonical scheme is <c>direct</c>, and the transport handshake
+    /// name is the same contract name.</description></item>
     /// </list>
     /// </remarks>
     public static class RawReliableDirectBinding

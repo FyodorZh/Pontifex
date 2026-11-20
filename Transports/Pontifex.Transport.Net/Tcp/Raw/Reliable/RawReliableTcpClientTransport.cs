@@ -18,8 +18,8 @@ namespace Pontifex.Raw.Reliable.Tcp
     /// the endpoint performs its own connect/teardown work on its serial action queue and socket
     /// threads.</description></item>
     /// <item><description><b>Handshake</b>: the client sends the transport handshake immediately after the socket
-    /// connects and becomes logically connected only after a matching response. The temporary binding scheme is
-    /// <c>tcp-noack</c>; the handshake name is the final contract name <c>tcp</c>.</description></item>
+    /// connects and becomes logically connected only after a matching response. The binding scheme and the
+    /// handshake name are both <c>tcp</c>.</description></item>
     /// <item><description><b>Other notes</b>: The transport owns one endpoint per start. A direct
     /// <see cref="ITransport.Stop"/> is a hard stop; a gentle logical disconnect is requested from the
     /// connected <see cref="IRawReliableEndpoint"/> returned to the handler.</description></item>
@@ -99,10 +99,10 @@ namespace Pontifex.Raw.Reliable.Tcp
             TimeSpan? connectTimeout = null,
             TimeSpan? gracefulShutdownDeadline = null,
             int? sendSourceInitialCapacity = null,
-            string handshakeName = RawReliableTcpInfo.HandshakeName,
+            string handshakeName = TcpInfo.HandshakeName,
             int? handshakeMaxByteSize = null,
             TimeSpan? handshakeTimeout = null)
-            : base(RawReliableTcpInfo.TransportName, logger, memory)
+            : base(TcpInfo.TransportName, logger, memory)
         {
             if (ipAddress == null)
             {
@@ -193,8 +193,8 @@ namespace Pontifex.Raw.Reliable.Tcp
             _remoteEndPoint = new IPEndPoint(ipAddress, port);
             _managedRemoteEndPoint = new IpEndPoint(_remoteEndPoint);
             _disconnectTimeout = disconnectTimeout;
-            _messageMaxByteSize = messageMaxSize ?? RawReliableTcpInfo.DefaultMessageMaxSize;
-            _bufferCapacityBytes = bufferCapacityBytes ?? RawReliableTcpInfo.DefaultBufferCapacity;
+            _messageMaxByteSize = messageMaxSize ?? TcpInfo.DefaultMessageMaxSize;
+            _bufferCapacityBytes = bufferCapacityBytes ?? TcpInfo.DefaultBufferCapacity;
             _pingPeriod = pingPeriod;
             _remoteHalfClosePolicy = remoteHalfClosePolicy;
             _receiveBufferSize = receiveBufferSize ?? DefaultReceiveBufferSize;
@@ -217,11 +217,11 @@ namespace Pontifex.Raw.Reliable.Tcp
         {
             try
             {
-                return $"{RawReliableTcpInfo.TransportName}-client[{_remoteEndPoint}]";
+                return $"{TcpInfo.TransportName}-client[{_remoteEndPoint}]";
             }
             catch (Exception)
             {
-                return $"{RawReliableTcpInfo.TransportName}-client[unknown]";
+                return $"{TcpInfo.TransportName}-client[unknown]";
             }
         }
 

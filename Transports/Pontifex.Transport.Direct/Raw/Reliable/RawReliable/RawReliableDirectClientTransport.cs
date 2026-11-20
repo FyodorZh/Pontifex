@@ -13,8 +13,8 @@ namespace Pontifex.Raw.Reliable.Direct
     /// <item><description><b>Thread safety</b>: Lifecycle calls are serialized by the base transport lock;
     /// the endpoint performs its own connect and teardown work on its serial action queue.</description></item>
     /// <item><description><b>Transport handshake</b>: the client sends the handshake request as the first
-    /// channel message and becomes logically connected only after a matching response. The temporary binding
-    /// scheme is <c>direct-noack</c>; the handshake name is the final contract name <c>direct</c>.</description></item>
+    /// channel message and becomes logically connected only after a matching response. The binding scheme and
+    /// the handshake name are both <c>direct</c>.</description></item>
     /// <item><description><b>Other notes</b>: The in-process handshake completes synchronously when a server is
     /// available. A missing, rejecting, or immediately disconnecting server is reported through the handler's
     /// <c>OnStopped</c> without <c>OnConnected</c>; it is not a start failure.</description></item>

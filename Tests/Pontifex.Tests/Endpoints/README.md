@@ -17,10 +17,8 @@ Selected inheritance tree:
 RawEndpoint
 ├── RawReliableEndpoint
 │   ├── RawReliableClientEndpoint
-│   │   ├── RawReliableAckClientEndpoint
 │   │   └── RawReliableHandshakeClientEndpoint
 │   └── RawReliableServerEndpoint
-│       ├── RawReliableAckServerEndpoint
 │       └── RawReliableHandshakeServerEndpoint
 └── RawUnreliableEndpoint
     └── RawUnreliableServerEndpoint
@@ -36,11 +34,6 @@ RawEndpoint
 - [IRawReliableEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableEndpoint.cs)
 - [RawReliableClientEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableClientEndpoint.cs)
 - [RawReliableServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableServerEndpoint.cs)
-- [RawReliableAckClientEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/Ack/RawReliableAckClientEndpoint.cs)
-- [IRawReliableAckClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Client/IRawReliableAckClientHandler.cs)
-- [RawReliableAckServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/Ack/RawReliableAckServerEndpoint.cs)
-- [IRawReliableAckServerHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Ack/Server/IRawReliableAckServerHandler.cs)
-- [RawReliableAckInfo.cs](../../../Pontifex/Implementations/Raw/Reliable/Ack/RawReliableAckInfo.cs)
 - [RawReliableHandshakeClientEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableHandshakeClientEndpoint.cs)
 - [IRawReliableClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClientHandler.cs)
 - [RawReliableHandshakeServerEndpoint.cs](../../../Pontifex/Implementations/Endpoints/Raw/Reliable/RawReliableHandshakeServerEndpoint.cs)
@@ -63,8 +56,6 @@ parent, and coverage file.
 | `RawReliableEndpoint` | `Pontifex.Raw.Reliable.RawReliableEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable` | `RawEndpoint` | [`RawReliable/Coverage.md`](RawReliable/Coverage.md) |
 | `RawReliableClientEndpoint` | `Pontifex.Raw.Reliable.RawReliableClientEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Client` | `RawReliableEndpoint` | [`RawReliable/Client/Coverage.md`](RawReliable/Client/Coverage.md) |
 | `RawReliableServerEndpoint` | `Pontifex.Raw.Reliable.RawReliableServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server` | `RawReliableEndpoint` | [`RawReliable/Server/Coverage.md`](RawReliable/Server/Coverage.md) |
-| `RawReliableAckClientEndpoint` | `Pontifex.Raw.Reliable.Ack.RawReliableAckClientEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Ack` | `RawReliableClientEndpoint` | [`RawReliable/Client/Ack/Coverage.md`](RawReliable/Client/Ack/Coverage.md) |
-| `RawReliableAckServerEndpoint` | `Pontifex.Raw.Reliable.Ack.RawReliableAckServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/Ack` | `RawReliableServerEndpoint` | [`RawReliable/Server/Ack/Coverage.md`](RawReliable/Server/Ack/Coverage.md) |
 | `RawReliableHandshakeClientEndpoint` | `Pontifex.Raw.Reliable.RawReliableHandshakeClientEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/RawReliableHandshakeClientEndpoint` | `RawReliableClientEndpoint` | [`RawReliable/Client/RawReliableHandshakeClientEndpoint/Coverage.md`](RawReliable/Client/RawReliableHandshakeClientEndpoint/Coverage.md) |
 | `RawReliableHandshakeServerEndpoint` | `Pontifex.Raw.Reliable.RawReliableHandshakeServerEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawReliable/Server/RawReliableHandshakeServerEndpoint` | `RawReliableServerEndpoint` | [`RawReliable/Server/RawReliableHandshakeServerEndpoint/Coverage.md`](RawReliable/Server/RawReliableHandshakeServerEndpoint/Coverage.md) |
 | `RawUnreliableEndpoint` | `Pontifex.Raw.Unreliable.RawUnreliableEndpoint` | `Tests/Pontifex.Tests/Endpoints/RawUnreliable` | `RawEndpoint` | [`RawUnreliable/Coverage.md`](RawUnreliable/Coverage.md) |
@@ -108,12 +99,6 @@ Endpoints/
 │   │   │   ├── RecordingRawReliableClientHandler.cs
 │   │   │   └── TestRawReliableClientEndpoint.cs
 │   │   ├── RawReliableClientEndpointTests.cs
-│   │   ├── Ack/
-│   │   │   ├── Coverage.md                  RawReliableAckClientEndpoint layer
-│   │   │   ├── Harness/
-│   │   │   │   ├── RecordingRawReliableAckClientHandler.cs
-│   │   │   │   └── TestRawReliableAckClientEndpoint.cs
-│   │   │   └── RawReliableAckClientEndpointTests.cs
 │   │   └── RawReliableHandshakeClientEndpoint/
 │   │       ├── Coverage.md                  RawReliableHandshakeClientEndpoint layer
 │   │       ├── Harness/
@@ -127,12 +112,6 @@ Endpoints/
 │       │   ├── RecordingRawReliableServerHandler.cs
 │       │   └── TestRawReliableServerEndpoint.cs
 │       ├── RawReliableServerEndpointTests.cs
-│       ├── Ack/
-│       │   ├── Coverage.md                  RawReliableAckServerEndpoint layer
-│       │   ├── Harness/
-│       │   │   ├── RecordingRawReliableAckServerHandler.cs
-│       │   │   └── TestRawReliableAckServerEndpoint.cs
-│       │   └── RawReliableAckServerEndpointTests.cs
 │       └── RawReliableHandshakeServerEndpoint/
 │           ├── Coverage.md                  RawReliableHandshakeServerEndpoint layer
 │           ├── Harness/
@@ -164,8 +143,8 @@ drivers.
   `RecordingRawReliableHandler`, which is shared by both client/server branches.
 - Client-specific harness stays in `RawReliable/Client/Harness/`; server-specific harness stays
   in `RawReliable/Server/Harness/`.
-- Ack-specific harness stays in the corresponding ack layer's `Harness/`; the
-  reliable-handshake harness stays in the corresponding reliable-handshake layer's `Harness/`.
+- The reliable-handshake harness stays in the corresponding reliable-handshake layer's
+  `Harness/`.
 - `RawUnreliable/Harness/` holds the layer's `TestRawUnreliableEndpoint` and the handler double
   `RecordingRawUnreliableHandler`, which is shared by the unreliable server branch.
 - `RawUnreliable/Server/Harness/` holds only the server-specific `TestRawUnreliableServerEndpoint`;
@@ -179,8 +158,6 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`RawReliable/Coverage.md`](RawReliable/Coverage.md) — `RawReliableEndpoint`
 - [`RawReliable/Client/Coverage.md`](RawReliable/Client/Coverage.md) — `RawReliableClientEndpoint`
 - [`RawReliable/Server/Coverage.md`](RawReliable/Server/Coverage.md) — `RawReliableServerEndpoint`
-- [`RawReliable/Client/Ack/Coverage.md`](RawReliable/Client/Ack/Coverage.md) — `RawReliableAckClientEndpoint`
-- [`RawReliable/Server/Ack/Coverage.md`](RawReliable/Server/Ack/Coverage.md) — `RawReliableAckServerEndpoint`
 - [`RawReliable/Client/RawReliableHandshakeClientEndpoint/Coverage.md`](RawReliable/Client/RawReliableHandshakeClientEndpoint/Coverage.md) — `RawReliableHandshakeClientEndpoint`
 - [`RawReliable/Server/RawReliableHandshakeServerEndpoint/Coverage.md`](RawReliable/Server/RawReliableHandshakeServerEndpoint/Coverage.md) — `RawReliableHandshakeServerEndpoint`
 - [`RawUnreliable/Coverage.md`](RawUnreliable/Coverage.md) — `RawUnreliableEndpoint`

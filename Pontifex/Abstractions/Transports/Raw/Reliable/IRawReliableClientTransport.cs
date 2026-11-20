@@ -1,7 +1,7 @@
 namespace Pontifex.Raw.Reliable
 {
     public interface IRawReliableClientTransport<in TClientHandler> : IRawReliableTransport
-        where TClientHandler : class, IRawReliableClientHandlerBase
+        where TClientHandler : class, IRawReliableClientHandler
     {
         /// <summary>
         /// Initializes the client transport with the user-provided handler.

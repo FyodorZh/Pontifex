@@ -56,14 +56,6 @@ namespace Pontifex.StopReasons
     }
 
     /// <summary>
-    /// Ack was not passed
-    /// </summary>
-    public sealed class AckRejected : StopReason
-    {
-        public AckRejected(string source) : base(source, "AckRejected") { }
-    }
-
-    /// <summary>
     /// The remote peer does not implement the same transport protocol contract.
     /// </summary>
     public sealed class ProtocolMismatch : StopReason

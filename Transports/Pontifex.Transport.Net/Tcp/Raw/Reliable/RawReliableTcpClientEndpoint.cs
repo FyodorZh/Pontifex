@@ -10,21 +10,24 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Raw.Reliable.Ack
+namespace Pontifex.Raw.Reliable.Tcp
 {
     /// <summary>
-    /// Reliable acknowledgement TCP client endpoint built on <see cref="LowLevelTcpSocket"/>.
+    /// Reliable TCP client endpoint built on <see cref="LowLevelTcpSocket"/>.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Thread safety</b>: Lifecycle hooks run on the base serial action queue; the
     /// outbound source has a single writer (that queue), while socket callbacks may run on socket or
     /// thread-pool threads.</description></item>
+    /// <item><description><b>Transport handshake</b>: the socket connect starts the handshake; the handler
+    /// observes <c>OnConnected</c> only after the server response is accepted. Inbound frames are dispatched
+    /// while the response is awaited so the handshake response is not dropped.</description></item>
     /// <item><description><b>Other notes</b>: The endpoint creates and owns the socket and the low-level
-    /// transport, keeping keep-alive disabled unless configured.</description></item>
+    /// transport, keeping the inherited keep-alive behavior from the reliable endpoint base.</description></item>
     /// </list>
     /// </remarks>
-    internal sealed class RawReliableAckTcpClientEndpoint : RawReliableAckClientEndpoint
+    internal sealed class RawReliableTcpClientEndpoint : RawReliableHandshakeClientEndpoint
     {
         private const int DefaultReceiveBufferSize = 16 * 1024;
 
@@ -58,10 +61,10 @@ namespace Pontifex.Raw.Reliable.Ack
         private volatile bool _failedHard;
         private bool _receiveDisposed;
 
-        internal RawReliableAckTcpClientEndpoint(
+        internal RawReliableTcpClientEndpoint(
             string transportName,
             IpEndPoint remoteEndPoint,
-            IRawReliableAckClientHandler handler,
+            IRawReliableClientHandler handler,
             int messageMaxByteSize,
             long bufferCapacityBytes,
             IMemoryRental memory,
@@ -72,7 +75,10 @@ namespace Pontifex.Raw.Reliable.Ack
             int messagePartMaxSize = DefaultReceiveBufferSize,
             TimeSpan? connectTimeout = null,
             TimeSpan? gracefulShutdownDeadline = null,
-            int sendSourceInitialCapacity = 10)
+            int sendSourceInitialCapacity = 10,
+            string handshakeName = TcpInfo.HandshakeName,
+            int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize,
+            TimeSpan? handshakeTimeout = null)
             : base(
                 transportName,
                 remoteEndPoint,
@@ -81,7 +87,10 @@ namespace Pontifex.Raw.Reliable.Ack
                 bufferCapacityBytes,
                 memory,
                 log,
-                pingOptions)
+                pingOptions,
+                handshakeName,
+                handshakeMaxByteSize,
+                handshakeTimeout)
         {
             if (remoteEndPoint == null)
             {
@@ -157,9 +166,17 @@ namespace Pontifex.Raw.Reliable.Ack
         }
 
         /// <summary>
-        /// Starts receiving only once the reliable stage is connected, so early inbound bytes are not
-        /// mistaken for a protocol parse failure, then runs the inherited handshake/keep-alive.
+        /// Starts the transport handshake and then starts receiving, so the handshake response is dispatched.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Called on the serial action queue.</description></item>
+        /// <item><description><b>Other notes</b>: The receiver starts only when the endpoint is still running after
+        /// the handshake request was admitted. A handler exception or a handler-initiated disconnect stops the
+        /// endpoint synchronously, so the receiver must not be started for it. The inherited keep-alive behavior
+        /// is started by the handshake completion, not here.</description></item>
+        /// </list>
+        /// </remarks>
         protected override void OnConnected()
         {
             if (!_connectSucceeded)
@@ -174,6 +191,11 @@ namespace Pontifex.Raw.Reliable.Ack
             }
 
             base.OnConnected();
+
+            if (!IsRunning)
+            {
+                return;
+            }
 
             try
             {
@@ -220,7 +242,7 @@ namespace Pontifex.Raw.Reliable.Ack
         }
 
         /// <summary>
-        /// Rejects further sends, notifies the handler, and starts the socket teardown in the background.
+        /// Notifies the handler of the logical disconnection and starts the socket teardown in the background.
         /// </summary>
         protected override void BeginDisconnect(StopReason reason, bool tryBeGentle)
         {

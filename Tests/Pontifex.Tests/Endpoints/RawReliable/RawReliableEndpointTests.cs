@@ -181,8 +181,9 @@ public sealed class RawReliableEndpointTests
     [TestCase(TestRawReliableEndpoint.InvalidFrame)]
     [TestCase(TestRawReliableEndpoint.PingFrame)]
     [TestCase(TestRawReliableEndpoint.PongFrame)]
-    [TestCase(TestRawReliableEndpoint.AckRequestFrame)]
-    [TestCase(TestRawReliableEndpoint.AckResponseFrame)]
+    [TestCase(TestRawReliableEndpoint.HandshakeRequestFrame)]
+    [TestCase(TestRawReliableEndpoint.HandshakeResponseFrame)]
+    [TestCase(TestRawReliableEndpoint.HandshakeRejectFrame)]
     public void ProcessInbound_UnhandledFrameType_StopsWithTextFail(byte frameType)
     {
         using var handler = new RecordingRawReliableHandler(Memory);

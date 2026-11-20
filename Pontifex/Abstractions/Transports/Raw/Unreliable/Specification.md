@@ -62,7 +62,7 @@ public interface IRawUnreliableHandler : IRawHandler
 `IRawEndpoint`; its XML documentation explicitly covers both the Reliable and
 the Unreliable behaviours. This variant relies on the Unreliable behaviour:
 `Ok` means local acceptance only, and RawUnreliable never returns
-`NotConnected`. See the RawReliableAck specification for the Reliable
+`NotConnected`. See the RawReliable specification for the Reliable
 behaviour of the same method.
 
 The server contract is variant-defined. Both `IRawUnreliableNoAckServer` and
@@ -423,7 +423,7 @@ registration, connection, or admission exchange from its source.
 
 `Send` is the single method defined on `IRawEndpoint` and shared with
 `IRawReliableEndpoint`. This section defines its **Unreliable behaviour**; the
-RawReliableAck specification defines the **Reliable behaviour** of the same
+RawReliable specification defines the **Reliable behaviour** of the same
 method. `Send` is thread-safe. It may run concurrently with `Stop` and with
 other sends; the outcome is determined by operation ordering. A call made
 before its endpoint starts, while its endpoint is stopping, after endpoint

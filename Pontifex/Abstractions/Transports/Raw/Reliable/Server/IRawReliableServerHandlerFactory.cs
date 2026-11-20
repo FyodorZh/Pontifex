@@ -10,8 +10,7 @@ namespace Pontifex.Raw.Reliable
         /// <summary>
         /// Identifies an incoming client and creates a new session for interaction.
         /// !!! It is guaranteed that calls to TryCreate() never overlap concurrently.
-        /// The returned handler owns no transport-supplied buffers: this call has no
-        /// acknowledgment payload, so there is nothing to populate or release.
+        /// The returned handler owns no transport-supplied buffers.
         /// </summary>
         /// <param name="remote">The remote endpoint of the connecting client.</param>
         /// <returns>Null if the client is not recognized, which rejects the connection;

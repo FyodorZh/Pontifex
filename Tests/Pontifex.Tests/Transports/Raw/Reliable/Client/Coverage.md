@@ -6,7 +6,7 @@
 - **Inheritance parent:** `Pontifex.Raw.Reliable.RawReliableTransport`
 - **Contract:** [RawReliableClientTransport.cs](../../../../../../Pontifex/Implementations/Raw/Reliable/RawReliableClientTransport.cs),
   [IRawReliableClientTransport.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableClientTransport.cs),
-  [IRawReliableClientHandlerBase.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableClientHandlerBase.cs),
+  [IRawReliableClientHandler.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClientHandler.cs),
   [IRawReliableEndpoint.cs](../../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableEndpoint.cs)
 
 ## Covered tests

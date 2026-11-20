@@ -6,7 +6,7 @@ using Pontifex.Utils;
 namespace Pontifex.Tests.Transports;
 
 /// <summary>
-/// Recording <see cref="IRawReliableClientHandlerBase"/> for the client transport tests. It records the
+/// Recording <see cref="IRawReliableClientHandler"/> for the client transport tests. It records the
 /// connection lifecycle callbacks and inbound buffers, can be configured to throw from the stop
 /// callback, and optionally appends callback names to a shared event log.
 /// </summary>
@@ -15,7 +15,7 @@ namespace Pontifex.Tests.Transports;
 /// so the test can inspect and release it. Buffers still alive at <see cref="Dispose"/> time are
 /// released there as a safety net.
 /// </remarks>
-internal sealed class RecordingRawReliableClientHandler : IRawReliableClientHandlerBase, IDisposable
+internal sealed class RecordingRawReliableClientHandler : IRawReliableClientHandler, IDisposable
 {
     private readonly List<UnionDataList> _received = new();
     private readonly List<string>? _events;
@@ -34,6 +34,17 @@ internal sealed class RecordingRawReliableClientHandler : IRawReliableClientHand
     public Exception? StoppedException { get; set; }
 
     public int DisconnectedCount { get; private set; }
+
+    public int ConnectedCount { get; private set; }
+
+    public IRawReliableEndpoint? ConnectedEndPoint { get; private set; }
+
+    public void OnConnected(IRawReliableEndpoint endPoint)
+    {
+        ConnectedCount++;
+        ConnectedEndPoint = endPoint;
+        _events?.Add("handlerConnected");
+    }
 
     public StopReason? StoppedReason { get; private set; }
 

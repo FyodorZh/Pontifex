@@ -27,7 +27,7 @@ namespace Pontifex.Raw.Reliable.Tcp
     /// connection.</description></item>
     /// <item><description><b>Other notes</b>: The endpoint takes ownership of an already-connected socket that the
     /// carrier accepted. It is created non-started; the caller must call Start or Stop. There is no
-    /// <c>ToString</c> override: the transport owns the <c>tcp-noack-server[...]</c> label.</description></item>
+    /// <c>ToString</c> override: the transport owns the <c>tcp-server[...]</c> label.</description></item>
     /// </list>
     /// </remarks>
     internal sealed class RawReliableTcpServerEndpoint : RawReliableHandshakeServerEndpoint

@@ -38,7 +38,7 @@
 | The inherited keep-alive background loop. | Keep-alive is disabled in the reliable client double; the loop wrapper uses real time and is out of scope. |
 | Real transport connect and teardown. | Covered by the transport suites and the carrier integration tests. |
 | Real timing and socket failures. | The suite uses deterministic seams. |
-| A Direct `RawReliable` carrier. | Only the TCP `tcp-noack` carrier exists in this stage. |
+| A Direct `RawReliable` carrier. | Both the `tcp` and `direct` RawReliable carriers exist. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
 
 ## Notes

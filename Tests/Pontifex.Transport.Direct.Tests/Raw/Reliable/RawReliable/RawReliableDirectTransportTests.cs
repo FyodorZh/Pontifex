@@ -14,7 +14,7 @@ namespace Pontifex.Tests.Raw.Reliable.RawReliable;
 
 /// <summary>
 /// Focused behavioural tests for the in-process reliable Direct transport pair: the mandatory transport
-/// handshake, zero reject linger, and the ported Ack Direct lifecycle cases.
+/// handshake, zero reject linger, and the ported Direct carrier lifecycle cases.
 /// </summary>
 [TestFixture]
 public sealed class RawReliableDirectTransportTests

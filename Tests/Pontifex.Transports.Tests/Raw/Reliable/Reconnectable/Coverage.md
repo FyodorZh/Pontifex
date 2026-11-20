@@ -39,7 +39,7 @@ Contract references:
 | Session-map capacity exhaustion and `disconnect_timeout` expiry removing the session and stopping the user handler. | `RawReliableReconnectable`. |
 | Two simultaneous physical connections racing for the same session id, and a reattach that arrives while the old link is still attached. | `RawReliableReconnectable`. |
 | Server response send failure during a reattach and its effect on the existing session's attachment state. | `RawReliableReconnectable`. |
-| End-to-end `reconnectable(30, tcp-noack(...))` over a real carrier. | Carrier integration suites (`Pontifex.Transport.Net.Tests`/`Pontifex.Transport.Direct.Tests`). |
+| End-to-end `reconnectable(30, tcp(...))` over a real carrier. | Carrier integration suites (`Pontifex.Transport.Net.Tests`/`Pontifex.Transport.Direct.Tests`). |
 
 ## Deferred By Design
 

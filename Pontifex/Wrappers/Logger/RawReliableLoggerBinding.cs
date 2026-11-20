@@ -7,19 +7,18 @@ namespace Pontifex.Raw.Reliable.Logger
     /// Factory binding for the logging reliable wrapper.
     /// </summary>
     /// <remarks>
-    /// The scheme is <c>log-noack</c> until the final cleanup: the registry rejects a second canonical
-    /// scheme name, so the reliable wrapper mirrors the <c>tcp</c> / <c>tcp-noack</c>
-    /// convention.
+    /// The scheme is <c>log</c>. The wrapper is transparent: it adds no negotiation, no name/version, and
+    /// no extra round trip.
     /// </remarks>
     public static class RawReliableLoggerBinding
     {
         /// <summary>
         /// The canonical scheme name of the reliable logging wrapper.
         /// </summary>
-        public const string SchemeName = "log-noack";
+        public const string SchemeName = "log";
 
         /// <summary>
-        /// Creates the registry entry that makes the <c>log-noack</c> scheme available.
+        /// Creates the registry entry that makes the <c>log</c> scheme available.
         /// </summary>
         /// <returns>The transport registration.</returns>
         public static ITransportRegistration CreateRegistration()

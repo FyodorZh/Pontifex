@@ -27,7 +27,7 @@ namespace Pontifex.Raw.Reliable
     /// </list>
     /// </remarks>
     public abstract class RawReliableClientTransport<TClientHandler> : RawReliableTransport, IRawReliableClientTransport<TClientHandler>
-        where TClientHandler : class, IRawReliableClientHandlerBase
+        where TClientHandler : class, IRawReliableClientHandler
     {
         private enum State
         {

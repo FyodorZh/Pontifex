@@ -48,8 +48,7 @@
 
 | Missing layer or test | Owner | Reason |
 |---|---|---|
-| `RawReliableAckClient` layer | This layer | Abstract descendant of `AnyTransport` with no layer yet; the nearest existing ancestor is the root layer. |
-| `RawReliableAckServer` layer | This layer | Abstract descendant of `AnyTransport` with no layer yet; the nearest existing ancestor is the root layer. |
+| — | — | No missing reliable layers: the inheritance tree is fully covered. |
 
 ## Deferred by design
 

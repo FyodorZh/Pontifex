@@ -3,7 +3,7 @@ namespace Pontifex.Raw.Reliable
     /// <summary>
     /// Client-side handler for a reliable raw transport.
     /// </summary>
-    public interface IRawReliableClientHandler : IRawReliableClientHandlerBase
+    public interface IRawReliableClientHandler : IRawReliableHandler
     {
         /// <summary>
         /// Logical connection. Informs the business logic that the transport is fully configured

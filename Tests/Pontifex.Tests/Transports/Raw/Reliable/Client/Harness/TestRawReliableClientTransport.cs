@@ -13,7 +13,7 @@ namespace Pontifex.Tests.Transports;
 /// attachment explicitly and the base class owns detachment after <see cref="DestroyTransport"/>
 /// completes.
 /// </summary>
-internal sealed class TestRawReliableClientTransport : RawReliableClientTransport<IRawReliableClientHandlerBase>
+internal sealed class TestRawReliableClientTransport : RawReliableClientTransport<IRawReliableClientHandler>
 {
     public TestRawReliableClientTransport(
         string typeName = "TestRawReliableClientTransport",
@@ -29,7 +29,7 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
 
     public override int MessageMaxByteSize => 1024;
 
-    public override TransportType Type => TransportType.RawReliableAck;
+    public override TransportType Type => TransportType.RawReliable;
 
     /// <summary>
     /// Gets or sets the result returned from <see cref="BeginConnect"/>.
@@ -39,7 +39,7 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
     /// <summary>
     /// Gets or sets the handler transformation applied by <see cref="SetupHandler"/>.
     /// </summary>
-    public Func<IRawReliableClientHandlerBase, IRawReliableClientHandlerBase?> SetupHandlerBehavior { get; set; } =
+    public Func<IRawReliableClientHandler, IRawReliableClientHandler?> SetupHandlerBehavior { get; set; } =
         static handler => handler;
 
     public int BeginConnectCalls { get; private set; }
@@ -48,7 +48,7 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
 
     public int SetupHandlerCalls { get; private set; }
 
-    public IRawReliableClientHandlerBase? LastSetupHandlerArgument { get; private set; }
+    public IRawReliableClientHandler? LastSetupHandlerArgument { get; private set; }
 
     public StopReason? LastDestroyReason { get; private set; }
 
@@ -81,7 +81,7 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
     /// </summary>
     public List<string> EventLog { get; } = new();
 
-    public new IRawReliableClientHandlerBase? Handler => base.Handler;
+    public new IRawReliableClientHandler? Handler => base.Handler;
 
     public IRawReliableClientEndpointImp? ExposedAttachedEndpoint => AttachedEndpoint;
 
@@ -90,7 +90,7 @@ internal sealed class TestRawReliableClientTransport : RawReliableClientTranspor
         AttachEndpoint(endpoint);
     }
 
-    protected override IRawReliableClientHandlerBase? SetupHandler(IRawReliableClientHandlerBase handler)
+    protected override IRawReliableClientHandler? SetupHandler(IRawReliableClientHandler handler)
     {
         SetupHandlerCalls++;
         LastSetupHandlerArgument = handler;

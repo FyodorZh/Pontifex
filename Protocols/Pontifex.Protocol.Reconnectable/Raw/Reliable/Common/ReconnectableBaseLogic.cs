@@ -288,7 +288,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
 
         #endregion
 
-        #region IRawAckBaseEndpoint
+        #region IRawReliableEndpoint
 
         public IEndPoint? RemoteEndPoint => _logicEndpoint;
 

@@ -23,7 +23,7 @@ internal sealed class TestRawReliableClientEndpoint : RawReliableClientEndpoint,
     private DateTime _now = new(2000, 1, 1);
 
     public TestRawReliableClientEndpoint(
-        IRawReliableClientHandlerBase handler,
+        IRawReliableClientHandler handler,
         IEndPoint? remoteEndPoint = null,
         string transportName = "TestClientTransport",
         int messageMaxByteSize = 1024,
@@ -73,8 +73,9 @@ internal sealed class TestRawReliableClientEndpoint : RawReliableClientEndpoint,
     public const byte DisconnectFrame = (byte)MessageType.DisconnectMessage;
     public const byte PingFrame = (byte)MessageType.PingMessage;
     public const byte PongFrame = (byte)MessageType.PongMessage;
-    public const byte AckRequestFrame = (byte)MessageType.AckRequestMessage;
-    public const byte AckResponseFrame = (byte)MessageType.AckResponseMessage;
+    public const byte HandshakeRequestFrame = (byte)MessageType.HandshakeRequestMessage;
+    public const byte HandshakeResponseFrame = (byte)MessageType.HandshakeResponseMessage;
+    public const byte HandshakeRejectFrame = (byte)MessageType.HandshakeRejectMessage;
 
     #region Queue and lifecycle control
 

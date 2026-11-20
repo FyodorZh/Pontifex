@@ -17,10 +17,6 @@ internal sealed class RecordingRawReliableHandshakeClientHandler : RecordingRawR
     {
     }
 
-    public int ConnectedCount { get; private set; }
-
-    public IRawReliableEndpoint? ConnectedEndPoint { get; private set; }
-
     /// <summary>
     /// Gets or sets the probe evaluated during <see cref="IRawReliableHandler.OnDisconnected"/>; typically reads
     /// the endpoint's <c>IsConnected</c>.
@@ -37,11 +33,9 @@ internal sealed class RecordingRawReliableHandshakeClientHandler : RecordingRawR
 
     public Exception? ConnectedException { get; set; }
 
-    public void OnConnected(IRawReliableEndpoint endPoint)
+    public override void OnConnected(IRawReliableEndpoint endPoint)
     {
-        ConnectedCount++;
-        ConnectedEndPoint = endPoint;
-        RecordEvent("connected");
+        base.OnConnected(endPoint);
 
         if (ThrowOnConnected)
         {

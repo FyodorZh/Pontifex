@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
@@ -49,27 +48,15 @@ namespace Pontifex.Converters
         private sealed class InnerHandler : IRawUnreliableHandler
         {
             private readonly RawUnreliableNoAckToRawReliableClient _owner;
-            private readonly TaskCompletionSource<IRawUnreliableEndpoint> _endpointTcs =
-                new TaskCompletionSource<IRawUnreliableEndpoint>(TaskCreationOptions.RunContinuationsAsynchronously);
             private volatile IRawUnreliableEndpoint? _endpoint;
 
             public InnerHandler(RawUnreliableNoAckToRawReliableClient owner) => _owner = owner;
 
             public IRawUnreliableEndpoint? Endpoint => _endpoint;
 
-            public IRawUnreliableEndpoint? WaitForEndpoint(TimeSpan timeout)
-            {
-                if (_endpoint == null)
-                {
-                    _endpointTcs.Task.Wait(timeout);
-                }
-                return _endpoint;
-            }
-
             public void OnStarted(IRawUnreliableEndpoint endpoint)
             {
                 _endpoint = endpoint;
-                _endpointTcs.TrySetResult(endpoint);
             }
 
             public void OnReceived(UnionDataList data)

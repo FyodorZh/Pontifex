@@ -9,14 +9,13 @@ namespace Pontifex.Raw.Reliable.Tcp
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item><description><b>Other notes</b>: The canonical scheme is <c>tcp-noack</c>. The acknowledgement
-    /// <c>tcp</c> scheme is never registered as an alias for this transport, and the reserved
-    /// <c>direct-noack</c> scheme is not registered here.</description></item>
+    /// <item><description><b>Other notes</b>: The canonical scheme is <c>tcp</c>, and the transport handshake
+    /// name is the same contract name. The <c>direct</c> scheme is registered by the Direct carrier.</description></item>
     /// </list>
     /// </remarks>
     public static class RawReliableTcpBinding
     {
-        public const string SchemeName = RawReliableTcpInfo.TransportName;
+        public const string SchemeName = TcpInfo.TransportName;
 
         public static ITransportRegistration CreateRegistration()
         {
@@ -55,7 +54,7 @@ namespace Pontifex.Raw.Reliable.Tcp
         {
             NetBindingSupport.ResolveAddress(context, out var ipAddress, out var port);
 
-            var disconnectTimeout = RawReliableTcpInfo.DefaultDisconnectTimeout;
+            var disconnectTimeout = TcpInfo.DefaultDisconnectTimeout;
             if (context.TryGetInt64("disconnection_timeout", out var timeoutSeconds))
             {
                 disconnectTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -83,12 +82,12 @@ namespace Pontifex.Raw.Reliable.Tcp
                 ? new RawReliableTcpServerTransport(
                     ipAddress,
                     port,
-                    RawReliableTcpInfo.ServerConnectionsLimit,
+                    TcpInfo.ServerConnectionsLimit,
                     disconnectTimeout,
                     null,
                     context.Logger,
                     context.Memory,
-                    handshakeName: RawReliableTcpInfo.HandshakeName,
+                    handshakeName: TcpInfo.HandshakeName,
                     handshakeMaxByteSize: handshakeMaxByteSize,
                     handshakeTimeout: handshakeTimeout,
                     rejectLinger: rejectLinger)
@@ -99,7 +98,7 @@ namespace Pontifex.Raw.Reliable.Tcp
                     null,
                     context.Logger,
                     context.Memory,
-                    handshakeName: RawReliableTcpInfo.HandshakeName,
+                    handshakeName: TcpInfo.HandshakeName,
                     handshakeMaxByteSize: handshakeMaxByteSize,
                     handshakeTimeout: handshakeTimeout);
         }

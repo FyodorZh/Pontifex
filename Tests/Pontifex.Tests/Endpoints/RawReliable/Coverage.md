@@ -19,7 +19,7 @@
 | `Send_FramingCountsTowardMessageMaxByteSize` | The framed size, not the raw payload size, is checked against `MessageMaxByteSize`. | A payload that fits exactly is rejected once the frame byte is added. | The buffer is mutated before admission, as documented. |
 | `ProcessInbound_PayloadFrame_DeliversPayloadWithoutTypeByte` | A payload frame is delivered with its type byte stripped. | The handler receives only the application payload. | The frame builder puts the type byte first and the payload after it. |
 | `ProcessInbound_DisconnectFrame_StopsWithGracefulRemoteIntention` | A remote disconnect frame initiates a graceful remote stop. | `BeginDisconnect` runs with `GracefulRemoteIntention` and the frame is not delivered. | The handler stop is observed only after `FinishDisconnect`. |
-| `ProcessInbound_UnhandledFrameType_StopsWithTextFail` | Frame types not handled by this layer are protocol failures. | Invalid, ping, pong, ack-request, ack-response, and unknown frame types all stop with `TextFail` and release the frame. | Six test cases share one contract row; derived layers override ping/pong/ack handling. |
+| `ProcessInbound_UnhandledFrameType_StopsWithTextFail` | Frame types not handled by this layer are protocol failures. | Invalid, ping, pong, handshake-request, handshake-response, handshake-reject, and unknown frame types all stop with `TextFail` and release the frame. | Seven test cases share one contract row; derived layers override ping/pong/handshake handling. |
 | `ProcessInbound_WhenNotConnected_ReleasesAndStopsWithTextFail` | Inbound frames require a low-level connection. | The frame is released, not delivered, and the endpoint stops with `TextFail`. | The stop is latched while connecting and completed after connect/disconnect. |
 | `ProcessInbound_EmptyFrame_StopsWithTextFail` | Empty inbound data has no frame type. | The endpoint treats it as a parse failure and stops with `TextFail`. | The empty list is released by the dispatch path. |
 | `DisconnectGracefully_SendsDisconnectFrameAndStopsGently` | `DisconnectGracefully` frames a disconnect message and stops with `UserIntention`. | The disconnect frame is transmitted, `BeginDisconnect` runs, and the stop is gentle. | The reason source is the transport name. |
@@ -27,9 +27,9 @@
 | `DisconnectGracefully_WhenDisconnectFrameCannotBeAdmitted_StopsUngently` | A disconnect frame that cannot be admitted forces an ungentle stop. | No frame is captured, `BeginDisconnect` still runs, and `tryBeGentle` is false. | Capacity is set below the frame size to force `BufferOverflow`. |
 | `DisconnectGracefully_UsesTransportNameAsReasonSource` | The graceful-disconnect reason is sourced from the transport name. | The reason's `Source` matches the configured transport name. | — |
 | `Stop_WhileConnected_DisconnectsBeforeNotifyingStopped` | A connected stop enters `Disconnecting` before the handler stop. | The reliable observables are false and no handler stop occurs until `FinishDisconnect`. | `BeginDisconnect` completes the teardown explicitly. |
-| `DisconnectCycle_DoesNotInvokeOnDisconnected` | This layer does not raise `OnDisconnected` itself. | A payload delivery followed by a stop produces only `OnReceived` and `OnStopped`. | Only the ack subclasses add the logical disconnect notification. |
+| `DisconnectCycle_DoesNotInvokeOnDisconnected` | This layer does not raise `OnDisconnected` itself. | A payload delivery followed by a stop produces only `OnReceived` and `OnStopped`. | Only the handshake subclasses add the logical disconnect notification. |
 | `FinishDisconnect_WhenNotDisconnecting_FailsHard` | `FinishDisconnect` is legal only while disconnecting. | An invalid completion fails hard with `ExceptionFail`. | The reliable stage is moved to disconnected before the base failure path. |
-| `IsConnected_TracksLowLevelConnection` | The default logical connection mirrors the low-level connection until the logical disconnect notification is delivered. | `IsConnected` is false while connecting, true when connected, and false once disconnecting begins. | Ack layers override `GetIsConnected` to add the handshake condition. |
+| `IsConnected_TracksLowLevelConnection` | The default logical connection mirrors the low-level connection until the logical disconnect notification is delivered. | `IsConnected` is false while connecting, true when connected, and false once disconnecting begins. | The reliable handshake layer overrides `GetIsConnected` to add the handshake condition. |
 | `FailHard_WhenConnected_StopsWithoutDisconnectedNotification` | A reliable failure does not raise `OnDisconnected` at this layer. | `FailHard` clears the low-level connection, notifies `OnStopped`, and leaves `DisconnectedCount` zero. | The reason instance is passed through unchanged. |
 | `NotifyDisconnected_WhenConnected_NotifiesOnce` | `NotifyDisconnectedCore` delivers the handler's logical disconnect at most once, after the connected latch is armed. | Two consecutive calls produce one `OnDisconnected` with the same reason. | The latch is armed explicitly by `MarkConnectedNotified`. |
 | `NotifyDisconnected_WhenNeverConnected_DoesNotNotify` | The logical disconnect requires that the handler observed the connection. | A call without an armed connected latch leaves `DisconnectedCount` zero. | This protects a session that fails before `OnConnected`. |
@@ -53,7 +53,7 @@
 |---|---|
 | Concrete client/server branches. | Covered by the child layers of this Abstract Test Suit. |
 | Concurrency, real transports, sockets, and wall-clock timing. | The default suite is deterministic; these facets belong to a separate categorised layer or the transport/conformance suites. |
-| Ack handshake and logical disconnect notifications. | Introduced by the ack child layers. |
+| Transport handshake and logical disconnect notifications. | Introduced by the handshake child layers. |
 
 ## Notes
 

@@ -37,7 +37,7 @@
 | A real periodic driver, timer, or transport ticker. | `PeriodicTick` is driven directly; scheduling is out of scope. |
 | Default `DateTime.Now` clock and real-time timeout behaviour. | Tests use the `Now` seam for determinism. |
 | Real transport session admission and teardown. | Covered by the transport suites and the carrier integration tests. |
-| A Direct `RawReliable` carrier. | Only the TCP `tcp-noack` carrier exists in this stage. |
+| A Direct `RawReliable` carrier. | Both the `tcp` and `direct` RawReliable carriers exist. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
 
 ## Notes

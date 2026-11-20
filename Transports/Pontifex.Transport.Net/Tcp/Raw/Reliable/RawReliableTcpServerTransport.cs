@@ -4,38 +4,36 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using Actuarius.Memory;
+using Pontifex.NetSockets;
 using Pontifex.NetSockets.Tcp;
 using Pontifex.StopReasons;
 using Scriba;
 
-namespace Pontifex.Raw.Reliable.Ack.Tcp
+namespace Pontifex.Raw.Reliable.Tcp
 {
     /// <summary>
-    /// Reliable acknowledgement TCP server transport. Accepts sockets through a shared asynchronous listener,
-    /// runs the acknowledgement handshake with <see cref="RawReliableAckTcpServerEndpoint.BeginAccept"/>, and
-    /// admits each accepted endpoint into the shared reliable server registry.
+    /// Reliable TCP server transport. Accepts sockets through the shared asynchronous
+    /// listener, runs the transport handshake, and admits each accepted endpoint into the shared reliable
+    /// server registry.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Thread safety</b>: Lifecycle calls are serialized by the base transport lock. The
     /// accept loop, handshake callbacks, and session callbacks may run on socket or thread-pool threads; the
     /// transport gates and registries are safe for concurrent use.</description></item>
-    /// <item><description><b>Other notes</b>: The transport owns the listener and every socket it accepts until
-    /// the handshake either transfers the socket to an endpoint or rejects it. No Task or async is used on the
-    /// server path.</description></item>
-    /// <item><description><b>Stop-once notification</b>: Closing handshake sockets during a transport stop is
-    /// best-effort cleanup only. A session handler may already exist by the time the completion path runs, so
-    /// the single <see cref="IRawHandler.OnStopped"/> guarantee comes from the shared stop-once gate returned by
-    /// <see cref="RawReliableAckServerTransport.TryAcknowledge"/>, not from the absence of a
-    /// handler.</description></item>
+    /// <item><description><b>Transport handshake</b>: the accepted socket is not admitted until its handshake
+    /// request has been read and validated. A rejected peer receives a reject frame, then the socket stays open
+    /// for the configured reject linger before it is closed.</description></item>
+    /// <item><description><b>Stop-once notification</b>: every handler returned by the factory is wrapped in the
+    /// transport's stop-once gate, so the session endpoint and the admission-failure fallback share one latch and
+    /// the factory's handler observes at most one <see cref="IRawHandler.OnStopped"/>.</description></item>
     /// </list>
     /// </remarks>
-    public class RawReliableAckTcpServerTransport : RawReliableAckServerTransport
+    public sealed class RawReliableTcpServerTransport : RawReliableAdmissionServerTransport
     {
         private const int DefaultReceiveBufferSize = 16 * 1024;
         private const int DefaultSendSourceInitialCapacity = 10;
 
-        private static readonly TimeSpan DefaultAckHandshakeTimeout = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DefaultGracefulShutdownDeadline = TimeSpan.FromSeconds(10);
 
         private readonly object _handshakeSocketsLock = new();
@@ -45,8 +43,10 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         private readonly int _messageMaxByteSize;
         private readonly long _bufferCapacityBytes;
         private readonly int _backlog;
-        private readonly int _ackMaxByteSize;
-        private readonly TimeSpan _ackHandshakeTimeout;
+        private readonly string _handshakeName;
+        private readonly int _handshakeMaxByteSize;
+        private readonly TimeSpan _handshakeTimeout;
+        private readonly TimeSpan _rejectLinger;
         private readonly RemoteHalfClosePolicy _remoteHalfClosePolicy;
         private readonly int _receiveBufferSize;
         private readonly int _messagePartMaxSize;
@@ -57,7 +57,7 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         private IServerSocketListener? _listener;
 
         /// <summary>
-        /// Initializes a reliable acknowledgement TCP server transport.
+        /// Initializes a reliable TCP server transport.
         /// </summary>
         /// <param name="ipAddress">The address to bind. Must be non-null.</param>
         /// <param name="port">The port to bind, in the range 0 to 65535.</param>
@@ -67,17 +67,13 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         /// TCP default.</param>
         /// <param name="logger">The logging system used by the transport.</param>
         /// <param name="memory">The memory rental system used by the transport.</param>
-        /// <param name="handshakeLimit">The maximum number of concurrent handshakes; values below 1 are clamped
-        /// to 1.</param>
+        /// <param name="handshakeLimit">The maximum number of connections admitted concurrently; values below 1
+        /// are clamped to 1.</param>
         /// <param name="bufferCapacityBytes">The byte budget for admitted but not yet transmitted messages, or
         /// <see langword="null"/> for the TCP default.</param>
         /// <param name="backlog">The listener backlog; must be at least 1.</param>
         /// <param name="tickPeriodMs">The session ticker period, or <see langword="null"/> for the
         /// default.</param>
-        /// <param name="ackMaxByteSize">The inclusive maximum acknowledgement payload size, or
-        /// <see langword="null"/> for the protocol maximum.</param>
-        /// <param name="ackHandshakeTimeout">The acknowledgement handshake deadline, or <see langword="null"/>
-        /// for the default.</param>
         /// <param name="remoteHalfClosePolicy">The action to take when the remote peer half-closes.</param>
         /// <param name="receiveBufferSize">The capacity of every pooled receive buffer, or
         /// <see langword="null"/> for the default.</param>
@@ -87,7 +83,14 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
         /// the default. <see cref="Timeout.InfiniteTimeSpan"/> waits indefinitely.</param>
         /// <param name="sendSourceInitialCapacity">The initial capacity of the outbound source, or
         /// <see langword="null"/> for the default.</param>
-        public RawReliableAckTcpServerTransport(
+        /// <param name="handshakeName">The transport handshake name used by the listener.</param>
+        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame, or
+        /// <see langword="null"/> for the default.</param>
+        /// <param name="handshakeTimeout">The server handshake deadline, or <see langword="null"/> for the
+        /// default. <see cref="Timeout.InfiniteTimeSpan"/> disables the deadline.</param>
+        /// <param name="rejectLinger">How long a rejected socket stays open after the reject frame is written,
+        /// or <see langword="null"/> for the default.</param>
+        public RawReliableTcpServerTransport(
             IPAddress ipAddress,
             int port,
             int connectionsLimit,
@@ -99,15 +102,21 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             long? bufferCapacityBytes = null,
             int backlog = 500,
             int? tickPeriodMs = null,
-            int? ackMaxByteSize = null,
-            TimeSpan? ackHandshakeTimeout = null,
             RemoteHalfClosePolicy remoteHalfClosePolicy = RemoteHalfClosePolicy.GracefulSendShutdown,
             int? receiveBufferSize = null,
             int? messagePartMaxSize = null,
             TimeSpan? gracefulShutdownDeadline = null,
-            int? sendSourceInitialCapacity = null)
+            int? sendSourceInitialCapacity = null,
+            string handshakeName = TcpInfo.HandshakeName,
+            int? handshakeMaxByteSize = null,
+            TimeSpan? handshakeTimeout = null,
+            TimeSpan? rejectLinger = null)
             : base(TcpInfo.TransportName, logger, memory,
-                Math.Max(1, handshakeLimit), Math.Max(1, connectionsLimit), tickPeriodMs ?? 100)
+                Math.Max(1, handshakeLimit), Math.Max(1, connectionsLimit), tickPeriodMs ?? 100,
+                handshakeName,
+                handshakeMaxByteSize ?? RawReliableHandshake.DefaultMaxByteSize,
+                handshakeTimeout,
+                rejectLinger)
         {
             if (ipAddress == null)
             {
@@ -149,19 +158,6 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
                 throw new ArgumentOutOfRangeException(nameof(tickPeriodMs));
             }
 
-            int resolvedAckMaxByteSize = ackMaxByteSize ?? RawReliableAckInfo.AckMaxByteSize;
-            if (resolvedAckMaxByteSize < 1 || resolvedAckMaxByteSize > RawReliableAckInfo.AckMaxByteSize)
-            {
-                throw new ArgumentOutOfRangeException(nameof(ackMaxByteSize));
-            }
-
-            var resolvedAckHandshakeTimeout = ackHandshakeTimeout ?? DefaultAckHandshakeTimeout;
-            if (resolvedAckHandshakeTimeout <= TimeSpan.Zero ||
-                resolvedAckHandshakeTimeout > LowLevelTcpSocket.MaxFiniteDeadline)
-            {
-                throw new ArgumentOutOfRangeException(nameof(ackHandshakeTimeout));
-            }
-
             if (!Enum.IsDefined(typeof(RemoteHalfClosePolicy), remoteHalfClosePolicy))
             {
                 throw new ArgumentOutOfRangeException(nameof(remoteHalfClosePolicy));
@@ -195,21 +191,33 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             _messageMaxByteSize = messageMaxSize ?? TcpInfo.DefaultMessageMaxSize;
             _bufferCapacityBytes = bufferCapacityBytes ?? TcpInfo.DefaultBufferCapacity;
             _backlog = backlog;
-            _ackMaxByteSize = resolvedAckMaxByteSize;
-            _ackHandshakeTimeout = resolvedAckHandshakeTimeout;
+            _handshakeName = HandshakeName;
+            _handshakeMaxByteSize = HandshakeMaxByteSize;
+            _handshakeTimeout = HandshakeTimeout;
+            _rejectLinger = RejectLinger;
             _remoteHalfClosePolicy = remoteHalfClosePolicy;
             _receiveBufferSize = receiveBufferSize ?? DefaultReceiveBufferSize;
             _messagePartMaxSize = messagePartMaxSize ?? DefaultReceiveBufferSize;
             _gracefulShutdownDeadline = resolvedGracefulShutdownDeadline;
             _sendSourceInitialCapacity = sendSourceInitialCapacity ?? DefaultSendSourceInitialCapacity;
+
+            if (_messageMaxByteSize < _handshakeMaxByteSize)
+            {
+                throw new ArgumentOutOfRangeException(nameof(messageMaxSize),
+                    "The message maximum must be at least the handshake maximum.");
+            }
         }
 
         /// <inheritdoc/>
         public override int MessageMaxByteSize => _messageMaxByteSize;
 
+        /// <summary>
+        /// Gets the canonical transport label used in diagnostics.
+        /// </summary>
+        /// <returns>A <c>tcp-server[...]</c> label with the configured local endpoint.</returns>
         public override string ToString()
         {
-            return $"tcp-server[{_localEndPoint}]";
+            return $"{TcpInfo.TransportName}-server[{_localEndPoint}]";
         }
 
         protected override bool StartCarrier()
@@ -306,6 +314,20 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             Log.wtf(ex);
         }
 
+        /// <summary>
+        /// Starts the transport handshake for one accepted socket.
+        /// </summary>
+        /// <param name="socket">The accepted, connected socket. Ownership transfers to the handshake engine;
+        /// every rejection path closes it.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Runs on the listener's accept callback thread. The admission
+        /// gates and the handler factory are safe for concurrent use.</description></item>
+        /// <item><description><b>Preconditions/Postconditions</b>: Every reserved admission is completed or
+        /// abandoned exactly once. The handshake socket is tracked until the completion callback runs or the
+        /// transport stops.</description></item>
+        /// </list>
+        /// </remarks>
         private void OnClientConnected(Socket socket)
         {
             if (IsStopping)
@@ -323,12 +345,24 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             TrackHandshakeSocket(socket);
             try
             {
-                RawReliableAckTcpServerEndpoint.BeginAccept(
-                    Name, socket, TryAcknowledge,
-                    _messageMaxByteSize, _bufferCapacityBytes, Memory, Log, _disconnectTimeout,
+                RawReliableTcpServerEndpoint.BeginAccept(
+                    Name,
+                    socket,
+                    TryHandshake,
+                    _handshakeName,
+                    _handshakeMaxByteSize,
+                    _messageMaxByteSize,
+                    _bufferCapacityBytes,
+                    Memory,
+                    Log,
+                    _disconnectTimeout,
+                    _rejectLinger,
                     result => OnHandshakeCompleted(socket, result),
-                    _ackMaxByteSize, _ackHandshakeTimeout, _remoteHalfClosePolicy,
-                    _receiveBufferSize, _messagePartMaxSize, _gracefulShutdownDeadline,
+                    _handshakeTimeout,
+                    _remoteHalfClosePolicy,
+                    _receiveBufferSize,
+                    _messagePartMaxSize,
+                    _gracefulShutdownDeadline,
                     _sendSourceInitialCapacity);
             }
             catch (Exception ex)
@@ -340,11 +374,11 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             }
         }
 
-        internal void OnHandshakeCompleted(Socket socket, AckAcceptResult result)
+        private void OnHandshakeCompleted(Socket socket, RawReliableTcpServerEndpoint.TcpHandshakeResult result)
         {
             UntrackHandshakeSocket(socket);
 
-            if (result.Status == AckAcceptStatus.Accepted)
+            if (result.Status == RawReliableTcpServerEndpoint.TcpHandshakeStatus.Accepted)
             {
                 CompleteAdmission(result.Endpoint!, result.Handler,
                     new TextFail(Name, "Failed to start or register a TCP session"));
@@ -352,9 +386,10 @@ namespace Pontifex.Raw.Reliable.Ack.Tcp
             }
 
             AbandonAdmission(result.Handler,
-                result.Reason ?? new TextFail(Name, "The acceptance handshake failed"));
+                result.Reason ?? new TextFail(Name, "The transport handshake failed"));
 
-            if (result.Status == AckAcceptStatus.Faulted && result.Error != null)
+            if (result.Status == RawReliableTcpServerEndpoint.TcpHandshakeStatus.Faulted &&
+                result.Error != null)
             {
                 Log.wtf(result.Error);
             }

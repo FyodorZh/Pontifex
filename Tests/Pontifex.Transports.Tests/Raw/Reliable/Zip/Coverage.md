@@ -34,7 +34,7 @@ Contract references:
 | Corrupt/invalid compressed bytes from the peer stopping the session through the wrapper `TextFail`/`ExceptionFail` path. | `RawReliableZip`. |
 | Incompressible payload expanding on the wire and still round-tripping. | `RawReliableZip`. |
 | Compression levels `0` and `9` producing different wire sizes for the same payload. | `RawReliableZip`. |
-| End-to-end `zip(tcp-noack(...))` over a real carrier. | Carrier integration suites (`Pontifex.Transport.Net.Tests`/`Pontifex.Transport.Direct.Tests`). |
+| End-to-end `zip(tcp(...))` over a real carrier. | Carrier integration suites (`Pontifex.Transport.Net.Tests`/`Pontifex.Transport.Direct.Tests`). |
 
 ## Deferred By Design
 

@@ -18,7 +18,7 @@ namespace Pontifex.Raw.Reliable
     /// </remarks>
     public abstract class RawReliableEndpointClientTransport<TClientHandler>
         : RawReliableClientTransport<TClientHandler>
-        where TClientHandler : class, IRawReliableClientHandlerBase
+        where TClientHandler : class, IRawReliableClientHandler
     {
         public override TransportType Type => TransportType.RawReliable;
 
