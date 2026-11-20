@@ -26,6 +26,7 @@
         <ProjectReference Include="..\..\Pontifex.Factory\Pontifex.Factory.csproj" />
         <ProjectReference Include="..\..\Transports\Pontifex.Transport.Direct\Pontifex.Transport.Direct.csproj" />
         <ProjectReference Include="..\..\Transports\Pontifex.Transport.Net\Pontifex.Transport.Net.csproj" />
+        <ProjectReference Include="..\..\Protocols\Pontifex.Protocol\Pontifex.Protocol.csproj" />
         <ProjectReference Include="..\..\Protocols\Pontifex.Protocol.Zip\Pontifex.Protocol.Zip.csproj" />
         <ProjectReference Include="..\..\Protocols\Pontifex.Protocol.Reconnectable\Pontifex.Protocol.Reconnectable.csproj" />
     </ItemGroup>
