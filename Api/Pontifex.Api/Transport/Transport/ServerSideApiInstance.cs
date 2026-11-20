@@ -32,6 +32,7 @@ namespace Pontifex.Api
         private readonly TApi _api;
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
+        private readonly INegotiationClock? _negotiationClock;
 
         private IRawReliableEndpoint? _endpoint;
         private NegotiationSession? _negotiation;
@@ -47,10 +48,24 @@ namespace Pontifex.Api
         public IEndPoint Endpoint => _endpoint?.RemoteEndPoint ?? VoidEndPoint.Instance;
 
         public ServerSideApiInstance(TApi api, IMemoryRental memoryRental, ILogger logger)
+            : this(api, memoryRental, logger, null)
+        {
+        }
+
+        /// <summary>
+        /// Creates the server Api instance with an explicit negotiation clock. Used by deterministic tests;
+        /// the public constructor selects the production clock.
+        /// </summary>
+        internal ServerSideApiInstance(
+            TApi api,
+            IMemoryRental memoryRental,
+            ILogger logger,
+            INegotiationClock? negotiationClock)
         {
             _api = api;
             _memoryRental = memoryRental;
             Log = logger;
+            _negotiationClock = negotiationClock;
         }
 
         void IRawReliableServerHandler.OnConnected(IRawReliableEndpoint endPoint)
@@ -65,6 +80,7 @@ namespace Pontifex.Api
                 _ => { },
                 reason => endPoint.Disconnect(reason),
                 HandleNegotiationAccepted,
+                clock: _negotiationClock,
                 log: Log);
 
             _negotiation = negotiation;

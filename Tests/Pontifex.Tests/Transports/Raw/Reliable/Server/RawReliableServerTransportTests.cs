@@ -766,6 +766,41 @@ public sealed class RawReliableServerTransportTests
     }
 
     [Test]
+    public void Stop_WhenSessionQueuesRunInline_NotifiesHandlersBeforeTheTransportCallback()
+    {
+        var transport = Create(maxActiveSessions: 2);
+        using var first = CreateSession();
+        using var second = CreateSession();
+        Initialize(transport);
+
+        int firstStoppedAtCallback = -1;
+        int secondStoppedAtCallback = -1;
+        int activeAtCallback = -1;
+        Assert.That(transport.Start(_ =>
+        {
+            firstStoppedAtCallback = first.Handler.StoppedCount;
+            secondStoppedAtCallback = second.Handler.StoppedCount;
+            activeAtCallback = transport.ExposedActiveSessions;
+        }), Is.True);
+
+        AdmitAndDrain(transport, first);
+        AdmitAndDrain(transport, second);
+        first.Session.Queue.RunImmediately = true;
+        second.Session.Queue.RunImmediately = true;
+
+        Assert.That(transport.Stop(Reason()), Is.True);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstStoppedAtCallback, Is.EqualTo(1),
+                "the first session's terminal notification must precede the transport callback");
+            Assert.That(secondStoppedAtCallback, Is.EqualTo(1),
+                "the second session's terminal notification must precede the transport callback");
+            Assert.That(activeAtCallback, Is.Zero);
+        });
+    }
+
+    [Test]
     public void Stop_WhenSessionAlreadyStopped_DoesNotStopItAgain()
     {
         var transport = Create();

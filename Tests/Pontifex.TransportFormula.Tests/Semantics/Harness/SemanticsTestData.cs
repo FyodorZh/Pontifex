@@ -562,6 +562,23 @@ internal static class SemanticsTestData
                 required: true,
                 positional: true));
 
+        // Harness extension: a string array with a throwing element validator.
+        Register(
+            builder,
+            "throwingArrays",
+            TypeA,
+            Array.Empty<string>(),
+            CreateStructParam(
+                "config",
+                Schema(CreateStringArrayField(
+                    "names",
+                    min: 1,
+                    max: 2,
+                    required: true,
+                    validate: ThrowingValidator)),
+                required: true,
+                positional: true));
+
         // Harness extension: an array nested inside a struct field.
         Register(
             builder,

@@ -3,13 +3,13 @@ using Actuarius.Memory;
 using Pontifex.NetSockets.Tcp;
 using Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness;
 
-namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
+namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
 {
     /// <summary>
     /// External liveness composition: an application stall detector invoking ForceAbortFinalize,
     /// and the disabled mode that leaves normal transport I/O intentionally pending.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class ApplicationLivenessWatchdogTests
     {
         [Test]

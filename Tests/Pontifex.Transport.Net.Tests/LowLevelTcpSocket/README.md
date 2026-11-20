@@ -63,6 +63,7 @@ LowLevelTcpSocket/
 │   ├── NoCopyReceiveConsumer.cs          no-copy, release-in-finally measurement consumer
 │   ├── ReusingReceivePool.cs             zero-allocation receive-owner pool for measuring
 │   ├── StrictSingleWriterQueue.cs        strict SPSC double (rejects concurrent readers/writers)
+│   ├── SocketCompositionFixture.cs       producer-composition fixture teardown helper
 │   ├── ApplicationByteLedger.cs          executable byte-budget composition example
 │   ├── ApplicationLivenessWatchdog.cs    executable liveness composition example
 │   ├── TestCategories.cs / LowLevelTcpSocketSuiteAttribute.cs
@@ -74,7 +75,10 @@ LowLevelTcpSocket/
 │       ├── ControllableQueueTests.cs      strict SPSC overlap detection
 │       ├── TrackingByteArrayTests.cs      ref-count diagnostics
 │       ├── AllocationMeasurerTests.cs     measurement calibration controls
-│       └── NoCopyReceiveConsumerTests.cs
+│       ├── NoCopyReceiveConsumerTests.cs
+│       ├── ApplicationByteLedgerTests.cs  byte-budget ledger self-test
+│       ├── ApplicationLivenessWatchdogTests.cs liveness watchdog self-test
+│       └── ProducerHarnessTests.cs        composition-fixture and strict-writer self-tests
 └── Tests/                   ns …LowLevelTcpSocketTests
     ├── Construction/        LowLevelTcpSocketConstructionTests, ConstructionRollbackTests,
     │                        DeadlineValidationTests, SystemSocketTests
@@ -93,8 +97,7 @@ LowLevelTcpSocket/
     ├── Ownership/           OwnershipTests, EventArgsStorageTests
     ├── Policies/            RemoteHalfClosePolicyTests
     ├── Composition/         ProducerCompositionTests, LoopbackSocketTests,
-    │                        LoopbackHalfClosePolicyTests,
-    │                        ApplicationByteLedgerTests, ApplicationLivenessWatchdogTests
+    │                        LoopbackHalfClosePolicyTests
     └── Probes/              AllocationBaselineTests, LoadProbeTests, TransportProfilingProbesTests
 ```
 
@@ -103,6 +106,13 @@ LowLevelTcpSocket/
 Coverage is recorded in [`Coverage.md`](Coverage.md) for the single root layer. It lists every test
 in the layer, including tests in `Tests/` groups and harness self-tests, plus planned gaps and gaps
 deferred by design. This README does not duplicate volatile coverage status.
+
+### Supporting production types
+
+`SystemSocketTests` and `PartialReceiveViewTests` stay in the subject groups: they pin the
+production `SystemSocket` accessor and `ReusablePartialView` behaviour that `LowLevelTcpSocket`
+depends on, rather than harness code. They are listed in `Coverage.md` as supporting-type
+coverage, not as harness self-tests.
 
 ## Naming and structure conventions
 

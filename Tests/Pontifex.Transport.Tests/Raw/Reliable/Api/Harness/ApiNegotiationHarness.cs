@@ -403,21 +403,42 @@ internal sealed class TailAppendingClientSideApi : ClientSideApi
 internal sealed class ApiNegotiationPair : IDisposable
 {
     private readonly ILogger _log = new Logger([]);
+    private readonly Func<ServerSideApiInstance<ApiNegotiationTestApi>> _instanceFactory;
 
-    public ApiNegotiationPair(ClientSideApi? clientApi = null, ServerSideApiInstance<ApiNegotiationTestApi>? instance = null)
+    public ApiNegotiationPair(
+        ClientSideApi? clientApi = null,
+        ServerSideApiInstance<ApiNegotiationTestApi>? instance = null,
+        INegotiationClock? clock = null,
+        Func<ServerSideApiInstance<ApiNegotiationTestApi>>? instanceFactory = null)
     {
-        ServerInstance = instance ?? new ServerSideApiInstance<ApiNegotiationTestApi>(
-            new ApiNegotiationTestApi(), MemoryRental.Shared, _log);
-        ServerApiFactory = new ServerSideApiFactory<ApiNegotiationTestApi>(() => ServerInstance);
-        ServerInstance.ApiStarted += _ => ServerApiStartedCount++;
+        if (instanceFactory != null)
+        {
+            _instanceFactory = instanceFactory;
+        }
+        else
+        {
+            var single = instance ?? new ServerSideApiInstance<ApiNegotiationTestApi>(
+                new ApiNegotiationTestApi(), MemoryRental.Shared, _log, clock);
+            _instanceFactory = () => single;
+        }
 
-        ClientApi = clientApi ?? new ClientSideApi(new ApiNegotiationTestApi(), MemoryRental.Shared, _log);
+        ServerApiFactory = new ServerSideApiFactory<ApiNegotiationTestApi>(CreateServerInstance);
+
+        ClientApi = clientApi ?? new ClientSideApi(new ApiNegotiationTestApi(), MemoryRental.Shared, _log, clock);
         ClientApi.Connected += _ => ClientConnectedCount++;
         ClientApi.Disconnected += reason =>
         {
             ClientDisconnectedCount++;
             ClientDisconnectReason = reason;
         };
+    }
+
+    private ServerSideApiInstance<ApiNegotiationTestApi> CreateServerInstance()
+    {
+        var created = _instanceFactory();
+        created.ApiStarted += _ => ServerApiStartedCount++;
+        ServerInstances.Add(created);
+        return created;
     }
 
     public FakeApiClient ClientTransport { get; } = new();
@@ -428,7 +449,11 @@ internal sealed class ApiNegotiationPair : IDisposable
 
     public ServerSideApiFactory<ApiNegotiationTestApi> ServerApiFactory { get; }
 
-    public ServerSideApiInstance<ApiNegotiationTestApi> ServerInstance { get; }
+    public List<ServerSideApiInstance<ApiNegotiationTestApi>> ServerInstances { get; } = new();
+
+    public ServerSideApiInstance<ApiNegotiationTestApi> ServerInstance => ServerInstances[0];
+
+    public List<FakeApiServerSession> ServerSessions { get; } = new();
 
     public FakeApiServerSession? ServerSession { get; private set; }
 
@@ -459,20 +484,8 @@ internal sealed class ApiNegotiationPair : IDisposable
         Assert.That(ClientTransport.Init(ClientApi), Is.True);
         Assert.That(ClientTransport.Start(_ => { }), Is.True);
 
-        ServerSession = ServerTransport.Connect();
-        Assert.That(ServerSession.Handler, Is.SameAs(ServerInstance));
-
-        ServerSession.Endpoint.Deliver = data =>
-        {
-            var rewrite = ServerToClient;
-            if (rewrite != null)
-            {
-                rewrite(data);
-                return;
-            }
-
-            ClientTransport.DeliverToClient(data);
-        };
+        ServerSession = ConnectServerSession();
+        Assert.That(ServerSession.Handler, Is.SameAs(ServerInstances[0]));
 
         ClientTransport.ConfigureEndpoint = endpoint =>
         {
@@ -492,12 +505,38 @@ internal sealed class ApiNegotiationPair : IDisposable
         ClientTransport.Connect();
     }
 
+    /// <summary>
+    /// Opens one more server-side session through the same factory and wires its outbound delivery.
+    /// </summary>
+    public FakeApiServerSession ConnectServerSession()
+    {
+        var session = ServerTransport.Connect();
+        session.Endpoint.Deliver = data =>
+        {
+            var rewrite = ServerToClient;
+            if (rewrite != null)
+            {
+                rewrite(data);
+                return;
+            }
+
+            ClientTransport.DeliverToClient(data);
+        };
+
+        ServerSessions.Add(session);
+        ServerSession ??= session;
+        return session;
+    }
+
     public void Dispose()
     {
         ClientTransport.Stop(new UserIntention("test", "complete"));
         ServerTransport.Stop(new UserIntention("test", "complete"));
         ClientTransport.Endpoint?.ReleaseSent();
-        ServerSession?.Release();
+        foreach (var session in ServerSessions)
+        {
+            session.Release();
+        }
     }
 }
 

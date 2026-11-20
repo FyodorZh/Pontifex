@@ -55,6 +55,21 @@ public sealed class RawUnreliableServerTransportTests
         callbackReason = reason;
     }
 
+    private static void UpdateMax(ref int max, int value)
+    {
+        int observed = Volatile.Read(ref max);
+        while (value > observed)
+        {
+            int previous = Interlocked.CompareExchange(ref max, value, observed);
+            if (previous == observed)
+            {
+                return;
+            }
+
+            observed = previous;
+        }
+    }
+
     [TearDown]
     public void TearDown()
     {
@@ -496,6 +511,108 @@ public sealed class RawUnreliableServerTransportTests
 
         Assert.That(handler.ReceivedCount, Is.EqualTo(2));
         Assert.That(handler.ReceivedBeforeStartedCount, Is.Zero);
+        transport.StopAndDrainAll();
+    }
+
+    [Test]
+    [Category("Transports.Concurrency")]
+    public void OnCarrierInbound_ConcurrentTriggersForTwoSources_SerializeFactoryCalls()
+    {
+        using var transport = Create();
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        using var startGate = new ManualResetEventSlim(false);
+        using var ready = new CountdownEvent(2);
+        using var factoryEntered = new ManualResetEventSlim(false);
+        using var releaseFactory = new ManualResetEventSlim(false);
+        var firstSource = new StringEndPoint("source-1");
+        var secondSource = new StringEndPoint("source-2");
+        int active = 0;
+        int maxActive = 0;
+        int factoryCalls = 0;
+        Exception? threadFailure = null;
+
+        transport.FactoryBehavior = (s, t) =>
+        {
+            int current = Interlocked.Increment(ref active);
+            UpdateMax(ref maxActive, current);
+            Interlocked.Increment(ref factoryCalls);
+            factoryEntered.Set();
+
+            try
+            {
+                if (!releaseFactory.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    throw new TimeoutException("The factory gate was not released.");
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref active);
+            }
+
+            return handler;
+        };
+        StartWithFactory(transport, (s, t) => handler, out _);
+
+        UnionDataList firstTrigger = TestBuffers.WithByte(Memory, 1);
+        UnionDataList secondTrigger = TestBuffers.WithByte(Memory, 2);
+
+        Thread Contender(IEndPoint source, UnionDataList trigger) => new(() =>
+        {
+            ready.Signal();
+            startGate.Wait();
+
+            try
+            {
+                transport.ExposedOnCarrierInbound(source, trigger);
+            }
+            catch (Exception ex)
+            {
+                threadFailure = ex;
+            }
+        });
+
+        var first = Contender(firstSource, firstTrigger);
+        var second = Contender(secondSource, secondTrigger);
+        first.IsBackground = true;
+        second.IsBackground = true;
+
+        try
+        {
+            first.Start();
+            second.Start();
+
+            Assert.That(ready.Wait(TimeSpan.FromSeconds(10)), Is.True,
+                "The contenders did not become ready.");
+            Assert.That(transport.ExposedRouteCount, Is.Zero);
+
+            startGate.Set();
+
+            Assert.That(factoryEntered.Wait(TimeSpan.FromSeconds(10)), Is.True,
+                "Neither contender entered the factory.");
+        }
+        finally
+        {
+            startGate.Set();
+            releaseFactory.Set();
+        }
+
+        Assert.That(first.Join(TimeSpan.FromSeconds(10)), Is.True, "The first contender did not finish.");
+        Assert.That(second.Join(TimeSpan.FromSeconds(10)), Is.True, "The second contender did not finish.");
+
+        Assert.That(threadFailure, Is.Null);
+        Assert.That(maxActive, Is.EqualTo(1),
+            "the admission lock is global, not per source route");
+        Assert.That(factoryCalls, Is.EqualTo(2));
+        Assert.That(transport.InvokeFactoryCalls, Is.EqualTo(2));
+        Assert.That(transport.CreateEndpointCalls, Is.EqualTo(2));
+        Assert.That(transport.ExposedRouteCount, Is.EqualTo(2));
+
+        foreach (var endpoint in transport.CreatedEndpoints)
+        {
+            ((TestRawUnreliableServerEndpoint)endpoint).DrainAll();
+        }
+
         transport.StopAndDrainAll();
     }
 

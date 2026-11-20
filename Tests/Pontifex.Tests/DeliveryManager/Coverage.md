@@ -92,6 +92,7 @@
 | `DeliveryMaxByteSize_ReturnsCorrectValue` | The maximum is `(messageMaxByteSize - multiOverhead - safetyMargin) * 255`. | The public limit matches the documented wire size arithmetic. | 100-byte message size yields 21,930 bytes. |
 | `ProcessIncoming_MalformedDeliveryReport_ReturnsFalse` | A non-user packet with an invalid report is rejected. | Malformed acknowledgements do not confirm deliveries. | The report declares five confirmations but carries none. |
 | `ProcessOutgoing_ProducesBuffer` | A scheduled message is emitted on the next pump. | Scheduling feeds the outgoing queue. | The captured message is released by the fixture. |
+| `ProcessOutgoing_WhenDispatcherQueueIsFull_FiresFailedToDeliverOnce` | A dispatcher `BufferOverflow` is translated to `FailedToDeliver`. | Filling the 5,000-entry dispatcher queue overflows exactly the last message, which fires one `FailedToDeliver` and is not handed to the consumer. | Schedules 5,001 messages through the facade, so no capacity seam is added; the tracked pools fail on a double release. |
 | `RoundTrip_SingleChunk_ReceivedFires` | A single-chunk message is delivered with its id and payload. | End-to-end send/receive through two managers. | Payload is copied out; the handler owns and releases the received buffer inside the callback. |
 | `DuplicateInbound_ReceivedFiresOnce` | A retransmitted message is delivered once. | The handler observes one message, and the duplicate still produces one outgoing delivery report. | The report assertion proves the ACK-always rule for duplicates; the report is a `false`-discriminated packet. |
 | `AckRoundTrip_DeliveredFires` | An acknowledgement round trip fires `Delivered` on the sender. | Delivery confirmation crosses the two managers. | Acknowledged id equals the scheduled id. |
@@ -217,7 +218,6 @@
 
 | Missing test or gap | Owner | Reason |
 |---|---|---|
-| Facade `BufferOverflow` → `FailedToDeliver` translation. | This layer | The dispatcher capacity case is deferred, but the facade's event translation and release ownership on that path are untested. |
 | `Deduplicator` with a non-positive capacity. | This layer | The constructor accepts any capacity; capacity zero would overflow on the first fill. The production manager never passes it. |
 
 ## Deferred by design

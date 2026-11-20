@@ -45,7 +45,10 @@ Validation paths run against scripted accessors; loopback acceptance uses `RealS
 | `NonPositiveReceiveBufferSize_Throws` | Constructor validation and endpoint exposure | Non Positive Receive Buffer Size Throws. | Real loopback socket; host-internal, no network dependency. |
 | `Endpoints_AreExposed` | Constructor validation and endpoint exposure | Endpoints Are Exposed. | Real loopback socket; host-internal, no network dependency. |
 
-#### `SystemSocketTests` — System socket acceptance
+This fixture pins the production `SystemSocket` accessor that `LowLevelTcpSocket` depends on. It is
+subject coverage of a supporting type, not harness self-coverage.
+
+#### `SystemSocketTests` — System socket acceptance (supporting production type)
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
@@ -145,7 +148,10 @@ The source, accessor, and deadline scheduler are scripted; no sleeping or real t
 
 The socket accessor and pool are scripted. Consumer-owned buffers and partial views are released by the test or a tracking harness.
 
-#### `PartialReceiveViewTests` — Partial receive view lifetime
+This fixture pins `ReusablePartialView.Create` and partial-view lifetime, a production supporting
+type used by the receive path. It is subject coverage, not harness self-coverage.
+
+#### `PartialReceiveViewTests` — Partial receive view lifetime (supporting production type)
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
@@ -432,21 +438,6 @@ Policy tests pin completion reasons; the loopback variants validate the resultin
 
 Producer/consumer examples are test-local. Loopback tests use real local TCP but remain bounded and deterministic.
 
-#### `ApplicationByteLedgerTests` — Application byte-budget accounting
-
-| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
-| --- | --- | --- | --- |
-| `WeightedByteAdmission_RejectsOversizedItem_WithoutTakingOwnership` | Application byte-budget accounting | Weighted Byte Admission Rejects Oversized Item Without Taking Ownership. | Test-local composition; bounded loopback. |
-| `ConsumerHeldBytes_RemainAccountedAfterSocketCompletion` | Application byte-budget accounting | Consumer Held Bytes Remain Accounted After Socket Completion. | Test-local composition; bounded loopback. |
-| `QueuedPendingHeldAndDeferredCleanup_AreSeparate` | Application byte-budget accounting | Queued Pending Held And Deferred Cleanup Are Separate. | Test-local composition; bounded loopback. |
-
-#### `ApplicationLivenessWatchdogTests` — External liveness monitoring
-
-| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
-| --- | --- | --- | --- |
-| `LivenessComposition_CanAbortStalledNormalIo` | External liveness monitoring | Liveness Composition Can Abort Stalled Normal Io. | Test-local composition; bounded loopback. |
-| `LivenessDisabled_LeavesNormalIoIntentionallyPending` | External liveness monitoring | Liveness Disabled Leaves Normal Io Intentionally Pending. | Test-local composition; bounded loopback. |
-
 #### `LoopbackHalfClosePolicyTests` — Remote-EOF half-close outcome on loopback
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
@@ -470,9 +461,7 @@ Producer/consumer examples are test-local. Loopback tests use real local TCP but
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
 | `ProducerHandoffHelper_WaitsForSourceQuiesced` | Producer seal, shutdown, and drain composition | Producer Handoff Helper Waits For Source Quiesced. | Test-local composition; bounded loopback. |
-| `FixtureTeardown_CompletesOutstandingFakeOperations` | Producer seal, shutdown, and drain composition | Fixture Teardown Completes Outstanding Fake Operations. | Test-local composition; bounded loopback. |
 | `NativePendingProbe_RetainsBorrowedBufferUntilLateCompletion` | Producer seal, shutdown, and drain composition | Native Pending Probe Retains Borrowed Buffer Until Late Completion. | Test-local composition; bounded loopback. |
-| `StrictSingleWriter_RejectsConcurrentProducerPublication` | Producer seal, shutdown, and drain composition | Strict Single Writer Rejects Concurrent Producer Publication. | Test-local composition; bounded loopback. |
 
 ### Allocation and load probes
 
@@ -570,6 +559,28 @@ Harness self-tests validate the test infrastructure itself. They are optional, c
 | --- | --- | --- | --- |
 | `DoubleRelease_IsDetected_EvenWhenFinalReleaseCountIsOne` | Tracking buffer ref-count diagnostics | Double Release Is Detected Even When Final Release Count Is One. | Optional harness self-test; .Harness category only. |
 | `BalancedAcquireRelease_RecordsSingleFinalReleaseAndZeroRefs` | Tracking buffer ref-count diagnostics | Balanced Acquire Release Records Single Final Release And Zero Refs. | Optional harness self-test; .Harness category only. |
+
+#### `ApplicationByteLedgerTests` — Application byte-budget accounting (harness self-test)
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `WeightedByteAdmission_RejectsOversizedItem_WithoutTakingOwnership` | Application byte-budget accounting (harness self-test) | Weighted Byte Admission Rejects Oversized Item Without Taking Ownership. | Optional harness self-test; .Harness category only. |
+| `ConsumerHeldBytes_RemainAccountedAfterSocketCompletion` | Application byte-budget accounting (harness self-test) | Consumer Held Bytes Remain Accounted After Socket Completion. | Optional harness self-test; .Harness category only. |
+| `QueuedPendingHeldAndDeferredCleanup_AreSeparate` | Application byte-budget accounting (harness self-test) | Queued Pending Held And Deferred Cleanup Are Separate. | Optional harness self-test; .Harness category only. |
+
+#### `ApplicationLivenessWatchdogTests` — External liveness monitoring (harness self-test)
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `LivenessComposition_CanAbortStalledNormalIo` | External liveness monitoring (harness self-test) | Liveness Composition Can Abort Stalled Normal Io. | Optional harness self-test; .Harness category only. |
+| `LivenessDisabled_LeavesNormalIoIntentionallyPending` | External liveness monitoring (harness self-test) | Liveness Disabled Leaves Normal Io Intentionally Pending. | Optional harness self-test; .Harness category only. |
+
+#### `ProducerHarnessTests` — Producer composition harness doubles
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `FixtureTeardown_CompletesOutstandingFakeOperations` | Harness composition helper | Fixture teardown completes pending fake native operations and returns borrowed buffers through the guarded pool. | Optional harness self-test; .Harness category only. |
+| `StrictSingleWriter_RejectsConcurrentProducerPublication` | Strict SPSC double | Concurrent producer publication is rejected and counted as a writer violation. | Optional harness self-test; .Harness category only. |
 
 ## Planned coverage
 

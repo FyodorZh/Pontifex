@@ -1,8 +1,12 @@
+using Actuarius.Memory;
+using Pontifex.Factory;
+using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Protocols;
 using Pontifex.Raw.Reliable.Zip;
 using Pontifex.StopReasons;
 using Pontifex.Tests.Raw.Reliable.Zip.Harness;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Tests.Raw.Reliable.Zip;
 
@@ -106,6 +110,138 @@ public sealed class RawReliableZipTests
         Assert.That(serverHandler, Is.Not.Null);
         Assert.That(serverHandler!.Received, Has.Count.EqualTo(1));
         Assert.That(serverHandler.Received[0], Is.EqualTo(new[] { "s:" + text }));
+    }
+
+    [Test]
+    public void DecompressionFailureAfterAdmission_StopsTheClientWithTextFail()
+    {
+        using var pair = new ZipPair();
+        pair.Start();
+        Assert.That(pair.ClientHandler.Endpoint!.IsConnected, Is.True);
+
+        // A raw payload is not a single compressed element; the zip logic cannot
+        // decode it and must terminate the session.
+        pair.FirstClient.InnerClient.DeliverToClient(ZipPayload.Create("raw", "payload"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ClientHandler.Received, Is.Empty,
+                "the undecodable payload must not reach the application handler");
+            Assert.That(pair.ClientHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<TextFail>());
+            Assert.That(pair.ClientHandler.Endpoint!.IsConnected, Is.False);
+        });
+    }
+
+    [Test]
+    public void BindingCompiledZip_ProducesFreshLogicPerSession()
+    {
+        var fakeServer = new FakeZipServer();
+        FakeZipClient? fakeClient = null;
+        var image = new FakeZipImage();
+
+        var builder = TransportFactoryBootstrap.CreateBuilder();
+        foreach (Pontifex.TransportType type in Enum.GetValues<Pontifex.TransportType>())
+        {
+            builder.Registry.RegisterType(
+                new Pontifex.TransportFormula.Registry.TransportTypeInfo(type, type.ToString()));
+        }
+
+        builder.RegisterTransport(RawReliableZipBinding.CreateRegistration());
+        builder.RegisterTransport(new Pontifex.Factory.Registration.TransportRegistration(
+            "fakezip",
+            Pontifex.TransportType.RawReliable,
+            Array.Empty<Pontifex.Factory.Registration.TransportParameter>(),
+            context => context.Role == Pontifex.Factory.Registration.TransportRole.Client
+                ? fakeClient!
+                : fakeServer,
+            Array.Empty<string>()));
+
+        var factory = builder.Build();
+
+        IRawReliableServer CompileServer() =>
+            (IRawReliableServer)factory.Compile(
+                "zip(fakezip())",
+                factory.CreateCompiler(
+                    Pontifex.Factory.Registration.TransportRole.Server,
+                    new Logger([]),
+                    MemoryRental.Shared));
+
+        IRawReliableClient CompileClient() =>
+            (IRawReliableClient)factory.Compile(
+                "zip(fakezip())",
+                factory.CreateCompiler(
+                    Pontifex.Factory.Registration.TransportRole.Client,
+                    new Logger([]),
+                    MemoryRental.Shared));
+
+        var server = CompileServer();
+        Assert.That(server.Init(image.Factory), Is.True);
+        Assert.That(server.Start(_ => { }), Is.True);
+
+        var session1 = fakeServer.Connect();
+        var client1Handler = new RecordingZipClientHandler();
+        fakeClient = new FakeZipClient();
+        var client1 = CompileClient();
+        Assert.That(client1.Init(client1Handler), Is.True);
+        session1.Endpoint.Deliver = data => fakeClient!.DeliverToClient(data);
+        fakeClient.ConfigureEndpoint = endpoint => endpoint.Deliver = session1.DeliverToServer;
+        Assert.That(client1.Start(_ => { }), Is.True);
+        fakeClient.Connect();
+
+        string firstText = new string('A', 2000);
+        Assert.That(client1Handler.Endpoint!.Send(ZipPayload.Create(firstText)),
+            Is.EqualTo(SendResult.Ok));
+        Assert.That(image.Handlers, Has.Count.EqualTo(1));
+        Assert.That(image.Handlers[0].Received[0], Is.EqualTo(new[] { "s:" + firstText }));
+
+        session1.Stop(new UserIntention("test", "first-session-disconnected"));
+        client1.Stop();
+
+        var session2 = fakeServer.Connect();
+        var client2Handler = new RecordingZipClientHandler();
+        fakeClient = new FakeZipClient();
+        var client2 = CompileClient();
+        Assert.That(client2.Init(client2Handler), Is.True);
+        session2.Endpoint.Deliver = data => fakeClient!.DeliverToClient(data);
+        fakeClient.ConfigureEndpoint = endpoint => endpoint.Deliver = session2.DeliverToServer;
+        Assert.That(client2.Start(_ => { }), Is.True);
+        fakeClient.Connect();
+
+        string secondText = new string('B', 2000);
+        Assert.That(client2Handler.Endpoint!.Send(ZipPayload.Create(secondText)),
+            Is.EqualTo(SendResult.Ok));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(image.Handlers, Has.Count.EqualTo(2),
+                "each session must obtain its own zip logic through the production binding");
+            Assert.That(image.Handlers[1], Is.Not.SameAs(image.Handlers[0]));
+            Assert.That(image.Handlers[1].Received, Has.Count.EqualTo(1));
+            Assert.That(image.Handlers[1].Received[0], Is.EqualTo(new[] { "s:" + secondText }),
+                "compression must still work after the first session released its compressor");
+        });
+
+        client2.Stop();
+        server.Stop();
+        session1.Release();
+        session2.Release();
+        fakeClient!.Endpoint?.ReleaseSent();
+    }
+
+    private sealed class FakeZipImage
+    {
+        public List<RecordingZipServerHandler> Handlers { get; } = new();
+
+        public ZipServerFactory Factory => _factory ??= new ZipServerFactory(_ =>
+        {
+            var handler = new RecordingZipServerHandler();
+            Handlers.Add(handler);
+            return handler;
+        });
+
+        private ZipServerFactory? _factory;
     }
 
     [Test]

@@ -90,6 +90,47 @@ public sealed class RawReliableWrapperTests
     }
 
     [Test]
+    public void ServerHandshakeTimeout_RejectsWithTimeoutTextAndStopsAfterLinger()
+    {
+        var clock = new ManualNegotiationClock();
+        var log = new Logger([]);
+        var logic = new RecordingWrapperLogic(log, MemoryRental.Shared);
+        var inner = new FakeReliableServer();
+        var server = new RawReliableWrapperServer("server", "layer", inner, logic, 1, 128, null, clock);
+        var factory = new RecordingServerFactory(_ => new RecordingRawReliableServerHandler());
+
+        Assert.That(server.Init(factory), Is.True);
+        Assert.That(server.Start(_ => { }), Is.True);
+
+        var session = inner.Connect();
+
+        Assert.That(clock.PendingDelays, Is.EqualTo(new[] { TimeSpan.FromSeconds(10) }));
+        Assert.That(factory.Calls, Is.Zero);
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(factory.Calls, Is.Zero, "a timed-out session must never reach the factory");
+            Assert.That(session.Endpoint.Sent, Has.Count.EqualTo(1));
+            Assert.That(Payload.Describe(session.Endpoint.Sent[0]), Is.EqualTo(
+                new[] { "h:1", "s:layer", "b:2", "s:negotiation timeout" }));
+            Assert.That(session.Endpoint.IsConnected, Is.True,
+                "the rejection linger keeps the inner session open");
+            Assert.That(clock.PendingDelays, Is.EqualTo(new[] { TimeSpan.FromSeconds(2) }));
+            Assert.That(logic.ConnectedCount, Is.Zero);
+        });
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.Endpoint.IsConnected, Is.False);
+            Assert.That(clock.PendingCount, Is.Zero);
+        });
+    }
+
+    [Test]
     public void VersionMismatch_StopsClientWithoutOnConnected()
     {
         var client = new FakeReliableClient();

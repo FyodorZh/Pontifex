@@ -207,6 +207,91 @@ public sealed class RawReliableReconnectableTests
         Assert.That(pair.Factory.Calls, Is.EqualTo(1));
     }
 
+    [Test]
+    public void UnknownSessionId_IsRejectedWithoutFactoryCallOrSessionDamage()
+    {
+        using var pair = new ReconnectablePair();
+        pair.Start();
+
+        var firstHandler = pair.ServerHandler;
+        Assert.That(firstHandler, Is.Not.Null);
+
+        pair.DropPhysicalConnection(new UserIntention("test", "fall"));
+        pair.Reconnect(endpoint => endpoint.Transform = input => OffsetReattachInt(0, 1000, input));
+
+        var rejected = pair.ServerSession;
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.Factory.Calls, Is.EqualTo(1),
+                "an unknown session id must not create a new user session");
+            Assert.That(firstHandler!.Events, Is.EqualTo(new[] { "connected" }),
+                "the existing session must be untouched");
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.ClientHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+            Assert.That(rejected!.HandlerStoppedCount, Is.Zero,
+                "the rejected physical session waits for the linger");
+        });
+
+        pair.Clock.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.That(rejected!.HandlerStoppedCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void StaleGeneration_IsRejectedWithoutFactoryCallOrSessionDamage()
+    {
+        using var pair = new ReconnectablePair();
+        pair.Start();
+
+        var firstHandler = pair.ServerHandler;
+        Assert.That(firstHandler, Is.Not.Null);
+
+        pair.DropPhysicalConnection(new UserIntention("test", "fall"));
+        pair.Reconnect(endpoint => endpoint.Transform = input => OffsetReattachInt(1, 1, input));
+
+        var rejected = pair.ServerSession;
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.Factory.Calls, Is.EqualTo(1));
+            Assert.That(firstHandler!.Events, Is.EqualTo(new[] { "connected" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.ClientHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+        });
+
+        pair.Clock.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.That(rejected!.HandlerStoppedCount, Is.EqualTo(1));
+    }
+
+    private static UnionDataList OffsetReattachInt(int index, int delta, UnionDataList input)
+    {
+        var elements = new List<UnionData>();
+        while (input.TryPopFirst(out var element))
+        {
+            elements.Add(element);
+        }
+
+        input.Release();
+
+        var result = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+        int intIndex = 0;
+        foreach (var element in elements)
+        {
+            if (element.Type == UnionDataType.Int && intIndex++ == index)
+            {
+                result.PutLast(new UnionData(element.Alias.IntValue + delta));
+            }
+            else
+            {
+                result.PutLast(element);
+            }
+        }
+
+        return result;
+    }
+
     private static UnionDataList ReplaceLastArrayWithWrongSecret(UnionDataList input)
     {
         var elements = new List<UnionData>();

@@ -3,13 +3,13 @@ using Actuarius.Memory;
 using Pontifex.NetSockets.Tcp;
 using Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness;
 
-namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
+namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
 {
     /// <summary>
     /// Application byte-budget ledger: byte-weighted admission, lifecycle phase separation,
     /// physical-storage dedup, and consumer credit lifetime.
     /// </summary>
-    [LowLevelTcpSocketSuite]
+    [LowLevelTcpSocketHarnessSuite]
     public class ApplicationByteLedgerTests
     {
         [Test]

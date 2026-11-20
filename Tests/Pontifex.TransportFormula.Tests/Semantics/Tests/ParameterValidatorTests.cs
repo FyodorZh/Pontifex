@@ -221,6 +221,17 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
+    public void Validate_ForDecimalParameterReceivingStruct_ReportsExpectedScalarWithStructShape()
+    {
+        SemanticsAssertions.ValidateParamsError(
+            Registry(),
+            "numbers(ratio={a=1})",
+            Constructor("numbers"),
+            "E_SEM_EXPECTED_SCALAR",
+            "parameter 'ratio' expects a scalar value, got struct");
+    }
+
+    [Test]
     public void Validate_ResolvesListElementsInForwardOrder()
     {
         SemanticsAssertions.ValidateParamsError(

@@ -442,8 +442,9 @@ facade are not repeated.
 - **Stop**: the admission is closed and the routes are cleared under the admission lock before
   `StopCarrier` runs. The carrier stops first, then every removed endpoint is stopped with the transport
   reason through the one-shot entry. Every session handler observes the same reason instance.
-- **Concurrency**: factory invocation and route publication are serialized for one source; concurrent
-  triggers for the same unknown source produce exactly one factory call, one endpoint, and one route.
+- **Concurrency**: factory invocation and route publication are serialized globally, across all source
+  routes. Concurrent triggers for the same unknown source produce exactly one factory call, one endpoint,
+  and one route; concurrent triggers for different sources still never overlap in the factory.
 
 ## How it works
 
