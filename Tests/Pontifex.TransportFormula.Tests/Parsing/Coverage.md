@@ -82,6 +82,8 @@
 | `Parse_ForAsInValuePosition_TreatsItAsBareScalar` | `grammar.md` §4.3, §6 | `as` in value position is an ordinary bare scalar, not a cast. | — |
 | `Parse_ForUpperCaseAs_RecognizesCast` | `grammar.md` §4.3; `parsing.md` §5.2 | The cast keyword comparison is ASCII case-insensitive. | Type spelling is preserved in the AST. |
 | `Parse_ForAsAsSchemeName_ProducesTransportCall` | `grammar.md` §4.3 | `as` may be a scheme name because it is contextual. | — |
+| `Parse_ForAsAsNamedArgumentName_KeepsTheNameAndScalarValue` | `grammar.md` §4.3, §5; `parsing.md` §5.4 | `as` is accepted in the named-argument name position and the value is parsed normally. | Proves the contextual keyword does not leak into the name position. |
+| `Parse_ForAsAsStructFieldName_KeepsTheFieldNameAndScalarValue` | `grammar.md` §4.3, §5; `parsing.md` §5.7 | `as` is accepted as a struct-field name and followed by its value. | — |
 | `Parse_ThroughIParser_ProducesTheSameResultAsTheConcreteParser` | `IParser` contract; `parsing.md` §5.1 | The parser is usable through its public interface and produces the same success and error outcomes as the concrete parser. | Compares both a valid and an invalid input. |
 | `Parse_ForTransportCall_RecordsSchemeSpanCloseParenOffsetAndFullSpan` | `parsing.md` §4, §5.3 | Call span, scheme span, and closing-parenthesis offset are exact. | `CloseParenOffset` supports missing-required-parameter diagnostics in later phases. |
 | `Parse_ForCast_RecordsTypeSpanAndFullCastSpan` | `parsing.md` §4, §5.2 | Cast span covers call start through type end; type token span is retained. | — |
@@ -142,8 +144,7 @@ The message column is the exact expected `FactoryError.Message`.
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| `as` used as a named-argument or struct-field name. | Parsing layer | The grammar allows `as` in name positions; only its keyword, scheme, value, and cast uses are tested. |
-| `TokenCursor.Match`/`MatchWord` and the remaining punctuation display branches. | Parsing layer | The members have no call site outside the class and the corpus never makes `(`, `)`, `]`, or `=` the offending token. |
+| The remaining punctuation display branches. | Parsing layer | The corpus never makes `(`, `)`, `]`, or `=` the offending token. |
 
 ## Deferred by design
 

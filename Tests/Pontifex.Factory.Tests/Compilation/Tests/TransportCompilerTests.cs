@@ -33,6 +33,54 @@ public sealed class TransportCompilerTests
     }
 
     [Test]
+    public void Constructor_WithNullDependency_ThrowsArgumentNullExceptionForThatDependency()
+    {
+        var constructors = CompilationTestData.NewRegistry();
+        var converters = new RecordingConvertersGraph(null);
+        var logger = CompilationTestData.Logger;
+        var memory = CompilationTestData.Memory;
+
+        AssertNullDependency(
+            "constructors",
+            () => new TransportCompiler(
+                null!,
+                converters,
+                logger,
+                memory,
+                Core.TransportRole.Server));
+        AssertNullDependency(
+            "converters",
+            () => new TransportCompiler(
+                constructors,
+                null!,
+                logger,
+                memory,
+                Core.TransportRole.Server));
+        AssertNullDependency(
+            "logger",
+            () => new TransportCompiler(
+                constructors,
+                converters,
+                null!,
+                memory,
+                Core.TransportRole.Server));
+        AssertNullDependency(
+            "memory",
+            () => new TransportCompiler(
+                constructors,
+                converters,
+                logger,
+                null!,
+                Core.TransportRole.Server));
+    }
+
+    private static void AssertNullDependency(string parameterName, Action create)
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => create());
+        Assert.That(exception!.ParamName, Is.EqualTo(parameterName));
+    }
+
+    [Test]
     public void Compile_WithNullRoot_ThrowsCompilerExceptionInconsistentTree()
     {
         var compiler = Compiler(CompilationTestData.NewRegistry());
@@ -463,6 +511,162 @@ public sealed class TransportCompilerTests
 
         var context = registration.LastContext!;
         Assert.That(context.TryGetTransportList("items", out _), Is.False);
+    }
+
+    [Test]
+    public void Compile_WithAbsentOptionalTransport_ReturnsFalseAndNoFactory()
+    {
+        var inputParam = CompilationTestData.TransportParam(
+            "input",
+            CompilationTestData.AnySet(),
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "outer",
+            CompilationTestData.TypeA,
+            inputParam);
+        var registration = new RecordingRegistration("outer", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(constructor)));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetTransport("input", out var factory), Is.False);
+        Assert.That(factory, Is.Null);
+    }
+
+    [Test]
+    public void Compile_WithAbsentOptionalStruct_ReturnsFalseAndNoValue()
+    {
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(),
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "outer",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration("outer", CompilationTestData.TypeA);
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        compiler.Compile(CompilationTestData.FormulaFor(
+            CompilationTestData.Transport(constructor)));
+
+        var context = registration.LastContext!;
+        Assert.That(context.TryGetStruct("config", out var value), Is.False);
+        Assert.That(value, Is.Null);
+    }
+
+    [Test]
+    public void Compile_WithStringForTransportParameter_ReportsTransportKind()
+    {
+        var inputParam = CompilationTestData.TransportParam(
+            "input",
+            CompilationTestData.AnySet(),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "outer",
+            CompilationTestData.TypeA,
+            inputParam);
+        var registration = new RecordingRegistration(
+            "outer",
+            CompilationTestData.TypeA,
+            Array.Empty<Core.TransportParameter>(),
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetTransport("input", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "outer");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Scalar(inputParam, "x")))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo("compiler expected value kind transport for parameter 'input', got string"));
+    }
+
+    [Test]
+    public void Compile_WithTransportForTransportListParameter_ReportsTransportListKind()
+    {
+        var listParam = CompilationTestData.TransportListParam(
+            "items",
+            CompilationTestData.AnySet(),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "outer",
+            CompilationTestData.TypeC,
+            listParam);
+        var registration = new RecordingRegistration(
+            "outer",
+            CompilationTestData.TypeC,
+            Array.Empty<Core.TransportParameter>(),
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetTransportList("items", out _);
+                return new FakeTransport(CompilationTestData.TypeC, "outer");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var nested = CompilationTestData.Transport(
+            CompilationTestData.Constructor("beta", CompilationTestData.TypeB));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Nested(listParam, nested)))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo(
+                "compiler expected value kind transport list for parameter 'items', got transport"));
+    }
+
+    [Test]
+    public void Compile_WithStringForStructParameter_ReportsStructKind()
+    {
+        var configParam = CompilationTestData.StructParam(
+            "config",
+            CompilationTestData.Schema(),
+            required: true,
+            positional: true);
+        var constructor = CompilationTestData.Constructor(
+            "outer",
+            CompilationTestData.TypeA,
+            configParam);
+        var registration = new RecordingRegistration(
+            "outer",
+            CompilationTestData.TypeA,
+            Array.Empty<Core.TransportParameter>(),
+            Array.Empty<string>(),
+            context =>
+            {
+                context.TryGetStruct("config", out _);
+                return new FakeTransport(CompilationTestData.TypeA, "outer");
+            });
+        var compiler = Compiler(CompilationTestData.NewRegistry(registration));
+
+        var exception = Assert.Throws<CompilerException>(() => compiler.Compile(
+            CompilationTestData.FormulaFor(
+                CompilationTestData.Transport(
+                    constructor,
+                    CompilationTestData.Scalar(configParam, "x")))))!;
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_CMP_PARAM_KIND_MISMATCH"));
+        Assert.That(
+            exception.Error.Message,
+            Is.EqualTo("compiler expected value kind struct for parameter 'config', got string"));
     }
 
     [Test]

@@ -759,6 +759,30 @@ public sealed class PrinterInvariantValidatorTests
     }
 
     [Test]
+    public void Validate_WhenStringParameterContainsCarriageReturn_ReportsInvalidScalar()
+    {
+        var constructor = AlphaConstructor();
+        var input = Param(constructor, "input");
+        var timeout = Param(constructor, "timeout");
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    input,
+                    CanonicalizationTestData.Expression(
+                        EmptyTransport("beta", CanonicalizationTestData.TypeB))),
+                CanonicalizationTestData.Bind(
+                    timeout,
+                    CanonicalizationTestData.Scalar("a\rb"))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_INVALID_SCALAR",
+            "scalar value contains a character that cannot be printed: U+000D");
+    }
+
+    [Test]
     public void Validate_WhenCastTargetIsAbsentFromCatalog_ReportsInvalidCastTarget()
     {
         var inner = EmptyTransport("alpha", CanonicalizationTestData.TypeA);
@@ -1390,6 +1414,96 @@ public sealed class PrinterInvariantValidatorTests
             formula,
             "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
             "field 'name' of struct parameter 'config' has value kind integer, expected string");
+    }
+
+    [Test]
+    public void Validate_WhenIntegerFieldReceivesArray_ReportsStructFieldKindMismatch()
+    {
+        var count = CanonicalizationTestData.IntegerField("count", 0, 10, required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(count),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "numericstruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            count,
+                            CanonicalizationTestData.ArrayValue())))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
+            "field 'count' of struct parameter 'config' has value kind array, expected integer");
+    }
+
+    [Test]
+    public void Validate_WhenNestedStructFieldReceivesArray_ReportsStructFieldKindMismatch()
+    {
+        var nested = CanonicalizationTestData.NestedField(
+            "nested",
+            CanonicalizationTestData.Schema(),
+            required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(nested),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "nestedstruct",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            nested,
+                            CanonicalizationTestData.ArrayValue())))));
+
+        AssertPrinterError(
+            formula,
+            "E_PRN_STRUCT_FIELD_KIND_MISMATCH",
+            "field 'nested' of struct parameter 'config' has value kind array, expected struct");
+    }
+
+    [Test]
+    public void Validate_WhenStructFieldNameStartsWithADigit_ReportsInconsistentTree()
+    {
+        var name = CanonicalizationTestData.StringField("1field", required: true);
+        var config = CanonicalizationTestData.StructParam(
+            "config",
+            CanonicalizationTestData.Schema(name),
+            required: true,
+            positional: true);
+        var constructor = CanonicalizationTestData.Constructor(
+            "structy",
+            CanonicalizationTestData.TypeA,
+            config);
+
+        var formula = CanonicalizationTestData.Formula(
+            CanonicalizationTestData.Transport(
+                constructor,
+                CanonicalizationTestData.Bind(
+                    config,
+                    CanonicalizationTestData.Struct(
+                        CanonicalizationTestData.Field(
+                            name,
+                            CanonicalizationTestData.StringValue("x"))))));
+
+        AssertInconsistent(formula, "non-canonical name");
     }
 
     [Test]

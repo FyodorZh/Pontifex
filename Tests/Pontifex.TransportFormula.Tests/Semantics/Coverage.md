@@ -99,6 +99,7 @@
 | `Validate_ForListElementsWithExpectedSet_ResolvesElementAgainstParameterExpectedType` | `ParameterValidator` | §7.1, §7.5 | List elements resolve with the parameter expected set. | Harness `listB`. |
 | `Validate_ChecksListArityBeforeResolvingElements` | `ParameterValidator` | §7.9 | Minimum arity is checked before element resolution. | The single element would also fail shape validation. |
 | `Validate_ChecksListMaximumBeforeResolvingElements` | `ParameterValidator` | §7.9 | Maximum arity is checked before element resolution. | Every element would also fail shape validation. |
+| `Validate_ForHomogeneousListAtMaximumCount_AcceptsEveryElement` | `ParameterValidator` | §6.5, §7.5 | A homogeneous list at the inclusive maximum count is accepted with every element resolved. | `gamma` with 3 TypeA elements; proves the upper bound is inclusive. |
 | `Validate_ResolvesListElementsInForwardOrder` | `ParameterValidator` | §7.9 | Elements are resolved from index 0 upward; the first element's error wins over a later element's error. | `gamma([alpha(x), numbers(x)])` fails in element 0. |
 | `Validate_VisitsBoundParametersInDeclarationOrder` | `ParameterValidator` | §7.5, §7.9 | The first bound parameter in declaration order reports its error first. | `mixed(input=1, flag=[x])` reverses source order; declaration order validates `flag` first. |
 | `Validate_ForStructParameterWithValidFields_ProducesStructValue` | `ParameterValidator` | §7.5 | A valid struct parameter produces `StructValue` with the expected field name and value. | — |
@@ -148,6 +149,7 @@
 | `Validate_ForDecimalFieldReceivingTransport_ReportsExpectedScalar` | `StructValidator` | §7.8, §13.3 | A decimal field keeps the existing scalar shape error for transports. | — |
 | `Validate_ForIntegerDecimalAndStringArrays_ProducesTypedArrayValues` | `StructValidator` | §6.5, §7.8 | String, integer, and decimal arrays produce homogeneous `ArrayValue` elements with typed scalar values. | — |
 | `Validate_ForEmptyOptionalArrays_AcceptsEmptyArrays` | `StructValidator` | §6.5, §7.8 | Empty optional arrays are valid. | — |
+| `Validate_ForIntegerArrayAtMaximumCount_AcceptsEveryElement` | `StructValidator` | §6.5, §7.8 | An integer array at the inclusive maximum count is accepted with typed elements. | `counts=[0,0,0]`; proves the upper bound is inclusive. |
 | `Validate_ForArrayBelowMinimum_ReportsArrayMin` | `StructValidator` | §7.8, §13.3 | A short array reports `E_SEM_ARRAY_MIN` before elements are inspected. | — |
 | `Validate_ForArrayAboveMaximum_ReportsArrayMax` | `StructValidator` | §7.8, §13.3 | A long array reports `E_SEM_ARRAY_MAX` before elements are inspected. | — |
 | `Validate_ForNonListArrayField_ReportsExpectedArray` | `StructValidator` | §7.8, §13.3 | A non-list value for an array field reports `E_SEM_STRUCT_FIELD_EXPECTED_ARRAY`. | — |
@@ -217,7 +219,6 @@ phase `Resolution`, offset, and zero-length span.
 | Missing test | Owner | Reason |
 |---|---|---|
 | Remaining shape-matrix cells. | Semantics layer | Decimal parameter receiving a struct, numeric fields receiving a list or struct, and struct-shaped string/decimal array elements are not enumerated. |
-| Inclusive list/array count maxima. | Semantics layer | Only `single` (min = max = 1) proves an inclusive upper bound; `gamma`/`counts` at the maximum are not accepted. |
 | §14.3 row `outer(beta(x) as TypeA)`. | Semantics layer | The cast-target mismatch matrix is covered for `TypeC`, not this exact row. |
 
 ## Deferred by design

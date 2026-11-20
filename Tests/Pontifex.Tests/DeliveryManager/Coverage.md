@@ -53,7 +53,7 @@
 | `TryToDeliver_DueTask_SendsOnce` | A due task is transmitted once with its wire envelope. | The first dispatch emits the discriminator and wire chunk id ahead of the packed data. | The first element is the `true` user discriminator read through the union alias as `ushort` 1. |
 | `TryToDeliver_ConfirmedDelivery_Skipped` | A confirmed task is not transmitted. | Acknowledgement removes pending work before it is due. | Confirmation happens before the due pump. |
 | `TryToDeliver_Retry_SendsMultipleTimes` | A task is retransmitted while the scheduler permits it. | Retry keeps sending the same task at the scheduled intervals. | Base interval 50 ms; pumps at 0/100/200 ms; timeout 10 s. |
-| `TryToDeliver_Failure_FiresFailedToDeliver` | Exhausting the retry budget reports failure. | `FailedToDeliver` fires once when the scheduler gives up. | Timeout 50 ms; second pump 200 ms after scheduling. |
+| `TryToDeliver_Failure_FiresFailedToDeliver` | Exhausting the retry budget reports failure; a later ACK is ignored. | `FailedToDeliver` fires once, and a subsequent `ConfirmDelivered` does not fire `Delivered`. | Timeout 50 ms; second pump 200 ms after scheduling. The dispatcher removes both maps on failure, so the late ACK is a no-op. |
 | `ConfirmDelivered_SingleChunk_FiresDelivered` | Confirming the only chunk reports delivery. | Single-chunk messages fire `Delivered` immediately. | — |
 | `ConfirmDelivered_MultiChunk_AllConfirmed_FiresOnce` | Delivery fires only after every chunk is confirmed. | The per-message chunk counter suppresses early delivery. | Two chunks; first confirmation emits nothing. |
 | `ConfirmDelivered_NonExistent_NoOp` | Confirming an unknown id is harmless. | Stray acknowledgements do not fire events. | — |
@@ -218,7 +218,6 @@
 | Missing test or gap | Owner | Reason |
 |---|---|---|
 | Facade `BufferOverflow` → `FailedToDeliver` translation. | This layer | The dispatcher capacity case is deferred, but the facade's event translation and release ownership on that path are untested. |
-| Late acknowledgement after retry exhaustion. | This layer | The failed → late-ACK transition must not fire `Delivered`; the dispatcher-level failure test stops at `FailedToDeliver`. |
 | `Deduplicator` with a non-positive capacity. | This layer | The constructor accepts any capacity; capacity zero would overflow on the first fill. The production manager never passes it. |
 
 ## Deferred by design

@@ -82,7 +82,7 @@ LowLevelTcpSocket/
     │                        SenderShutdownDeadlineTests, WholeDrainDeadlineTests,
     │                        SynchronousSendTests
     ├── Receiving/           ReceiverTests, ReceiveFailureTests, PartialReceiveViewTests,
-    │                        ReceivePoolTests, SynchronousReceiveTests
+    │                        ReceivePoolTests, SynchronousReceiveTests, ReceiverShutdownTests
     ├── Draining/            SourceDrainedTests, DrainHandlerAdmissionTests,
     │                        DrainNotificationHandoffTests, DrainNotificationAllocationTests,
     │                        SourceQuiescedTests

@@ -174,6 +174,39 @@ public sealed class RawReliableReconnectableTests
             "a message queued before the drop must be replayed after reattach");
     }
 
+    [Test]
+    public void ReplayedMessageAfterReattach_IsDeliveredOnce()
+    {
+        using var pair = new ReconnectablePair();
+        pair.Start();
+
+        var serverHandler = pair.ServerHandler;
+        Assert.That(serverHandler, Is.Not.Null);
+
+        // A server-side send resets the report-flush window, so the delivery report
+        // for the client's message is not emitted in the same tick.
+        Assert.That(serverHandler!.Endpoint!.Send(ReconnectablePayload.CreateInt(1)),
+            Is.EqualTo(SendResult.Ok));
+        pair.TickAll();
+
+        Assert.That(pair.ClientHandler.Endpoint!.Send(ReconnectablePayload.CreateInt(44)),
+            Is.EqualTo(SendResult.Ok));
+        pair.TickAll();
+
+        Assert.That(serverHandler.Received, Is.EqualTo(new[] { 44 }),
+            "the first transmission must reach the server before the drop");
+
+        pair.DropPhysicalConnection(new UserIntention("test", "fall"));
+        pair.Reconnect();
+        pair.TickAll();
+
+        Assert.That(pair.ServerSession!.ReceivedCount, Is.EqualTo(2),
+            "the server must receive the reattach tail and one replayed message");
+        Assert.That(serverHandler.Received, Is.EqualTo(new[] { 44 }),
+            "a replayed unconfirmed message must be suppressed as a duplicate");
+        Assert.That(pair.Factory.Calls, Is.EqualTo(1));
+    }
+
     private static UnionDataList ReplaceLastArrayWithWrongSecret(UnionDataList input)
     {
         var elements = new List<UnionData>();

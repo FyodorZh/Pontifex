@@ -172,6 +172,57 @@ public sealed class RawReliableAdmissionServerTransportTests
     }
 
     [Test]
+    public void TryCreateHandler_AfterNullResult_ReinvokesTheFactoryOnTheNextAdmission()
+    {
+        var transport = Create();
+        using var handler = new RecordingRawReliableHandshakeServerHandler(Memory);
+        int calls = 0;
+        var factory = new RecordingRawReliableAdmissionServerHandlerFactory(
+            _ => ++calls == 1 ? null : handler);
+        InitializeAndStart(transport, factory);
+
+        Assert.That(transport.ExposedTryCreateHandler(Remote), Is.Null);
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(1));
+
+        IRawReliableServerHandler? second = transport.ExposedTryCreateHandler(Remote);
+
+        Assert.That(second, Is.TypeOf<StopOnceServerHandler>());
+        Assert.That(((StopOnceServerHandler)second!).Inner, Is.SameAs(handler));
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(2),
+            "a null factory result must not be cached");
+    }
+
+    [Test]
+    public void TryCreateHandler_AfterThrow_ReinvokesTheFactoryOnTheNextAdmission()
+    {
+        var transport = Create();
+        using var handler = new RecordingRawReliableHandshakeServerHandler(Memory);
+        bool first = true;
+        var factory = new RecordingRawReliableAdmissionServerHandlerFactory(
+            _ =>
+            {
+                if (first)
+                {
+                    first = false;
+                    throw new InvalidOperationException("factory failure");
+                }
+
+                return handler;
+            });
+        InitializeAndStart(transport, factory);
+
+        Assert.That(transport.ExposedTryCreateHandler(Remote), Is.Null);
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(1));
+
+        IRawReliableServerHandler? second = transport.ExposedTryCreateHandler(Remote);
+
+        Assert.That(second, Is.TypeOf<StopOnceServerHandler>());
+        Assert.That(((StopOnceServerHandler)second!).Inner, Is.SameAs(handler));
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(2),
+            "a throwing factory must remain eligible for a later attempt");
+    }
+
+    [Test]
     public void TryCreateHandler_InvokesFactoryWithRemote()
     {
         var transport = Create();

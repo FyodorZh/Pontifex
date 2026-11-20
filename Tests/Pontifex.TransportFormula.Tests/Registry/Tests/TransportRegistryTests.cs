@@ -74,6 +74,15 @@ public sealed class TransportRegistryTests
     }
 
     [Test]
+    public void FindCanonicalAndCandidates_WithNullScheme_ReturnEmptyResults()
+    {
+        var registry = RegistryTestData.NewStandardBuilder().Build();
+
+        Assert.That(registry.FindCanonical(null!), Is.Null);
+        Assert.That(registry.FindCandidates(null!), Is.Empty);
+    }
+
+    [Test]
     public void FindCandidates_ForSchemeWithCanonicalAndAliases_ReturnsCanonicalFirstThenAliasesSortedByName()
     {
         var builder = RegistryTestData.NewStandardBuilder();

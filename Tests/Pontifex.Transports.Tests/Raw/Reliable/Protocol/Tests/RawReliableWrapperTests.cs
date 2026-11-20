@@ -50,6 +50,46 @@ public sealed class RawReliableWrapperTests
     }
 
     [Test]
+    public void Client_WhenProcessReceivedDataReturnsFalse_StopsWithTextFail()
+    {
+        using var pair = new WrapperPair();
+        pair.ClientLogic.ProcessReceivedResult = false;
+        pair.Start();
+
+        Assert.That(pair.ServerHandler!.Endpoint!.Send(Payload.Create("x")), Is.EqualTo(SendResult.Ok));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ClientHandler.ReceivedCount, Is.Zero,
+                "a rejected payload must not reach the application handler");
+            Assert.That(pair.ClientHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<TextFail>());
+            Assert.That(pair.ClientHandler.Endpoint!.IsConnected, Is.False);
+        });
+    }
+
+    [Test]
+    public void Server_WhenProcessReceivedDataReturnsFalse_DisconnectsWithTextFail()
+    {
+        using var pair = new WrapperPair();
+        pair.ServerLogic.ProcessReceivedResult = false;
+        pair.Start();
+
+        Assert.That(pair.ClientHandler.Endpoint!.Send(Payload.Create("x")), Is.EqualTo(SendResult.Ok));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ServerHandler!.ReceivedCount, Is.Zero,
+                "a rejected payload must not reach the application handler");
+            Assert.That(pair.ServerHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+            Assert.That(pair.ServerHandler.StopReason, Is.TypeOf<TextFail>());
+            Assert.That(pair.ServerSession!.Endpoint.IsConnected, Is.False);
+        });
+    }
+
+    [Test]
     public void VersionMismatch_StopsClientWithoutOnConnected()
     {
         var client = new FakeReliableClient();

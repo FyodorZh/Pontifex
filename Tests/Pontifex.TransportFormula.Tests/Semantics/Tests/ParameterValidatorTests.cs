@@ -208,6 +208,19 @@ public sealed class ParameterValidatorTests
     }
 
     [Test]
+    public void Validate_ForHomogeneousListAtMaximumCount_AcceptsEveryElement()
+    {
+        var provided = Validate(
+            "gamma([alpha(beta(x)), alpha(beta(x)), alpha(beta(x))])",
+            Constructor("gamma"));
+
+        Assert.That(provided, Has.Count.EqualTo(1));
+        var list = (TransportListValue)provided[0].Value;
+        Assert.That(list.Elements, Has.Count.EqualTo(3));
+        Assert.That(list.Elements.Select(e => e.Type), Is.All.EqualTo(SemanticsTestData.TypeA));
+    }
+
+    [Test]
     public void Validate_ResolvesListElementsInForwardOrder()
     {
         SemanticsAssertions.ValidateParamsError(

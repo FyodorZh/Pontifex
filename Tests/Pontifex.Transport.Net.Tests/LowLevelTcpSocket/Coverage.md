@@ -113,6 +113,13 @@ The source, accessor, and deadline scheduler are scripted; no sleeping or real t
 | `TryShutdown_OperationAbortedIsBenign` | Sender shutdown semantics | Try Shutdown Operation Aborted Is Benign. | Scripted source/accessor; no real time. |
 | `TryShutdown_ConnectionAbortedIsBenign` | Sender shutdown semantics | Try Shutdown Connection Aborted Is Benign. | Scripted source/accessor; no real time. |
 
+#### `ReceiverShutdownTests` — Receiver shutdown semantics
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `LocalShutdown_WithBenignSocketError_CompletesAsLocalShutdown` | Receiver shutdown semantics; benign teardown classification | `NotConnected`, `Shutdown`, `OperationAborted`, and `ConnectionAborted` on the receiver `Shutdown` produce `LocalShutdown` with no error. | Parameterized over the four socket errors; each case releases the in-flight receive with `OperationAborted`. |
+| `LocalShutdown_WithObjectDisposed_CompletesAsLocalShutdown` | Receiver shutdown semantics; benign teardown classification | A disposed socket during receiver `Shutdown` is a normal teardown outcome. | Complements the non-benign `ReceiveShutdownFailure_FaultsReceiver` case. |
+
 #### `SynchronousSendTests` — Synchronous send completion
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
@@ -568,7 +575,6 @@ Harness self-tests validate the test infrastructure itself. They are optional, c
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| Receiver-direction benign shutdown classification. | `LowLevelTcpSocket` | The sender direction is covered; the receiver equivalent is not. |
 | Async receive `WouldBlock` exhaustion. | `LowLevelTcpSocket` | Only the synchronous exhaustion path is scripted. |
 | Receiver `Shutdown()` before `Start()` and repeated shutdown. | `LowLevelTcpSocket` | All existing receiver tests start the receiver first. |
 | `ReusablePartialView` pool bound, revive-after-release, and delegated diagnostics. | `LowLevelTcpSocket` | Only `Create`, indexer, `CopyTo` range, and underflow are covered. |

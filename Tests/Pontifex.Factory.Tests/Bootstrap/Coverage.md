@@ -28,6 +28,7 @@
 | `RegisterTransport_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12; `ITransportFactoryBuilder.RegisterTransport` contract | The facade registration path is sealed after `Build` and reports the formula registry's `E_REG_BUILDER_SEALED`. | This is the path the Compilation README delegates to this suite; `Build_SealsTheRegistry_SoLaterRegistrationThrows` covers the sibling registry-level guard. |
 | `Build_WithoutRegistrations_ReturnsFactoryThatReportsUnknownScheme` | `ITransportFactoryBuilder` and `ITransportFactory` contracts | An empty pipeline is usable and reports `E_SEM_UNKNOWN_SCHEME` with phase `Resolution`. | Proves the factory is wired even with no constructors. |
 | `RegisterTransport_WithCoreRegistration_RegistersFormulaMetadataAndRuntimeConstructor` | `parsing.md` §6.9 | One core registration produces resolvable formula metadata and a runtime constructor that `Compile` can reach. | The transport instance returned by `Compile` is the exact instance the core registration created. |
+| `Create_IsInvokedOnlyByCompilation` | `parsing.md` §6.9 — the direct compiler is the only caller of `Create` | `Resolve` and `Canonicalize` invoke the core `Create` callback zero times; `Compile` invokes it exactly once. | The counter lives in the test registration lambda; no production seam was added. |
 | `RegisterTransport_WithCoreRegistration_NormalizesTheScheme` | `CoreRegistrationAdapter` normalization contract | A mixed-case core scheme becomes the canonical lowercase scheme in resolution and printing. | Normalization belongs to the adapter/formula registry, not the runtime registry. |
 | `RegisterTransport_WithCoreRegistration_PreservesAliases` | `ITransportFactoryBuilder` and `ITransportFactory` contracts | Core aliases remain resolvable and print as the canonical scheme. | Alias order and deduplication are formula-registry rules; this test covers carriage through the adapter. |
 | `RegisterTransport_WithCoreRegistration_MapsStringParameterMetadata` | `CoreRegistrationAdapter` and `ITransportFactory` contracts | A required core string parameter becomes a required formula parameter: omission is a resolution error and supply succeeds. | Parameter names are normalized by the adapter and then by the formula registry. |
@@ -41,7 +42,7 @@
 | `RegisterTransport_WithUnsortedCoreArrayElementRange_ThrowsInvalidIntegerRange` | parsing.md §6.5, §6.7 rule 7, §13.4 | Unsorted core integer array element bounds reach `E_REG_INVALID_INTEGER_RANGE`. | — |
 | `RegisterTransport_WithUnsortedCoreDecimalArrayElementRange_ThrowsInvalidDecimalRange` | parsing.md §6.5, §6.7 rule 7, §13.4 | Unsorted core decimal array element bounds reach `E_REG_INVALID_DECIMAL_RANGE`. | — |
 | `RegisterTransport_WithNullRegistration_ThrowsArgumentNullException` | `ITransportFactoryBuilder.RegisterTransport` contract | A null core registration is rejected before any registry changes. | The guard is the builder's, matching the core registration contract. |
-| `RegisterTransport_WithDuplicateCanonicalScheme_ThrowsRegistrationException` | `parsing.md` §6.7 rule 3; `ITransportFactoryBuilder` and `ITransportFactory` contracts | Two core registrations with the same normalized scheme surface the formula registry's duplicate error. | The duplicate is rejected before the runtime registry could drift. |
+| `RegisterTransport_WithDuplicateCanonicalScheme_ThrowsRegistrationException` | `parsing.md` §6.7 rule 3; `ITransportFactoryBuilder` and `ITransportFactory` contracts | Two core registrations with the same normalized scheme surface the formula registry's duplicate error; after the throw, `Build` still resolves the first `alpha` with its original type. | The post-throw build-and-resolve proves the rejected registration is atomic and left no partial state. |
 | `Resolve_WithValidFormula_ReturnsResolvedTransport` | `TransportFactory.Resolve` contract | `Resolve` parses and resolves, returning a `ResolvedTransport` in the result DTO. | The resolved root type and constructor name are asserted through the public DTOs. |
 | `Resolve_WithParseError_ReturnsResultInsteadOfThrowing` | `parsing.md` §12.3 | Parse errors are returned as `FormulaResolveResult.Error`, not thrown. | Phase is `Parsing` for `E_SYN_UNEXPECTED_TOKEN`. |
 | `Resolve_WithSemanticError_ReturnsResultInsteadOfThrowing` | `parsing.md` §12.3 | Resolution errors are returned as `FormulaResolveResult.Error`, not thrown. | Phase is `Resolution`. |
@@ -75,8 +76,6 @@
 
 | Missing test or gap | Owner | Reason |
 |---|---|---|
-| `Create` is invoked only during compilation, never by `Resolve` or `Canonicalize`. | This layer | `parsing.md` §6.9 makes this a MUST; the harness registration has no invocation counter. |
-| A rejected registration leaves the previously registered transport resolvable. | This layer | The duplicate-registration test asserts the exception only and does not build and resolve afterwards. |
 | Adapter rejection of an unsupported parameter or field kind. | This layer | Reachable only through a hand-written `ITransportRegistration`; no test supplies a custom `TransportParameter`/`StructField`.
 
 ## Deferred by design

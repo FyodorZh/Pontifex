@@ -142,6 +142,38 @@ namespace Pontifex.Factory.Tests.Bootstrap
         }
 
         [Test]
+        public void Create_IsInvokedOnlyByCompilation()
+        {
+            int createCalls = 0;
+            var builder = BootstrapTestData.NewBuilder();
+            builder.RegisterTransport(
+                BootstrapTestData.CoreRegistration(
+                    "alpha",
+                    BootstrapTestData.TypeA,
+                    _ =>
+                    {
+                        createCalls++;
+                        return new FakeTransport(BootstrapTestData.TypeA, "alpha");
+                    }));
+
+            var factory = builder.Build();
+
+            Assert.That(factory.Resolve("alpha()").Error, Is.Null);
+            Assert.That(createCalls, Is.Zero, "resolution must not construct a transport");
+
+            Assert.That(factory.Canonicalize("alpha()"), Is.EqualTo("alpha()"));
+            Assert.That(createCalls, Is.Zero, "canonicalization must not construct a transport");
+
+            var compiler = factory.CreateCompiler(
+                TransportRole.Server,
+                VoidLogger.Instance,
+                MemoryRental.Shared);
+
+            Assert.That(factory.Compile("alpha()", compiler), Is.Not.Null);
+            Assert.That(createCalls, Is.EqualTo(1), "compilation constructs the transport exactly once");
+        }
+
+        [Test]
         public void RegisterTransport_WithCoreRegistration_NormalizesTheScheme()
         {
             var builder = BootstrapTestData.NewBuilder();
@@ -551,6 +583,16 @@ namespace Pontifex.Factory.Tests.Bootstrap
             Assert.That(
                 exception.Error.Message,
                 Is.EqualTo("canonical scheme 'alpha' is already registered"));
+
+            // The rejected registration must not have disturbed the first one.
+            var factory = builder.Build();
+            var resolved = factory.Resolve("alpha()");
+
+            Assert.That(resolved.Error, Is.Null);
+            var transport = (ResolvedTransport)resolved.Formula!.Root;
+            Assert.That(transport.Constructor.Name, Is.EqualTo("alpha"));
+            Assert.That(transport.Type, Is.EqualTo(BootstrapTestData.TypeA));
+            Assert.That(factory.Resolve("alpha()").Formula, Is.Not.Null);
         }
     }
 }

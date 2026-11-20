@@ -55,6 +55,41 @@ public sealed class RawReliableHandshakeClientEndpointTests
     }
 
     [Test]
+    public void HandshakeResponse_NegotiatesSmallerMaximum_AndKeepsItAfterStop()
+    {
+        using var handler = new RecordingRawReliableHandshakeClientHandler(Memory);
+        using var ep = new TestRawReliableHandshakeClientEndpoint(handler, messageMaxByteSize: 1024);
+        ep.ConnectAndComplete();
+        Assert.That(ep.MessageMaxByteSize, Is.EqualTo(1024), "precondition: the local maximum is applied before the response");
+
+        ep.CompleteHandshake(messageMaxByteSize: 256);
+
+        Assert.That(ep.MessageMaxByteSize, Is.EqualTo(256));
+        Assert.That(handler.ConnectedCount, Is.EqualTo(1));
+
+        ep.Stop(Reason(), tryBeGentle: false);
+        ep.DrainAll();
+        ep.CompleteDisconnect();
+
+        Assert.That(ep.MessageMaxByteSize, Is.EqualTo(256),
+            "the negotiated maximum is read-only and survives stop/disconnect");
+    }
+
+    [Test]
+    public void HandshakeResponse_WithLargerServerMaximum_KeepsTheLocalMaximum()
+    {
+        using var handler = new RecordingRawReliableHandshakeClientHandler(Memory);
+        using var ep = new TestRawReliableHandshakeClientEndpoint(handler, messageMaxByteSize: 1024);
+        ep.ConnectAndComplete();
+
+        ep.CompleteHandshake(messageMaxByteSize: 4096);
+
+        Assert.That(ep.MessageMaxByteSize, Is.EqualTo(1024),
+            "the client applies min(local, server), not the server value");
+        Assert.That(handler.ConnectedCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Stop_WhenConnected_NotifiesDisconnectedThenStopped()
     {
         using var handler = new RecordingRawReliableHandshakeClientHandler(Memory);

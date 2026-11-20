@@ -114,6 +114,23 @@ public sealed class TransportTypeCatalogTests
     }
 
     [Test]
+    public void GetCanonicalName_ForUnknownType_ThrowsInvalidOperationException()
+    {
+        var catalog = RegistryTestData
+            .NewBuilder(RegistryTestData.TypeAInfo())
+            .Build()
+            .Types;
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => catalog.GetCanonicalName(RegistryTestData.TypeB));
+
+        Assert.That(
+            exception!.Message,
+            Is.EqualTo(
+                "transport type " + RegistryTestData.TypeB + " is not present in the type catalog"));
+    }
+
+    [Test]
     public void RegisterType_WithDuplicateNameDifferentCase_ThrowsDuplicateTypeName()
     {
         var builder = RegistryTestData.NewBuilder(RegistryTestData.TypeInfo(RegistryTestData.TypeA, "TypeA"));

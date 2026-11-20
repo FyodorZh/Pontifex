@@ -84,6 +84,13 @@
 | `RegisterTransport_WithInvalidStructFieldAndDuplicateAliasForType_ReportsStructFieldFirst` | §6.7 rules 7, 9 | Struct validation precedes alias-to-type checks. | — |
 | `RegisterTransport_WithDuplicateAliasAndExpectedTypeAbsent_ReportsDuplicateAliasFirst` | §6.7 rules 9, 11 | Alias-to-type checks precede catalog membership. | — |
 | `RegisterTransport_WithConstructorAndExpectedTypesAbsent_ReportsConstructorTypeFirst` | §6.7 rule 11 | The constructor type is checked before expected-set members. | Expected members are checked in parameter declaration order. |
+| `RegisterTransport_WithTwoParametersHavingAbsentExpectedTypes_ReportsFirstParameter` | §6.7 rule 11 | Expected-set membership is validated in parameter declaration order; the first parameter's first absent member wins. | Both parameters have an absent member. |
+| `RegisterTransport_WithTwoAbsentMembersInOneExpectedSet_ReportsFirstMember` | §6.7 rule 11 | Members inside one expected set are validated in their stored order. | `OneOf(TypeB, TypeC)` with neither in the catalog reports `TypeB`. |
+| `RegisterTransport_WithNullRegistration_ThrowsArgumentNullException` | `IRegistryBuilder` argument contract | A null registration is rejected before any registry rule runs. | Defensive guard; no `E_REG_*` error is produced. |
+| `RegisterTransport_WithNullConstructor_ThrowsArgumentNullException` | `IRegistryBuilder` argument contract | A registration with a null constructor is rejected before rule 2. | — |
+| `RegisterType_WithNullInfo_ThrowsArgumentNullException` | `IRegistryBuilder` argument contract | A null catalog entry is rejected before rule 0. | — |
+| `GetCanonicalName_ForUnknownType_ThrowsInvalidOperationException` | `parsing.md` §6.6; `ITransportTypeCatalog` contract | The non-total accessor fails fast outside the catalog instead of returning a fabricated name. | Exact message asserted. |
+| `FindCanonicalAndCandidates_WithNullScheme_ReturnEmptyResults` | §6.8 | Null is treated as an absent scheme by both lookups. | No exception. |
 | `RegisterTransport_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12, §13.4 | A built registry cannot gain transports. | Lifecycle guard `E_REG_BUILDER_SEALED`; no offset. |
 | `Build_WithNoRegistrations_ReturnsEmptyRegistry` | `IRegistry` contract | An empty build produces empty collections and no candidates. | — |
 | `Build_ReturnsConstructorsInRegistrationOrder` | `IRegistryBuilder.Build` contract | `Constructors` is the ordered constructor list, not a map order. | — |
@@ -131,8 +138,6 @@ phase `Registration`, and no span.
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| Expected-member ordering across parameters and within one set. | Registry layer | The only ordering test has one parameter with one expected member. |
-| Registry-layer null/invalid guards. | Registry layer | Null `TransportTypeInfo`, null registration/constructor, `GetCanonicalName` outside the catalog, and null scheme are defensive branches. |
 | `Min == Max` range boundaries. | Registry layer | Only inverted bounds are tested. |
 
 ## Deferred by design

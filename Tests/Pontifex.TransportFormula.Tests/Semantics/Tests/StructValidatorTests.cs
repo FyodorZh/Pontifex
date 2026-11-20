@@ -300,6 +300,21 @@ public sealed class StructValidatorTests
     }
 
     [Test]
+    public void Validate_ForIntegerArrayAtMaximumCount_AcceptsEveryElement()
+    {
+        var fields = SemanticsAssertions.ValidateStruct(
+            "{counts=[0, 0, 0]}",
+            ArraysSchema());
+
+        Assert.That(fields, Has.Count.EqualTo(1));
+        var counts = (ArrayValue)fields[0].Value;
+        Assert.That(counts.Elements, Has.Count.EqualTo(3));
+        Assert.That(
+            counts.Elements.Cast<IntegerValue>().Select(e => e.Value),
+            Is.EqualTo(new[] { 0L, 0L, 0L }));
+    }
+
+    [Test]
     public void Validate_ForArrayBelowMinimum_ReportsArrayMin()
     {
         SemanticsAssertions.ValidateStructError(

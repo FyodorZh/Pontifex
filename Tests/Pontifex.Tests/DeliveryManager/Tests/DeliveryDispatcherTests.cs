@@ -162,6 +162,12 @@ namespace Pontifex.Tests.Delivery
             d.TryToDeliver(consumer, scheduler, now + TimeSpan.FromMilliseconds(200));
 
             Assert.That(failedId, Is.EqualTo(new DeliveryId(1)));
+
+            bool delivered = false;
+            d.OnDelivered += _ => delivered = true;
+            d.ConfirmDelivered(Info(1));
+
+            Assert.That(delivered, Is.False, "an ACK after retry exhaustion must not fire Delivered");
             foreach (var b in sent) b.Release();
         }
 

@@ -260,6 +260,28 @@ public sealed class ParserTests
         Assert.That(formula.Root.Cast, Is.Null);
     }
 
+    [Test]
+    public void Parse_ForAsAsNamedArgumentName_KeepsTheNameAndScalarValue()
+    {
+        var formula = Parse("alpha(as=1)");
+        var argument = formula.Root.Call.Arguments.Single();
+
+        Assert.That(argument.Name, Is.EqualTo("as"));
+        Assert.That(((AstScalar)argument.Value).Text, Is.EqualTo("1"));
+        Assert.That(formula.Root.Cast, Is.Null);
+    }
+
+    [Test]
+    public void Parse_ForAsAsStructFieldName_KeepsTheFieldNameAndScalarValue()
+    {
+        var formula = Parse("alpha({as=1})");
+        var structValue = (AstStruct)formula.Root.Call.Arguments.Single().Value;
+        var field = structValue.Fields.Single();
+
+        Assert.That(field.Name, Is.EqualTo("as"));
+        Assert.That(((AstScalar)field.Value).Text, Is.EqualTo("1"));
+    }
+
     #endregion
 
     #region AST spans and offsets
