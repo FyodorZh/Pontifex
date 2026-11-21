@@ -25,3 +25,7 @@
 - [ ] Refactor RRUnreliable to request/response semantics
   - [x] Stage 1: formal refactoring (request/response API, request ids, TTLs, carrier-agnostic core)
   - [ ] Stage 2: strict specification and conformance tests
+- [ ] Replace RRReliableAck and RRReliableNoAck with the RRReliable abstraction
+  - [x] Stage 1: abstraction only (transport interfaces, per-request handlers, completion types,
+    four-type matrix)
+  - [ ] Stage 2: unified implementations, TTLs, strict specification and tests

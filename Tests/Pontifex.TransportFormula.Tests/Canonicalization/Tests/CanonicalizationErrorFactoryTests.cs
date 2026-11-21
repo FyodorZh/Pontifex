@@ -222,7 +222,7 @@ public sealed class CanonicalizationErrorFactoryTests
         CanonicalizationAssertions.AssertError(
             exception.Error,
             "E_PRN_INVALID_CAST_TARGET",
-            "cast target 'RRReliableAck' is invalid");
+            "cast target 'RRUnreliable' is invalid");
     }
 
     [TestCase('\u0000', "U+0000")]

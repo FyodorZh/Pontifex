@@ -795,7 +795,7 @@ public sealed class PrinterInvariantValidatorTests
         AssertPrinterError(
             formula,
             "E_PRN_INVALID_CAST_TARGET",
-            "cast target 'RRReliableAck' is invalid");
+            "cast target 'RRUnreliable' is invalid");
     }
 
     [Test]

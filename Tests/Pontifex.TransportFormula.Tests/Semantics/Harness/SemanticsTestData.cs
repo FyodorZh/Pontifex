@@ -20,7 +20,7 @@ internal static class SemanticsTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliable;
     public static readonly TransportType TypeB = TransportType.RawUnreliable;
-    public static readonly TransportType TypeC = TransportType.RRReliableNoAck;
+    public static readonly TransportType TypeC = TransportType.RRReliable;
 
     public const string ParameterValidatorReason = "value must not be 'bad'";
     public const string FieldValidatorReason = "field must not be 'bad'";

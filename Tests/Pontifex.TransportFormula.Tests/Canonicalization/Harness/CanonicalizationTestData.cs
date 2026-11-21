@@ -21,10 +21,10 @@ internal static class CanonicalizationTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliable;
     public static readonly TransportType TypeB = TransportType.RawUnreliable;
-    public static readonly TransportType TypeC = TransportType.RRReliableNoAck;
+    public static readonly TransportType TypeC = TransportType.RRReliable;
 
     // Deliberately absent from the standard type catalog.
-    public static readonly TransportType TypeNotInCatalog = TransportType.RRReliableAck;
+    public static readonly TransportType TypeNotInCatalog = TransportType.RRUnreliable;
 
     public static readonly TransportTypeSet AnySetValue =
         new(TransportTypeSetKind.Any, Array.Empty<TransportType>());
