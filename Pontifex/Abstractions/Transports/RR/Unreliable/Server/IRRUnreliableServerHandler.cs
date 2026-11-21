@@ -21,7 +21,7 @@ namespace Pontifex.RR.Unreliable
         /// <param name="request">The received request. The handler owns the reference.</param>
         /// <returns><see langword="true"/> if the request is accepted; <see langword="false"/> if it is
         /// rejected. A rejected request cannot be answered: the transport drops its pending-response
-        /// route, so a later <see cref="IRRUnreliableServer.Response"/> with this id fails with
+        /// route, so a later <see cref="IRRUnreliableServerTransport.Response"/> with this id fails with
         /// <see cref="SendResult.InvalidAddress"/>.</returns>
         bool OnRequested(long requestId, IEndPoint client, UnionDataList request);
 

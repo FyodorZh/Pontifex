@@ -16,7 +16,7 @@ namespace Pontifex.RR.Unreliable
     /// <see cref="StartCarrier"/>, <see cref="StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
-    public abstract class RRUnreliableClientTransport : AnyTransport, IRRUnreliableClient
+    public abstract class RRUnreliableClientTransport : AnyTransport, IRRUnreliableClientTransport
     {
         private readonly IEndPoint _serverEndPoint;
         private readonly RRUnreliableRequestTable<byte> _pendingResponses;

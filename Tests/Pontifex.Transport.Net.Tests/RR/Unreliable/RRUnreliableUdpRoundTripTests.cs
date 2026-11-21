@@ -158,14 +158,14 @@ public sealed class RRUnreliableUdpRoundTripTests
 
     private sealed class EchoServerHandler : IRRUnreliableServerHandler, IDisposable
     {
-        private readonly IRRUnreliableServer _server;
+        private readonly IRRUnreliableServerTransport _server;
         private readonly IMemoryRental _memory;
         private readonly bool _accept;
         private readonly object _locker = new();
         private int _requestCount;
         private long _firstRequestId;
 
-        public EchoServerHandler(IRRUnreliableServer server, IMemoryRental memory, bool accept = true)
+        public EchoServerHandler(IRRUnreliableServerTransport server, IMemoryRental memory, bool accept = true)
         {
             _server = server;
             _memory = memory;

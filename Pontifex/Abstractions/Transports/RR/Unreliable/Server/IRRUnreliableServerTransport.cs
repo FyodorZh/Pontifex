@@ -6,7 +6,7 @@ namespace Pontifex.RR.Unreliable
     /// Server half of the RR unreliable contract: receives requests from clients and sends the matched
     /// responses back to their sources.
     /// </summary>
-    public interface IRRUnreliableServer : ITransport
+    public interface IRRUnreliableServerTransport : ITransport
     {
         /// <summary>
         /// Inclusive maximum payload size of one message, in bytes. Transport framing is not included.

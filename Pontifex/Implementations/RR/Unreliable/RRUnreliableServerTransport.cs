@@ -16,7 +16,7 @@ namespace Pontifex.RR.Unreliable
     /// <see cref="StartCarrier"/>, <see cref="StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
-    public abstract class RRUnreliableServerTransport : AnyTransport, IRRUnreliableServer
+    public abstract class RRUnreliableServerTransport : AnyTransport, IRRUnreliableServerTransport
     {
         private readonly struct PendingResponse
         {

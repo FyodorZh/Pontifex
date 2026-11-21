@@ -6,7 +6,7 @@ namespace Pontifex.RR.Unreliable
     /// Client half of the RR unreliable contract: sends requests to a fixed server and receives the
     /// responses that are matched to them by request id.
     /// </summary>
-    public interface IRRUnreliableClient : ITransport
+    public interface IRRUnreliableClientTransport : ITransport
     {
         /// <summary>
         /// Gets the fixed route of the server this client sends to.
