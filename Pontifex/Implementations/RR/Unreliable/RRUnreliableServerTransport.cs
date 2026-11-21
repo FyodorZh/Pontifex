@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Utils;
@@ -11,12 +10,15 @@ namespace Pontifex.RR.Unreliable
     /// Base class for RR unreliable server transports.
     /// </summary>
     /// <remarks>
-    /// The class owns the request/response mechanics: server-global request ids, the pending-response
-    /// routes, and the frame header. A carrier supplies the datagram transport through
-    /// <see cref="StartCarrier"/>, <see cref="StopCarrier"/>, and <see cref="SendFrame"/> and reports
+    /// The class owns the server request mechanics: server-global request ids, the pending-response
+    /// routes, and the request dispatch. The lifecycle is inherited from
+    /// <see cref="RRUnreliableTransport{THandler}"/>; a carrier supplies the datagram transport through
+    /// <see cref="RRUnreliableTransport{THandler}.StartCarrier"/>,
+    /// <see cref="RRUnreliableTransport{THandler}.StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
-    public abstract class RRUnreliableServerTransport : AnyTransport, IRRUnreliableServerTransport
+    public abstract class RRUnreliableServerTransport
+        : RRUnreliableTransport<IRRUnreliableServerHandler>, IRRUnreliableServerTransport
     {
         private readonly struct PendingResponse
         {
@@ -39,11 +41,6 @@ namespace Pontifex.RR.Unreliable
 
         private readonly RRUnreliableRequestTable<PendingResponse> _pendingResponses;
 
-        private volatile IRRUnreliableServerHandler? _handler;
-        private volatile bool _handlerStarted;
-        private bool _initialized;
-        private long _lastRequestId;
-
         /// <summary>
         /// Initializes a new RR unreliable server transport.
         /// </summary>
@@ -61,36 +58,6 @@ namespace Pontifex.RR.Unreliable
             _pendingResponses = new RRUnreliableRequestTable<PendingResponse>(
                 timeProvider ?? UtcNowDateTimeProvider.Instance,
                 responseTtl);
-        }
-
-        /// <inheritdoc/>
-        public abstract int MessageMaxByteSize { get; }
-
-        /// <summary>
-        /// Gets the inclusive carrier-frame size that fits <see cref="MessageMaxByteSize"/> plus the
-        /// request-id header.
-        /// </summary>
-        protected int FrameMaxByteSize => MessageMaxByteSize + RRUnreliableFrame.OverheadBytes;
-
-        /// <inheritdoc/>
-        public bool Init(IRRUnreliableServerHandler handler)
-        {
-            if (handler == null!)
-            {
-                throw new ArgumentNullException(nameof(handler));
-            }
-
-            lock (_locker)
-            {
-                if (_initialized || HasStartBeenAttempted || !IsValid)
-                {
-                    return false;
-                }
-
-                _initialized = true;
-                _handler = handler;
-                return true;
-            }
         }
 
         /// <inheritdoc/>
@@ -124,24 +91,18 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
-        /// Starts the concrete carrier.
-        /// </summary>
-        /// <returns><see langword="true"/> when the carrier started; otherwise
-        /// <see langword="false"/>.</returns>
-        protected abstract bool StartCarrier();
-
-        /// <summary>
-        /// Stops and releases the concrete carrier. Must tolerate a carrier that never fully started.
-        /// </summary>
-        protected abstract void StopCarrier(StopReason reason);
-
-        /// <summary>
         /// Sends one encoded frame to <paramref name="destination"/>.
         /// </summary>
         /// <param name="destination">The route that received the request.</param>
         /// <param name="frame">The frame to send. The implementation owns it and must release it on every
         /// path.</param>
         protected abstract SendResult SendFrame(IEndPoint destination, UnionDataList frame);
+
+        /// <inheritdoc/>
+        protected sealed override void ClearPendingRequests()
+        {
+            _pendingResponses.Clear();
+        }
 
         /// <summary>
         /// Handles one inbound datagram received by the concrete carrier.
@@ -162,102 +123,19 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            IRRUnreliableServerHandler? handler = _handler;
+            IRRUnreliableServerHandler? handler = DispatchHandler;
             if (handler == null)
             {
                 frame.Release();
                 return;
             }
 
-            if (!_handlerStarted)
-            {
-                // The carrier may receive before Started() returns; such a frame is dropped.
-                frame.Release();
-                return;
-            }
-
-            long requestId = Interlocked.Increment(ref _lastRequestId);
+            long requestId = NextRequestId();
             _pendingResponses.Add(requestId, new PendingResponse(source, clientRequestId));
 
             if (!handler.OnRequested(requestId, source, frame))
             {
                 _pendingResponses.TryTake(requestId, out _);
-            }
-        }
-
-        /// <inheritdoc/>
-        protected override bool TryStart()
-        {
-            IRRUnreliableServerHandler? handler = _handler;
-            if (handler == null)
-            {
-                return false;
-            }
-
-            bool carrierStarted;
-            try
-            {
-                carrierStarted = StartCarrier();
-            }
-            catch (Exception ex)
-            {
-                FailException("StartCarrier", ex);
-                return false;
-            }
-
-            if (!carrierStarted)
-            {
-                return false;
-            }
-
-            try
-            {
-                handler.Started();
-            }
-            catch (Exception ex)
-            {
-                FailException($"{handler.GetType()}.Started()", ex);
-                return false;
-            }
-
-            _handlerStarted = true;
-            return true;
-        }
-
-        /// <inheritdoc/>
-        protected override void OnStarted()
-        {
-            // DO NOTHING
-        }
-
-        /// <inheritdoc/>
-        protected override void OnStopped(StopReason reason)
-        {
-            IRRUnreliableServerHandler? handler = _handler;
-            _handler = null;
-            _handlerStarted = false;
-
-            if (handler != null)
-            {
-                try
-                {
-                    handler.Stopped();
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                }
-            }
-
-            _pendingResponses.Clear();
-
-            try
-            {
-                StopCarrier(reason);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
             }
         }
     }

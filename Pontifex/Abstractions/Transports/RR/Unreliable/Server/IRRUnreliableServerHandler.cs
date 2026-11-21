@@ -5,13 +5,8 @@ namespace Pontifex.RR.Unreliable
     /// <summary>
     /// Application callbacks for one RR unreliable server.
     /// </summary>
-    public interface IRRUnreliableServerHandler : IHandler
+    public interface IRRUnreliableServerHandler : IRRUnreliableHandler
     {
-        /// <summary>
-        /// Called once when the server transport and its carrier are ready.
-        /// </summary>
-        void Started();
-
         /// <summary>
         /// Called for every request received from a client.
         /// </summary>
@@ -24,10 +19,5 @@ namespace Pontifex.RR.Unreliable
         /// route, so a later <see cref="IRRUnreliableServerTransport.Response"/> with this id fails with
         /// <see cref="SendResult.InvalidAddress"/>.</returns>
         bool OnRequested(long requestId, IEndPoint client, UnionDataList request);
-
-        /// <summary>
-        /// Called once when the server stops.
-        /// </summary>
-        void Stopped();
     }
 }

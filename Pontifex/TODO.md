@@ -24,6 +24,8 @@
     appears
 - [ ] Refactor RRUnreliable to request/response semantics
   - [x] Stage 1: formal refactoring (request/response API, request ids, TTLs, carrier-agnostic core)
+  - [x] Extract shared lifecycle into `RRUnreliableTransport<THandler>` (handler base, `Init`,
+    start/stop template, dispatch gate)
   - [ ] Stage 2: strict specification and conformance tests
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
   `IRRUnreliableTransport`)
