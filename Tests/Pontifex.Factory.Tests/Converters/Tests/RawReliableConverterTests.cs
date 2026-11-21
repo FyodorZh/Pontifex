@@ -22,8 +22,8 @@ public sealed class RawReliableConverterTests
     {
         public Pair(
             FakeRawUnreliableNetwork network,
-            RawUnreliableNoAckToRawReliableClient client,
-            RawUnreliableNoAckToRawReliableServer server,
+            RawUnreliableToRawReliableClient client,
+            RawUnreliableToRawReliableServer server,
             RecordingRawReliableClientHandler clientHandler,
             RecordingRawReliableServerHandler serverHandler,
             RecordingRawReliableServerHandlerFactory factory)
@@ -38,9 +38,9 @@ public sealed class RawReliableConverterTests
 
         public FakeRawUnreliableNetwork Network { get; }
 
-        public RawUnreliableNoAckToRawReliableClient Client { get; }
+        public RawUnreliableToRawReliableClient Client { get; }
 
-        public RawUnreliableNoAckToRawReliableServer Server { get; }
+        public RawUnreliableToRawReliableServer Server { get; }
 
         public RecordingRawReliableClientHandler ClientHandler { get; }
 
@@ -126,7 +126,7 @@ public sealed class RawReliableConverterTests
         };
 
         var clientHandler = new RecordingRawReliableClientHandler();
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
 
@@ -160,7 +160,7 @@ public sealed class RawReliableConverterTests
         Assert.That(network.Server.Start(_ => { }), Is.True);
 
         var clientHandler = new RecordingRawReliableClientHandler();
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
 
@@ -192,7 +192,7 @@ public sealed class RawReliableConverterTests
         Assert.That(network.Server.Start(_ => { }), Is.True);
 
         var clientHandler = new RecordingRawReliableClientHandler();
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
 
@@ -235,7 +235,7 @@ public sealed class RawReliableConverterTests
         Assert.That(network.Server.Start(_ => { }), Is.True);
 
         var clientHandler = new RecordingRawReliableClientHandler();
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
 
@@ -353,7 +353,7 @@ public sealed class RawReliableConverterTests
 
         var serverHandler = new RecordingRawReliableServerHandler();
         var factory = new RecordingRawReliableServerHandlerFactory(_ => serverHandler);
-        var server = new RawUnreliableNoAckToRawReliableServer(network.Server, null, null);
+        var server = new RawUnreliableToRawReliableServer(network.Server, null, null);
         Assert.That(server.Init(factory), Is.True);
         Assert.That(server.Start(_ => { }), Is.True);
         Assert.That(network.Client.Start(_ => { }), Is.True);
@@ -404,8 +404,8 @@ public sealed class RawReliableConverterTests
         var serverHandler = new RecordingRawReliableServerHandler();
         var factory = new RecordingRawReliableServerHandlerFactory(_ => serverHandler);
 
-        var server = new RawUnreliableNoAckToRawReliableServer(network.Server, null, null);
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var server = new RawUnreliableToRawReliableServer(network.Server, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
 
         Assert.That(server.Init(factory), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);

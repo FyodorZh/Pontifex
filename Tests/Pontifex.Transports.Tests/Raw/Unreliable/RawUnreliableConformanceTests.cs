@@ -9,7 +9,7 @@ namespace Pontifex.Tests.Raw.Unreliable;
 
 /// <summary>
 /// Shared, implementation-agnostic conformance suite for the RawUnreliable
-/// Ack and NoAck contract variants. Each concrete adapter derives the test
+/// contract. Each concrete adapter derives the test
 /// fixture and supplies a linked server-client topology. Reliable-mode tests
 /// call <see cref="IRawUnreliableTransportConformanceControl.TryMakeReliable"/>
 /// before startup and are skipped when the capability is unavailable.
@@ -40,7 +40,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         using var fixture = CreateAdapter().CreateFixture();
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Stop(), Is.True);
         Assert.Multiple(() =>
         {
@@ -56,7 +56,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         using var fixture = CreateAdapter().CreateFixture();
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Start(reason => stopped.TrySetResult(reason)), Is.True);
         Assert.That(fixture.Server.Start(_ => { }), Is.False);
         Assert.That(fixture.Server.Stop(new UserIntention("test", "normal stop")), Is.True);
@@ -75,7 +75,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
     {
         using var fixture = CreateAdapter().CreateFixture();
 
-        Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.True);
         var starts = Enumerable.Range(0, 8)
             .Select(_ => Task.Run(() => fixture.Server.Start(_ => { })));
         var results = await Task.WhenAll(starts);
@@ -110,7 +110,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var control = GetControl<IConformanceControl>(fixture.Server);
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.True);
         Assert.That(fixture.Server.Start(reason => stopped.TrySetResult(reason)), Is.True);
         control.InjectUnrecoverableFailure();
 
@@ -145,7 +145,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -163,7 +163,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -182,7 +182,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -203,7 +203,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -235,7 +235,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         var serverHandler = new EchoServerHandler(fixture, expected, response, serverReceived, emptyReceived);
         var clientHandler = new AssertContentClientHandler(fixture, expectedResponse, clientReceived);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(server, client);
 
@@ -257,7 +257,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -279,7 +279,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -299,7 +299,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -322,7 +322,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -347,7 +347,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var serverHandler = new ServerSendsValuesHandler(fixture, 1, 2);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -371,7 +371,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var serverHandler = new ServerReentrancyHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -391,7 +391,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var serverHandler = new ServerSendsValuesHandler(fixture, 1, 2);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -415,7 +415,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -438,7 +438,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -466,7 +466,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -490,7 +490,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
 
         var stopped = new TaskCompletionSource<StopReason>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -517,7 +517,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -580,7 +580,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         var probe = new ServerSerializationProbe();
         var created = new ConcurrentQueue<BlockingServerHandler>();
-        Assert.That(fixture.InitServer((_, _) =>
+        Assert.That(fixture.InitServer(_ =>
         {
             var handler = new BlockingServerHandler(fixture, probe);
             created.Enqueue(handler);
@@ -627,7 +627,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -661,7 +661,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         });
 
         Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.True);
-        Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.True);
     }
 
     [Test]
@@ -672,8 +672,8 @@ public abstract class RawUnreliableConformanceTests<TServer>
 
         Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.True);
         Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.False);
-        Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.True);
-        Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.False);
+        Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.True);
+        Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.False);
     }
 
     [Test]
@@ -683,14 +683,14 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
 
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.True);
         Start(fixture.Server, client);
 
         Assert.Multiple(() =>
         {
             Assert.That(client.Init(new RecordingTestHandler(fixture)), Is.False);
-            Assert.That(fixture.InitServer((_, _) => (IRawUnreliableHandler?)null), Is.False);
+            Assert.That(fixture.InitServer(_ => (IRawUnreliableHandler?)null), Is.False);
         });
     }
 
@@ -716,7 +716,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -738,7 +738,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new OnStartedOrderClientHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -780,7 +780,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         var handler = new SourceCheckingHandler(fixture);
         IEndPoint? factorySource = null;
-        Assert.That(fixture.InitServer((source, _) =>
+        Assert.That(fixture.InitServer(source =>
         {
             factorySource = source;
             handler.Source = source;
@@ -812,7 +812,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         var serverHandler = new RecordingTestHandler(fixture);
         var factoryCalls = 0;
-        Assert.That(fixture.InitServer((_, _) =>
+        Assert.That(fixture.InitServer(_ =>
             Interlocked.Increment(ref factoryCalls) == 1 ? (IRawUnreliableHandler?)null : serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
@@ -841,7 +841,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         var serverHandler = new RecordingTestHandler(fixture);
         var factoryCalls = 0;
-        Assert.That(fixture.InitServer((_, _) =>
+        Assert.That(fixture.InitServer(_ =>
         {
             if (Interlocked.Increment(ref factoryCalls) == 1)
                 throw new InvalidOperationException("Expected conformance test factory exception.");
@@ -875,7 +875,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var throwingHandler = new ThrowingOnStartedHandler(fixture);
         var goodHandler = new RecordingTestHandler(fixture);
         var factoryCalls = 0;
-        Assert.That(fixture.InitServer((_, _) =>
+        Assert.That(fixture.InitServer(_ =>
         {
             return Interlocked.Increment(ref factoryCalls) == 1
                 ? (IRawUnreliableHandler)throwingHandler
@@ -910,7 +910,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var clientHandler = new RecordingTestHandler(fixture);
         var handlers = new ConcurrentQueue<EndpointStopOnReceiveHandler>();
-        Assert.That(fixture.InitServer((_, _) =>
+        Assert.That(fixture.InitServer(_ =>
         {
             var handler = new EndpointStopOnReceiveHandler(fixture);
             handlers.Enqueue(handler);
@@ -952,7 +952,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         var serverHandler = new RecordingTestHandler(fixture);
         var factoryCalls = 0;
-        Assert.That(fixture.InitServer((_, _) => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
+        Assert.That(fixture.InitServer(_ => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
@@ -991,7 +991,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1012,7 +1012,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1036,7 +1036,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
         var onStopped = 0;
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(fixture.Server.Start(_ => { }), Is.True);
         Assert.That(client.Start(_ => Interlocked.Increment(ref onStopped)), Is.True);
@@ -1060,7 +1060,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var clientHandler = new RecordingTestHandler(fixture);
         var serverHandler = new EndpointStopOnReceiveHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
@@ -1085,7 +1085,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new OnStoppedCountingHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1104,7 +1104,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var firstClientHandler = new RecordingTestHandler(fixture);
         var secondClientHandler = new RecordingTestHandler(fixture);
         var serverHandlers = new ConcurrentQueue<ServerRouteRecordingHandler>();
-        Assert.That(fixture.InitServer((_, _) =>
+        Assert.That(fixture.InitServer(_ =>
         {
             var handler = new ServerRouteRecordingHandler(fixture);
             serverHandlers.Enqueue(handler);
@@ -1147,7 +1147,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         var serverHandler = new RecordingTestHandler(fixture);
         var factoryCalls = 0;
-        Assert.That(fixture.InitServer((_, _) => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
+        Assert.That(fixture.InitServer(_ => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
@@ -1179,7 +1179,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         var serverHandler = new OnStartedFlagHandler(fixture);
         var factoryCalls = 0;
-        Assert.That(fixture.InitServer((_, _) => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
+        Assert.That(fixture.InitServer(_ => { Interlocked.Increment(ref factoryCalls); return serverHandler; }), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
@@ -1214,7 +1214,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new RecordingTestHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1250,7 +1250,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var client = fixture.CreateClient();
         var serverHandler = new RecordingTestHandler(fixture);
         var clientHandler = new OnStoppedCountingHandler(fixture);
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 
@@ -1297,7 +1297,7 @@ public abstract class RawUnreliableConformanceTests<TServer>
         var clientHandler = new RecordingTestHandler(fixture);
         Assert.That(EnableReliable(client, fixture.Server), Is.True,
             "The implementation does not provide reliable debug mode.");
-        Assert.That(fixture.InitServer((_, _) => serverHandler), Is.True);
+        Assert.That(fixture.InitServer(_ => serverHandler), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);
         Start(fixture.Server, client);
 

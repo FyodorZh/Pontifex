@@ -4,7 +4,7 @@ namespace Pontifex.Tests.Raw.Unreliable;
 
 /// <summary>
 /// Shared construction options for every endpoint in one RawUnreliable
-/// conformance fixture, used by both the Ack and NoAck contract variants.
+/// conformance fixture, used by the RawUnreliable conformance suite.
 /// </summary>
 public sealed class RawUnreliableConformanceFixtureOptions
 {

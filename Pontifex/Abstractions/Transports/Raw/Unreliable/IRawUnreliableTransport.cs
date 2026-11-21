@@ -1,7 +1,7 @@
 namespace Pontifex.Raw.Unreliable
 {
     /// <summary>
-    /// Transport-level contract of the RawUnreliable variants: the carrier lifecycle owner and the factory and
+    /// Transport-level contract of RawUnreliable: the carrier lifecycle owner and the factory and
     /// registry of the endpoints that own their own lifecycle.
     /// </summary>
     /// <remarks>

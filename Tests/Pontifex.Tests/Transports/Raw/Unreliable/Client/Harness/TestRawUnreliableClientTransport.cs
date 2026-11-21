@@ -30,7 +30,7 @@ internal sealed class TestRawUnreliableClientTransport : RawUnreliableClientTran
 
     public override int MessageMaxByteSize => 1024;
 
-    public override TransportType Type => TransportType.RawUnreliableAck;
+    public override TransportType Type => TransportType.RawUnreliable;
 
     /// <summary>
     /// Gets or sets the endpoint factory. When <see langword="null"/> the double creates a

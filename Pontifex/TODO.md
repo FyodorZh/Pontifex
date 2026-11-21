@@ -1,5 +1,6 @@
 # Pontifex TODO List
 
+- [x] Merge RawUnreliableNoAck into RawUnreliable and delete the RawUnreliableAck family
 - [x] Implement RawUnreliableAck conformance tests
   - [x] Check (update) RawUnreliableNoAck tests coverage
 - [x] Implement RawUnreliableNoAck direct implementation

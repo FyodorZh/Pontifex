@@ -21,7 +21,7 @@ internal sealed class TestRawUnreliableTransportWithoutDebugReliability : RawUnr
 
     public override int MessageMaxByteSize => 1024;
 
-    public override TransportType Type => TransportType.RawUnreliableAck;
+    public override TransportType Type => TransportType.RawUnreliable;
 
     /// <summary>
     /// Gets the typed <see cref="RawUnreliableTransport.Conformance"/> property.

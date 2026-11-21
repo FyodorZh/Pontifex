@@ -57,8 +57,8 @@ static TransportRegistry()
 
     builder.RegisterTransport(RawReliableDirectBinding.CreateRegistration());
     builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
-    builder.RegisterTransport(RawUnreliableNoAckDirectBinding.CreateRegistration());
-    builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
+    builder.RegisterTransport(RawUnreliableDirectBinding.CreateRegistration());
+    builder.RegisterTransport(RawUnreliableUdpBinding.CreateRegistration());
     builder.RegisterTransport(MyNewWebSocketBinding.CreateRegistration());  // ← ADD
 
     Factory = builder.Build();
@@ -105,7 +105,7 @@ Two stack implementations are available:
 - **`DynamicTransportStack`** — takes a `Func<string>` formula provider; the formula is compiled fresh each time `GetTransportFactory()` is called. Use this when the formula contains a runtime value (e.g. a dynamic port).
 - **`StaticTransportStack`** — takes a fixed formula string. Use this for formulas that do not change.
 
-If the new transport produces a different `TransportType` (e.g. `RawUnreliableNoAck`), create a new file `TransportStacks/RawUnreliableNoAckStacks.cs` with its own class.
+If the new transport produces a different `TransportType` (e.g. `RawUnreliable`), create a new file `TransportStacks/RawUnreliableStacks.cs` with its own class.
 
 ### Result
 

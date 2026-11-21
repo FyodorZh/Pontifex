@@ -1,4 +1,4 @@
-# RawUnreliable Transport Specification (Common Core)
+# RawUnreliable Transport Specification
 
 ## 1. Scope
 
@@ -12,13 +12,8 @@ opaque `UnionDataList` messages. It defines:
 - server source-route creation and routing rules; and
 - transport and endpoint failure and shutdown responsibilities.
 
-This document is the common core shared by the two RawUnreliable variant
-contracts: **RawUnreliableNoAck** and **RawUnreliableAck**. The variants
-differ only in the server handler factory. A NoAck server factory receives the
-inbound source route; an Ack server factory additionally receives the
-triggering message. Each variant specification is normative for its factory
-signature and source-route acceptance rules; this document is normative for
-everything else.
+RawUnreliable is the single unreliable raw contract. Its server handler
+factory receives the inbound source route and never the triggering message.
 
 This specification is implementation-agnostic. It does **not** define a wire
 format, interoperability between implementations, configuration syntax, peer
@@ -60,15 +55,25 @@ public interface IRawUnreliableHandler : IRawHandler
 `Send(UnionDataList bufferToSend)` method that is shared with
 `IRawReliableEndpoint`. The single `Send` method is defined once in
 `IRawEndpoint`; its XML documentation explicitly covers both the Reliable and
-the Unreliable behaviours. This variant relies on the Unreliable behaviour:
+the Unreliable behaviours. RawUnreliable relies on the Unreliable behaviour:
 `Ok` means local acceptance only, and RawUnreliable never returns
 `NotConnected`. See the RawReliable specification for the Reliable
 behaviour of the same method.
 
-The server contract is variant-defined. Both `IRawUnreliableNoAckServer` and
-`IRawUnreliableAckServer` extend `IRawUnreliableTransport` and each declares a
-variant `Init` binding a server handler factory; the exact signatures are
-defined by the variant specifications.
+The server contract is:
+
+```csharp
+public interface IRawUnreliableServer : IRawUnreliableTransport
+{
+    bool Init(Func<IEndPoint, IRawUnreliableHandler?> handlerFactory);
+}
+```
+
+The server factory receives only the source route. It **MUST NOT** receive or
+observe the triggering message; the triggering message remains owned by the
+transport until the new endpoint adopts it as its first inbox element and,
+after a successful `handler.OnStarted`, is delivered through
+`handler.OnReceived` as specified in section 7.3.
 
 Clients and servers expose neither a transport-level receive event nor a
 transport-level `TrySend` operation. A handler receives an
@@ -81,9 +86,9 @@ sending and endpoint-local stopping.
 | --- | --- |
 | **client** | A transport configured with one remote server destination. It owns one client endpoint while running. |
 | **server** | A transport that receives messages addressed to its configured listen address. It creates an endpoint and handler for each accepted source route. |
-| **transport** | One `IRawUnreliableClient` or one variant server (`IRawUnreliableNoAckServer` or `IRawUnreliableAckServer`) instance. |
+| **transport** | One `IRawUnreliableClient` or one `IRawUnreliableServer` instance. |
 | **endpoint** | An `IRawUnreliableEndpoint` representing one route usable by application code for sending and receiving. It is not an `IEndPoint` routing value. |
-| **source route** | A server-side route identified by an `IEndPoint` supplied to the variant server handler factory from an inbound message source. |
+| **source route** | A server-side route identified by an `IEndPoint` supplied to the server handler factory from an inbound message source. |
 | **message** | One logical `UnionDataList` supplied to `Send` or delivered to `OnReceived`. |
 | **accepted send** | A `Send` call that returns `SendResult.Ok`. It has been accepted for local transport processing only. |
 | **delivery** | One `OnReceived` invocation for a message. A delivered duplicate is a separate delivery. |
@@ -105,7 +110,7 @@ session or security principal.
 | Handlers | Each endpoint's callbacks are serialized and non-reentrant. Server endpoints may invoke callbacks concurrently with other server endpoints. | Return promptly, release received buffers, and protect state shared between handlers. | Callback thread or scheduler. |
 | Routing | A client has one configured route. A server creates endpoint routes from valid inbound sources and binds each endpoint to one equal source route while valid. | Return null from the factory to decline a source message; treat endpoint metadata as unauthenticated. | Endpoint representation and carrier addressing. |
 | Endpoint failure | A stopped or internally invalidated endpoint stops its handler callbacks. A server can later create a new endpoint for the same source route. | Observe `OnStopped`; retain no expectation that an invalid endpoint will become valid again. | Endpoint failure detection mechanism and timing. |
-| Conformance | An implementation claiming Carrier-Independent Core Conformance exposes the variant transport and endpoint test controls. | Use controls only in conformance adapters and never as application-plane behavior. | Whether an ordinary production instance exposes no controls or controls that remain inactive. |
+| Conformance | An implementation claiming Carrier-Independent Core Conformance exposes the transport and endpoint test controls. | Use controls only in conformance adapters and never as application-plane behavior. | Whether an ordinary production instance exposes no controls or controls that remain inactive. |
 | Transport failure | Unrecoverable transport failure stops and invalidates the transport. | Observe `onStopped`, recreate a transport after terminal failure, and log or surface application failures. | Failure detection mechanism and timing. |
 | Security | No authentication, authorization, confidentiality, integrity, or replay protection. | Implement required protection above this layer or select an appropriately protected carrier. | Any implementation-specific protection outside this contract. |
 
@@ -115,8 +120,7 @@ session or security principal.
 
 `Init` binds the application callback object before a transport may start. A
 client binds one non-null `IRawUnreliableHandler`. A server binds one non-null
-variant handler factory; the factory signature is defined by the variant
-specification.
+server handler factory with the signature defined in section 3.
 
 Passing null to `Init` **MUST** throw `ArgumentNullException` without changing
 the transport state. A server factory returning null is valid and is not an
@@ -283,9 +287,8 @@ lifetime of a particular source-endpoint representation; it remains bound while
 the corresponding endpoint remains valid.
 
 When an inbound message has no valid server endpoint for its equal source
-route, the server **MUST** invoke the configured variant handler factory. The
-factory arguments are defined by the variant specification: RawUnreliableNoAck
-supplies only the source route; RawUnreliableAck additionally supplies the
+route, the server **MUST** invoke the configured server handler factory as
+`handlerFactory(source)`, supplying only the source route. It never passes the
 triggering message. Route creation is atomic for equal sources: concurrent
 first messages from one equal source **MUST NOT** cause multiple concurrent
 factory calls or multiple endpoints. If the factory returns a handler, the
@@ -368,10 +371,8 @@ sequenceDiagram
     Note over SE,CE: A reply has the same unreliable semantics
 ```
 
-The bracketed factory form denotes the variant: RawUnreliableNoAck invokes
-`handlerFactory(source)`; RawUnreliableAck invokes
-`handlerFactory(source, message)`. The variant specifications define the exact
-invocation.
+The bracketed factory form denotes that the server invokes
+`handlerFactory(source)`, supplying only the source route.
 
 The callback for a message accepted by `Send` **MUST NOT** begin
 before that `Send` call returns. Delivery may otherwise occur on any
@@ -590,10 +591,6 @@ returns false if the implementation cannot provide this test mode. This mode is
 solely a conformance aid and does not change RawUnreliable production
 semantics.
 
-Each variant names its transport control type: `IRawUnreliableNoAckTransportConformanceControl`
-and `IRawUnreliableAckTransportConformanceControl` both extend
-`IRawUnreliableTransportConformanceControl`. See the variant specifications.
-
 ### 12.3 Endpoint conformance control
 
 The endpoint control is named
@@ -635,10 +632,6 @@ endpoint, before the delivery begins. The checkpoint may run before the
 delivery is scheduled, so a held gate prevents the callback from starting. It
 is not hit for malformed, oversized, stopped, discarded, pending-startup, or
 undeliverable messages. It is not hit for `OnStarted` or `OnStopped`.
-
-Each variant names its endpoint control type: `IRawUnreliableNoAckEndpointConformanceControl`
-and `IRawUnreliableAckEndpointConformanceControl` both extend
-`IRawUnreliableEndpointConformanceControl`. See the variant specifications.
 
 ## 13. Failure, shutdown, and implementation-defined behavior
 
@@ -728,7 +721,7 @@ a protected transport stack.
       specified concurrency rules.
 - [ ] Preserve endpoint and transport stop callback ordering, including
       endpoint notification before transport `onStopped` notification.
-- [ ] Expose the variant transport and endpoint conformance controls from
+- [ ] Expose the transport and endpoint conformance controls from
       conformance-adapter instances, including all required checkpoints and
       pre-start transport-wide reliable debug mode.
 - [ ] Document carrier-specific configuration, capacity, scheduling, failure,

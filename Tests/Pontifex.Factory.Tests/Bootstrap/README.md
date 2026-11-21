@@ -87,7 +87,7 @@ Bootstrap/
 ├── Coverage.md
 ├── Harness/
 │   ├── BootstrapTestData.cs
-│   ├── FakeRawUnreliableNoAckClient.cs
+│   ├── FakeRawUnreliableClient.cs
 │   ├── FakeTransport.cs
 │   └── RecordingConvertersGraph.cs
 └── Tests/
@@ -113,7 +113,7 @@ There are no groups. All test files live directly under `Tests/`.
   exact instance a core constructor returned.
 - `RecordingConvertersGraph` — a converter-graph double that records
   `TryConvert` arguments and returns a scripted conversion factory.
-- `FakeRawUnreliableNoAckClient` — a non-I/O raw-unreliable client used only to
+- `FakeRawUnreliableClient` — a non-I/O raw-unreliable client used only to
   exercise the built-in converter through the default graph.
 
 There are no harness self-tests. The harness is local to this suite: the

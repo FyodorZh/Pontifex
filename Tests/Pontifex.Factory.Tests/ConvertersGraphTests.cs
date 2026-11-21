@@ -10,11 +10,11 @@ namespace Pontifex.Factory.Tests;
 public sealed class ConvertersGraphTests
 {
     [Test]
-    public void Default_HasSingleConversionFromRawUnreliableNoAckToRawReliable()
+    public void Default_HasSingleConversionFromRawUnreliableToRawReliable()
     {
         Assert.That(
             ConvertersGraph.Default.HasPath(
-                TransportType.RawUnreliableNoAck,
+                TransportType.RawUnreliable,
                 TransportType.RawReliable,
                 out int length),
             Is.True);
@@ -22,10 +22,10 @@ public sealed class ConvertersGraphTests
     }
 
     [Test]
-    public void Default_TryConvert_FromRawUnreliableNoAckToRawReliable_ReturnsAConverter()
+    public void Default_TryConvert_FromRawUnreliableToRawReliable_ReturnsAConverter()
     {
         Func<ITransport> conversion = ConvertersGraph.Default.TryConvert(
-            TransportType.RawUnreliableNoAck,
+            TransportType.RawUnreliable,
             TransportType.RawReliable,
             () => throw new InvalidOperationException("The inner transport must not be built by TryConvert."))!;
 

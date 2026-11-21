@@ -19,8 +19,8 @@ namespace Pontifex.TransportFormula.Tests.Semantics.Harness;
 internal static class SemanticsTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliable;
-    public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
-    public static readonly TransportType TypeC = TransportType.RawUnreliableAck;
+    public static readonly TransportType TypeB = TransportType.RawUnreliable;
+    public static readonly TransportType TypeC = TransportType.RRUnreliableAck;
 
     public const string ParameterValidatorReason = "value must not be 'bad'";
     public const string FieldValidatorReason = "field must not be 'bad'";

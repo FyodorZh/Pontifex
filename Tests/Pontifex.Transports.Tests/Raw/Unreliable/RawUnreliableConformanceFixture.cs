@@ -10,8 +10,8 @@ namespace Pontifex.Tests.Raw.Unreliable;
 
 /// <summary>
 /// Base implementation of a RawUnreliable conformance fixture. Owns client and
-/// endpoint tracking, conformance-gate reset, and disposal. Variant carriers
-/// supply the server, the client construction, and the InitServer mapping.
+/// endpoint tracking, conformance-gate reset, and disposal. Carriers supply the
+/// server, the client construction, and the InitServer mapping.
 /// </summary>
 public abstract class RawUnreliableConformanceFixture<TServer> : IRawUnreliableConformanceFixture<TServer>
     where TServer : IRawUnreliableTransport
@@ -34,14 +34,14 @@ public abstract class RawUnreliableConformanceFixture<TServer> : IRawUnreliableC
 
     protected IMemoryRental Memory { get; }
 
-    public bool InitServer(Func<IEndPoint, UnionDataList?, IRawUnreliableHandler?> factory)
+    public bool InitServer(Func<IEndPoint, IRawUnreliableHandler?> factory)
     {
         if (factory == null!)
             throw new ArgumentNullException(nameof(factory));
         return InitServerCore(factory);
     }
 
-    protected abstract bool InitServerCore(Func<IEndPoint, UnionDataList?, IRawUnreliableHandler?> factory);
+    protected abstract bool InitServerCore(Func<IEndPoint, IRawUnreliableHandler?> factory);
 
     public IRawUnreliableClient CreateClient()
     {

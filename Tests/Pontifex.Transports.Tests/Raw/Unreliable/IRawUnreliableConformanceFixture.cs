@@ -16,8 +16,8 @@ public interface IRawUnreliableEndpointTracker
 
 /// <summary>
 /// One linked server-client topology for the carrier-independent
-/// RawUnreliable conformance suite, shared by the Ack and NoAck variants.
-/// The generic parameter is the variant server transport type.
+/// RawUnreliable conformance suite. The generic parameter is the server
+/// transport type.
 /// </summary>
 public interface IRawUnreliableConformanceFixture<TServer> : IDisposable, IRawUnreliableEndpointTracker
     where TServer : IRawUnreliableTransport
@@ -28,11 +28,10 @@ public interface IRawUnreliableConformanceFixture<TServer> : IDisposable, IRawUn
     IRawUnreliableClient CreateClient();
 
     /// <summary>
-    /// Binds the variant server handler factory. The adapter maps the uniform
-    /// delegate onto its variant <c>Init</c>: NoAck ignores the message, Ack
-    /// forwards it. For NoAck the message argument is always null.
+    /// Binds the server handler factory. The adapter maps the uniform delegate
+    /// onto its server <c>Init</c>.
     /// </summary>
-    bool InitServer(Func<IEndPoint, UnionDataList?, IRawUnreliableHandler?> factory);
+    bool InitServer(Func<IEndPoint, IRawUnreliableHandler?> factory);
 
     /// <summary>All endpoints registered so far (safe for concurrent reads).</summary>
     IReadOnlyList<IRawUnreliableEndpoint> TrackedEndpoints { get; }

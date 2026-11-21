@@ -1,21 +1,18 @@
 # RawUnreliable Conformance Coverage
 
 `RawUnreliableConformanceTests` is the shared, implementation-agnostic
-conformance suite for both the Ack and NoAck RawUnreliable variants. Each
-concrete adapter derives the test fixture and supplies a linked server-client
-topology. Reliable-mode tests call `TryMakeReliable` before startup and assert
-that the mode is available; the dedicated guard test
+conformance suite for the RawUnreliable contract. Each concrete adapter
+derives the test fixture and supplies a linked server-client topology.
+Reliable-mode tests call `TryMakeReliable` before startup and assert that the
+mode is available; the dedicated guard test
 `TryMakeReliable_ClientAndServer_ReportSupported` performs the same check for
 the adapter, so no test in this suite can skip when the mode is missing.
-
-Variant-specific coverage is documented in the variant files:
-[RawUnreliableAck](Ack/Coverage.md) and [RawUnreliableNoAck](NoAck/Coverage.md).
 
 ## Covered
 
 | Specification area | Coverage |
 | --- | --- |
-| Lifecycle | Null and invalid init, one-time init, init after start, start-before-init invalidation, null start callback, pre-start stop, one-time start, concurrent start with a single winner, failed start, injected unrecoverable failure, client start without a running server, and concurrent status reads during stop. |
+| Lifecycle | Null and invalid init, one-time init, init after start, start-before-init invalidation, null start callback, pre-stop, one-time start, concurrent start with a single winner, failed start, injected unrecoverable failure, client start without a running server, and concurrent status reads during stop. |
 | Sending | Unavailable state after a normal stop, invalid (null) messages, oversized messages, exact-size-limit messages, concurrent sends with every accepted message delivered, and send/stop races. A send that cannot reach the carrier is released and dropped silently. Each client endpoint has a local byte budget; a server transport shares one byte-and-message budget across all of its session endpoints. The caps are declared in the carrier `*Info` classes (`MessageMaxByteSize * QueueCapacity` bytes, `QueueCapacity` messages) and wired through the transport budget hooks. |
 | Delivery | Empty and complex content in both directions, exact-size-limit boundaries, client-to-server and server-to-client exact-once FIFO, retained server reply routes, and concurrent accepted sends. |
 | Callbacks | Server and client exception isolation, server per-endpoint serialization (`ServerCallbacks_AreSerializedPerEndpoint` — callbacks of different endpoints may overlap and the suite neither requires nor forbids that), client serialization, endpoint non-reentrancy, `AcceptedSend_DoesNotBeginReceiveCallbackBeforeTrySendReturns` proving the commit is off the caller's `Send` path and the handler observes the send already returned, OnStarted-completes-before-OnReceived ordering, endpoint validity and usability once OnStarted completes, OnStarted exceptions stopping a client without OnStopped, stop from a receive callback, and stop while a pre-callback gate blocks. |
@@ -25,6 +22,8 @@ Variant-specific coverage is documented in the variant files:
 
 ## Notes
 
+- The server factory never receives the triggering message. If the factory returns null or throws, or the
+  carrier can no longer serve the route, the trigger is released silently; declined triggers are not logged.
 - Carrier drops are silent by design. A direct send with no registered server, a UDP queue overflow, or a send to a stopped shared sender releases the message without logging. Log silence is asserted at two layers: the endpoint-layer inbox-cap tests and the transport-layer decline tests in `Tests/Pontifex.Tests/Transports/Raw/Unreliable/Server/RawUnreliableServerTransportTests.cs` (`OnCarrierInbound_WhenFactoryReturnsNull_ReleasesTriggerAndPublishesNoRoute`, `OnCarrierInbound_WhenNoFactoryIsBound_ReleasesTriggerAndPublishesNoRoute`, `OnCarrierInbound_WhenCreateEndpointDeclines_ReleasesTriggerAndPublishesNoRoute`).
 - Server callbacks are serialized per endpoint (one server session), not globally. Each endpoint owns its serial
   queue, so callbacks of different server endpoints may run concurrently; that cross-endpoint concurrency is

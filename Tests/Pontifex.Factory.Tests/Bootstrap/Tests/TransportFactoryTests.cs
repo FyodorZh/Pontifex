@@ -570,14 +570,14 @@ namespace Pontifex.Factory.Tests.Bootstrap
         {
             var builder = TransportFactoryBootstrap.CreateBuilder();
             builder.Registry.RegisterType(
-                new TransportTypeInfo(TransportType.RawUnreliableNoAck, "TypeC"));
+                new TransportTypeInfo(TransportType.RawUnreliable, "TypeC"));
             builder.Registry.RegisterType(
                 new TransportTypeInfo(BootstrapTestData.TypeA, "TypeA"));
             builder.RegisterTransport(
                 BootstrapTestData.CoreRegistration(
                     "alpha",
-                    TransportType.RawUnreliableNoAck,
-                    _ => new FakeRawUnreliableNoAckClient()));
+                    TransportType.RawUnreliable,
+                    _ => new FakeRawUnreliableClient()));
 
             var factory = builder.Build();
             var compiler = factory.CreateCompiler(

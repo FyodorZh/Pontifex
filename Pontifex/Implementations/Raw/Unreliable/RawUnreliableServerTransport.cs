@@ -11,9 +11,8 @@ namespace Pontifex.Raw.Unreliable
     /// <summary>
     /// Base class for the unreliable raw server transports of the endpoint-owned architecture.
     /// </summary>
-    /// <typeparam name="TFactory">The variant handler-factory delegate type: the Ack variant uses a
-    /// factory that receives the triggering message, the NoAck variant a factory that receives only the
-    /// source route.</typeparam>
+    /// <typeparam name="TFactory">The server handler-factory delegate type. In-repo carriers use a
+    /// factory that receives only the source route.</typeparam>
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Admission</b>: the first inbound message of a new source creates a session.
@@ -46,7 +45,7 @@ namespace Pontifex.Raw.Unreliable
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Other notes</b>: Every in-repo unreliable carrier overrides
-        /// <see cref="SendBudgetBytes"/> and <see cref="SendBudgetMessages"/> from its variant <c>*Info</c>
+        /// <see cref="SendBudgetBytes"/> and <see cref="SendBudgetMessages"/> from its carrier <c>*Info</c>
         /// constants, so this 100-message value is only the base fallback. The Stage-4 layer test pins the
         /// default derivation for carriers that keep it.</description></item>
         /// </list>
@@ -115,7 +114,7 @@ namespace Pontifex.Raw.Unreliable
         /// <item><description><b>Other notes</b>: The fallback is
         /// <see cref="IRawTransport.MessageMaxByteSize"/> times
         /// <see cref="DefaultSendBudgetMessages"/>. Every in-repo carrier overrides this together with
-        /// <see cref="SendBudgetMessages"/> from its variant <c>*Info</c> constants, and must configure
+        /// <see cref="SendBudgetMessages"/> from its carrier <c>*Info</c> constants, and must configure
         /// each endpoint's local byte budget with this value so that the shared budget binds
         /// first.</description></item>
         /// </list>
@@ -129,7 +128,7 @@ namespace Pontifex.Raw.Unreliable
         /// <list type="bullet">
         /// <item><description><b>Other notes</b>: The fallback is
         /// <see cref="DefaultSendBudgetMessages"/>, for a carrier that does not override. Every in-repo
-        /// carrier overrides it from its variant <c>*Info.SendBudgetMessages</c> constant.</description></item>
+        /// carrier overrides it from its carrier <c>*Info.SendBudgetMessages</c> constant.</description></item>
         /// </list>
         /// </remarks>
         protected virtual int SendBudgetMessages => DefaultSendBudgetMessages;
@@ -148,9 +147,9 @@ namespace Pontifex.Raw.Unreliable
         protected SendBudget? SharedSendBudget => Volatile.Read(ref _sharedSendBudget);
 
         /// <summary>
-        /// Binds the variant handler factory exactly once.
+        /// Binds the server handler factory exactly once.
         /// </summary>
-        /// <param name="factory">The variant factory. It may be <see langword="null"/>; a null factory
+        /// <param name="factory">The server factory. It may be <see langword="null"/>; a null factory
         /// rejects every new route but does not fail the transport.</param>
         /// <returns><see langword="true"/> for the first successful call; otherwise
         /// <see langword="false"/>.</returns>
@@ -232,7 +231,7 @@ namespace Pontifex.Raw.Unreliable
             IEndPoint source, UnionDataList trigger);
 
         /// <summary>
-        /// Invokes the variant factory in a type-safe way.
+        /// Invokes the server factory in a type-safe way.
         /// </summary>
         /// <param name="factory">The factory bound by <see cref="TryInitializeServer"/>.</param>
         /// <param name="source">The source route that triggered the call.</param>

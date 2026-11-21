@@ -216,7 +216,7 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=End
   transport suite in `Tests/Pontifex.Tests/Transports` and the conformance project
   `Tests/Pontifex.Transports.Tests`.
 - Wrapper endpoints (`RawReliableBaseEndpointWrapper` and its descendants) and converter
-  transports (`RawUnreliableNoAckToRawReliableConverter` and its client/server parts).
+  transports (`RawUnreliableToRawReliableConverter` and its client/server parts).
 - The conformance architecture: `IConformanceControl`, transport-level controls, failure injection, and
   the conformance behaviour of the controls published by `GetControls`. Tests may arm an endpoint's gate
   counters purely as an observable to pin delivery counts; `CheckPoint` behaviour itself belongs to its

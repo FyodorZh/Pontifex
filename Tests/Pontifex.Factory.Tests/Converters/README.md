@@ -1,6 +1,6 @@
 # Converters Test Suite
 
-Contract tests for the built-in `RawUnreliableNoAck` to `RawReliable` transport
+Contract tests for the built-in `RawUnreliable` to `RawReliable` transport
 converter. The suite proves that the converter performs its own handshake as the
 first delivery-managed message, rejects version and name mismatches without
 creating an application session, negotiates the minimum of the two delivery
@@ -11,9 +11,9 @@ manager maxima, and mirrors the reliable terminal lifecycle exactly once.
 **Test Suit.** The subject is a small tightly coupled group of non-abstract
 converter types:
 
-- `RawUnreliableNoAckToRawReliableConverter`
-- `RawUnreliableNoAckToRawReliableClient`
-- `RawUnreliableNoAckToRawReliableServer`
+- `RawUnreliableToRawReliableConverter`
+- `RawUnreliableToRawReliableClient`
+- `RawUnreliableToRawReliableServer`
 
 The internal `ConverterHandshake` helper is part of the same subject group because the client and
 server encode and decode their handshake through it. The suite file abbreviates the group to
@@ -23,22 +23,22 @@ Root subject: the built-in converter group above.
 
 ## Contract references
 
-- [RawUnreliableNoAckToRawReliableConverter.cs](../../../Pontifex/Converters/RawUnreliableNoAck/RawReliable/RawUnreliableNoAckToRawReliableConverter.cs)
-- [RawUnreliableNoAckToRawReliableClient.cs](../../../Pontifex/Converters/RawUnreliableNoAck/RawReliable/RawUnreliableNoAckToRawReliableClient.cs)
-- [RawUnreliableNoAckToRawReliableServer.cs](../../../Pontifex/Converters/RawUnreliableNoAck/RawReliable/RawUnreliableNoAckToRawReliableServer.cs)
-- [ConverterHandshake.cs](../../../Pontifex/Converters/RawUnreliableNoAck/RawReliable/ConverterHandshake.cs)
+- [RawUnreliableToRawReliableConverter.cs](../../../Pontifex/Converters/RawUnreliable/RawUnreliableToRawReliableConverter.cs)
+- [RawUnreliableToRawReliableClient.cs](../../../Pontifex/Converters/RawUnreliable/RawUnreliableToRawReliableClient.cs)
+- [RawUnreliableToRawReliableServer.cs](../../../Pontifex/Converters/RawUnreliable/RawUnreliableToRawReliableServer.cs)
+- [ConverterHandshake.cs](../../../Pontifex/Converters/RawUnreliable/ConverterHandshake.cs)
 - [ConvertersGraph.cs](../../../Pontifex/Converters/ConvertersGraph.cs)
 - [IRawReliableClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClient.cs),
   [IRawReliableServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServer.cs),
   [IRawReliableEndpoint.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/IRawReliableEndpoint.cs)
-- [IRawUnreliableNoAckClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/NoAck/IRawUnreliableNoAckClient.cs),
-  [IRawUnreliableNoAckServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/NoAck/IRawUnreliableNoAckServer.cs)
+- [IRawUnreliableClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableClient.cs),
+  [IRawUnreliableServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Unreliable/IRawUnreliableServer.cs)
 
 ## Layers
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 |---|---|---|---|---|
-| `Converters` | Built-in RawUnreliableNoAck to RawReliable converter group | `Tests/Pontifex.Factory.Tests/Converters` | — (root) | [`Coverage.md`](Coverage.md) |
+| `Converters` | Built-in RawUnreliable to RawReliable converter group | `Tests/Pontifex.Factory.Tests/Converters` | — (root) | [`Coverage.md`](Coverage.md) |
 
 ## Naming conventions
 
@@ -71,8 +71,8 @@ There are no groups. All test files live directly under `Tests/`.
 
 `Harness/` contains hand-written doubles only:
 
-- `FakeRawUnreliableNetwork`, `FakeEndPoint`, `FakeRawUnreliableNoAckClient`,
-  `FakeRawUnreliableNoAckServer`, and the client/server endpoints — a
+- `FakeRawUnreliableNetwork`, `FakeEndPoint`, `FakeRawUnreliableClient`,
+  `FakeRawUnreliableServer`, and the client/server endpoints — a
   synchronous in-process raw-unreliable pair. They create no sockets or
   background threads; every send is delivered on the caller's thread.
 - `RawUnreliableDeliveryPeer` — a scripted raw-unreliable peer that speaks the
