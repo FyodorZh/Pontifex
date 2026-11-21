@@ -21,8 +21,6 @@ namespace Pontifex.RR.Unreliable.Udp
 
         private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(RRUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
-        public override TransportType Type => TransportType.RRUnreliable;
-
         public override int MessageMaxByteSize => RRUdpInfo.MessageMaxByteSize;
 
         public RRUnreliableUdpServer(IPAddress ipAddress, int port, TimeSpan responseTtl, ILogger logger,

@@ -53,21 +53,9 @@ namespace Pontifex.RR.Unreliable
         {
             requestId = -1;
 
-            if (request == null!)
+            if (!TryValidatePayload(request, SendResult.NotConnected, out SendResult failure))
             {
-                return SendResult.InvalidMessage;
-            }
-
-            if (!IsStarted)
-            {
-                request.Release();
-                return SendResult.NotConnected;
-            }
-
-            if (request.GetDataSize() > MessageMaxByteSize)
-            {
-                request.Release();
-                return SendResult.MessageTooBig;
+                return failure;
             }
 
             long id = NextRequestId();

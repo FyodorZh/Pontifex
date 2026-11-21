@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Actuarius.Memory;
+using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.RR.Unreliable
@@ -32,6 +33,9 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         public abstract int MessageMaxByteSize { get; }
 
+        /// <inheritdoc/>
+        public override TransportType Type => TransportType.RRUnreliable;
+
         /// <summary>
         /// Gets the inclusive carrier-frame size that fits <see cref="MessageMaxByteSize"/> plus the
         /// request-id header.
@@ -43,6 +47,44 @@ namespace Pontifex.RR.Unreliable
         /// <see cref="Started"/> has completed.
         /// </summary>
         protected THandler? DispatchHandler => _handlerStarted ? _handler : null;
+
+        /// <summary>
+        /// Validates an outbound payload and releases it on failure.
+        /// </summary>
+        /// <param name="message">The payload to validate.</param>
+        /// <param name="notStartedResult">The result to return when the transport is not
+        /// started.</param>
+        /// <param name="failure">The failure result, or <see cref="SendResult.Ok"/> on
+        /// success.</param>
+        /// <returns><see langword="true"/> when the payload may be sent; otherwise
+        /// <see langword="false"/>.</returns>
+        protected bool TryValidatePayload(UnionDataList message, SendResult notStartedResult,
+            out SendResult failure)
+        {
+            failure = SendResult.Ok;
+
+            if (message == null!)
+            {
+                failure = SendResult.InvalidMessage;
+                return false;
+            }
+
+            if (!IsStarted)
+            {
+                message.Release();
+                failure = notStartedResult;
+                return false;
+            }
+
+            if (message.GetDataSize() > MessageMaxByteSize)
+            {
+                message.Release();
+                failure = SendResult.MessageTooBig;
+                return false;
+            }
+
+            return true;
+        }
 
         /// <inheritdoc/>
         public bool Init(THandler handler)

@@ -63,21 +63,9 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         public SendResult Response(long requestId, UnionDataList response)
         {
-            if (response == null!)
+            if (!TryValidatePayload(response, SendResult.Error, out SendResult failure))
             {
-                return SendResult.InvalidMessage;
-            }
-
-            if (!IsStarted)
-            {
-                response.Release();
-                return SendResult.Error;
-            }
-
-            if (response.GetDataSize() > MessageMaxByteSize)
-            {
-                response.Release();
-                return SendResult.MessageTooBig;
+                return failure;
             }
 
             if (!_pendingResponses.TryTake(requestId, out PendingResponse route))
