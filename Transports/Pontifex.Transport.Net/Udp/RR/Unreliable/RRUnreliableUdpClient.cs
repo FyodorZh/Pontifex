@@ -10,59 +10,41 @@ using Transport.Utils;
 
 namespace Pontifex.RR.Unreliable.Udp
 {
-    internal sealed class RRUnreliableUdpClient : AnyTransport, IRRUnreliableClient, IRRUnreliableServerEndpoint
+    internal sealed class RRUnreliableUdpClient : RRUnreliableClientTransport
     {
-        private readonly IPEndPoint mRemoteEndPoint;
-        private readonly IEndPoint mManagedRemoteEndPoint;
+        private readonly IPEndPoint _remoteEndPoint;
 
-        private IRRUnreliableClientHandler? mHandler;
+        private UdpSyncSender? _sender;
+        private UdpReceiver? _receiver;
 
-        private UdpSyncSender? mSender;
-        private UdpReceiver? mReceiver;
+        private Socket? _socket;
 
-        private Socket? mSocket;
-
-        private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim(RRUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
+        private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(RRUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
         public override TransportType Type => TransportType.RRUnreliable;
-        
-        public RRUnreliableUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
-            :base(RRUdpInfo.TransportName + "_rr", logger, memory)
-        {
-            mRemoteEndPoint = new IPEndPoint(ipAddress, port);
-            mManagedRemoteEndPoint = new IpEndPoint(mRemoteEndPoint);
-            //AppendControl(mTrafficCollector);
-        }
 
-        bool IRRUnreliableClient.Init(IRRUnreliableClientHandler handler)
+        public override int MessageMaxByteSize => RRUdpInfo.MessageMaxByteSize;
+
+        public RRUnreliableUdpClient(IEndPoint serverEndPoint, TimeSpan requestTtl, ILogger logger, IMemoryRental memory)
+            : base(RRUdpInfo.TransportName + "_rr", serverEndPoint, requestTtl, logger, memory)
         {
-            if (handler == null!)
+            if (!(serverEndPoint is IpEndPoint ipEndPoint) || !(ipEndPoint.EP is IPEndPoint remoteEndPoint))
             {
-                return false;
-            }
-            
-            mHandler = handler;
-            return true;
-        }
-
-        public IEndPoint EndPoint => mManagedRemoteEndPoint;
-
-        public int MessageMaxByteSize => RRUdpInfo.MessageMaxByteSize;
-
-        protected override bool TryStart()
-        {
-            if (mHandler == null)
-            {
-                return false;
+                throw new ArgumentException("The server endpoint must be an IP endpoint.", nameof(serverEndPoint));
             }
 
+            _remoteEndPoint = remoteEndPoint;
+        }
+
+        protected override bool StartCarrier()
+        {
             IPEndPoint? localEndPoint = null;
             try
             {
-                var addressFamily = mRemoteEndPoint.AddressFamily;
+                var addressFamily = _remoteEndPoint.AddressFamily;
                 var bindedAddress = addressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
 
-                mSocket = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
+                _socket = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
 
                 bool binded = false;
 
@@ -73,7 +55,7 @@ namespace Pontifex.RR.Unreliable.Udp
                     {
                         int randomPort = 10000 + rnd.Next(30000);
                         localEndPoint = new IPEndPoint(bindedAddress, randomPort);
-                        mSocket.Bind(localEndPoint); // any port?
+                        _socket.Bind(localEndPoint); // any port?
                     }
                     catch (Exception)
                     {
@@ -85,139 +67,93 @@ namespace Pontifex.RR.Unreliable.Udp
 
                 if (!binded || localEndPoint == null)
                 {
-                    mSocket.Close();
-                    mSocket = null;
+                    _socket.Close();
+                    _socket = null;
                     return false;
                 }
 
-                Log.i("UDP.Sender from local='{0}' to remote='{1}'", localEndPoint, mRemoteEndPoint);
-                mSender = new UdpSyncSender(mSocket, mRemoteEndPoint, RRUdpInfo.MessageMaxByteSize,
+                Log.i("UDP.Sender from local='{0}' to remote='{1}'", localEndPoint, _remoteEndPoint);
+                _sender = new UdpSyncSender(_socket, _remoteEndPoint, FrameMaxByteSize,
                     Memory.ByteArraysPool,
                     (ex) =>
                     {
                         FailException("Sender.Exception", ex);
                     },
-                    mTrafficCollector);
+                    _trafficCollector);
 
-                Log.i("UDP.Listener from local='{0}' of remote='{1}'", localEndPoint, mRemoteEndPoint);
+                Log.i("UDP.Listener from local='{0}' of remote='{1}'", localEndPoint, _remoteEndPoint);
 
-                mReceiver = new UdpReceiver(mSocket, mRemoteEndPoint, OnReceived, (ex) =>
+                _receiver = new UdpReceiver(_socket, _remoteEndPoint, OnReceived, (ex) =>
                     {
                         FailException("UDP.Receiver", ex);
                     },
                     Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log,
-                    mTrafficCollector);
-
-                try
-                {
-                    // FailException() в текущем каллстеке не должен сработать до Start() иначе мы получим Stopped() без Started()
-                    mHandler.Started(this);
-                }
-                catch (Exception e)
-                {
-                    FailException(mHandler.GetType() + ".Started()", e);
-                }
+                    _trafficCollector);
 
                 return true;
             }
             catch (Exception ex)
             {
-                if (mSocket != null)
+                if (_socket != null)
                 {
-                    mSocket.Close();
-                    mSocket = null;
+                    _socket.Close();
+                    _socket = null;
                 }
 
-                mSender = null;
+                _sender = null;
 
-                if (mReceiver != null)
+                if (_receiver != null)
                 {
-                    mReceiver.Stop();
+                    _receiver.Stop();
+                    _receiver = null;
                 }
 
-                FailException("TryStart", ex);
+                FailException("StartCarrier", ex);
                 return false;
             }
         }
 
-        protected override void OnStarted()
+        protected override void StopCarrier(StopReason reason)
         {
-            // DO NOTHING
-        }
+            _sender = null;
 
-        protected override void OnStopped(StopReason reason)
-        {
-            if (mHandler != null)
-            {
-                try
-                {
-                    mHandler.Stopped();
-                }
-                catch (Exception e)
-                {
-                    Log.wtf(e);
-                }
-            }
-            mHandler = null;
-
-            mSender = null;
-
-            var receiver = mReceiver;
+            var receiver = _receiver;
             if (receiver != null)
             {
                 receiver.Stop();
-                mReceiver = null;
+                _receiver = null;
             }
 
-            var socket = mSocket;
+            var socket = _socket;
             if (socket != null)
             {
                 socket.Close();
-                mSocket = null;
+                _socket = null;
             }
         }
 
-        SendResult IRRUnreliableServerEndpoint.Send(UnionDataList message)
+        protected override SendResult SendFrame(UnionDataList frame)
         {
-            if (message == null!)
-            {
-                return SendResult.InvalidMessage;
-            }
-
-            var sender = mSender;
+            var sender = _sender;
             if (sender == null)
             {
-                message.Release();
+                frame.Release();
                 return SendResult.NotConnected;
             }
 
-            return sender.Send(message);
+            return sender.Send(frame);
         }
 
         private void OnReceived(EndPoint remoteEp, UnionDataList message)
         {
-            var handler = mHandler;
-            if (handler != null)
-            {
-                try
-                {
-                    handler.Received(message);
-                    return;
-                }
-                catch (Exception e)
-                {
-                    FailException($"{mHandler?.GetType()}.Received()", e);
-                }
-            }
-
-            message.Release();
+            OnFrameReceived(ServerEndPoint, message);
         }
 
         public override string ToString()
         {
             try
             {
-                return $"udp-client[{mRemoteEndPoint}]";
+                return $"udp-client[{_remoteEndPoint}]";
             }
             catch (Exception)
             {

@@ -1,3 +1,5 @@
+using System;
+using System.Net;
 using Pontifex.Factory.Registration;
 using Pontifex.NetSockets;
 
@@ -19,7 +21,17 @@ namespace Pontifex.RR.Unreliable.Udp
                 new TransportParameter[]
                 {
                     NetBindingSupport.HostParameter(),
-                    NetBindingSupport.PortParameter()
+                    NetBindingSupport.PortParameter(),
+                    new IntegerParameter(
+                        "request_ttl",
+                        required: false,
+                        positional: false,
+                        new IntegerType(1, int.MaxValue)),
+                    new IntegerParameter(
+                        "response_ttl",
+                        required: false,
+                        positional: false,
+                        new IntegerType(1, int.MaxValue))
                 },
                 Create,
                 new[] { LegacyAlias });
@@ -28,9 +40,42 @@ namespace Pontifex.RR.Unreliable.Udp
         private static ITransport Create(ITransportBuildContext context)
         {
             NetBindingSupport.ResolveAddress(context, out var ipAddress, out var port);
-            return context.Role == TransportRole.Server
-                ? new RRUnreliableUdpServer(ipAddress, port, context.Logger, context.Memory)
-                : new RRUnreliableUdpClient(ipAddress, port, context.Logger, context.Memory);
+
+            if (context.Role == TransportRole.Server)
+            {
+                TimeSpan responseTtl = ResolveServerResponseTtl(context);
+                return new RRUnreliableUdpServer(ipAddress, port, responseTtl, context.Logger, context.Memory);
+            }
+
+            TimeSpan requestTtl = ResolveClientRequestTtl(context);
+            IEndPoint serverEndPoint = new IpEndPoint(new IPEndPoint(ipAddress, port));
+            return new RRUnreliableUdpClient(serverEndPoint, requestTtl, context.Logger, context.Memory);
+        }
+
+        private static TimeSpan ResolveClientRequestTtl(ITransportBuildContext context)
+        {
+            if (context.TryGetInt64("response_ttl", out _))
+            {
+                throw new InvalidOperationException(
+                    "The 'response_ttl' parameter is valid only for a server transport.");
+            }
+
+            return context.TryGetInt64("request_ttl", out long seconds)
+                ? TimeSpan.FromSeconds(seconds)
+                : RRUdpInfo.DefaultClientRequestTtl;
+        }
+
+        private static TimeSpan ResolveServerResponseTtl(ITransportBuildContext context)
+        {
+            if (context.TryGetInt64("request_ttl", out _))
+            {
+                throw new InvalidOperationException(
+                    "The 'request_ttl' parameter is valid only for a client transport.");
+            }
+
+            return context.TryGetInt64("response_ttl", out long seconds)
+                ? TimeSpan.FromSeconds(seconds)
+                : RRUdpInfo.DefaultServerResponseTtl;
         }
     }
 }

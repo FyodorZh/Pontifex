@@ -8,16 +8,16 @@ namespace Pontifex.RR.Unreliable
     public interface IRRUnreliableClientHandler : IHandler
     {
         /// <summary>
-        /// Called once the client endpoint is ready. The endpoint is used to send messages to the server.
+        /// Called once the client transport and its carrier are ready.
         /// </summary>
-        /// <param name="endpoint">The client-side handle bound to the configured server.</param>
-        void Started(IRRUnreliableServerEndpoint endpoint);
+        void Started();
 
         /// <summary>
-        /// Called for every message sent by the server to this client.
+        /// Called for a response whose id matches a request sent by this client.
         /// </summary>
-        /// <param name="message">The received message. The handler owns the reference.</param>
-        void Received(UnionDataList message);
+        /// <param name="requestId">The id returned by <see cref="IRRUnreliableClient.Request"/>.</param>
+        /// <param name="response">The received response. The handler owns the reference.</param>
+        void OnResponded(long requestId, UnionDataList response);
 
         /// <summary>
         /// Called once when the client stops.

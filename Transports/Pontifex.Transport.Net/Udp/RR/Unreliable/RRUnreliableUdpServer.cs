@@ -1,41 +1,42 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
-using Actuarius.Collections;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.NetSockets;
 using Pontifex.Utils;
 using Scriba;
+using Transport.Utils;
 
 namespace Pontifex.RR.Unreliable.Udp
 {
-    internal sealed class RRUnreliableUdpServer : AnyTransport, IRRUnreliableServer
+    internal sealed class RRUnreliableUdpServer : RRUnreliableServerTransport
     {
-        private IPEndPoint mLocalEndPoint;
+        private IPEndPoint _localEndPoint;
 
-        private UdpReceiver? mReceiver;
-        private UdpAsyncSender? mSender;
+        private UdpReceiver? _receiver;
+        private UdpAsyncSender? _sender;
 
-        private volatile IRRUnreliableServerHandler? mHandler;
+        private Socket? _socket;
 
-        private Socket? mSocket;
-
-        private readonly TemporaryMap<EndPoint, IpEndPoint> mEPointsMap = new (UtcNowDateTimeProvider.Instance, TimeSpan.FromSeconds(10));
+        private readonly TrafficCollectorSlim _trafficCollector = new TrafficCollectorSlim(RRUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
         public override TransportType Type => TransportType.RRUnreliable;
-        
-        public RRUnreliableUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
-            : base(RRUdpInfo.TransportName + "_rr", logger, memory)
+
+        public override int MessageMaxByteSize => RRUdpInfo.MessageMaxByteSize;
+
+        public RRUnreliableUdpServer(IPAddress ipAddress, int port, TimeSpan responseTtl, ILogger logger,
+            IMemoryRental memory)
+            : base(RRUdpInfo.TransportName + "_rr", responseTtl, logger, memory)
         {
-            mLocalEndPoint = new IPEndPoint(ipAddress, port);
+            _localEndPoint = new IPEndPoint(ipAddress, port);
         }
 
         public override string ToString()
         {
             try
             {
-                return $"udp-server[{mLocalEndPoint}]";
+                return $"udp-server[{_localEndPoint}]";
             }
             catch (Exception)
             {
@@ -43,37 +44,23 @@ namespace Pontifex.RR.Unreliable.Udp
             }
         }
 
-        bool IRRUnreliableServer.Init(IRRUnreliableServerHandler handler)
+        protected override bool StartCarrier()
         {
-            mHandler = handler;
-            return (handler != null!);
-        }
-
-        public int MessageMaxByteSize => RRUdpInfo.MessageMaxByteSize;
-
-        protected override bool TryStart()
-        {
-            if (mHandler == null)
-            {
-                Log.e("Starting.Result = 'NULL_HANDLER'");
-                return false;
-            }
-
             try
             {
-                mSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
                 try
                 {
-                    mSocket.Bind(mLocalEndPoint);
+                    _socket.Bind(_localEndPoint);
                 }
                 catch (SocketException ex)
                 {
                     if (ex.SocketErrorCode == SocketError.AddressNotAvailable)
                     {
-                        var anyEp = new IPEndPoint(IPAddress.Any, mLocalEndPoint.Port);
-                        mSocket.Bind(anyEp);
-                        mLocalEndPoint = anyEp;
+                        var anyEp = new IPEndPoint(IPAddress.Any, _localEndPoint.Port);
+                        _socket.Bind(anyEp);
+                        _localEndPoint = anyEp;
                     }
                     else
                     {
@@ -82,22 +69,22 @@ namespace Pontifex.RR.Unreliable.Udp
                 }
 
                 IPEndPoint anyRemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                mReceiver = new UdpReceiver(mSocket, anyRemoteEndPoint, OnReceived, (ex) =>
+                _receiver = new UdpReceiver(_socket, anyRemoteEndPoint, OnReceived, (ex) =>
                 {
                     if (ex.SocketErrorCode != SocketError.ConnectionReset)
                     {
                         Log.e("UDP.Receiver SocketException with code " + ex.ErrorCode + " received. Continue working!!!");
                     }
-                }, Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log, null!);
+                }, Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log,
+                    _trafficCollector);
 
-                Log.i("UDP.Sender from local={0}", mLocalEndPoint);
+                Log.i("UDP.Sender from local={0}", _localEndPoint);
 
-                mSender = new UdpAsyncSender(mSocket, RRUdpInfo.MessageMaxByteSize, Memory.ByteArraysPool,
+                _sender = new UdpAsyncSender(_socket, FrameMaxByteSize, Memory.ByteArraysPool,
                     _ =>
                     {
                         Log.e("UDP.Sender Exception received. Continue working!!!");
-                    }, Log, null!);
-
+                    }, Log, _trafficCollector);
 
                 return true;
             }
@@ -105,92 +92,74 @@ namespace Pontifex.RR.Unreliable.Udp
             {
                 Log.e("Starting.Result = 'EXCEPTION'");
 
-                if (mSocket != null)
+                if (_socket != null)
                 {
-                    mSocket.Close();
-                    mSocket = null;
+                    _socket.Close();
+                    _socket = null;
                 }
-                if (mReceiver != null)
+                if (_receiver != null)
                 {
-                    mReceiver.Stop();
+                    _receiver.Stop();
                 }
-                mReceiver = null;
-                mSender = null;
-                FailException("TryStart", ex);
+                _receiver = null;
+                _sender = null;
+                FailException("StartCarrier", ex);
                 return false;
             }
         }
 
-        protected override void OnStarted()
+        protected override void StopCarrier(StopReason reason)
         {
-            // DO NOTHING
-        }
-
-        protected override void OnStopped(StopReason reason)
-        {
-            mHandler = null;
-
-            var receiver = mReceiver;
+            var receiver = _receiver;
             if (receiver != null)
             {
                 receiver.Stop();
-                mReceiver = null;
+                _receiver = null;
             }
 
-            var sender = mSender;
+            var sender = _sender;
             if (sender != null)
             {
                 sender.Stop();
-                mSender = null;
+                _sender = null;
             }
 
-            var socket = mSocket;
+            var socket = _socket;
             if (socket != null)
             {
                 socket.Close();
-                mSocket = null;
+                _socket = null;
             }
         }
 
-        SendResult IRRUnreliableServer.Send(IEndPoint client, UnionDataList message)
+        protected override SendResult SendFrame(IEndPoint destination, UnionDataList frame)
         {
-            if (message == null!)
+            var sender = _sender;
+            if (sender == null)
             {
-                return SendResult.InvalidMessage;
+                frame.Release();
+                return SendResult.Error;
             }
 
-            var sender = mSender;
-            if (sender != null)
+            if (destination is IpEndPoint ipEndPoint && ipEndPoint.EP is IPEndPoint endPoint)
             {
-                if (client is IpEndPoint endPoint)
-                {
-                    return sender.Send(endPoint.EP, message);
-                }
-
-                message.Release();
-                return SendResult.InvalidAddress;
+                return sender.Send(endPoint, frame);
             }
-            
-            message.Release();
-            return SendResult.Error;
+
+            frame.Release();
+            return SendResult.InvalidAddress;
         }
 
         private void OnReceived(EndPoint sender, UnionDataList receivedData)
         {
-            var handler = mHandler;
-            if (handler != null)
-            {
-                if (!mEPointsMap.TryGetValue(sender, out var ep))
-                {
-                    ep = new IpEndPoint(sender);
-                    mEPointsMap.Add(sender, ep);
-                }
-                handler.OnRequest(ep, receivedData); // TODO: change ENDPOINT
-            }
-            else
-            {
-                receivedData.Release();
-            }
+            // UdpReceiver reuses one EndPoint instance, so the route must be snapshotted before it can be
+            // stored or handed to user code.
+            IPEndPoint? remote = sender as IPEndPoint;
+            IEndPoint client = remote != null
+                ? new IpEndPoint(new IPEndPoint(remote.Address, remote.Port))
+                : new IpEndPoint(sender);
+
+            OnFrameReceived(client, receivedData);
         }
     }
 }

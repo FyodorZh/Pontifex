@@ -8,20 +8,26 @@ namespace Pontifex.RR.Unreliable
     public interface IRRUnreliableServerHandler : IHandler
     {
         /// <summary>
-        /// Called once when the server starts.
+        /// Called once when the server transport and its carrier are ready.
         /// </summary>
         void Started();
+
+        /// <summary>
+        /// Called for every request received from a client.
+        /// </summary>
+        /// <param name="requestId">The server-global id that identifies the request, across all
+        /// clients.</param>
+        /// <param name="client">The route of the client that sent the request.</param>
+        /// <param name="request">The received request. The handler owns the reference.</param>
+        /// <returns><see langword="true"/> if the request is accepted; <see langword="false"/> if it is
+        /// rejected. A rejected request cannot be answered: the transport drops its pending-response
+        /// route, so a later <see cref="IRRUnreliableServer.Response"/> with this id fails with
+        /// <see cref="SendResult.InvalidAddress"/>.</returns>
+        bool OnRequested(long requestId, IEndPoint client, UnionDataList request);
 
         /// <summary>
         /// Called once when the server stops.
         /// </summary>
         void Stopped();
-
-        /// <summary>
-        /// Called for every request received from a client.
-        /// </summary>
-        /// <param name="client">The route of the client that sent the request.</param>
-        /// <param name="message">The received message. The handler owns the reference.</param>
-        void OnRequest(IEndPoint client, UnionDataList message);
     }
 }

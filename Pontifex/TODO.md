@@ -22,3 +22,6 @@
     outbound budget does not bound
   - [ ] Revisit D8 (the transport-base shape) with option E if a third RawUnreliable contract variant
     appears
+- [ ] Refactor RRUnreliable to request/response semantics
+  - [x] Stage 1: formal refactoring (request/response API, request ids, TTLs, carrier-agnostic core)
+  - [ ] Stage 2: strict specification and conformance tests

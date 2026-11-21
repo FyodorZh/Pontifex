@@ -30,6 +30,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
         Case(Registration.TransportRole.Server, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliable),
+        Case(Registration.TransportRole.Server, "udp_rr(\"127.0.0.1\", 9000, response_ttl = 5)", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Server, "zip(tcp(\"127.0.0.1\", 9000), compression_level = 9)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
@@ -39,6 +40,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
         Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliable),
+        Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000, request_ttl = 5)", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Client, "zip(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable)
@@ -79,6 +81,9 @@ public sealed class FactoryBindingsTests
         Assert.That(
             factory.Canonicalize("UDP(\"127.0.0.1\", 9000) AS RRUnreliable"),
             Is.EqualTo("udp(127.0.0.1, 9000) as RRUnreliable"));
+        Assert.That(
+            factory.Canonicalize("UDP_RR(\"127.0.0.1\", 9000, request_ttl = 5)"),
+            Is.EqualTo("udp_rr(127.0.0.1, 9000, request_ttl=5)"));
         Assert.That(
             factory.Canonicalize("ZIP(TCP(\"127.0.0.1\", 9000), compression_level = 1)"),
             Is.EqualTo("zip(tcp(127.0.0.1, 9000), compression_level=1)"));
