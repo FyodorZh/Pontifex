@@ -40,6 +40,7 @@ namespace Pontifex.RR.Unreliable
         }
 
         private readonly RRUnreliableRequestTable<PendingResponse> _pendingResponses;
+        private readonly TimeSpan _responseTtl;
 
         /// <summary>
         /// Initializes a new RR unreliable server transport.
@@ -55,10 +56,14 @@ namespace Pontifex.RR.Unreliable
             IMemoryRental memory, IDateTimeProvider? timeProvider = null)
             : base(typeName, logger, memory)
         {
+            _responseTtl = responseTtl;
             _pendingResponses = new RRUnreliableRequestTable<PendingResponse>(
                 timeProvider ?? UtcNowDateTimeProvider.Instance,
                 responseTtl);
         }
+
+        /// <inheritdoc/>
+        public TimeSpan ResponseTtl => _responseTtl;
 
         /// <inheritdoc/>
         public SendResult Response(long requestId, UnionDataList response)

@@ -22,7 +22,8 @@ namespace Pontifex.RR.Reliable
 
         /// <summary>
         /// The request did not complete normally for any other reason, for example a transport
-        /// failure or a stop.
+        /// failure, a stop, a request TTL expiry, or a rejection notification that never reached
+        /// the client.
         /// </summary>
         Failed
     }

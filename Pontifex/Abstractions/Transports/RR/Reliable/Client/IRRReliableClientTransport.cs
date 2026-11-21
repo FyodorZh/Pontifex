@@ -4,23 +4,26 @@ using Pontifex.Utils;
 namespace Pontifex.RR.Reliable
 {
     /// <summary>
-    /// Client half of the RR reliable contract: sends requests to a server, receives zero or more
+    /// Client half of the RR reliable contract: sends requests to a fixed server, receives zero or more
     /// responses for each request, and observes the terminal completion of every accepted request.
     /// </summary>
+    /// <remarks>
+    /// The client binds no application handler and has no initialization step; it is ready for
+    /// <see cref="ITransport.Start"/> after construction.
+    /// </remarks>
     public interface IRRReliableClientTransport : IRRReliableTransport
     {
         /// <summary>
-        /// Gets the maximum time a request may remain pending after
-        /// <see cref="Request"/> returns <see cref="SendResult.Ok"/>.
+        /// Gets the fixed route of the server this client sends to.
         /// </summary>
-        TimeSpan RequestTtl { get; }
+        IEndPoint ServerEndPoint { get; }
 
         /// <summary>
-        /// Prepares the client before it is started.
+        /// Gets the maximum time a request may remain pending. The period starts when
+        /// <see cref="Request"/> returns <see cref="SendResult.Ok"/>; the time spent inside that call
+        /// is not counted.
         /// </summary>
-        /// <returns><see langword="true"/> if the client was initialized; otherwise
-        /// <see langword="false"/>.</returns>
-        bool Init();
+        TimeSpan RequestTtl { get; }
 
         /// <summary>
         /// Sends <paramref name="request"/> to the server and binds <paramref name="handler"/> to it.

@@ -9,8 +9,9 @@ namespace Pontifex.RR.Reliable
     public interface IRRReliableServerTransport : IRRReliableTransport
     {
         /// <summary>
-        /// Gets the maximum time a response stream may remain open after
-        /// <see cref="IRRReliableServerHandler.OnRequested"/> accepts the request.
+        /// Gets the maximum time a response stream may remain undecided or open, counted from the
+        /// moment the request is presented to
+        /// <see cref="IRRReliableServerHandler.OnRequested"/>.
         /// </summary>
         TimeSpan ResponseTtl { get; }
 
@@ -20,6 +21,8 @@ namespace Pontifex.RR.Reliable
         /// <param name="handler">The handler that receives the request callbacks.</param>
         /// <returns><see langword="true"/> if the handler was bound; otherwise
         /// <see langword="false"/>.</returns>
+        /// <exception cref="System.ArgumentNullException"><paramref name="handler"/> is
+        /// <see langword="null"/>.</exception>
         bool Init(IRRReliableServerHandler handler);
     }
 }

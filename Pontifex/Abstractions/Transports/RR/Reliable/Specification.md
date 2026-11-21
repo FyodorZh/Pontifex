@@ -4,8 +4,9 @@
 
 `RRReliable` is the single reliable request/response (RR) transport contract.
 A client sends a request bound to a per-request handler. The server handler
-accepts or rejects the request and may answer it with zero or more responses
-followed by one explicit completion. The client may cancel the request.
+accepts the request by responding to it, or rejects it explicitly, and may
+answer it with zero or more responses followed by one explicit completion. The
+client may cancel the request.
 
 This specification defines:
 
@@ -48,13 +49,13 @@ public interface IRRReliableTransport : IRRTransport
 
 public interface IRRReliableClientTransport : IRRReliableTransport
 {
+    IEndPoint ServerEndPoint { get; }
     TimeSpan RequestTtl { get; }
-    bool Init();
     SendResult Request(UnionDataList request, IRRReliableRequestHandler handler);
     void CancelRequest(IRRReliableRequestHandler handler);
 }
 
-public interface IRRReliableRequestHandler
+public interface IRRReliableRequestHandler : IHandler
 {
     void Response(UnionDataList response);
     void Finish(RRReliableCompletionType type);
@@ -68,7 +69,7 @@ public interface IRRReliableServerTransport : IRRReliableTransport
 
 public interface IRRReliableServerHandler : IHandler
 {
-    bool OnRequested(IEndPoint client, UnionDataList request,
+    void OnRequested(IEndPoint client, UnionDataList request,
         IRRReliableResponse response);
 }
 
@@ -77,6 +78,7 @@ public interface IRRReliableResponse
     long RequestId { get; }
     SendResult Response(UnionDataList response);
     SendResult Finish();
+    SendResult Reject();
 }
 
 public enum RRReliableCompletionType
@@ -92,10 +94,18 @@ public enum RRReliableCompletionType
 `Start(Action<StopReason>)`, `Stop(StopReason?)`, `Log`, `Memory`, and
 `GetControls`. `IRRTransport` adds `MessageMaxByteSize`.
 
-The client binds no handler; each `Request` binds its own
-`IRRReliableRequestHandler`. The server binds one `IRRReliableServerHandler`
-through `Init`. Neither handler has `Started` or `Stopped` callbacks; transport
-lifecycle is observed through `Start`/`Stop` and the `onStopped` callback.
+The client binds no handler and has no `Init`; it is ready for `Start` after
+construction, and `ServerEndPoint` is the route fixed at construction. Each
+`Request` binds its own `IRRReliableRequestHandler`. The server binds one
+`IRRReliableServerHandler` through `Init`. Neither handler has `Started` or
+`Stopped` callbacks. The readiness signal is `Start` returning `true`; the stop
+signals are `onStopped`, the terminal `Finish(Failed)` notifications, and closed
+response handles. A handler that is created per request has no transport-level
+lifecycle to observe.
+
+A response handle starts **undecided**. The handler decides the outcome through
+the handle: the first successful `Response` or `Finish` call accepts the
+request, and `Reject` rejects it. There is no boolean acceptance result.
 
 ## 4. Terms and roles
 
@@ -109,13 +119,19 @@ lifecycle is observed through `Start`/`Stop` and the `onStopped` callback.
 | **request handler** | The per-request `IRRReliableRequestHandler` bound by `Request`. |
 | **response handle** | The `IRRReliableResponse` supplied to `OnRequested`. |
 | **request id** | The server-global `IRRReliableResponse.RequestId`, unique across all clients. |
+| **server route** | The `ServerEndPoint` fixed at client construction. |
 | **accepted request** | A `Request` call that returned `SendResult.Ok`. |
-| **accepted response** | A `IRRReliableResponse.Response` call that returned `SendResult.Ok`. |
+| **undecided handle** | A response handle on which no `Response`, `Finish`, or `Reject` call has succeeded yet. |
+| **accepted response stream** | A response handle whose first successful `Response` or `Finish` call accepted the request. |
+| **rejected request** | A response handle whose `Reject` call succeeded, or an `OnRequested` call that threw while its handle was undecided. |
+| **closed handle** | A handle after `Finish`, response TTL expiry, or a transport stop. Every later `Response`, `Finish`, or `Reject` call returns `Error`. |
 | **pending request** | An accepted request whose handler has not yet received `Finish`. |
-| **rejected request** | An `OnRequested` call that returned `false` or threw. |
 | **request TTL** | `IRRReliableClientTransport.RequestTtl`. |
 | **response TTL** | `IRRReliableServerTransport.ResponseTtl`. |
 | **running** | The period after a successful `Start` and before stopping begins. |
+
+A rejected handle is terminal but not closed: `Reject` returns `Ok` again,
+while `Response` and `Finish` throw. A transport stop closes every handle.
 
 `IEndPoint` is routing metadata, not a session or security principal.
 
@@ -124,11 +140,11 @@ lifecycle is observed through `Start`/`Stop` and the `onStopped` callback.
 | Topic | Guaranteed by RRReliable | Application responsibility | Implementation-defined |
 | --- | --- | --- | --- |
 | Request delivery | Retries until the request is delivered, rejected, cancelled, or failed. If `OnRequested` runs for a request, it runs exactly once. | Handle every completion type; make server work idempotent only if a carrier can redeliver after an implementation-defined persistence boundary. | Carrier, retry schedule, persistence, and deduplication. |
-| Response delivery | Delivers each accepted response exactly once to the request handler, in acceptance order, unless the request stops being live first. | Handle zero or more responses; do not assume any response arrives. | Retry schedule and queue capacity. |
-| Completion | Delivers exactly one `Finish` for every accepted request. | Never wait for a second `Finish`; do not call `Response` after it. | Timing only. |
-| Correlation | Per-request handler identity; server `RequestId` is unique across clients. | Never bind one handler to two pending requests. | Id encoding and wire correlation. |
+| Response delivery | Attempts to deliver each response accepted with `Ok` exactly once to the request handler, in acceptance order, until the request stops being live. `Ok` is local acceptance, not proof of delivery. | Handle zero or more responses; do not assume any response arrives. | Retry schedule and queue capacity. |
+| Completion | Delivers exactly one `Finish` for every accepted request, after the responses that precede it. The type reports the outcome the client observed; a rejection notification that is lost surfaces as `Failed`. | Never wait for a second `Finish`; do not call `Response` after it. | Timing only. |
+| Correlation | Per-request handler identity and the fixed `ServerEndPoint`; server `RequestId` is unique across clients. | Never bind one handler to two pending requests. | Id encoding and wire correlation. |
 | Cancellation | `CancelRequest` produces one `Finish(Canceled)` and suppresses later responses. | Treat server-side cancellation as best effort. | Whether and how cancellation reaches the server. |
-| Server rejection | Rejected requests complete as `Rejected` and cannot be answered. | Return `false` only for a definite decision; a throw is also a rejection. | Logging. |
+| Server rejection | `Reject()` produces `Rejected` on the client when the notification arrives; otherwise the request completes as `Failed` at `RequestTtl`. A rejected handle cannot answer. | Reject only while the handle is undecided; never respond after `Reject`. | Whether and how the rejection reaches the client, and logging. |
 | TTLs | A pending request finishes `Failed` at `RequestTtl`; a response stream stops accepting at `ResponseTtl`. | Choose TTLs appropriate to the carrier's latency. | Clock source and timer implementation. |
 | Handler callbacks | Per-request serialization and non-reentrancy; different requests may run concurrently. | Protect state shared by handlers. | Scheduler and thread. |
 | Security | No authentication, authorization, confidentiality, integrity, or replay protection. | Add protection above this layer or use a protected carrier. | Any protection outside this contract. |
@@ -142,19 +158,29 @@ frames internally.
 For each request accepted with `SendResult.Ok`:
 
 1. The transport **MUST** attempt delivery until the request is delivered,
-   rejected, cancelled, completed, or failed.
+   rejected, cancelled, or failed.
 2. `IRRReliableServerHandler.OnRequested` **MUST** be invoked at most once for
    that request. If it is invoked, it is invoked exactly once.
-3. The transport **MUST** deliver every response accepted with `Ok` to the
-   request handler exactly once, in the order in which those `Response` calls
-   returned `Ok`, unless the request completes before the response can be
-   delivered. A response that cannot be delivered because the request
-   completed is discarded.
+3. The transport **MUST** attempt to deliver every response accepted with `Ok`
+   to the request handler exactly once, in the order in which those `Response`
+   calls returned `Ok`, unless the request completes before the response can be
+   delivered. A response that cannot be delivered because the request completed
+   is discarded.
 4. The transport **MUST** deliver exactly one `Finish` for the request, after
    every response that precedes its completion has been delivered.
 5. The transport **MUST** suppress duplicates. The application **MUST NOT**
    observe the same request or response twice, even when the carrier
    retransmits.
+
+Acceptance and rejection are decided by the server handler through the response
+handle, not by a return value. A handler that calls neither `Response`, nor
+`Finish`, nor `Reject` leaves the request undecided; `ResponseTtl` bounds that
+state.
+
+Rejection is a server decision communicated to the client on a best-effort
+basis. The transport **MUST** attempt to deliver it, but **MUST NOT** claim that
+the client always observes `Rejected`: if the notification does not arrive
+before the client request TTL expires, the request completes as `Failed`.
 
 The transport **MUST NOT** claim exactly-once delivery across an
 implementation-defined persistence boundary it cannot support. A stopped
@@ -171,27 +197,31 @@ may be interleaved, delayed, or processed concurrently.
 
 ### 7.1 Initialization
 
-The client `Init()` and the server `Init(handler)` bind the transport for a
-start. `Init` is one-time and pre-start. Concurrent calls are safe, and at most
-one call **MAY** return `true`; every later or racing call **MUST** return
-`false` without changing the bound state. A successful `Init` **MUST NOT**
-start carrier activity.
+The server `Init(handler)` binds the application handler for a start. The client
+has no `Init`: it binds no handler and is ready to start after construction.
+`Init` is one-time and pre-start. Concurrent calls are safe, and at most one
+call **MAY** return `true`; every later or racing call **MUST** return `false`
+without changing the bound state. A successful `Init` **MUST NOT** start
+carrier activity.
 
 The server `Init` **MUST** throw `ArgumentNullException` for a null handler
-without changing state. The client `Init` takes no handler.
+without changing state.
 
 `Init` **MUST** return `false` after a start has been attempted, after the
-transport is invalid, or after stopping begins. `Start` before a successful
-`Init` **MUST** return `false` and invalidate the transport.
+transport is invalid, or after stopping begins. A server `Start` before a
+successful `Init` **MUST** return `false` and invalidate the transport. The
+client `Start` requires no initialization.
 
 ### 7.2 Transport state
 
 ```mermaid
 stateDiagram-v2
     [*] --> Constructed
-    Constructed --> Initialized: Init succeeds
+    Constructed --> Initialized: server Init succeeds
     Initialized --> Running: Start succeeds
+    Constructed --> Running: client Start succeeds
     Initialized --> Invalid: Start fails
+    Constructed --> Invalid: client Start fails
     Running --> Stopping: Stop or unrecoverable failure
     Stopping --> Stopped: terminal transition
     Stopped --> [*]
@@ -205,6 +235,9 @@ stateDiagram-v2
 `true`. A failed initial start **MUST** invalidate the transport, **MUST NOT**
 invoke `onStopped`, and **MUST NOT** deliver any handler callback.
 
+No handler callback and no server callback **MUST** begin before `Start` has
+returned `true`.
+
 A normal `Stop` does not invalidate the transport: `IsValid` remains `true`
 while `IsStarted` becomes `false`. An unrecoverable internal or carrier failure
 **MUST** invalidate it. A stopped transport **MUST NOT** be restarted or
@@ -215,10 +248,11 @@ reinitialized.
 When a started transport stops or fails, it **MUST**:
 
 1. stop accepting new requests and responses;
-2. deliver exactly one `Finish(Failed)` to every pending request handler;
-3. make every live `IRRReliableResponse` handle return `Error` and release its
-   payload;
-4. stop the handler callbacks that are not part of the terminal notification;
+2. deliver exactly one `Finish(Failed)` to every pending request handler whose
+   request has not already completed;
+3. close every live response handle, so later `Response`, `Finish`, and
+   `Reject` calls return `Error`;
+4. stop the handler callbacks that are not part of the terminal notifications;
    and
 5. invoke `onStopped` exactly once after the terminal transition.
 
@@ -231,11 +265,19 @@ A normal stop, an unrecoverable failure, and a carrier loss are all `Failed`
 for pending requests. `Canceled` is used only for an explicit
 `CancelRequest`.
 
-The transport has no handler `Started`/`Stopped` callbacks. A server
-`IRRReliableResponse` that is still live when the server stops returns `Error`
-after the stop begins.
+A request that was undecided at stop is closed, not rejected: the client
+completes it as `Failed` unless a rejection notification already reached it.
+
+The transport has no handler `Started`/`Stopped` callbacks. A server response
+handle that is still live when the server stops returns `Error` after the stop
+begins.
 
 ## 8. Client contract
+
+The client is configured with one fixed server route, exposed as
+`ServerEndPoint`. The route is immutable for the client lifetime. The client
+**MUST** accept a response only from that route and **MUST** drop and release a
+response received from any other route. This is routing, not authentication.
 
 ### 8.1 `Request`
 
@@ -278,14 +320,18 @@ If `Request` returns `Ok`, the request is pending and the handler **MUST**
 receive exactly one `Finish` eventually. `Ok` is local acceptance, not proof
 that the server has seen the request.
 
+`RequestTtl` starts when the call returns `Ok`. The transport **MUST NOT** count
+the time spent inside `Request` against the TTL.
+
 `IRRReliableRequestHandler.Response` or `Finish` **MAY** begin before `Request`
 returns. The handler must tolerate that.
 
 ### 8.2 Request callbacks
 
 `IRRReliableRequestHandler.Response(UnionDataList response)` is invoked for
-each accepted response for the request. `IRRReliableRequestHandler.Finish(type)`
-is invoked exactly once and terminates the request.
+each response accepted by the server for the request.
+`IRRReliableRequestHandler.Finish(type)` is invoked exactly once and terminates
+the request.
 
 Callbacks for one request handler are serialized and non-reentrant. No
 `Response` follows `Finish`. Callbacks for different request handlers may run
@@ -333,43 +379,48 @@ observes the loss on its next response attempt or at its response TTL.
 ### 9.1 `OnRequested`
 
 ```csharp
-bool OnRequested(IEndPoint client, UnionDataList request,
+void OnRequested(IEndPoint client, UnionDataList request,
     IRRReliableResponse response);
 ```
 
-`OnRequested` is invoked for every accepted request, at most once per request.
-It may run concurrently for different requests; the transport provides no
-global serialization across requests. `client` identifies the source route.
-Equal `IEndPoint` values **MUST** denote the same route while valid, and equal
-values **MUST** return equal hash codes.
+`OnRequested` is invoked once for every request the transport presents. It may
+run concurrently for different requests; the transport provides no global
+serialization across requests. `client` identifies the source route. Equal
+`IEndPoint` values **MUST** denote the same route while valid, and equal values
+**MUST** return equal hash codes.
 
 `IRRReliableResponse.RequestId` is the server-global request id. The first
-accepted request of a running server transport is `1`; ids are strictly
-increasing and unique across all clients. Duplicate suppression means the same
-request is never presented twice, so each id appears at most once in
-`OnRequested`.
+request presented to a running server transport is `1`; ids are strictly
+increasing and unique across all clients. Ids **MAY** have gaps: an id can be
+consumed without being presented. Duplicate suppression means the same request
+is never presented twice, so each id appears at most once in `OnRequested`.
 
-The handler owns the request reference and **MUST** release it exactly once,
-including when it rejects the request or throws.
+The handler owns the request reference and **MUST** release it exactly once.
 
-Returning `true` accepts the request and keeps the response handle live.
-Returning `false`, or throwing, rejects it. On rejection:
+The handle starts undecided. The handler decides the outcome only through the
+handle:
 
-- the response handle **MUST** become invalid;
-- the client request **MUST** complete with `Finish(Rejected)`;
-- no response frame is delivered; and
-- a later `IRRReliableResponse.Response` or `Finish` **MUST** return
-  `Error`.
+| First successful call | Resulting state | Client-visible effect |
+| --- | --- | --- |
+| `Response` | accepted response stream | responses may be delivered |
+| `Finish` | accepted and completed | `Finish(Normal)` after the accepted responses |
+| `Reject` | rejected | `Finish(Rejected)` when the notification arrives, otherwise `Finish(Failed)` at `RequestTtl` |
 
-A throwing `OnRequested` **MUST** be caught and logged and treated as a
-rejection. It **MUST NOT** stop or invalidate the transport.
+`Response` and `Finish` may be called inside `OnRequested` or later. Returning
+without deciding leaves the handle undecided and live until it is answered or
+`ResponseTtl` expires. An accepted or rejected handle keeps that state.
+
+A throwing `OnRequested` **MUST** be caught and logged and **MUST NOT** stop or
+invalidate the transport. If the handle was still undecided, the transport
+**MUST** reject it. If it was already accepted or rejected, the throw changes
+nothing and the request keeps its state.
 
 ### 9.2 `IRRReliableResponse`
 
-The response handle stays usable after `OnRequested` returns and may be used
-asynchronously. Different requests may use their handles concurrently. Calls
-for one handle are serialized by the transport and may be made from any
-thread.
+The handle stays usable after `OnRequested` returns and may be used
+asynchronously, including from inside `OnRequested`. Different requests may use
+their handles concurrently. Calls for one handle are serialized by the
+transport and may be made from any thread.
 
 `long RequestId { get; }` is the server-global request id and is immutable for
 the handle lifetime.
@@ -378,33 +429,51 @@ the handle lifetime.
 request. Zero or more responses are allowed before `Finish`. The result
 precedence is:
 
-1. `InvalidMessage` — the response is null or cannot be serialized;
-2. `MessageTooBig` — the serialized payload exceeds `MessageMaxByteSize`;
-3. `Error` — the transport is stopping or stopped, the request was rejected,
-   cancelled, has already finished, or the handle is otherwise invalid; or
-4. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
+1. the transport is stopping or stopped, or the handle is closed → `Error`;
+2. the request was rejected → throw `InvalidOperationException`;
+3. `InvalidMessage` — the response is null or cannot be serialized;
+4. `MessageTooBig` — the serialized payload exceeds `MessageMaxByteSize`; or
+5. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
    implementation-defined synchronous failure.
 
-On every result except `InvalidMessage`, the transport owns and eventually
-releases the response payload. The caller **MUST NOT** access it afterwards.
-A response accepted with `Ok` participates in the request's ordered delivery
-guarantee. A non-`Ok` result carries no retry signal; the application chooses
-its own retry and backpressure policy using a new payload buffer.
+The first successful `Response` call moves the handle from undecided to
+accepted. On every result except `InvalidMessage`, the transport owns and
+eventually releases the response payload. The caller **MUST NOT** access it
+afterwards. A response accepted with `Ok` participates in the request's ordered
+delivery guarantee: the transport attempts it until the request completes or
+leaves the live set. `Ok` is local acceptance; it does not prove that the
+client received the response. A non-`Ok` result carries no retry signal; the
+application chooses its own retry and backpressure policy using a new payload
+buffer.
 
-`SendResult Finish()` completes the request normally. The first call that
-completes it returns `Ok`. Every later call, and every call after a rejection,
-cancellation, stop, or expiry, returns `Error`. No `Response` call is allowed
-after a successful `Finish`; such a call returns `Error`. `Finish` itself
-participates in the ordered stream: the client's `Finish(Normal)` is delivered
-after all responses that returned `Ok` before it.
+`SendResult Finish()` completes the request normally and accepts the request if
+it is still undecided. The first call that completes it returns `Ok`. Every
+later call returns `Error`. `Finish` itself participates in the ordered stream:
+the client's `Finish(Normal)` is delivered after all responses that returned
+`Ok` before it.
+
+`SendResult Reject()` rejects the request if it is still undecided. It returns
+`Ok` for the first successful call and for a repeated call. It returns `Error`
+when the transport is stopping or stopped. After a successful `Reject`, every
+`Response` and `Finish` call throws `InvalidOperationException`; the payload
+passed to a throwing `Response` is not consumed and remains with the caller.
+
+Calling `Reject` after `Response` or `Finish` succeeded throws
+`InvalidOperationException`. The rejection notification is best effort; the
+client completes with `Rejected` only if the notification arrives before its
+`RequestTtl` expires.
 
 ### 9.3 Response TTL
 
-`ResponseTtl` is a positive duration. It starts when `OnRequested` accepts the
-request. When it expires, the response handle becomes invalid and every later
-`Response` or `Finish` returns `Error`. The transport **MUST** complete the
+`ResponseTtl` is a positive duration exposed by
+`IRRReliableServerTransport.ResponseTtl`. It starts when the request is
+presented to `OnRequested` and bounds the time the stream may stay undecided or
+open. When it expires, the handle is closed and every later `Response`,
+`Finish`, or `Reject` returns `Error`. The transport **MUST** complete the
 client request with `Finish(Failed)` and **MUST** attempt to suppress later
-responses. Expiry is a transport decision, not an application callback.
+responses. Expiry is a transport decision, not an application callback. A
+request whose TTL has already expired **SHOULD NOT** be presented to
+`OnRequested`.
 
 The server transport **MAY** drop a cancelled, failed, or expired client
 connection or route. If it does, later handle calls return `Error`.
@@ -416,26 +485,29 @@ Every request accepted by `Request` receives exactly one `Finish`:
 | Trigger | `RRReliableCompletionType` |
 | --- | --- |
 | The server's `IRRReliableResponse.Finish()` completed normally and its completion reached the client | `Normal` |
-| `OnRequested` returned `false` or threw | `Rejected` |
+| The server's `IRRReliableResponse.Reject()` succeeded and the rejection reached the client | `Rejected` |
 | The client called `CancelRequest` | `Canceled` |
-| The client or server transport stopped or failed, the carrier lost the request, or the request TTL expired | `Failed` |
+| The client or server transport stopped or failed, the carrier lost the request, the request TTL expired, or a rejection notification did not reach the client | `Failed` |
 | The server response TTL expired | `Failed` |
 
 `Finish(Normal)` **MUST** follow every response of the request that was
 accepted before the server's `Finish`. No `Response` follows any `Finish`.
 
-`Finish(Rejected)` is delivered after the server rejects the request. It is
+`Finish(Rejected)` is delivered when the rejection reaches the client. It is
 delivered even when the server sent no responses.
 
 `Finish(Canceled)` is delivered exactly once by `CancelRequest`. The server
 does not receive a cancellation callback. `Finish(Failed)` covers every other
-terminal path, including a normal local stop.
+terminal path, including a normal local stop and a lost rejection.
+
+`Finish` is guaranteed; its type is the outcome the client actually observed,
+not necessarily the server's decision.
 
 ## 11. Request TTL
 
 `RequestTtl` is a positive duration exposed by
-`IRRReliableClientTransport.RequestTtl`. It starts when `Request` accepts the
-request.
+`IRRReliableClientTransport.RequestTtl`. It starts when `Request` returns
+`SendResult.Ok`; the time spent inside the call is not counted.
 
 The transport **MUST** monitor the pending request for the whole TTL; expiry
 does not depend on further traffic. On expiry the transport **MUST**:
@@ -470,9 +542,8 @@ inbound data that is malformed, cannot be decoded, or exceeds
 stop or invalidate the transport solely because of it.
 
 A server **MUST NOT** require a prior registration, connection, or admission
-exchange beyond what its carrier mandates. A client **MUST** accept a response
-only from the route associated with its request; this is routing, not
-authentication.
+exchange beyond what its carrier mandates. The client **MUST** accept a
+response only from `ServerEndPoint`; this is routing, not authentication.
 
 ## 13. Request path
 
@@ -486,17 +557,17 @@ sequenceDiagram
 
     CE->>ST: request (reliably, deduplicated)
     ST->>S: OnRequested(client, request, response)
-    alt accepted
-        S->>R: Response(payload) -> Ok
+    alt Response or Finish called
+        S->>R: Response(payload) -> Ok (accepts)
         R-->>CE: ordered response
         CE->>C: Response(payload)
         S->>R: Finish() -> Ok
         R-->>CE: terminal
         CE->>C: Finish(Normal)
-    else rejected
-        S-->>ST: false or throw
-        ST-->>CE: rejection
-        CE->>C: Finish(Rejected)
+    else Reject called
+        S->>R: Reject() -> Ok
+        R-->>CE: rejection (best effort)
+        CE->>C: Finish(Rejected) or Finish(Failed)
     end
 ```
 
@@ -545,11 +616,15 @@ may contribute to TTL expiry.
 
 | Result | Required meaning |
 | --- | --- |
-| `Ok` | The response or completion was accepted for reliable delivery. |
+| `Ok` | The response, completion, or rejection was accepted locally. Delivery is attempted until the request leaves the live set; `Ok` does not prove client receipt. |
 | `InvalidMessage` | The response is null or cannot be serialized. |
 | `MessageTooBig` | The payload exceeds `MessageMaxByteSize`. |
 | `BufferOverflow` | The implementation cannot accept the response because local capacity is full. |
-| `Error` | The handle is invalid, the request completed, or the transport stopped. |
+| `Error` | The handle is closed or the transport stopped. |
+
+`Reject` returns only `Ok` or `Error`. After a successful `Reject`, `Response`
+and `Finish` throw `InvalidOperationException`; after a successful `Response`
+or `Finish`, `Reject` throws. A throwing call does not consume its payload.
 
 Every synchronous non-`Ok` result is non-fatal to the transport. It does not
 imply that the request has completed; the application chooses whether to
@@ -559,7 +634,7 @@ retry with a new payload buffer or finish the request.
 
 An unrecoverable internal or carrier failure after a successful start **MUST**
 invalidate the transport, finish every pending request with `Finish(Failed)`,
-invalidate every live response handle, and invoke `onStopped` exactly once. A
+close every live response handle, and invoke `onStopped` exactly once. A
 normal `Stop` follows the same pending-request and handle rules without
 invalidating the transport.
 
@@ -596,8 +671,12 @@ protected transport stack.
 - [ ] Bind a distinct request handler to each pending request.
 - [ ] Never reuse a handler while its request is pending.
 - [ ] Expect zero or more `Response` calls followed by exactly one `Finish`.
-- [ ] Treat `Ok` from `Request` or `Response` as local acceptance only.
-- [ ] Handle every completion type, including `Rejected` and `Failed`.
+- [ ] Treat `Ok` from `Request`, `Response`, `Finish`, or `Reject` as local
+      acceptance only.
+- [ ] Handle every completion type; a rejection may surface as `Failed`.
+- [ ] Decide every response handle exactly once: `Response`/`Finish` to accept,
+      `Reject` to reject.
+- [ ] Never call `Response` or `Finish` after `Reject`; they throw.
 - [ ] Never call `Response` after `Finish`.
 - [ ] Release every delivered response exactly once.
 - [ ] Keep request and server handlers prompt, non-blocking, and
@@ -608,19 +687,24 @@ protected transport stack.
 
 ### 17.2 Transport-implementer checklist
 
-- [ ] Provide one-time `Init` and `Start` with no handler lifecycle callbacks.
+- [ ] Provide one-time server `Init` and one-time `Start`; the client requires
+      no `Init`.
+- [ ] Provide no handler `Started`/`Stopped` callbacks.
 - [ ] Preserve exactly-once request presentation, ordered responses, and one
       `Finish` per accepted request.
+- [ ] Treat a rejection notification as best effort and report the
+      client-observed outcome in `Finish`.
 - [ ] Suppress duplicates across retries, within the documented persistence
       scope.
-- [ ] Assign unique server-global request ids starting at `1`.
+- [ ] Assign unique server-global request ids starting at `1`; gaps are allowed.
+- [ ] Accept responses only from `ServerEndPoint`.
 - [ ] Serialize callbacks per request handler and per response handle while
       allowing different requests to proceed concurrently.
-- [ ] Enforce `RequestTtl` and `ResponseTtl` actively, independently of
-      traffic, and complete pending requests with `Failed`.
+- [ ] Enforce `RequestTtl` from the moment `Request` returns `Ok`.
+- [ ] Enforce `ResponseTtl` from the moment `OnRequested` is invoked.
 - [ ] Finish every pending request with `Failed` on stop or failure.
-- [ ] Invalidate response handles and return `Error` after completion,
-      cancellation, rejection, expiry, or stop.
+- [ ] Close response handles and return `Error` after completion, expiry, or
+      stop, and throw `InvalidOperationException` after `Reject`.
 - [ ] Enforce `MessageMaxByteSize` on sent and received payloads.
 - [ ] Drop and log malformed or oversized inbound data without stopping.
 - [ ] Transfer and release buffers according to this specification.
@@ -634,6 +718,7 @@ protected transport stack.
 - No cross-request ordering.
 - No server-side cancellation callback or server-initiated completion type
   other than `Finish()`.
+- No guarantee that a rejection notification reaches the client.
 - No implicit acknowledgement, receipt, or response-status payload.
 - No authentication, authorization, confidentiality, integrity, or replay
   protection.

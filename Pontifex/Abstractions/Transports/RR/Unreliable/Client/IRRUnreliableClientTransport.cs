@@ -1,3 +1,4 @@
+using System;
 using Pontifex.Utils;
 
 namespace Pontifex.RR.Unreliable
@@ -12,6 +13,11 @@ namespace Pontifex.RR.Unreliable
         /// Gets the fixed route of the server this client sends to.
         /// </summary>
         IEndPoint ServerEndPoint { get; }
+
+        /// <summary>
+        /// Gets how long the client accepts a response after it accepted the request.
+        /// </summary>
+        TimeSpan RequestTtl { get; }
 
         /// <summary>
         /// Binds the application handler before the transport is started.

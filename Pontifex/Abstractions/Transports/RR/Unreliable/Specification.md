@@ -53,6 +53,7 @@ public interface IRRUnreliableTransport : IRRTransport
 public interface IRRUnreliableClientTransport : IRRUnreliableTransport
 {
     IEndPoint ServerEndPoint { get; }
+    TimeSpan RequestTtl { get; }
     bool Init(IRRUnreliableClientHandler handler);
     SendResult Request(UnionDataList request, out long requestId);
 }
@@ -70,6 +71,7 @@ public interface IRRUnreliableClientHandler : IRRUnreliableHandler
 
 public interface IRRUnreliableServerTransport : IRRUnreliableTransport
 {
+    TimeSpan ResponseTtl { get; }
     bool Init(IRRUnreliableServerHandler handler);
     SendResult Response(long requestId, UnionDataList response);
 }
@@ -101,8 +103,8 @@ handler is bound with `Init`; the server handler is bound with `Init`.
 | **server-global id** | The id passed to `OnRequested` and later to `Response`; it is unique across all clients of one running server transport. |
 | **pending request** | A client-local id that the client still accepts a response for. |
 | **pending route** | A server-global id that the server can still answer. |
-| **request TTL** | How long a client accepts a response after `Request` accepted the request. |
-| **response TTL** | How long a server accepts `Response` after `OnRequested` received the request. |
+| **request TTL** | How long a client accepts a response after `Request` accepted the request; exposed as `IRRUnreliableClientTransport.RequestTtl`. |
+| **response TTL** | How long a server accepts `Response` after it received the request; exposed as `IRRUnreliableServerTransport.ResponseTtl`. |
 | **accepted request** | A `Request` call that returned `SendResult.Ok`. |
 | **rejected request** | An `OnRequested` call that returned `false` or threw. |
 | **running** | The period after a successful `Start` and before stopping begins. |
@@ -177,9 +179,10 @@ NOT** be restarted or reinitialized.
 
 ### 6.3 Handler notifications
 
-`handler.Started()` **MUST** be invoked exactly once after the carrier starts
-and after a successful `Start` is possible, and before any `OnResponded` or
-`OnRequested` may begin.
+`handler.Started()` **MUST** be invoked exactly once after the carrier starts,
+before `Start` returns `true`, and before any `OnResponded` or `OnRequested`
+may begin. The caller therefore observes a ready handler whenever `Start`
+returns `true`.
 
 If `Started()` throws, the implementation **MUST** catch and log the
 exception, clean up the carrier, fail the `Start`, invalidate the transport,
@@ -264,8 +267,9 @@ the following wins:
 2. the request TTL expires; or
 3. the transport stops or fails, which clears the pending window.
 
-The request TTL starts when `Request` accepts the request. The TTL is a
-positive, implementation-configured duration. Expiry is silent: no callback is
+The request TTL starts when `Request` accepts the request. The value is a
+positive, implementation-configured duration exposed by
+`IRRUnreliableClientTransport.RequestTtl`. Expiry is silent: no callback is
 raised and the pending id is simply no longer eligible. A response for an id
 that is unknown, expired, already answered, or sent by another route **MUST**
 be released and dropped.
@@ -299,8 +303,9 @@ received.
 The server binds one `IRRUnreliableServerHandler` through `Init`.
 
 For each valid inbound request frame, the server assigns a new server-global
-id. The first accepted id is `1`; ids are strictly increasing for the lifetime
-of the running server transport and are unique across all clients. Duplicate
+id. The first id is `1`; ids are strictly increasing and unique across all
+clients for the lifetime of the running server transport. Ids **MAY** have
+gaps: a frame can consume an id and still be rejected or dropped. Duplicate
 request frames from the same client route are independent requests and receive
 distinct server-global ids.
 
@@ -367,13 +372,14 @@ A rejected request has no pending route, so `Response` for its id returns
 ### 8.4 Pending routes and response TTL
 
 A pending route is created when `OnRequested` accepts a request and is removed
-when the request TTL expires, when the transport stops or fails, when
+when the response TTL expires, when the transport stops or fails, when
 `Response` takes it, or when the handler rejects the request.
 
 The response TTL starts when the server receives the request, before
-`OnRequested` is invoked. It is a positive, implementation-configured duration.
-Expiry is silent: the route is no longer eligible and a later `Response`
-returns `InvalidAddress`. No callback is raised.
+`OnRequested` is invoked. The value is a positive, implementation-configured
+duration exposed by `IRRUnreliableServerTransport.ResponseTtl`. Expiry is
+silent: the route is no longer eligible and a later `Response` returns
+`InvalidAddress`. No callback is raised.
 
 If the server never responds, the route expires and the client pending request
 eventually expires independently. Neither side receives a timeout callback.
@@ -486,7 +492,6 @@ contract defines no callback timeout.
 | `NotConnected` | The client transport is not running. |
 | `BufferOverflow` | The implementation cannot accept the request because local outbound capacity is full. |
 | `Error` | Another synchronous sending failure occurred. |
-| `InvalidAddress` | The configured server route is synchronously unusable. |
 
 Every synchronous non-`Ok` result is non-fatal and **MUST NOT** by itself stop
 or invalidate the transport.
@@ -561,7 +566,8 @@ transport, or choose a protected transport stack.
 - [ ] Release each delivered payload exactly once, even when processing fails.
 - [ ] Keep handlers prompt, non-blocking, and exception-safe.
 - [ ] Treat rejection as silent; rely on TTLs rather than a rejection callback.
-- [ ] Do not answer a request after its response TTL.
+- [ ] Do not answer a request after the response TTL exposed by
+      `IRRUnreliableServerTransport.ResponseTtl`.
 - [ ] Treat endpoints, ids, and messages as unauthenticated input.
 - [ ] Observe `onStopped` and `Stopped`; do not restart a stopped or invalid
       transport.
@@ -573,7 +579,7 @@ transport, or choose a protected transport stack.
       only after a successful `Started`.
 - [ ] Keep client and server callback sequences serialized and non-reentrant.
 - [ ] Assign client-local ids and server-global ids that are unique for the
-      transport lifetime, starting at `1`.
+      transport lifetime, starting at `1`; server-global ids may have gaps.
 - [ ] Install the client pending id before submitting the request frame.
 - [ ] Deliver at most one response per client-local id and drop unknown,
       expired, duplicate, and foreign-route responses.

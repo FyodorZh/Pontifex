@@ -1,3 +1,4 @@
+using System;
 using Pontifex.Utils;
 
 namespace Pontifex.RR.Unreliable
@@ -8,6 +9,11 @@ namespace Pontifex.RR.Unreliable
     /// </summary>
     public interface IRRUnreliableServerTransport : IRRUnreliableTransport
     {
+        /// <summary>
+        /// Gets how long the server accepts a response after it received the request.
+        /// </summary>
+        TimeSpan ResponseTtl { get; }
+
         /// <summary>
         /// Binds the application handler before the transport is started.
         /// </summary>

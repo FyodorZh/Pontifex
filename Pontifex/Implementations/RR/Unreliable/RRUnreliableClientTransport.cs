@@ -21,6 +21,7 @@ namespace Pontifex.RR.Unreliable
         : RRUnreliableTransport<IRRUnreliableClientHandler>, IRRUnreliableClientTransport
     {
         private readonly IEndPoint _serverEndPoint;
+        private readonly TimeSpan _requestTtl;
         private readonly RRUnreliableRequestTable<byte> _pendingResponses;
 
         /// <summary>
@@ -40,6 +41,7 @@ namespace Pontifex.RR.Unreliable
             : base(typeName, logger, memory)
         {
             _serverEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
+            _requestTtl = requestTtl;
             _pendingResponses = new RRUnreliableRequestTable<byte>(
                 timeProvider ?? UtcNowDateTimeProvider.Instance,
                 requestTtl);
@@ -47,6 +49,9 @@ namespace Pontifex.RR.Unreliable
 
         /// <inheritdoc/>
         public IEndPoint ServerEndPoint => _serverEndPoint;
+
+        /// <inheritdoc/>
+        public TimeSpan RequestTtl => _requestTtl;
 
         /// <inheritdoc/>
         public SendResult Request(UnionDataList request, out long requestId)
