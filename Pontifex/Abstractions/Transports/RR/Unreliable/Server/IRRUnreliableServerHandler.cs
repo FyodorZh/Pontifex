@@ -5,7 +5,7 @@ namespace Pontifex.RR.Unreliable
     /// <summary>
     /// Application callbacks for one RR unreliable server.
     /// </summary>
-    public interface IRRUnreliableServerHandler : IRRUnreliableHandler
+    public interface IRRUnreliableServerHandler : IHandler
     {
         /// <summary>
         /// Called for every request received from a client.

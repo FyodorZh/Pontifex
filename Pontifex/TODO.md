@@ -27,8 +27,9 @@
   - [x] Extract shared lifecycle into `RRUnreliableTransport` / `RRUnreliableTransport<THandler>`
     (carrier template, handler base, `Init`, dispatch gate)
   - [x] Stage 2a: `Specification.md` written
-  - [ ] Stage 2b: align the implementation with the specification (failed-start handler callbacks,
-    `Response`/`OnRequested` exception policy, client source filtering) and add conformance tests
+  - [x] Stage 2b: align the implementation with the specification (failed-start callbacks,
+    `Response`/`OnRequested` exception policy, client source filtering, inbound size limit)
+  - [ ] Stage 2c: conformance adapter and tests; residual `OnRequested`/`Stop` transition race
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
   `IRRUnreliableTransport`, `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`,
   `IRRResponse`, `RRRequestHandler`, `RRResponse`)

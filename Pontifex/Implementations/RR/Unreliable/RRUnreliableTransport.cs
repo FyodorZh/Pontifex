@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Actuarius.Memory;
+using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
@@ -111,8 +112,28 @@ namespace Pontifex.RR.Unreliable
             }
             catch (Exception ex)
             {
-                FailException("StartCarrier", ex);
+                Log.wtf(ex);
+                AbortCarrier(new ExceptionFail(Name, ex, "StartCarrier"));
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Stops a carrier whose start failed. No handler callback, <c>onStopped</c> notification, or
+        /// terminal request notification is delivered.
+        /// </summary>
+        /// <param name="reason">The failure reason passed to the carrier.</param>
+        protected void AbortCarrier(StopReason reason)
+        {
+            ClearPendingRequests();
+
+            try
+            {
+                StopCarrier(reason);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
             }
         }
 
@@ -143,10 +164,10 @@ namespace Pontifex.RR.Unreliable
     /// </summary>
     /// <typeparam name="THandler">The role-specific handler type.</typeparam>
     public abstract class RRUnreliableTransport<THandler> : RRUnreliableTransport
-        where THandler : class, IRRUnreliableHandler
+        where THandler : class, IHandler
     {
         private THandler? _handler;
-        private volatile bool _handlerStarted;
+        private volatile bool _dispatchEnabled;
         private bool _initialized;
 
         /// <summary>
@@ -161,10 +182,10 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
-        /// Gets the handler that may receive callbacks, or <see langword="null"/> before
-        /// <see cref="Started"/> has completed.
+        /// Gets the handler that may receive callbacks, or <see langword="null"/> before the transport
+        /// started dispatching.
         /// </summary>
-        protected THandler? DispatchHandler => _handlerStarted ? _handler : null;
+        protected THandler? DispatchHandler => _dispatchEnabled ? _handler : null;
 
         /// <inheritdoc/>
         public bool Init(THandler handler)
@@ -190,8 +211,7 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         protected sealed override bool TryStart()
         {
-            THandler? handler = _handler;
-            if (handler == null)
+            if (_handler == null)
             {
                 return false;
             }
@@ -201,38 +221,15 @@ namespace Pontifex.RR.Unreliable
                 return false;
             }
 
-            try
-            {
-                handler.Started();
-            }
-            catch (Exception ex)
-            {
-                FailException($"{handler.GetType()}.Started()", ex);
-                return false;
-            }
-
-            _handlerStarted = true;
+            _dispatchEnabled = true;
             return true;
         }
 
         /// <inheritdoc/>
         protected sealed override void OnStopped(StopReason reason)
         {
-            THandler? handler = _handler;
             _handler = null;
-            _handlerStarted = false;
-
-            if (handler != null)
-            {
-                try
-                {
-                    handler.Stopped();
-                }
-                catch (Exception ex)
-                {
-                    Log.wtf(ex);
-                }
-            }
+            _dispatchEnabled = false;
 
             base.OnStopped(reason);
         }

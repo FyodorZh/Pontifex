@@ -56,13 +56,7 @@ public interface IRRUnreliableServerTransport : IRRServerTransport
     bool Init(IRRUnreliableServerHandler handler);
 }
 
-public interface IRRUnreliableHandler : IHandler
-{
-    void Started();
-    void Stopped();
-}
-
-public interface IRRUnreliableServerHandler : IRRUnreliableHandler
+public interface IRRUnreliableServerHandler : IHandler
 {
     bool OnRequested(IEndPoint client, UnionDataList request,
         IRRUnreliableResponse response);
@@ -80,8 +74,8 @@ specification.
 The client binds no transport-level handler and has no `Init`; it is ready to
 start after construction. Each `Request` binds its own
 `IRRUnreliableRequestHandler`. The server binds one
-`IRRUnreliableServerHandler` through `Init`. Only the server handler has
-`Started` and `Stopped` callbacks.
+`IRRUnreliableServerHandler` through `Init`. Neither handler has lifecycle
+callbacks; readiness is `Start` returning `true`.
 
 A server response handle is supplied by the transport; applications never
 implement `IRRUnreliableResponse`.
@@ -188,9 +182,8 @@ produce one response that the client discards.
 
 ### 5.1 `OnRequested`
 
-`OnRequested` is invoked after `Started()` returned successfully, on a running
-server. Callbacks for the single server handler are serialized and
-non-reentrant.
+`OnRequested` is invoked on a running server. Callbacks for the single server
+handler are serialized and non-reentrant.
 
 The handler owns the request reference and **MUST** release it exactly once,
 including when it rejects the request or throws.
@@ -233,27 +226,7 @@ closed and a later `Response` returns `Error`; no callback is raised. If the
 server never responds, the client pending request eventually expires
 independently. Neither side receives a timeout callback.
 
-## 6. Server handler notifications
-
-`handler.Started()` **MUST** be invoked exactly once after the carrier starts,
-before `Start` returns `true`, and before any `OnRequested` may begin. The
-caller therefore observes a ready handler whenever `Start` returns `true`.
-
-If `Started()` throws, the implementation **MUST** catch and log the exception,
-clean up the carrier, fail the `Start`, invalidate the transport, and **MUST
-NOT** invoke `Stopped()` for that handler.
-
-`handler.Stopped()` **MUST** be invoked exactly once, after a start whose
-`Started()` returned successfully, when the transport stops or fails. It is
-invoked before the transport's `onStopped` callback. The handler's `Stopped`
-exception **MUST** be caught and logged without changing the stop outcome.
-
-`Stop` **MUST** be safe from any thread, including from a handler callback.
-Once transport stopping begins, no new `OnRequested` may begin. A handler
-already running may finish asynchronously. Pending state is cleared; no
-callback is delivered for an abandoned request.
-
-## 7. Request/response path
+## 6. Request/response path
 
 ```mermaid
 sequenceDiagram
@@ -287,7 +260,7 @@ accepted before the corresponding `Request` call bound the handler.
 The callback for a response **MAY** begin on any scheduler after the response
 frame is accepted locally.
 
-## 8. Send results
+## 7. Send results
 
 `Request` results are defined in section 4.1. `Response` results are defined in
 section 5.2. Every synchronous non-`Ok` result is non-fatal and **MUST NOT** by
@@ -301,7 +274,7 @@ The UDP reference implementation configures `request_ttl` (default 30 seconds)
 on the client and `response_ttl` (default 10 seconds) on the server. Those
 values are configuration, not part of this contract.
 
-## 9. Application-author checklist
+## 8. Application-author checklist
 
 - [ ] Call server `Init` exactly once before `Start`; the client needs no
       `Init`.
@@ -319,16 +292,12 @@ values are configuration, not part of this contract.
 - [ ] Treat rejection as silent; rely on TTLs rather than a rejection callback.
 - [ ] Do not answer a request after the response TTL exposed by
       `IRRUnreliableServerTransport.ResponseTtl`.
-- [ ] Observe `onStopped` and, on the server, `Stopped`; do not restart a
-      stopped or invalid transport.
+- [ ] Observe `onStopped`; do not restart a stopped or invalid transport.
 
-## 10. Transport-implementer checklist
+## 9. Transport-implementer checklist
 
 - [ ] Bind one server handler with a one-time, pre-start `Init`; the client
       requires no `Init`.
-- [ ] Deliver the server handler's `Started` before `Start` returns `true` and
-      before any request callback, and `Stopped` only after a successful
-      `Started`.
 - [ ] Keep server callbacks serialized and non-reentrant; keep each request
       handler's callbacks serialized and non-reentrant.
 - [ ] Assign client-local request ids and server-global ids that are unique for the
@@ -345,13 +314,13 @@ values are configuration, not part of this contract.
 - [ ] Enforce `MessageMaxByteSize` on sent and received payloads.
 - [ ] Drop and log malformed or oversized inbound frames without stopping.
 - [ ] Transfer and release buffers according to the common specification.
-- [ ] Treat `OnRequested`, `Response`, and `Started` exceptions as specified and
-      keep unrelated transport activity running.
+- [ ] Treat `OnRequested` and `Response` exceptions as specified and keep
+      unrelated transport activity running.
 - [ ] Preserve stop and `onStopped` ordering and the exact supplied reason.
 - [ ] Document configuration, TTLs, capacity, scheduling, and carrier failure
       behavior without weakening this contract.
 
-## 11. Non-goals
+## 10. Non-goals
 
 - No completion/finish callback, streaming, or multiple responses per request.
 - No server notification of cancellation, and no cancellation of a server

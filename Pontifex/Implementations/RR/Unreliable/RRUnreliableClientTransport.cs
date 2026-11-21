@@ -198,9 +198,23 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
+            if (!ServerEndPoint.Equals(source))
+            {
+                Log.w("{0} dropped a response from a foreign route {1}", Name, source);
+                frame.Release();
+                return;
+            }
+
             if (!RRUnreliableFrame.TryDecode(frame, out ushort requestId))
             {
                 Log.w("{0} received a malformed response frame from {1}", Name, source);
+                frame.Release();
+                return;
+            }
+
+            if (frame.GetDataSize() > MessageMaxByteSize)
+            {
+                Log.w("{0} dropped an oversized response from {1}", Name, source);
                 frame.Release();
                 return;
             }

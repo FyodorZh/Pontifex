@@ -76,6 +76,13 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
+            if (frame.GetDataSize() > MessageMaxByteSize)
+            {
+                Log.w("{0} dropped an oversized request from {1}", Name, source);
+                frame.Release();
+                return;
+            }
+
             IRRUnreliableServerHandler? handler = DispatchHandler;
             if (handler == null)
             {

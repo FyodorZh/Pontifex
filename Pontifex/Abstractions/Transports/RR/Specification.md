@@ -246,9 +246,9 @@ terminal rules to every pending request and open handle, and invoke
 
 ### 6.5 Handler lifecycle
 
-The family specification defines whether a bound handler has lifecycle
-callbacks. `onStopped` is the only guaranteed transport-level stop
-notification.
+RR handlers have no lifecycle callbacks. `onStopped` is the transport-level
+stop notification, and the family terminal notifications cover pending
+requests and response handles.
 
 ## 7. Request and response TTLs
 
@@ -371,7 +371,7 @@ Request ids, endpoints, and payloads are unauthenticated input.
 | Cancellation | `Finish(Canceled)` and best-effort server notification | silent, client-local |
 | Request TTL expiry | `Finish(Failed)` | silent, no callback |
 | Response TTL expiry | `Finish(Failed)` and closed handle | closed handle only |
-| Server handler lifecycle | none | `Started` and `Stopped` |
+| Server handler lifecycle | none | none |
 | Ordering | per-request ordered | none |
 
 ## 14. Non-goals

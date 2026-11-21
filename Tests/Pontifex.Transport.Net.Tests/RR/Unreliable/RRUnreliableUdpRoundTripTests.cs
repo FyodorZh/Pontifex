@@ -50,9 +50,6 @@ public sealed class RRUnreliableUdpRoundTripTests
             Assert.That(server.Start(_ => { }), Is.True);
             Assert.That(client.Start(_ => { }), Is.True);
 
-            Assert.That(serverHandler.StartedSignal.Wait(Timeout), Is.True,
-                "the server handler must be started");
-
             var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
             request.PutLast(42);
 
@@ -217,8 +214,6 @@ public sealed class RRUnreliableUdpRoundTripTests
             _respond = respond;
         }
 
-        public ManualResetEventSlim StartedSignal { get; } = new(false);
-
         public ManualResetEventSlim RequestedSignal { get; } = new(false);
 
         public IRRUnreliableResponse? LastResponse { get; private set; }
@@ -230,11 +225,6 @@ public sealed class RRUnreliableUdpRoundTripTests
         public int LastRequestValue { get; private set; }
 
         public SendResult ResponseResult { get; private set; }
-
-        public void Started()
-        {
-            StartedSignal.Set();
-        }
 
         public bool OnRequested(IEndPoint client, UnionDataList request, IRRUnreliableResponse response)
         {
@@ -266,13 +256,8 @@ public sealed class RRUnreliableUdpRoundTripTests
             }
         }
 
-        public void Stopped()
-        {
-        }
-
         public void Dispose()
         {
-            StartedSignal.Dispose();
             RequestedSignal.Dispose();
         }
     }

@@ -144,7 +144,13 @@ namespace Pontifex.RR.Unreliable.Udp
 
         private void OnReceived(EndPoint remoteEp, UnionDataList message)
         {
-            OnFrameReceived(ServerEndPoint, message);
+            // The receiver reuses one EndPoint instance; snapshot the route before comparing it with
+            // the configured server endpoint.
+            IEndPoint source = remoteEp is IPEndPoint ip
+                ? new IpEndPoint(new IPEndPoint(ip.Address, ip.Port))
+                : new IpEndPoint(remoteEp);
+
+            OnFrameReceived(source, message);
         }
 
         public override string ToString()
