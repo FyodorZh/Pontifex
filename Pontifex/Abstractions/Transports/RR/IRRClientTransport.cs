@@ -13,8 +13,9 @@ namespace Pontifex.RR
         IEndPoint ServerEndPoint { get; }
 
         /// <summary>
-        /// Gets the maximum time a request may remain pending. The exact start point is defined by the
-        /// concrete family.
+        /// Gets the maximum time a request may remain pending, counted from the moment the request was
+        /// accepted (the request call returned <see cref="SendResult.Ok"/>). The time spent inside the
+        /// call is not counted.
         /// </summary>
         TimeSpan RequestTtl { get; }
     }

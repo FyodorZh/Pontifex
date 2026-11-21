@@ -5,14 +5,15 @@ using Operarius;
 namespace Pontifex.RR.Unreliable
 {
     /// <summary>
-    /// Table of the outstanding requests of one RR unreliable endpoint. An entry is removed when it is
+    /// Table of the outstanding requests of one RR unreliable client. An entry is removed when it is
     /// taken, when it expires, or when the table is cleared.
     /// </summary>
     /// <remarks>
-    /// Entries are pruned opportunistically on every operation. Expiry order follows insertion order
-    /// because every entry uses the same TTL and request ids are monotonic.
+    /// Expired entries are pruned opportunistically when a new entry is added. The deadline of an
+    /// entry may be re-armed, so expiry is checked per entry rather than by insertion order.
     /// </remarks>
     internal sealed class RRUnreliableRequestTable<TValue>
+        where TValue : class
     {
         private readonly struct Entry
         {
@@ -28,8 +29,7 @@ namespace Pontifex.RR.Unreliable
         }
 
         private readonly object _locker = new object();
-        private readonly Dictionary<long, Entry> _entries = new Dictionary<long, Entry>();
-        private readonly Queue<long> _expiryOrder = new Queue<long>();
+        private readonly Dictionary<ushort, Entry> _entries = new Dictionary<ushort, Entry>();
         private readonly IDateTimeProvider _timeProvider;
         private readonly TimeSpan _ttl;
 
@@ -45,58 +45,109 @@ namespace Pontifex.RR.Unreliable
             _ttl = ttl;
         }
 
-        public void Add(long requestId, TValue value)
+        /// <summary>
+        /// Adds an entry with a fresh deadline and prunes expired entries.
+        /// </summary>
+        /// <param name="requestId">The id of the entry.</param>
+        /// <param name="value">The value to store.</param>
+        /// <param name="onExpired">Invoked for every value removed while pruning expired
+        /// entries.</param>
+        public void Add(ushort requestId, TValue value, Action<TValue>? onExpired = null)
         {
             lock (_locker)
             {
                 DateTime now = _timeProvider.Now;
-                Sweep(now);
+                Sweep(now, onExpired);
                 _entries.Add(requestId, new Entry(value, now + _ttl));
-                _expiryOrder.Enqueue(requestId);
             }
         }
 
-        public bool TryTake(long requestId, out TValue value)
+        /// <summary>
+        /// Restarts the TTL of an existing entry. Does nothing when the entry is already gone.
+        /// </summary>
+        public void ReArm(ushort requestId)
         {
             lock (_locker)
             {
-                Sweep(_timeProvider.Now);
+                if (_entries.TryGetValue(requestId, out Entry entry))
+                {
+                    _entries[requestId] = new Entry(entry.Value, _timeProvider.Now + _ttl);
+                }
+            }
+        }
 
+        /// <summary>
+        /// Removes the entry with the given id.
+        /// </summary>
+        /// <param name="requestId">The id of the entry.</param>
+        /// <param name="value">The removed value, or the default when the entry was not present.</param>
+        /// <param name="expired">Whether the removed entry had already expired.</param>
+        /// <returns><see langword="true"/> when an entry was removed; otherwise
+        /// <see langword="false"/>.</returns>
+        public bool TryTake(ushort requestId, out TValue value, out bool expired)
+        {
+            lock (_locker)
+            {
                 if (_entries.TryGetValue(requestId, out Entry entry))
                 {
                     _entries.Remove(requestId);
+                    expired = entry.ExpiresAt <= _timeProvider.Now;
                     value = entry.Value;
                     return true;
                 }
 
                 value = default!;
+                expired = false;
                 return false;
             }
         }
 
         /// <summary>
-        /// Takes the entry only when its value is <paramref name="expected"/> by reference.
+        /// Removes the entry only when its value is <paramref name="expected"/> by reference.
         /// </summary>
         /// <param name="requestId">The id of the entry.</param>
         /// <param name="expected">The value that must own the entry.</param>
-        /// <param name="value">The removed value, or the default when the entry was not taken.</param>
-        /// <returns><see langword="true"/> when the entry was removed; otherwise
+        /// <param name="value">The removed value, or the default when the entry was not removed.</param>
+        /// <param name="expired">Whether the removed entry had already expired.</param>
+        /// <returns><see langword="true"/> when an entry was removed; otherwise
         /// <see langword="false"/>.</returns>
-        public bool TryTakeExact(long requestId, object expected, out TValue value)
+        public bool TryTakeExact(ushort requestId, object expected, out TValue value, out bool expired)
         {
             lock (_locker)
             {
-                Sweep(_timeProvider.Now);
-
                 if (_entries.TryGetValue(requestId, out Entry entry) &&
                     ReferenceEquals(entry.Value, expected))
                 {
                     _entries.Remove(requestId);
+                    expired = entry.ExpiresAt <= _timeProvider.Now;
                     value = entry.Value;
                     return true;
                 }
 
                 value = default!;
+                expired = false;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Removes the entry only when its value is <paramref name="expected"/> and it has already
+        /// expired.
+        /// </summary>
+        /// <returns><see langword="true"/> when an expired entry was removed; otherwise
+        /// <see langword="false"/>.</returns>
+        public bool TryReapExpired(ushort requestId, object expected)
+        {
+            lock (_locker)
+            {
+                if (_entries.TryGetValue(requestId, out Entry entry) &&
+                    ReferenceEquals(entry.Value, expected) &&
+                    entry.ExpiresAt <= _timeProvider.Now)
+                {
+                    _entries.Remove(requestId);
+                    return true;
+                }
+
                 return false;
             }
         }
@@ -118,30 +169,33 @@ namespace Pontifex.RR.Unreliable
                 }
 
                 _entries.Clear();
-                _expiryOrder.Clear();
             }
         }
 
-        private void Sweep(DateTime now)
+        private void Sweep(DateTime now, Action<TValue>? onExpired)
         {
-            while (_expiryOrder.Count > 0)
+            List<ushort>? expired = null;
+
+            foreach (KeyValuePair<ushort, Entry> pair in _entries)
             {
-                long requestId = _expiryOrder.Peek();
-
-                if (!_entries.TryGetValue(requestId, out Entry entry))
+                if (pair.Value.ExpiresAt <= now)
                 {
-                    // Already removed by TryTake.
-                    _expiryOrder.Dequeue();
-                    continue;
+                    (expired ??= new List<ushort>()).Add(pair.Key);
                 }
+            }
 
-                if (entry.ExpiresAt > now)
+            if (expired == null)
+            {
+                return;
+            }
+
+            foreach (ushort requestId in expired)
+            {
+                if (_entries.TryGetValue(requestId, out Entry entry))
                 {
-                    return;
+                    _entries.Remove(requestId);
+                    onExpired?.Invoke(entry.Value);
                 }
-
-                _expiryOrder.Dequeue();
-                _entries.Remove(requestId);
             }
         }
     }

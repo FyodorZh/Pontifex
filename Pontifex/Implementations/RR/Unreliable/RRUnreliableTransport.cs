@@ -12,7 +12,7 @@ namespace Pontifex.RR.Unreliable
     /// </summary>
     public abstract class RRUnreliableTransport : AnyTransport, IRRUnreliableTransport
     {
-        private long _lastRequestId;
+        private long _lastServerRequestId;
 
         /// <summary>
         /// Initializes a new RR unreliable transport.
@@ -78,9 +78,9 @@ namespace Pontifex.RR.Unreliable
         /// <summary>
         /// Returns the next request id of this transport.
         /// </summary>
-        protected long NextRequestId()
+        protected long NextServerRequestId()
         {
-            return Interlocked.Increment(ref _lastRequestId);
+            return Interlocked.Increment(ref _lastServerRequestId);
         }
 
         /// <summary>

@@ -32,8 +32,11 @@
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
   `IRRUnreliableTransport`, `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`,
   `IRRResponse`, `RRRequestHandler`, `RRResponse`)
+- [x] Write `RR/Specification.md` (common base) and reduce both family specifications to
+  deltas over it
 - [x] Unify the RR per-request model: per-request client handlers with `RequestId`/`Cancel` and a
   server response handle for both families
+- [x] Correlation: 16-bit request id with a random per-lifetime base and unchecked increment
 - [ ] Replace RRReliableAck and RRReliableNoAck with the RRReliable abstraction
   - [x] Stage 1: abstraction only (transport interfaces, per-request handlers, completion types,
     four-type matrix)

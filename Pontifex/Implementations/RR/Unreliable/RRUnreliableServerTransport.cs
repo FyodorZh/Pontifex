@@ -69,7 +69,7 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            if (!RRUnreliableFrame.TryDecode(frame, out long clientRequestId))
+            if (!RRUnreliableFrame.TryDecode(frame, out ushort clientRequestId))
             {
                 Log.w("{0} received a malformed request frame from {1}", Name, source);
                 frame.Release();
@@ -83,7 +83,7 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            long requestId = NextRequestId();
+            long requestId = NextServerRequestId();
             var response = new RRUnreliableResponse(
                 this,
                 requestId,

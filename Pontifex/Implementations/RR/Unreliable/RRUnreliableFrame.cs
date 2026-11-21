@@ -9,15 +9,15 @@ namespace Pontifex.RR.Unreliable
     internal static class RRUnreliableFrame
     {
         /// <summary>
-        /// Serialized size of the header: the long request id is stored as one type byte and eight value
-        /// bytes.
+        /// Serialized size of the header: the 16-bit request id is stored as one type byte and two
+        /// value bytes.
         /// </summary>
-        public const int OverheadBytes = 9;
+        public const int OverheadBytes = 3;
 
         /// <summary>
         /// Prepends <paramref name="requestId"/> to <paramref name="message"/>.
         /// </summary>
-        public static void Encode(UnionDataList message, long requestId)
+        public static void Encode(UnionDataList message, ushort requestId)
         {
             if (message == null!)
             {
@@ -32,7 +32,7 @@ namespace Pontifex.RR.Unreliable
         /// </summary>
         /// <returns><see langword="true"/> when the frame starts with a request id; otherwise
         /// <see langword="false"/>.</returns>
-        public static bool TryDecode(UnionDataList message, out long requestId)
+        public static bool TryDecode(UnionDataList message, out ushort requestId)
         {
             if (message == null!)
             {

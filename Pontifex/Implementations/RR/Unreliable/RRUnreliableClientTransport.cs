@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography;
+using System.Threading;
 using Actuarius.Memory;
 using Operarius;
 using Pontifex.Utils;
@@ -22,6 +24,7 @@ namespace Pontifex.RR.Unreliable
         private readonly IEndPoint _serverEndPoint;
         private readonly TimeSpan _requestTtl;
         private readonly RRUnreliableRequestTable<IRRUnreliableRequestHandler> _pendingResponses;
+        private long _nextRequestId;
 
         /// <summary>
         /// Initializes a new RR unreliable client transport.
@@ -52,6 +55,42 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         public TimeSpan RequestTtl => _requestTtl;
 
+        /// <summary>
+        /// Starts the carrier and selects the random 16-bit base of this client's request ids.
+        /// </summary>
+        /// <returns><see langword="true"/> when the carrier started; otherwise
+        /// <see langword="false"/>.</returns>
+        protected override bool TryStart()
+        {
+            if (!base.TryStart())
+            {
+                return false;
+            }
+
+            _nextRequestId = CreateRandomRequestId() - 1;
+            return true;
+        }
+
+        /// <summary>
+        /// Returns the next 16-bit client-local request id. The value wraps unchecked.
+        /// </summary>
+        private ushort NextRequestId()
+        {
+            return unchecked((ushort)Interlocked.Increment(ref _nextRequestId));
+        }
+
+        private static ushort CreateRandomRequestId()
+        {
+            var bytes = new byte[sizeof(ushort)];
+
+            using (RandomNumberGenerator generator = RandomNumberGenerator.Create())
+            {
+                generator.GetBytes(bytes);
+            }
+
+            return BitConverter.ToUInt16(bytes, 0);
+        }
+
         /// <inheritdoc/>
         public SendResult Request(UnionDataList request, IRRUnreliableRequestHandler handler)
         {
@@ -66,6 +105,18 @@ namespace Pontifex.RR.Unreliable
                     "The handler must derive from RRRequestHandler.", nameof(handler));
             }
 
+            if (bindable.IsBound)
+            {
+                if (bindable.RequestId is not ushort boundId ||
+                    !_pendingResponses.TryReapExpired(boundId, handler))
+                {
+                    throw new InvalidOperationException(
+                        "The handler is already bound to a pending request.");
+                }
+
+                bindable.Unbind();
+            }
+
             if (!bindable.TryReserve())
             {
                 throw new InvalidOperationException(
@@ -78,23 +129,26 @@ namespace Pontifex.RR.Unreliable
                 return failure;
             }
 
-            long requestId = NextRequestId();
+            ushort requestId = NextRequestId();
             bindable.Bind(requestId, CancelRequest);
-            _pendingResponses.Add(requestId, handler);
+            _pendingResponses.Add(requestId, handler, UnbindExpired);
             RRUnreliableFrame.Encode(request, requestId);
 
             SendResult result = SendFrame(request);
             if (result != SendResult.Ok)
             {
-                _pendingResponses.TryTakeExact(requestId, handler, out _);
+                _pendingResponses.TryTakeExact(requestId, handler, out _, out _);
                 bindable.Unbind();
                 return result;
             }
 
+            _pendingResponses.ReArm(requestId);
             return SendResult.Ok;
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Cancels the request bound to <paramref name="handler"/>.
+        /// </summary>
         private void CancelRequest(IRRRequestHandler handler)
         {
             if (handler == null!)
@@ -102,15 +156,21 @@ namespace Pontifex.RR.Unreliable
                 throw new ArgumentNullException(nameof(handler));
             }
 
-            if (!(handler is RRRequestHandler bindable) || !bindable.IsBound)
+            if (!(handler is RRRequestHandler bindable) || !bindable.IsBound ||
+                bindable.RequestId is not ushort requestId)
             {
                 return;
             }
 
-            if (_pendingResponses.TryTakeExact(handler.RequestId, handler, out _))
+            if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
             {
                 bindable.Unbind();
             }
+        }
+
+        private static void UnbindExpired(IRRUnreliableRequestHandler handler)
+        {
+            ((RRRequestHandler)handler).Unbind();
         }
 
         /// <summary>
@@ -138,14 +198,15 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            if (!RRUnreliableFrame.TryDecode(frame, out long requestId))
+            if (!RRUnreliableFrame.TryDecode(frame, out ushort requestId))
             {
                 Log.w("{0} received a malformed response frame from {1}", Name, source);
                 frame.Release();
                 return;
             }
 
-            if (!_pendingResponses.TryTake(requestId, out IRRUnreliableRequestHandler handler))
+            if (!_pendingResponses.TryTake(requestId, out IRRUnreliableRequestHandler handler,
+                    out bool expired))
             {
                 frame.Release();
                 return;
@@ -153,6 +214,13 @@ namespace Pontifex.RR.Unreliable
 
             if (!(handler is RRRequestHandler bindable))
             {
+                frame.Release();
+                return;
+            }
+
+            if (expired)
+            {
+                bindable.Unbind();
                 frame.Release();
                 return;
             }

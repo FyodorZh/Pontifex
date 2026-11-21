@@ -20,7 +20,8 @@ namespace Pontifex.RR.Unreliable
         /// <see cref="RRRequestHandler"/> and must not already be bound to another pending
         /// request.</param>
         /// <returns>The result of the send attempt. On <see cref="SendResult.Ok"/>,
-        /// <see cref="IRRRequestHandler.RequestId"/> is the client-local id of the request.</returns>
+        /// <see cref="IRRRequestHandler.RequestId"/> is the client-local request id of the
+        /// request.</returns>
         /// <exception cref="System.ArgumentNullException"><paramref name="handler"/> is
         /// <see langword="null"/>.</exception>
         /// <exception cref="System.ArgumentException"><paramref name="handler"/> does not derive from

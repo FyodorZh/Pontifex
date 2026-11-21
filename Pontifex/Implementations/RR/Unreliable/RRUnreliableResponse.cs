@@ -11,12 +11,12 @@ namespace Pontifex.RR.Unreliable
     {
         private readonly RRUnreliableServerTransport _transport;
         private readonly IEndPoint _client;
-        private readonly long _clientRequestId;
+        private readonly ushort _clientRequestId;
         private readonly DateTime _expiresAt;
         private int _closed;
 
         public RRUnreliableResponse(RRUnreliableServerTransport transport, long requestId,
-            DateTime expiresAt, IEndPoint client, long clientRequestId)
+            DateTime expiresAt, IEndPoint client, ushort clientRequestId)
             : base(requestId)
         {
             _transport = transport;
@@ -31,9 +31,9 @@ namespace Pontifex.RR.Unreliable
         public IEndPoint Client => _client;
 
         /// <summary>
-        /// Gets the client-local id that the response frame must carry back.
+        /// Gets the 16-bit client-local request id that the response frame must carry back.
         /// </summary>
-        public long ClientRequestId => _clientRequestId;
+        public ushort ClientRequestId => _clientRequestId;
 
         /// <summary>
         /// Gets the moment after which the handle no longer answers.

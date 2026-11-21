@@ -57,7 +57,7 @@ public sealed class RRUnreliableUdpRoundTripTests
             request.PutLast(42);
 
             Assert.That(client.Request(request, clientHandler), Is.EqualTo(SendResult.Ok));
-            Assert.That(clientHandler.RequestId, Is.EqualTo(1));
+            Assert.That(clientHandler.RequestId, Is.Not.Null);
 
             Assert.That(serverHandler.RequestedSignal.Wait(Timeout), Is.True,
                 "the server must receive the request");

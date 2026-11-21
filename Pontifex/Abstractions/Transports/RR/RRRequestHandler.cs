@@ -14,11 +14,18 @@ namespace Pontifex.RR
     public abstract class RRRequestHandler : IRRRequestHandler
     {
         private Action<IRRRequestHandler>? _cancel;
-        private long _requestId = -1L;
+        private int _requestId = -1;
         private int _bound;
 
         /// <inheritdoc/>
-        public long RequestId => Interlocked.Read(ref _requestId);
+        public ushort? RequestId
+        {
+            get
+            {
+                int requestId = Volatile.Read(ref _requestId);
+                return requestId < 0 ? null : (ushort)requestId;
+            }
+        }
 
         /// <inheritdoc/>
         public void Cancel()
@@ -47,9 +54,9 @@ namespace Pontifex.RR
         /// <summary>
         /// Completes the reservation and publishes the request id and the cancellation operation.
         /// </summary>
-        internal void Bind(long requestId, Action<IRRRequestHandler> cancel)
+        internal void Bind(ushort requestId, Action<IRRRequestHandler> cancel)
         {
-            Interlocked.Exchange(ref _requestId, requestId);
+            Volatile.Write(ref _requestId, requestId);
             Volatile.Write(ref _cancel, cancel);
         }
 

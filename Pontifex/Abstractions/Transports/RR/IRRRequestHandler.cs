@@ -5,17 +5,18 @@ namespace Pontifex.RR
     /// </summary>
     /// <remarks>
     /// The transport binds the handler to one request. While the handler is bound,
-    /// <see cref="RequestId"/> is the client-local id of that request and <see cref="Cancel"/>
+    /// <see cref="RequestId"/> is the client-local request id of that request and <see cref="Cancel"/>
     /// cancels it. Both members are supplied by <see cref="RRRequestHandler"/>; a transport rejects
     /// a handler that does not derive from it.
     /// </remarks>
     public interface IRRRequestHandler : IHandler
     {
         /// <summary>
-        /// Gets the client-local id of the request the handler is bound to, or the id of the request
-        /// it was last bound to. The value is <c>-1</c> before the first successful binding.
+        /// Gets the client-local request id of the request the handler is bound to, the id of the
+        /// request it was last bound to, or <see langword="null"/> before the first successful
+        /// binding.
         /// </summary>
-        long RequestId { get; }
+        ushort? RequestId { get; }
 
         /// <summary>
         /// Cancels the request currently bound to this handler, if any.
