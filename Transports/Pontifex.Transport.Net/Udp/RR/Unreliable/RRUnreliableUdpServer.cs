@@ -8,24 +8,24 @@ using Pontifex.NetSockets;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.RR.Unreliable.NoAck.Udp
+namespace Pontifex.RR.Unreliable.Udp
 {
-    internal sealed class RRUnreliableNoAckUdpServer : AnyTransport, IRRUnreliableNoAckServer
+    internal sealed class RRUnreliableUdpServer : AnyTransport, IRRUnreliableServer
     {
         private IPEndPoint mLocalEndPoint;
 
         private UdpReceiver? mReceiver;
         private UdpAsyncSender? mSender;
 
-        private volatile IRRUnreliableNoAckServerHandler? mHandler;
+        private volatile IRRUnreliableServerHandler? mHandler;
 
         private Socket? mSocket;
 
         private readonly TemporaryMap<EndPoint, IpEndPoint> mEPointsMap = new (UtcNowDateTimeProvider.Instance, TimeSpan.FromSeconds(10));
 
-        public override TransportType Type => TransportType.RRUnreliableNoAck;
+        public override TransportType Type => TransportType.RRUnreliable;
         
-        public RRUnreliableNoAckUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
+        public RRUnreliableUdpServer(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
             : base(RRUdpInfo.TransportName + "_rr", logger, memory)
         {
             mLocalEndPoint = new IPEndPoint(ipAddress, port);
@@ -43,7 +43,7 @@ namespace Pontifex.RR.Unreliable.NoAck.Udp
             }
         }
 
-        bool IRRUnreliableNoAckServer.Init(IRRUnreliableNoAckServerHandler handler)
+        bool IRRUnreliableServer.Init(IRRUnreliableServerHandler handler)
         {
             mHandler = handler;
             return (handler != null!);
@@ -152,7 +152,7 @@ namespace Pontifex.RR.Unreliable.NoAck.Udp
             }
         }
 
-        SendResult IRRUnreliableNoAckServer.Send(IEndPoint client, UnionDataList message)
+        SendResult IRRUnreliableServer.Send(IEndPoint client, UnionDataList message)
         {
             if (message == null!)
             {

@@ -8,14 +8,14 @@ using Pontifex.Utils;
 using Scriba;
 using Transport.Utils;
 
-namespace Pontifex.RR.Unreliable.NoAck.Udp
+namespace Pontifex.RR.Unreliable.Udp
 {
-    internal sealed class RRUnreliableNoAckUdpClient : AnyTransport, IRRUnreliableNoAckClient, IRRUnreliableNoAckServerEndpoint
+    internal sealed class RRUnreliableUdpClient : AnyTransport, IRRUnreliableClient, IRRUnreliableServerEndpoint
     {
         private readonly IPEndPoint mRemoteEndPoint;
         private readonly IEndPoint mManagedRemoteEndPoint;
 
-        private IRRUnreliableNoAckClientHandler? mHandler;
+        private IRRUnreliableClientHandler? mHandler;
 
         private UdpSyncSender? mSender;
         private UdpReceiver? mReceiver;
@@ -24,9 +24,9 @@ namespace Pontifex.RR.Unreliable.NoAck.Udp
 
         private readonly TrafficCollectorSlim mTrafficCollector = new TrafficCollectorSlim(RRUdpInfo.TransportName, UtcNowDateTimeProvider.Instance);
 
-        public override TransportType Type => TransportType.RRUnreliableNoAck;
+        public override TransportType Type => TransportType.RRUnreliable;
         
-        public RRUnreliableNoAckUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
+        public RRUnreliableUdpClient(IPAddress ipAddress, int port, ILogger logger, IMemoryRental memory)
             :base(RRUdpInfo.TransportName + "_rr", logger, memory)
         {
             mRemoteEndPoint = new IPEndPoint(ipAddress, port);
@@ -34,7 +34,7 @@ namespace Pontifex.RR.Unreliable.NoAck.Udp
             //AppendControl(mTrafficCollector);
         }
 
-        bool IRRUnreliableNoAckClient.Init(IRRUnreliableNoAckClientHandler handler)
+        bool IRRUnreliableClient.Init(IRRUnreliableClientHandler handler)
         {
             if (handler == null!)
             {
@@ -177,7 +177,7 @@ namespace Pontifex.RR.Unreliable.NoAck.Udp
             }
         }
 
-        SendResult IRRUnreliableNoAckServerEndpoint.Send(UnionDataList message)
+        SendResult IRRUnreliableServerEndpoint.Send(UnionDataList message)
         {
             if (message == null!)
             {

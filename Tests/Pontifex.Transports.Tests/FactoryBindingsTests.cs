@@ -11,7 +11,7 @@ using Pontifex.Raw.Reliable.Tcp;
 using Pontifex.Raw.Reliable.Zip;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.Raw.Unreliable.Udp;
-using Pontifex.RR.Unreliable.NoAck.Udp;
+using Pontifex.RR.Unreliable.Udp;
 using Pontifex.Utils;
 using Scriba;
 using FormulaRegistry = Pontifex.TransportFormula.Registry;
@@ -29,7 +29,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
-        Case(Registration.TransportRole.Server, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
+        Case(Registration.TransportRole.Server, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Server, "zip(tcp(\"127.0.0.1\", 9000), compression_level = 9)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
@@ -38,7 +38,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
-        Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliableNoAck),
+        Case(Registration.TransportRole.Client, "udp_rr(\"127.0.0.1\", 9000)", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Client, "zip(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "reconnectable(30, tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable)
@@ -77,8 +77,8 @@ public sealed class FactoryBindingsTests
             factory.Canonicalize("TCP(\"127.0.0.1\", 9000)"),
             Is.EqualTo("tcp(127.0.0.1, 9000)"));
         Assert.That(
-            factory.Canonicalize("UDP(\"127.0.0.1\", 9000) AS RRUnreliableNoAck"),
-            Is.EqualTo("udp(127.0.0.1, 9000) as RRUnreliableNoAck"));
+            factory.Canonicalize("UDP(\"127.0.0.1\", 9000) AS RRUnreliable"),
+            Is.EqualTo("udp(127.0.0.1, 9000) as RRUnreliable"));
         Assert.That(
             factory.Canonicalize("ZIP(TCP(\"127.0.0.1\", 9000), compression_level = 1)"),
             Is.EqualTo("zip(tcp(127.0.0.1, 9000), compression_level=1)"));
@@ -173,7 +173,7 @@ public sealed class FactoryBindingsTests
         builder.RegisterTransport(RawUnreliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableUdpBinding.CreateRegistration());
-        builder.RegisterTransport(RRUnreliableNoAckUdpBinding.CreateRegistration());
+        builder.RegisterTransport(RRUnreliableUdpBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableZipBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableReconnectableBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableLoggerBinding.CreateRegistration());

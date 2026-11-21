@@ -1,12 +1,12 @@
 using Pontifex.Factory.Registration;
 using Pontifex.NetSockets;
 
-namespace Pontifex.RR.Unreliable.NoAck.Udp
+namespace Pontifex.RR.Unreliable.Udp
 {
     /// <summary>
-    /// Factory binding for the RR UDP unreliable NoAck transport.
+    /// Factory binding for the RR UDP unreliable transport.
     /// </summary>
-    public static class RRUnreliableNoAckUdpBinding
+    public static class RRUnreliableUdpBinding
     {
         public const string SchemeName = RRUdpInfo.TransportName + "_rr";
         public const string LegacyAlias = RRUdpInfo.TransportName;
@@ -15,7 +15,7 @@ namespace Pontifex.RR.Unreliable.NoAck.Udp
         {
             return new TransportRegistration(
                 SchemeName,
-                TransportType.RRUnreliableNoAck,
+                TransportType.RRUnreliable,
                 new TransportParameter[]
                 {
                     NetBindingSupport.HostParameter(),
@@ -29,8 +29,8 @@ namespace Pontifex.RR.Unreliable.NoAck.Udp
         {
             NetBindingSupport.ResolveAddress(context, out var ipAddress, out var port);
             return context.Role == TransportRole.Server
-                ? new RRUnreliableNoAckUdpServer(ipAddress, port, context.Logger, context.Memory)
-                : new RRUnreliableNoAckUdpClient(ipAddress, port, context.Logger, context.Memory);
+                ? new RRUnreliableUdpServer(ipAddress, port, context.Logger, context.Memory)
+                : new RRUnreliableUdpClient(ipAddress, port, context.Logger, context.Memory);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace Pontifex.RR.Unreliable.NoAck.Udp
+﻿namespace Pontifex.RR.Unreliable.Udp
 {
     internal static class RRUdpInfo
     {

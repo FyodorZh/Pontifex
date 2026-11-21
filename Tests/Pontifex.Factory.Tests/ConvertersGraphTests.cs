@@ -38,7 +38,7 @@ public sealed class ConvertersGraphTests
         Array values = Enum.GetValues(typeof(TransportType));
         TransportType highest = (TransportType)values.GetValue(values.Length - 1)!;
 
-        Assert.That(highest, Is.EqualTo(TransportType.RRUnreliableNoAck));
+        Assert.That(highest, Is.EqualTo(TransportType.RRUnreliable));
 
         foreach (TransportType type in values)
         {
@@ -55,7 +55,7 @@ public sealed class ConvertersGraphTests
     {
         Assert.That(
             ConvertersGraph.Default.HasPath(
-                TransportType.RRUnreliableNoAck,
+                TransportType.RRUnreliable,
                 TransportType.RawReliable,
                 out int length),
             Is.False);

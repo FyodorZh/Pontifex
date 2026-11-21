@@ -11,7 +11,7 @@ internal static class RegistryTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliable;
     public static readonly TransportType TypeB = TransportType.RawUnreliable;
-    public static readonly TransportType TypeC = TransportType.RRUnreliableAck;
+    public static readonly TransportType TypeC = TransportType.RRReliableNoAck;
     public static readonly TransportType UnregisteredType = TransportType.RRReliableAck;
 
     public static TransportTypeInfo TypeInfo(TransportType type, string canonicalName)
