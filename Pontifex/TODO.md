@@ -26,10 +26,13 @@
   - [x] Stage 1: formal refactoring (request/response API, request ids, TTLs, carrier-agnostic core)
   - [x] Extract shared lifecycle into `RRUnreliableTransport<THandler>` (handler base, `Init`,
     start/stop template, dispatch gate)
-  - [ ] Stage 2: strict specification and conformance tests
+  - [x] Stage 2a: `Specification.md` written
+  - [ ] Stage 2b: align the implementation with the specification (failed-start handler callbacks,
+    `OnResponded`/`OnRequested` exception policy, client source filtering) and add conformance tests
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
   `IRRUnreliableTransport`)
 - [ ] Replace RRReliableAck and RRReliableNoAck with the RRReliable abstraction
   - [x] Stage 1: abstraction only (transport interfaces, per-request handlers, completion types,
     four-type matrix)
-  - [ ] Stage 2: unified implementations, TTLs, strict specification and tests
+  - [x] Stage 2a: `Specification.md` written; TTL getters added
+  - [ ] Stage 2b: unified implementations and conformance tests

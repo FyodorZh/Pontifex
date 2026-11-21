@@ -1,3 +1,5 @@
+using System;
+
 namespace Pontifex.RR.Reliable
 {
     /// <summary>
@@ -6,6 +8,12 @@ namespace Pontifex.RR.Reliable
     /// </summary>
     public interface IRRReliableServerTransport : IRRReliableTransport
     {
+        /// <summary>
+        /// Gets the maximum time a response stream may remain open after
+        /// <see cref="IRRReliableServerHandler.OnRequested"/> accepts the request.
+        /// </summary>
+        TimeSpan ResponseTtl { get; }
+
         /// <summary>
         /// Binds the application handler before the transport is started.
         /// </summary>

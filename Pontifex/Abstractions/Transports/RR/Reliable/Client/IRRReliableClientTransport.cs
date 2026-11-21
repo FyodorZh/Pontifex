@@ -1,3 +1,4 @@
+using System;
 using Pontifex.Utils;
 
 namespace Pontifex.RR.Reliable
@@ -8,6 +9,12 @@ namespace Pontifex.RR.Reliable
     /// </summary>
     public interface IRRReliableClientTransport : IRRReliableTransport
     {
+        /// <summary>
+        /// Gets the maximum time a request may remain pending after
+        /// <see cref="Request"/> returns <see cref="SendResult.Ok"/>.
+        /// </summary>
+        TimeSpan RequestTtl { get; }
+
         /// <summary>
         /// Prepares the client before it is started.
         /// </summary>
