@@ -10,37 +10,18 @@ namespace Pontifex.RR.Unreliable
     /// Base class for RR unreliable server transports.
     /// </summary>
     /// <remarks>
-    /// The class owns the server request mechanics: server-global request ids, the pending-response
-    /// routes, and the request dispatch. The lifecycle is inherited from
+    /// The class owns the server request mechanics: server-global request ids, response handles, and the
+    /// request dispatch. The lifecycle is inherited from
     /// <see cref="RRUnreliableTransport{THandler}"/>; a carrier supplies the datagram transport through
-    /// <see cref="RRUnreliableTransport{THandler}.StartCarrier"/>,
-    /// <see cref="RRUnreliableTransport{THandler}.StopCarrier"/>, and <see cref="SendFrame"/> and reports
+    /// <see cref="RRUnreliableTransport.StartCarrier"/>,
+    /// <see cref="RRUnreliableTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
     public abstract class RRUnreliableServerTransport
         : RRUnreliableTransport<IRRUnreliableServerHandler>, IRRUnreliableServerTransport
     {
-        private readonly struct PendingResponse
-        {
-            public PendingResponse(IEndPoint client, long clientRequestId)
-            {
-                Client = client;
-                ClientRequestId = clientRequestId;
-            }
-
-            /// <summary>
-            /// The route that received the request.
-            /// </summary>
-            public IEndPoint Client { get; }
-
-            /// <summary>
-            /// The client-local id that the response frame must carry back.
-            /// </summary>
-            public long ClientRequestId { get; }
-        }
-
-        private readonly RRUnreliableRequestTable<PendingResponse> _pendingResponses;
         private readonly TimeSpan _responseTtl;
+        private readonly IDateTimeProvider _timeProvider;
 
         /// <summary>
         /// Initializes a new RR unreliable server transport.
@@ -56,32 +37,17 @@ namespace Pontifex.RR.Unreliable
             IMemoryRental memory, IDateTimeProvider? timeProvider = null)
             : base(typeName, logger, memory)
         {
+            if (responseTtl <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(responseTtl), "The TTL must be positive.");
+            }
+
             _responseTtl = responseTtl;
-            _pendingResponses = new RRUnreliableRequestTable<PendingResponse>(
-                timeProvider ?? UtcNowDateTimeProvider.Instance,
-                responseTtl);
+            _timeProvider = timeProvider ?? UtcNowDateTimeProvider.Instance;
         }
 
         /// <inheritdoc/>
         public TimeSpan ResponseTtl => _responseTtl;
-
-        /// <inheritdoc/>
-        public SendResult Response(long requestId, UnionDataList response)
-        {
-            if (!TryValidatePayload(response, SendResult.Error, out SendResult failure))
-            {
-                return failure;
-            }
-
-            if (!_pendingResponses.TryTake(requestId, out PendingResponse route))
-            {
-                response.Release();
-                return SendResult.InvalidAddress;
-            }
-
-            RRUnreliableFrame.Encode(response, route.ClientRequestId);
-            return SendFrame(route.Client, response);
-        }
 
         /// <summary>
         /// Sends one encoded frame to <paramref name="destination"/>.
@@ -90,12 +56,6 @@ namespace Pontifex.RR.Unreliable
         /// <param name="frame">The frame to send. The implementation owns it and must release it on every
         /// path.</param>
         protected abstract SendResult SendFrame(IEndPoint destination, UnionDataList frame);
-
-        /// <inheritdoc/>
-        protected sealed override void ClearPendingRequests()
-        {
-            _pendingResponses.Clear();
-        }
 
         /// <summary>
         /// Handles one inbound datagram received by the concrete carrier.
@@ -124,12 +84,70 @@ namespace Pontifex.RR.Unreliable
             }
 
             long requestId = NextRequestId();
-            _pendingResponses.Add(requestId, new PendingResponse(source, clientRequestId));
+            var response = new RRUnreliableResponse(
+                this,
+                requestId,
+                _timeProvider.Now + _responseTtl,
+                source,
+                clientRequestId);
 
-            if (!handler.OnRequested(requestId, source, frame))
+            bool accepted;
+            try
             {
-                _pendingResponses.TryTake(requestId, out _);
+                accepted = handler.OnRequested(source, frame, response);
             }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                accepted = false;
+            }
+
+            if (!accepted)
+            {
+                response.Close();
+            }
+        }
+
+        /// <summary>
+        /// Sends the single response held by <paramref name="response"/>.
+        /// </summary>
+        /// <param name="response">The response handle that owns the route.</param>
+        /// <param name="payload">The response payload. The method owns it.</param>
+        /// <returns>The result of the send attempt.</returns>
+        internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload)
+        {
+            if (response.IsClosed || !IsStarted)
+            {
+                payload?.Release();
+                return SendResult.Error;
+            }
+
+            if (payload == null!)
+            {
+                return SendResult.InvalidMessage;
+            }
+
+            if (payload.GetDataSize() > MessageMaxByteSize)
+            {
+                payload.Release();
+                return SendResult.MessageTooBig;
+            }
+
+            if (_timeProvider.Now > response.ExpiresAt)
+            {
+                response.Close();
+                payload.Release();
+                return SendResult.Error;
+            }
+
+            if (!response.TryClose())
+            {
+                payload.Release();
+                return SendResult.Error;
+            }
+
+            RRUnreliableFrame.Encode(payload, response.ClientRequestId);
+            return SendFrame(response.Client, payload);
         }
     }
 }

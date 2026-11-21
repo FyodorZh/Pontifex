@@ -7,9 +7,11 @@ namespace Pontifex.RR.Reliable
     /// </summary>
     /// <remarks>
     /// Callbacks for one handler are serialized. Different requests may complete concurrently. A
-    /// completed handler may be reused for a new request.
+    /// completed handler may be reused for a new request. Derive from <see cref="RRRequestHandler"/>,
+    /// which supplies <see cref="IRRRequestHandler.RequestId"/> and
+    /// <see cref="IRRRequestHandler.Cancel"/>.
     /// </remarks>
-    public interface IRRReliableRequestHandler : IHandler
+    public interface IRRReliableRequestHandler : IRRRequestHandler
     {
         /// <summary>
         /// Called for a response of the request. Multiple responses are allowed before

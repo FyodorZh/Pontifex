@@ -1,37 +1,32 @@
-using System;
 using Pontifex.Utils;
 
 namespace Pontifex.RR.Unreliable
 {
     /// <summary>
-    /// Client half of the RR unreliable contract: sends requests to a fixed server and receives the
-    /// responses that are matched to them by request id.
+    /// Client half of the RR unreliable contract: sends requests to a fixed server and receives at most
+    /// one response per request through the request's own handler.
     /// </summary>
-    public interface IRRUnreliableClientTransport : IRRUnreliableTransport
+    /// <remarks>
+    /// The client binds no transport-level handler and has no initialization step; it is ready for
+    /// <see cref="ITransport.Start"/> after construction.
+    /// </remarks>
+    public interface IRRUnreliableClientTransport : IRRClientTransport
     {
         /// <summary>
-        /// Gets the fixed route of the server this client sends to.
-        /// </summary>
-        IEndPoint ServerEndPoint { get; }
-
-        /// <summary>
-        /// Gets how long the client accepts a response after it accepted the request.
-        /// </summary>
-        TimeSpan RequestTtl { get; }
-
-        /// <summary>
-        /// Binds the application handler before the transport is started.
-        /// </summary>
-        /// <param name="handler">The handler that receives the response callbacks.</param>
-        /// <returns><see langword="true"/> if the handler was bound; otherwise <see langword="false"/>.</returns>
-        bool Init(IRRUnreliableClientHandler handler);
-
-        /// <summary>
-        /// Sends <paramref name="request"/> to the server and returns the id that matches its response.
+        /// Sends <paramref name="request"/> to the server and binds <paramref name="handler"/> to it.
         /// </summary>
         /// <param name="request">The request payload. The transport owns it after the call.</param>
-        /// <param name="requestId">The client-local id of the request, or <c>-1</c> when the call fails.</param>
-        /// <returns>The result of the send attempt.</returns>
-        SendResult Request(UnionDataList request, out long requestId);
+        /// <param name="handler">The handler of this request. It must derive from
+        /// <see cref="RRRequestHandler"/> and must not already be bound to another pending
+        /// request.</param>
+        /// <returns>The result of the send attempt. On <see cref="SendResult.Ok"/>,
+        /// <see cref="IRRRequestHandler.RequestId"/> is the client-local id of the request.</returns>
+        /// <exception cref="System.ArgumentNullException"><paramref name="handler"/> is
+        /// <see langword="null"/>.</exception>
+        /// <exception cref="System.ArgumentException"><paramref name="handler"/> does not derive from
+        /// <see cref="RRRequestHandler"/>.</exception>
+        /// <exception cref="System.InvalidOperationException"><paramref name="handler"/> is already
+        /// bound to a pending request.</exception>
+        SendResult Request(UnionDataList request, IRRUnreliableRequestHandler handler);
     }
 }

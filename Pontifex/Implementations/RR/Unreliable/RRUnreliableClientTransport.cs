@@ -11,18 +11,17 @@ namespace Pontifex.RR.Unreliable
     /// </summary>
     /// <remarks>
     /// The class owns the client request mechanics: the fixed server route, client-local request ids,
-    /// the pending-request window, and the response dispatch. The lifecycle is inherited from
-    /// <see cref="RRUnreliableTransport{THandler}"/>; a carrier supplies the datagram transport through
-    /// <see cref="RRUnreliableTransport{THandler}.StartCarrier"/>,
-    /// <see cref="RRUnreliableTransport{THandler}.StopCarrier"/>, and <see cref="SendFrame"/> and reports
+    /// the per-request handler binding, the pending-request window, and the response dispatch. The
+    /// lifecycle is inherited from <see cref="RRUnreliableTransport"/>; a carrier supplies the datagram
+    /// transport through <see cref="RRUnreliableTransport.StartCarrier"/>,
+    /// <see cref="RRUnreliableTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
-    public abstract class RRUnreliableClientTransport
-        : RRUnreliableTransport<IRRUnreliableClientHandler>, IRRUnreliableClientTransport
+    public abstract class RRUnreliableClientTransport : RRUnreliableTransport, IRRUnreliableClientTransport
     {
         private readonly IEndPoint _serverEndPoint;
         private readonly TimeSpan _requestTtl;
-        private readonly RRUnreliableRequestTable<byte> _pendingResponses;
+        private readonly RRUnreliableRequestTable<IRRUnreliableRequestHandler> _pendingResponses;
 
         /// <summary>
         /// Initializes a new RR unreliable client transport.
@@ -42,7 +41,7 @@ namespace Pontifex.RR.Unreliable
         {
             _serverEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
             _requestTtl = requestTtl;
-            _pendingResponses = new RRUnreliableRequestTable<byte>(
+            _pendingResponses = new RRUnreliableRequestTable<IRRUnreliableRequestHandler>(
                 timeProvider ?? UtcNowDateTimeProvider.Instance,
                 requestTtl);
         }
@@ -54,28 +53,64 @@ namespace Pontifex.RR.Unreliable
         public TimeSpan RequestTtl => _requestTtl;
 
         /// <inheritdoc/>
-        public SendResult Request(UnionDataList request, out long requestId)
+        public SendResult Request(UnionDataList request, IRRUnreliableRequestHandler handler)
         {
-            requestId = -1;
+            if (handler == null!)
+            {
+                throw new ArgumentNullException(nameof(handler));
+            }
+
+            if (!(handler is RRRequestHandler bindable))
+            {
+                throw new ArgumentException(
+                    "The handler must derive from RRRequestHandler.", nameof(handler));
+            }
+
+            if (!bindable.TryReserve())
+            {
+                throw new InvalidOperationException(
+                    "The handler is already bound to a pending request.");
+            }
 
             if (!TryValidatePayload(request, SendResult.NotConnected, out SendResult failure))
             {
+                bindable.Unbind();
                 return failure;
             }
 
-            long id = NextRequestId();
-            _pendingResponses.Add(id, 0);
-            RRUnreliableFrame.Encode(request, id);
+            long requestId = NextRequestId();
+            bindable.Bind(requestId, CancelRequest);
+            _pendingResponses.Add(requestId, handler);
+            RRUnreliableFrame.Encode(request, requestId);
 
             SendResult result = SendFrame(request);
             if (result != SendResult.Ok)
             {
-                _pendingResponses.TryTake(id, out _);
+                _pendingResponses.TryTakeExact(requestId, handler, out _);
+                bindable.Unbind();
                 return result;
             }
 
-            requestId = id;
             return SendResult.Ok;
+        }
+
+        /// <inheritdoc/>
+        private void CancelRequest(IRRRequestHandler handler)
+        {
+            if (handler == null!)
+            {
+                throw new ArgumentNullException(nameof(handler));
+            }
+
+            if (!(handler is RRRequestHandler bindable) || !bindable.IsBound)
+            {
+                return;
+            }
+
+            if (_pendingResponses.TryTakeExact(handler.RequestId, handler, out _))
+            {
+                bindable.Unbind();
+            }
         }
 
         /// <summary>
@@ -88,7 +123,7 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         protected sealed override void ClearPendingRequests()
         {
-            _pendingResponses.Clear();
+            _pendingResponses.Clear(handler => ((RRRequestHandler)handler).Unbind());
         }
 
         /// <summary>
@@ -110,14 +145,13 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            if (!_pendingResponses.TryTake(requestId, out _))
+            if (!_pendingResponses.TryTake(requestId, out IRRUnreliableRequestHandler handler))
             {
                 frame.Release();
                 return;
             }
 
-            IRRUnreliableClientHandler? handler = DispatchHandler;
-            if (handler == null)
+            if (!(handler is RRRequestHandler bindable))
             {
                 frame.Release();
                 return;
@@ -125,11 +159,15 @@ namespace Pontifex.RR.Unreliable
 
             try
             {
-                handler.OnResponded(requestId, frame);
+                handler.Response(frame);
             }
             catch (Exception ex)
             {
-                FailException($"{handler.GetType()}.OnResponded()", ex);
+                Log.wtf(ex);
+            }
+            finally
+            {
+                bindable.Unbind();
             }
         }
     }

@@ -7,16 +7,11 @@ using Scriba;
 namespace Pontifex.RR.Unreliable
 {
     /// <summary>
-    /// Common lifecycle of the RR unreliable transports: handler binding, carrier start and stop, and
-    /// the handler dispatch gate.
+    /// Common lifecycle of the RR unreliable transports: carrier start and stop, payload validation, and
+    /// request-id allocation.
     /// </summary>
-    /// <typeparam name="THandler">The role-specific handler type.</typeparam>
-    public abstract class RRUnreliableTransport<THandler> : AnyTransport, IRRUnreliableTransport
-        where THandler : class, IRRUnreliableHandler
+    public abstract class RRUnreliableTransport : AnyTransport, IRRUnreliableTransport
     {
-        private THandler? _handler;
-        private volatile bool _handlerStarted;
-        private bool _initialized;
         private long _lastRequestId;
 
         /// <summary>
@@ -41,12 +36,6 @@ namespace Pontifex.RR.Unreliable
         /// request-id header.
         /// </summary>
         protected int FrameMaxByteSize => MessageMaxByteSize + RRUnreliableFrame.OverheadBytes;
-
-        /// <summary>
-        /// Gets the handler that may receive callbacks, or <see langword="null"/> before
-        /// <see cref="Started"/> has completed.
-        /// </summary>
-        protected THandler? DispatchHandler => _handlerStarted ? _handler : null;
 
         /// <summary>
         /// Validates an outbound payload and releases it on failure.
@@ -86,27 +75,6 @@ namespace Pontifex.RR.Unreliable
             return true;
         }
 
-        /// <inheritdoc/>
-        public bool Init(THandler handler)
-        {
-            if (handler == null!)
-            {
-                throw new ArgumentNullException(nameof(handler));
-            }
-
-            lock (_locker)
-            {
-                if (_initialized || HasStartBeenAttempted || !IsValid)
-                {
-                    return false;
-                }
-
-                _initialized = true;
-                _handler = handler;
-                return true;
-            }
-        }
-
         /// <summary>
         /// Returns the next request id of this transport.
         /// </summary>
@@ -130,7 +98,94 @@ namespace Pontifex.RR.Unreliable
         /// <summary>
         /// Clears the role-specific pending state. Called once while the transport stops.
         /// </summary>
-        protected abstract void ClearPendingRequests();
+        protected virtual void ClearPendingRequests()
+        {
+        }
+
+        /// <inheritdoc/>
+        protected override bool TryStart()
+        {
+            try
+            {
+                return StartCarrier();
+            }
+            catch (Exception ex)
+            {
+                FailException("StartCarrier", ex);
+                return false;
+            }
+        }
+
+        /// <inheritdoc/>
+        protected override void OnStarted()
+        {
+            // DO NOTHING
+        }
+
+        /// <inheritdoc/>
+        protected override void OnStopped(StopReason reason)
+        {
+            ClearPendingRequests();
+
+            try
+            {
+                StopCarrier(reason);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+            }
+        }
+    }
+
+    /// <summary>
+    /// RR unreliable transport with an application handler bound before the start.
+    /// </summary>
+    /// <typeparam name="THandler">The role-specific handler type.</typeparam>
+    public abstract class RRUnreliableTransport<THandler> : RRUnreliableTransport
+        where THandler : class, IRRUnreliableHandler
+    {
+        private THandler? _handler;
+        private volatile bool _handlerStarted;
+        private bool _initialized;
+
+        /// <summary>
+        /// Initializes a new RR unreliable transport with a bound handler.
+        /// </summary>
+        /// <param name="typeName">The name of the concrete transport.</param>
+        /// <param name="logger">The logging system used by the transport.</param>
+        /// <param name="memory">The memory rental system used to rent buffers.</param>
+        protected RRUnreliableTransport(string typeName, ILogger logger, IMemoryRental memory)
+            : base(typeName, logger, memory)
+        {
+        }
+
+        /// <summary>
+        /// Gets the handler that may receive callbacks, or <see langword="null"/> before
+        /// <see cref="Started"/> has completed.
+        /// </summary>
+        protected THandler? DispatchHandler => _handlerStarted ? _handler : null;
+
+        /// <inheritdoc/>
+        public bool Init(THandler handler)
+        {
+            if (handler == null!)
+            {
+                throw new ArgumentNullException(nameof(handler));
+            }
+
+            lock (_locker)
+            {
+                if (_initialized || HasStartBeenAttempted || !IsValid)
+                {
+                    return false;
+                }
+
+                _initialized = true;
+                _handler = handler;
+                return true;
+            }
+        }
 
         /// <inheritdoc/>
         protected sealed override bool TryStart()
@@ -141,18 +196,7 @@ namespace Pontifex.RR.Unreliable
                 return false;
             }
 
-            bool carrierStarted;
-            try
-            {
-                carrierStarted = StartCarrier();
-            }
-            catch (Exception ex)
-            {
-                FailException("StartCarrier", ex);
-                return false;
-            }
-
-            if (!carrierStarted)
+            if (!base.TryStart())
             {
                 return false;
             }
@@ -169,12 +213,6 @@ namespace Pontifex.RR.Unreliable
 
             _handlerStarted = true;
             return true;
-        }
-
-        /// <inheritdoc/>
-        protected sealed override void OnStarted()
-        {
-            // DO NOTHING
         }
 
         /// <inheritdoc/>
@@ -196,16 +234,7 @@ namespace Pontifex.RR.Unreliable
                 }
             }
 
-            ClearPendingRequests();
-
-            try
-            {
-                StopCarrier(reason);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-            }
+            base.OnStopped(reason);
         }
     }
 }

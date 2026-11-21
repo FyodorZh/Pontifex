@@ -74,10 +74,49 @@ namespace Pontifex.RR.Unreliable
             }
         }
 
-        public void Clear()
+        /// <summary>
+        /// Takes the entry only when its value is <paramref name="expected"/> by reference.
+        /// </summary>
+        /// <param name="requestId">The id of the entry.</param>
+        /// <param name="expected">The value that must own the entry.</param>
+        /// <param name="value">The removed value, or the default when the entry was not taken.</param>
+        /// <returns><see langword="true"/> when the entry was removed; otherwise
+        /// <see langword="false"/>.</returns>
+        public bool TryTakeExact(long requestId, object expected, out TValue value)
         {
             lock (_locker)
             {
+                Sweep(_timeProvider.Now);
+
+                if (_entries.TryGetValue(requestId, out Entry entry) &&
+                    ReferenceEquals(entry.Value, expected))
+                {
+                    _entries.Remove(requestId);
+                    value = entry.Value;
+                    return true;
+                }
+
+                value = default!;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Removes every entry.
+        /// </summary>
+        /// <param name="onRemoved">Invoked for every removed value while the table is locked.</param>
+        public void Clear(Action<TValue>? onRemoved = null)
+        {
+            lock (_locker)
+            {
+                if (onRemoved != null)
+                {
+                    foreach (Entry entry in _entries.Values)
+                    {
+                        onRemoved(entry.Value);
+                    }
+                }
+
                 _entries.Clear();
                 _expiryOrder.Clear();
             }

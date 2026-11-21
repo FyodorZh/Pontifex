@@ -43,27 +43,46 @@ public interface IRRTransport : ITransport
     int MessageMaxByteSize { get; }
 }
 
+public interface IRRRequestHandler : IHandler
+{
+    long RequestId { get; }
+    void Cancel();
+}
+
+public interface IRRResponse
+{
+    long RequestId { get; }
+    SendResult Response(UnionDataList response);
+}
+
+public interface IRRClientTransport : IRRTransport
+{
+    IEndPoint ServerEndPoint { get; }
+    TimeSpan RequestTtl { get; }
+}
+
+public interface IRRServerTransport : IRRTransport
+{
+    TimeSpan ResponseTtl { get; }
+}
+
 public interface IRRReliableTransport : IRRTransport
 {
 }
 
-public interface IRRReliableClientTransport : IRRReliableTransport
+public interface IRRReliableClientTransport : IRRClientTransport
 {
-    IEndPoint ServerEndPoint { get; }
-    TimeSpan RequestTtl { get; }
     SendResult Request(UnionDataList request, IRRReliableRequestHandler handler);
-    void CancelRequest(IRRReliableRequestHandler handler);
 }
 
-public interface IRRReliableRequestHandler : IHandler
+public interface IRRReliableRequestHandler : IRRRequestHandler
 {
     void Response(UnionDataList response);
     void Finish(RRReliableCompletionType type);
 }
 
-public interface IRRReliableServerTransport : IRRReliableTransport
+public interface IRRReliableServerTransport : IRRServerTransport
 {
-    TimeSpan ResponseTtl { get; }
     bool Init(IRRReliableServerHandler handler);
 }
 
@@ -73,10 +92,8 @@ public interface IRRReliableServerHandler : IHandler
         IRRReliableResponse response);
 }
 
-public interface IRRReliableResponse
+public interface IRRReliableResponse : IRRResponse
 {
-    long RequestId { get; }
-    SendResult Response(UnionDataList response);
     SendResult Finish();
     SendResult Reject();
 }
@@ -93,6 +110,12 @@ public enum RRReliableCompletionType
 `ITransport` supplies `Type`, `Name`, `IsValid`, `IsStarted`,
 `Start(Action<StopReason>)`, `Stop(StopReason?)`, `Log`, `Memory`, and
 `GetControls`. `IRRTransport` adds `MessageMaxByteSize`.
+
+`IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`, and
+`IRRResponse` are shared with the unreliable family. A request handler **MUST**
+derive from `RRRequestHandler`, which supplies `RequestId` and `Cancel`; a
+transport **MUST** throw `ArgumentException` for any other handler.
+`RRResponse` is the corresponding base for transport-supplied response handles.
 
 The client binds no handler and has no `Init`; it is ready for `Start` after
 construction, and `ServerEndPoint` is the route fixed at construction. Each
@@ -118,6 +141,7 @@ request, and `Reject` rejects it. There is no boolean acceptance result.
 | **response** | One `UnionDataList` passed to `IRRReliableResponse.Response` and delivered through `IRRReliableRequestHandler.Response`. |
 | **request handler** | The per-request `IRRReliableRequestHandler` bound by `Request`. |
 | **response handle** | The `IRRReliableResponse` supplied to `OnRequested`. |
+| **client-local id** | `IRRRequestHandler.RequestId` while the handler is bound; unique within one client transport. |
 | **request id** | The server-global `IRRReliableResponse.RequestId`, unique across all clients. |
 | **server route** | The `ServerEndPoint` fixed at client construction. |
 | **accepted request** | A `Request` call that returned `SendResult.Ok`. |
@@ -143,7 +167,7 @@ while `Response` and `Finish` throw. A transport stop closes every handle.
 | Response delivery | Attempts to deliver each response accepted with `Ok` exactly once to the request handler, in acceptance order, until the request stops being live. `Ok` is local acceptance, not proof of delivery. | Handle zero or more responses; do not assume any response arrives. | Retry schedule and queue capacity. |
 | Completion | Delivers exactly one `Finish` for every accepted request, after the responses that precede it. The type reports the outcome the client observed; a rejection notification that is lost surfaces as `Failed`. | Never wait for a second `Finish`; do not call `Response` after it. | Timing only. |
 | Correlation | Per-request handler identity and the fixed `ServerEndPoint`; server `RequestId` is unique across clients. | Never bind one handler to two pending requests. | Id encoding and wire correlation. |
-| Cancellation | `CancelRequest` produces one `Finish(Canceled)` and suppresses later responses. | Treat server-side cancellation as best effort. | Whether and how cancellation reaches the server. |
+| Cancellation | `handler.Cancel()` produces one `Finish(Canceled)` and suppresses later responses. | Treat server-side cancellation as best effort. | Whether and how cancellation reaches the server. |
 | Server rejection | `Reject()` produces `Rejected` on the client when the notification arrives; otherwise the request completes as `Failed` at `RequestTtl`. A rejected handle cannot answer. | Reject only while the handle is undecided; never respond after `Reject`. | Whether and how the rejection reaches the client, and logging. |
 | TTLs | A pending request finishes `Failed` at `RequestTtl`; a response stream stops accepting at `ResponseTtl`. | Choose TTLs appropriate to the carrier's latency. | Clock source and timer implementation. |
 | Handler callbacks | Per-request serialization and non-reentrancy; different requests may run concurrently. | Protect state shared by handlers. | Scheduler and thread. |
@@ -263,7 +287,7 @@ request.
 
 A normal stop, an unrecoverable failure, and a carrier loss are all `Failed`
 for pending requests. `Canceled` is used only for an explicit
-`CancelRequest`.
+`handler.Cancel()`.
 
 A request that was undecided at stop is closed, not rejected: the client
 completes it as `Failed` unless a rejection notification already reached it.
@@ -291,21 +315,22 @@ requests are allowed and each request binds its own handler.
 The transport performs these checks in order:
 
 1. `handler` is null → throw `ArgumentNullException`;
-2. `handler` is already bound to a pending request → throw
+2. `handler` does not derive from `RRRequestHandler` → throw `ArgumentException`;
+3. `handler` is already bound to a pending request → throw
    `InvalidOperationException`;
-3. `request` is null or cannot be serialized → `InvalidMessage`;
-4. the transport is not running → `NotConnected`;
-5. the serialized payload exceeds `MessageMaxByteSize` → `MessageTooBig`; or
-6. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
+4. `request` is null or cannot be serialized → `InvalidMessage`;
+5. the transport is not running → `NotConnected`;
+6. the serialized payload exceeds `MessageMaxByteSize` → `MessageTooBig`; or
+7. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
    implementation-defined synchronous failure.
 
-`ArgumentNullException` and `InvalidOperationException` are thrown before the
-request payload is consumed; on those exceptions the caller retains the
-request. For every `SendResult` other than `InvalidMessage`, the transport
-owns and eventually releases the request payload. The caller **MUST NOT** read,
-mutate, retain, release, or retry with that `UnionDataList` after such a call.
-On `InvalidMessage`, the buffer is null or already dead and remains with the
-caller.
+`ArgumentNullException`, `ArgumentException`, and `InvalidOperationException`
+are thrown before the request payload is consumed; on those exceptions the
+caller retains the request. For every `SendResult` other than
+`InvalidMessage`, the transport owns and eventually releases the request
+payload. The caller **MUST NOT** read, mutate, retain, release, or retry with
+that `UnionDataList` after such a call. On `InvalidMessage`, the buffer is null
+or already dead and remains with the caller.
 
 A handler that is already bound to a pending request **MUST** be rejected with
 `InvalidOperationException`; the method **MUST NOT** silently rebind it. After
@@ -317,8 +342,10 @@ callbacks for that call. In particular, a failed `Request` does not deliver
 `Finish`.
 
 If `Request` returns `Ok`, the request is pending and the handler **MUST**
-receive exactly one `Finish` eventually. `Ok` is local acceptance, not proof
-that the server has seen the request.
+receive exactly one `Finish` eventually. `handler.RequestId` is the
+client-local id of the request while the handler is bound; it is `-1` before
+the first binding and keeps the last id after unbinding. `Ok` is local
+acceptance, not proof that the server has seen the request.
 
 `RequestTtl` starts when the call returns `Ok`. The transport **MUST NOT** count
 the time spent inside `Request` against the TTL.
@@ -347,26 +374,27 @@ invalidate the transport, and it **MUST NOT** cause a duplicate callback. A
 `Finish` callback that throws is still considered delivered exactly once. The
 throwing handler is responsible for releasing any response it owns.
 
-### 8.3 `CancelRequest`
+### 8.3 `Cancel()`
 
 ```csharp
-void CancelRequest(IRRReliableRequestHandler handler);
+void Cancel();
 ```
 
-`CancelRequest` is thread-safe and idempotent. A null handler **MUST** throw
-`ArgumentNullException`. An unknown, completed, or already-cancelled handler is
-a no-op. The method uses handler identity, not equality.
+`IRRRequestHandler.Cancel` is thread-safe and idempotent. An unknown,
+completed, or already-cancelled handler is a no-op. The method uses handler
+identity, not equality, and needs no transport reference: the handler delegates
+to the transport that bound it.
 
-For a pending request, the transport **MUST**:
+For a pending request, cancellation **MUST**:
 
 1. suppress every later `Response` for that request;
 2. deliver exactly one `Finish(Canceled)`; and
 3. make a best effort to inform the server so it stops producing responses.
 
 The `Finish(Canceled)` notification **MUST** be delivered exactly once. If
-`CancelRequest` is called outside a callback of that handler, the notification
-**MUST** be scheduled before the call returns. If `CancelRequest` is called
-from inside a callback of the same handler, the terminal `Finish` **MUST** be
+`Cancel` is called outside a callback of that handler, the notification
+**MUST** be scheduled before the call returns. If `Cancel` is called from
+inside a callback of the same handler, the terminal `Finish` **MUST** be
 delivered after the running callback returns, not reentrantly.
 
 No server-side cancellation callback exists. If the transport can inform the
@@ -486,7 +514,7 @@ Every request accepted by `Request` receives exactly one `Finish`:
 | --- | --- |
 | The server's `IRRReliableResponse.Finish()` completed normally and its completion reached the client | `Normal` |
 | The server's `IRRReliableResponse.Reject()` succeeded and the rejection reached the client | `Rejected` |
-| The client called `CancelRequest` | `Canceled` |
+| The client cancelled the request through `handler.Cancel()` | `Canceled` |
 | The client or server transport stopped or failed, the carrier lost the request, the request TTL expired, or a rejection notification did not reach the client | `Failed` |
 | The server response TTL expired | `Failed` |
 
@@ -496,7 +524,7 @@ accepted before the server's `Finish`. No `Response` follows any `Finish`.
 `Finish(Rejected)` is delivered when the rejection reaches the client. It is
 delivered even when the server sent no responses.
 
-`Finish(Canceled)` is delivered exactly once by `CancelRequest`. The server
+`Finish(Canceled)` is delivered exactly once by `Cancel()`. The server
 does not receive a cancellation callback. `Finish(Failed)` covers every other
 terminal path, including a normal local stop and a lost rejection.
 
@@ -582,10 +610,12 @@ non-reentrant. Callbacks for different request handlers may run concurrently.
 The server's `OnRequested` callbacks for different requests may run
 concurrently. The transport does not provide global callback serialization.
 
-A transport method (`Request`, `CancelRequest`, `Stop`, or an
-`IRRReliableResponse` call) may be invoked from a callback. A `CancelRequest`
-from the same handler's callback defers its `Finish(Canceled)` until the
-callback returns.
+A transport method (`Request`, `handler.Cancel()`, `Stop`, or an
+`IRRReliableResponse` call) may be invoked from a callback. A `Cancel()` from
+the same handler's callback defers its `Finish(Canceled)` until the callback
+returns. While a request handler is bound, its `RequestId` identifies the
+request; the transport publishes the id before the first callback for it and
+keeps it readable after unbinding.
 
 Each delivered response transfers one independently owned `UnionDataList`
 reference to the handler. The handler **MUST** release it exactly once and
@@ -608,8 +638,9 @@ may contribute to TTL expiry.
 | `BufferOverflow` | The implementation cannot accept the request because local capacity is full. |
 | `Error` | Another synchronous transport error occurred. |
 
-`ArgumentNullException` (null handler) and `InvalidOperationException`
-(handler already bound) are thrown before the payload is consumed. A non-`Ok`
+`ArgumentNullException` (null handler), `ArgumentException` (handler does not
+derive from `RRRequestHandler`), and `InvalidOperationException` (handler
+already bound) are thrown before the payload is consumed. A non-`Ok`
 `SendResult` delivers no callbacks.
 
 ### 15.2 `IRRReliableResponse`
@@ -669,7 +700,10 @@ protected transport stack.
 ### 17.1 Application-author checklist
 
 - [ ] Bind a distinct request handler to each pending request.
+- [ ] Derive every request handler from `RRRequestHandler`.
 - [ ] Never reuse a handler while its request is pending.
+- [ ] Use `handler.Cancel()` to cancel; do not expect callbacks after
+      cancellation.
 - [ ] Expect zero or more `Response` calls followed by exactly one `Finish`.
 - [ ] Treat `Ok` from `Request`, `Response`, `Finish`, or `Reject` as local
       acceptance only.
@@ -697,6 +731,8 @@ protected transport stack.
 - [ ] Suppress duplicates across retries, within the documented persistence
       scope.
 - [ ] Assign unique server-global request ids starting at `1`; gaps are allowed.
+- [ ] Reject a handler that does not derive from `RRRequestHandler` with
+      `ArgumentException`, and publish `RequestId` before the first callback.
 - [ ] Accept responses only from `ServerEndPoint`.
 - [ ] Serialize callbacks per request handler and per response handle while
       allowing different requests to proceed concurrently.

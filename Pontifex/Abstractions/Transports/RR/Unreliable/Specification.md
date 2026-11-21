@@ -5,17 +5,17 @@
 `RRUnreliable` is the single unreliable request/response (RR) transport contract.
 It matches each client request with at most one server response.
 
-A client sends a `UnionDataList` request and receives a client-local request id.
-A server receives the request with a server-global request id and the source
-`IEndPoint`, and may send at most one response for that id. A client receives a
-response only when its id matches a request that is still inside the client's
-pending window.
+A client sends a `UnionDataList` request bound to a per-request handler and
+receives at most one response through that handler. A server receives the
+request with a response handle and the source `IEndPoint`, and may answer it
+once. A client may cancel a pending request locally.
 
 This specification defines:
 
-- the public client/server and handler contracts;
+- the public client/server, request-handler, server-handler, and response
+  contracts;
 - request-id domains and response correlation;
-- the client pending window and the server pending-response routes;
+- the client pending window and the server response handles;
 - request and response TTLs and their observable effects;
 - transport and handler lifecycles;
 - callback, ownership, and failure rules; and
@@ -28,8 +28,8 @@ acknowledgement, retry, ordering, or queue capacity. Those concerns belong to a
 selected implementation or to a protocol layered above this transport.
 
 RRUnreliable provides **no response guarantee**. A request may receive no
-response. A server response may be lost, duplicated, or reordered. A server
-may reject a request silently; the client only observes the request's pending
+response. A server response may be lost, duplicated, or reordered. A server may
+reject a request silently; the client only observes the request's pending
 window expiry.
 
 ## 2. Normative language
@@ -50,12 +50,37 @@ public interface IRRUnreliableTransport : IRRTransport
 {
 }
 
-public interface IRRUnreliableClientTransport : IRRUnreliableTransport
+public interface IRRRequestHandler : IHandler
+{
+    long RequestId { get; }
+    void Cancel();
+}
+
+public interface IRRUnreliableRequestHandler : IRRRequestHandler
+{
+    void Response(UnionDataList response);
+}
+
+public interface IRRClientTransport : IRRTransport
 {
     IEndPoint ServerEndPoint { get; }
     TimeSpan RequestTtl { get; }
-    bool Init(IRRUnreliableClientHandler handler);
-    SendResult Request(UnionDataList request, out long requestId);
+}
+
+public interface IRRUnreliableClientTransport : IRRClientTransport
+{
+    SendResult Request(UnionDataList request,
+        IRRUnreliableRequestHandler handler);
+}
+
+public interface IRRResponse
+{
+    long RequestId { get; }
+    SendResult Response(UnionDataList response);
+}
+
+public interface IRRUnreliableResponse : IRRResponse
+{
 }
 
 public interface IRRUnreliableHandler : IHandler
@@ -64,21 +89,20 @@ public interface IRRUnreliableHandler : IHandler
     void Stopped();
 }
 
-public interface IRRUnreliableClientHandler : IRRUnreliableHandler
-{
-    void OnResponded(long requestId, UnionDataList response);
-}
-
-public interface IRRUnreliableServerTransport : IRRUnreliableTransport
-{
-    TimeSpan ResponseTtl { get; }
-    bool Init(IRRUnreliableServerHandler handler);
-    SendResult Response(long requestId, UnionDataList response);
-}
-
 public interface IRRUnreliableServerHandler : IRRUnreliableHandler
 {
-    bool OnRequested(long requestId, IEndPoint client, UnionDataList request);
+    bool OnRequested(IEndPoint client, UnionDataList request,
+        IRRUnreliableResponse response);
+}
+
+public interface IRRServerTransport : IRRTransport
+{
+    TimeSpan ResponseTtl { get; }
+}
+
+public interface IRRUnreliableServerTransport : IRRServerTransport
+{
+    bool Init(IRRUnreliableServerHandler handler);
 }
 ```
 
@@ -86,9 +110,17 @@ public interface IRRUnreliableServerHandler : IRRUnreliableHandler
 `Start(Action<StopReason>)`, `Stop(StopReason?)`, `Log`, `Memory`, and
 `GetControls`. `IRRTransport` adds `MessageMaxByteSize`.
 
-The client and server expose no transport-level receive callback and no
-transport-level send operation other than `Request` and `Response`. The client
-handler is bound with `Init`; the server handler is bound with `Init`.
+The client binds no transport-level handler and has no `Init`; it is ready for
+`Start` after construction. Each `Request` binds its own
+`IRRUnreliableRequestHandler`. The server binds one
+`IRRUnreliableServerHandler` through `Init`. Only the server handler has
+`Started` and `Stopped` callbacks.
+
+`IRRRequestHandler` and `IRRResponse` are the common RR contracts. A request
+handler **MUST** derive from `RRRequestHandler`, which supplies `RequestId` and
+`Cancel`; a transport **MUST** throw `ArgumentException` for any other handler.
+A server response handle is supplied by the transport and implements
+`IRRUnreliableResponse`; applications never implement it.
 
 ## 4. Terms and roles
 
@@ -98,13 +130,16 @@ handler is bound with `Init`; the server handler is bound with `Init`.
 | **server** | An `IRRUnreliableServerTransport` receiving requests from any client route. |
 | **transport** | One client or one server transport instance. |
 | **request** | One `UnionDataList` passed to `Request`. |
-| **response** | One `UnionDataList` passed to `Response`. |
-| **client-local id** | The id returned by `Request`; it is unique within one client transport. |
-| **server-global id** | The id passed to `OnRequested` and later to `Response`; it is unique across all clients of one running server transport. |
-| **pending request** | A client-local id that the client still accepts a response for. |
-| **pending route** | A server-global id that the server can still answer. |
-| **request TTL** | How long a client accepts a response after `Request` accepted the request; exposed as `IRRUnreliableClientTransport.RequestTtl`. |
-| **response TTL** | How long a server accepts `Response` after it received the request; exposed as `IRRUnreliableServerTransport.ResponseTtl`. |
+| **response** | One `UnionDataList` passed to `IRRUnreliableResponse.Response` and delivered through `IRRUnreliableRequestHandler.Response`. |
+| **request handler** | The per-request `IRRUnreliableRequestHandler` bound by `Request`. |
+| **response handle** | The `IRRUnreliableResponse` supplied to `OnRequested`. |
+| **client-local id** | `IRRRequestHandler.RequestId` while the handler is bound; unique within one client transport. |
+| **server-global id** | `IRRUnreliableResponse.RequestId`; unique across all clients of one running server transport. |
+| **pending request** | A bound request handler whose request has not received a response, was not cancelled, and has not expired. |
+| **open response handle** | A server handle that can still answer its request. |
+| **closed response handle** | A handle after `Response`, rejection, response TTL expiry, or a transport stop; every later `Response` call returns `Error`. |
+| **request TTL** | `IRRUnreliableClientTransport.RequestTtl`. |
+| **response TTL** | `IRRUnreliableServerTransport.ResponseTtl`. |
 | **accepted request** | A `Request` call that returned `SendResult.Ok`. |
 | **rejected request** | An `OnRequested` call that returned `false` or threw. |
 | **running** | The period after a successful `Start` and before stopping begins. |
@@ -118,21 +153,22 @@ connected/disconnected callback, keep-alive, reconnection, or resume concept.
 | Topic | Guaranteed by RRUnreliable | Application responsibility | Implementation-defined |
 | --- | --- | --- | --- |
 | Request delivery | Preserves complete messages; loss, duplication, and reordering are permitted. | Treat requests as at-least-zero; make server operations idempotent where duplicates matter. | Carrier and retry behavior. |
-| Response correlation | Delivers at most one `OnResponded` per accepted client-local id; the first valid response wins. | Do not expect a response; tolerate pending-window expiry. | Carrier timing, loss, and delivery order. |
-| Server rejection | A rejected request is removed from the server pending routes and is never answered. | Treat rejection as silent; the client observes only TTL expiry. | Whether and when a rejection is logged. |
+| Response correlation | Delivers at most one `Response` per accepted request, through the bound handler; the first valid response wins. `Response` takes the single valid respond opportunity. | Do not expect a response; tolerate pending-window expiry. | Carrier timing, loss, and delivery order. |
+| Cancellation | `Cancel()` silently stops accepting a response for the request. | Treat cancellation as local; the server is not informed. | Whether the server later wastes a response. |
+| Server rejection | A rejected request closes the response handle and is never answered. | Treat rejection as silent; the client observes only TTL expiry. | Whether and when a rejection is logged. |
 | Sending | `Request`/`Response` return a synchronous result; `Ok` is local acceptance only. | Handle every `SendResult`; never reuse a consumed payload. | Queue capacity, scheduling, and drain rate. |
-| Handler callbacks | Started once before any request/response callback; callbacks serialized and non-reentrant. | Return promptly, release owned buffers, and protect state. | Callback thread and scheduler. |
-| Pending windows | A response is delivered only while its client-local id is pending; a response is accepted only while its server-global id has a route. | Do not respond after the server TTL; do not expect late responses. | Clock source and expiry-check timing. |
-| Transport failure | Unrecoverable failure stops and invalidates the transport and delivers terminal callbacks once. | Observe `onStopped` and `Stopped`; create a new transport after failure. | Failure detection mechanism and timing. |
+| Handler callbacks | `Started` once before any request callback; callbacks for one request handler are serialized and non-reentrant. | Return promptly, release owned buffers, and protect state. | Callback thread and scheduler. |
+| Pending windows | A response is delivered only while its request handler is bound; a response is accepted only while the handle is open. | Do not respond after the response TTL; do not expect late responses. | Clock source and expiry-check timing. |
+| Transport failure | Unrecoverable failure stops and invalidates the transport and delivers the server handler terminal callbacks once. | Observe `onStopped` and `Stopped`; create a new transport after failure. | Failure detection mechanism and timing. |
 | Security | No authentication, authorization, confidentiality, integrity, or replay protection. | Add protection above this layer or use a protected carrier. | Any protection outside this contract. |
 
 ## 6. Initialization and transport lifecycle
 
 ### 6.1 Initialization
 
-`Init` binds one non-null role handler before a transport may start. Passing
-`null` **MUST** throw `ArgumentNullException` without changing the transport
-state.
+Only the server has an initialization step. `Init` binds one non-null server
+handler before the transport may start. Passing `null` **MUST** throw
+`ArgumentNullException` without changing the transport state.
 
 `Init` is a one-time operation. Concurrent calls are safe, and at most one
 call **MAY** return `true`. Every later or racing call **MUST** return `false`
@@ -141,17 +177,20 @@ without changing the bound handler or invalidating the transport. A successful
 transport able to send.
 
 `Init` **MUST** return `false` after a start has been attempted, after the
-transport is invalid, or after the transport is stopping. `Start` before a
-successful `Init` **MUST** return `false` and invalidate the transport.
+transport is invalid, or after the transport is stopping. A server `Start`
+before a successful `Init` **MUST** return `false` and invalidate the
+transport. The client `Start` requires no initialization.
 
 ### 6.2 Transport state
 
 ```mermaid
 stateDiagram-v2
     [*] --> Constructed
-    Constructed --> Initialized: Init succeeds
+    Constructed --> Initialized: server Init succeeds
     Initialized --> Running: Start succeeds
+    Constructed --> Running: client Start succeeds
     Initialized --> Invalid: Start fails
+    Constructed --> Invalid: client Start fails
     Running --> Stopping: Stop or unrecoverable failure
     Stopping --> Stopped: terminal transition
     Stopped --> [*]
@@ -163,12 +202,14 @@ stateDiagram-v2
 
 `Start` is one-time. Concurrent calls are safe, but at most one call **MAY**
 return `true`; every racing or later call **MUST** return `false`. A successful
-start starts the carrier and then invokes `handler.Started()`.
+server start starts the carrier and then invokes `handler.Started()`.
 
 If the initial `Start` attempt returns `false`, the transport **MUST** become
 invalid and **MUST NOT** deliver any handler callback, including `Stopped`. It
 **MUST NOT** invoke the supplied `onStopped`. A later `Start` call returns
 `false` without changing the terminal state.
+
+No callback **MUST** begin before `Start` has returned `true`.
 
 A normal `Stop` after a successful start does **not** invalidate the
 transport: `IsValid` remains `true` while `IsStarted` becomes `false`. An
@@ -177,12 +218,11 @@ unrecoverable internal or carrier failure **MUST** invalidate it.
 After a successful start, stopping is terminal. A stopped transport **MUST
 NOT** be restarted or reinitialized.
 
-### 6.3 Handler notifications
+### 6.3 Server handler notifications
 
 `handler.Started()` **MUST** be invoked exactly once after the carrier starts,
-before `Start` returns `true`, and before any `OnResponded` or `OnRequested`
-may begin. The caller therefore observes a ready handler whenever `Start`
-returns `true`.
+before `Start` returns `true`, and before any `OnRequested` may begin. The
+caller therefore observes a ready handler whenever `Start` returns `true`.
 
 If `Started()` throws, the implementation **MUST** catch and log the
 exception, clean up the carrier, fail the `Start`, invalidate the transport,
@@ -195,9 +235,9 @@ invoked before the transport's `onStopped` callback. The handler's `Stopped`
 exception **MUST** be caught and logged without changing the stop outcome.
 
 `Stop` **MUST** be safe from any thread, including from a handler callback.
-Once transport stopping begins, no new `OnResponded` or `OnRequested` may
-begin. A handler already running may finish asynchronously. Pending state is
-cleared; no callback is delivered for an abandoned pending request or route.
+Once transport stopping begins, no new `OnRequested` may begin. A handler
+already running may finish asynchronously. Pending state is cleared; no
+callback is delivered for an abandoned request.
 
 For each successful `Start(onStopped)`, `onStopped` **MUST** be invoked exactly
 once after the terminal transition. A normal stop preserves the supplied
@@ -220,81 +260,112 @@ does not accept general messages from other routes.
 ### 7.2 `Request`
 
 ```csharp
-SendResult Request(UnionDataList request, out long requestId);
+SendResult Request(UnionDataList request,
+    IRRUnreliableRequestHandler handler);
 ```
 
-`Request` is thread-safe and may be called from any thread, including from
-`OnResponded` or `Stopped`. Concurrent calls produce distinct ids.
+`Request` is thread-safe and may be called from any thread, including from a
+response callback. Concurrent calls produce distinct ids.
 
-The result precedence is:
+The transport performs these checks in order:
 
-1. `InvalidMessage` — `request` is null or cannot be serialized;
-2. `NotConnected` — the transport is not running;
-3. `MessageTooBig` — the serialized payload exceeds `MessageMaxByteSize`; or
-4. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
+1. `handler` is null → throw `ArgumentNullException`;
+2. `handler` does not derive from `RRRequestHandler` → throw `ArgumentException`;
+3. `handler` is already bound to a pending request → throw
+   `InvalidOperationException`;
+4. `request` is null or cannot be serialized → `InvalidMessage`;
+5. the transport is not running → `NotConnected`;
+6. the serialized payload exceeds `MessageMaxByteSize` → `MessageTooBig`; or
+7. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
    implementation-defined synchronous failure.
 
-On every result except `InvalidMessage`, the transport owns and eventually
-releases the request payload. The caller **MUST NOT** read, mutate, retain,
-release, or retry with that `UnionDataList` after the call. On
-`InvalidMessage`, the buffer is null or already dead and remains with the
-caller.
-
-`requestId` is `-1` whenever the call does not return `Ok`.
+The three exceptions are thrown before the request payload is consumed; on
+those exceptions the caller retains the request and the handler keeps its
+previous `RequestId`. For every `SendResult` other than `InvalidMessage`, the
+transport owns and eventually releases the request payload. The caller **MUST
+NOT** read, mutate, retain, release, or retry with that `UnionDataList` after
+such a call. On `InvalidMessage`, the buffer is null or already dead and
+remains with the caller.
 
 On `Ok`:
 
-- a client-local id is assigned. The first accepted id is `1`; ids are
-  strictly increasing for the lifetime of the client transport and are never
-  reused;
+- `handler.RequestId` becomes the client-local id of the request. The first
+  accepted id is `1`; ids are strictly increasing for the lifetime of the
+  client transport and are never reused;
 - the id enters the pending window before the frame is submitted to the
   carrier; and
 - the request may still be lost. `Ok` is not a peer or response guarantee.
 
 If the carrier call fails after the id entered the pending window, the id
-**MUST** be removed and `requestId` **MUST** be `-1`.
+**MUST** be removed, the handler **MUST** be unbound, and the call **MUST NOT**
+return `Ok`.
 
-`OnResponded` **MAY** begin before the `Request` call returns. The handler
-receives the id, so it must tolerate a response that arrives before the caller
-has observed the returned id.
+`IRRUnreliableRequestHandler.Response` **MAY** begin before `Request` returns.
+The handler already holds the id, so it must tolerate a response that arrives
+before the caller has observed the return value. The handler may already be
+unbound when `Request` returns.
+
+A handler that is already bound **MUST** be rejected with
+`InvalidOperationException`; the method **MUST NOT** silently rebind it. After
+its request completes, is cancelled, or expires, the same handler instance
+**MAY** be used for a new request. `RequestId` remains readable after
+unbinding and reports the last request bound to the handler.
 
 ### 7.3 Pending window and request TTL
 
-The client pending window contains every accepted client-local id until one of
+The client pending window contains every accepted request handler until one of
 the following wins:
 
-1. the first valid response for that id is taken for delivery;
-2. the request TTL expires; or
-3. the transport stops or fails, which clears the pending window.
+1. the first valid response for the request is taken for delivery;
+2. the request is cancelled through `Cancel()`;
+3. the request TTL expires; or
+4. the transport stops or fails, which clears the pending window.
 
 The request TTL starts when `Request` accepts the request. The value is a
 positive, implementation-configured duration exposed by
 `IRRUnreliableClientTransport.RequestTtl`. Expiry is silent: no callback is
-raised and the pending id is simply no longer eligible. A response for an id
-that is unknown, expired, already answered, or sent by another route **MUST**
-be released and dropped.
+raised, the handler is unbound, and the pending id is no longer eligible. A
+response for an id that is unknown, expired, already answered, cancelled, or
+sent by another route **MUST** be released and dropped.
 
-An accepted request therefore receives **zero or one** `OnResponded` call. A
-duplicate response for an id whose first response was already taken is
+An accepted request therefore receives **zero or one** `Response` call. A
+duplicate response for a request whose first response was already taken is
 dropped.
 
-### 7.4 `OnResponded`
+### 7.4 `Response` callback
 
-`OnResponded(long requestId, UnionDataList response)` is invoked at most once
-per accepted request, after `Started()` returned successfully.
+`IRRUnreliableRequestHandler.Response(UnionDataList response)` is invoked at
+most once per accepted request, after `Started()` returned successfully. While
+it runs, `handler.RequestId` still identifies the request.
 
-Callbacks for the single client handler are serialized and non-reentrant. A
-`Request` or `Stop` call from `OnResponded` **MUST NOT** cause a nested
-`OnResponded` invocation on the same handler.
+Callbacks for one request handler are serialized and non-reentrant. Callbacks
+for different requests may run concurrently; an implementation may serialize
+all client callbacks. A `Request` or `Stop` call from a response callback
+**MUST NOT** cause a nested `Response` invocation on the same handler.
+
+After the callback returns, the transport unbinds the handler. The handler
+**MUST NOT** expect another callback for that request.
 
 The handler owns the delivered response reference and **MUST** release it
 exactly once. The transport retains ownership of every response it drops.
 
-If `OnResponded` throws, the transport **MUST** catch and log the exception,
+If `Response` throws, the transport **MUST** catch and log the exception,
 suppress further processing of only that delivery, and continue running. It
-**MUST NOT** stop or invalidate the transport solely because `OnResponded`
-threw. The throwing handler is responsible for releasing the response it
-received.
+**MUST NOT** stop or invalidate the transport solely because `Response` threw.
+The throwing handler is responsible for releasing the response it received.
+
+### 7.5 Cancellation
+
+`Cancel()` is thread-safe and idempotent, uses handler identity, and accepts
+any handler instance. It needs no transport reference: the handler delegates
+to the transport that bound it.
+
+For a bound request, cancellation removes it from the pending window and
+unbinds the handler. No callback is raised; a response that arrives later is
+released and dropped. Cancellation is local: the server is not informed and
+may still produce one response that the client discards.
+
+A completed, cancelled, expired, or unknown handler is a no-op.
 
 ## 8. Server contract
 
@@ -317,7 +388,8 @@ return equal hash codes. The route is unauthenticated metadata.
 ### 8.2 `OnRequested`
 
 ```csharp
-bool OnRequested(long requestId, IEndPoint client, UnionDataList request);
+bool OnRequested(IEndPoint client, UnionDataList request,
+    IRRUnreliableResponse response);
 ```
 
 `OnRequested` is invoked after `Started()` returned successfully, on a running
@@ -327,61 +399,58 @@ non-reentrant.
 The handler owns the request reference and **MUST** release it exactly once,
 including when it rejects the request or throws.
 
-Returning `true` accepts the request and installs a pending route for
-`requestId`.
-
-Returning `false` rejects it. The server **MUST** remove any pending route for
-that id and **MUST NOT** send any response for it. Rejection is silent to the
-client; the client's pending request simply expires. A later `Response` with
-that id **MUST** return `InvalidAddress`.
+The response handle starts open and carries the server-global id. Returning
+`true` accepts the request and keeps the handle open. Returning `false` rejects
+it: the transport **MUST** close the handle, and a later `Response` call on it
+**MUST** return `Error`. Rejection is silent to the client; the client's
+pending request simply expires.
 
 If `OnRequested` throws, the server **MUST** catch and log the exception, treat
-the request as rejected, and continue running. It **MUST NOT** stop or
-invalidate the transport solely because `OnRequested` threw.
+the request as rejected, close the handle, and continue running. It **MUST
+NOT** stop or invalidate the transport solely because `OnRequested` threw. A
+response already accepted with `Ok` before the throw may still be delivered.
 
-### 8.3 `Response`
+The handle stays usable after `OnRequested` returns and may be used
+asynchronously. Different requests receive different handles.
 
-```csharp
-SendResult Response(long requestId, UnionDataList response);
-```
+### 8.3 `IRRUnreliableResponse`
 
-`Response` is thread-safe and may be called from `OnRequested` or later, from
-any thread. The server handler may answer synchronously inside `OnRequested`.
+`long RequestId { get; }` is the server-global id of the request and is
+immutable for the handle lifetime.
 
-The result precedence is:
+`SendResult Response(UnionDataList response)` sends the single response for the
+request. The result precedence is:
 
-1. `InvalidMessage` — `response` is null or cannot be serialized;
-2. `Error` — the transport is not running;
-3. `MessageTooBig` — the serialized payload exceeds `MessageMaxByteSize`;
-4. `InvalidAddress` — `requestId` is unknown, expired, already answered, or
-   belongs to a rejected request; or
-5. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
+1. the handle is closed or the transport is not running → `Error`;
+2. `InvalidMessage` — the response is null or cannot be serialized;
+3. `MessageTooBig` — the serialized payload exceeds `MessageMaxByteSize`; or
+4. the carrier result, including `Ok`, `BufferOverflow`, `Error`, or another
    implementation-defined synchronous failure.
 
 On every result except `InvalidMessage`, the transport owns and eventually
 releases the response payload. The caller **MUST NOT** access it afterwards.
 
-A pending route is single-use. A successful lookup removes it before the send
-is attempted, so a later `Response` with the same id returns `InvalidAddress`
+A handle is single-use. The first call that passes validation closes the
+handle before the send is attempted, so a later `Response` call returns `Error`
 even when the carrier send fails. `Ok` is local acceptance only; it is not a
 delivery guarantee.
 
-A rejected request has no pending route, so `Response` for its id returns
-`InvalidAddress`.
+Calls for one handle are serialized by the transport and may be made from any
+thread.
 
-### 8.4 Pending routes and response TTL
+### 8.4 Response handles and response TTL
 
-A pending route is created when `OnRequested` accepts a request and is removed
-when the response TTL expires, when the transport stops or fails, when
-`Response` takes it, or when the handler rejects the request.
+A handle is open from the moment `OnRequested` is invoked. It is closed when
+`Response` succeeds, when `OnRequested` rejects the request, when the response
+TTL expires, or when the transport stops or fails.
 
 The response TTL starts when the server receives the request, before
 `OnRequested` is invoked. The value is a positive, implementation-configured
 duration exposed by `IRRUnreliableServerTransport.ResponseTtl`. Expiry is
-silent: the route is no longer eligible and a later `Response` returns
-`InvalidAddress`. No callback is raised.
+silent: the handle is closed and a later `Response` returns `Error`. No
+callback is raised.
 
-If the server never responds, the route expires and the client pending request
+If the server never responds, the handle expires and the client pending request
 eventually expires independently. Neither side receives a timeout callback.
 
 ## 9. Message model, correlation, and delivery eligibility
@@ -392,18 +461,20 @@ and the request-id header. The limit applies to `Request` and `Response` and to
 received payloads. Empty `UnionDataList` values are valid.
 
 Requests and responses are correlated by an opaque `long` id chosen by the
-sending side:
+client:
 
 - a request frame carries the client-local id;
 - a response frame carries the client-local id that the server received in the
-  request; and
-- the server-global id is a server-side bookkeeping id and is not required to
-  appear on the wire.
+  request;
+- the client delivers the response to the handler currently bound to that id;
+  and
+- the server-global id is a server-side bookkeeping id that is not required to
+  appear on the wire and is not used for client correlation.
 
 The wire encoding, framing, and id encoding are implementation-defined.
 
-An implementation **MUST NOT** deliver to a handler, or install a pending
-route for, inbound data that is malformed, cannot be decoded, or exceeds the
+An implementation **MUST NOT** deliver to a handler, or open a response handle
+for, inbound data that is malformed, cannot be decoded, or exceeds the
 applicable limit. It **MUST** release and log such data and **MUST NOT** stop
 or invalidate the transport solely because of it.
 
@@ -419,34 +490,35 @@ the same logical payload that was sent.
 
 ```mermaid
 sequenceDiagram
-    participant C as Client handler
+    participant C as Request handler
     participant CE as Client transport
     participant ST as Server transport
     participant S as Server handler
+    participant R as Response handle
 
-    C->>CE: Request(payload) -> Ok(id)
+    C->>CE: Request(payload, handler) -> Ok
     Note over CE,ST: request may be lost, duplicated, or reordered
     CE-->>ST: zero or more request frames
-    ST->>S: OnRequested(serverId, client, request)
+    ST->>S: OnRequested(client, request, response)
     alt accepted and answered
-        S->>ST: Response(serverId, response)
-        ST-->>CE: response frame carrying clientId
-        CE->>C: OnResponded(clientId, response)
+        S->>R: Response(payload)
+        R-->>CE: response frame carrying the client id
+        CE->>C: Response(payload)
     else rejected
         S-->>ST: false
-        Note over ST: pending route removed
+        Note over R: handle closed
         Note over CE: pending request expires silently
     end
 ```
 
-For every accepted request the client delivers either zero or one
-`OnResponded`. The server may invoke `OnRequested` zero, one, or multiple
-times for the same client-local id when the carrier duplicates the request.
-Each invocation carries a new server-global id; only the first response that
-reaches the client while its id is pending is delivered.
+For every accepted request the client delivers either zero or one `Response`.
+The server may invoke `OnRequested` zero, one, or multiple times for the same
+client id when the carrier duplicates the request. Each invocation carries a
+new server-global id; only the first response that reaches the client while
+its id is pending is delivered.
 
-An implementation **MUST NOT** invoke `OnResponded` for a response that was
-accepted before the corresponding `Request` call entered the pending window.
+An implementation **MUST NOT** invoke `Response` for a response that was
+accepted before the corresponding `Request` call bound the handler.
 
 The callback for a response **MAY** begin on any scheduler after the response
 frame is accepted locally. No ordering between different requests is
@@ -454,15 +526,15 @@ guaranteed.
 
 ## 11. Callback concurrency and buffer ownership
 
-The client has one handler, and its `Started`, `OnResponded`, and `Stopped`
-callbacks are serialized and non-reentrant. The server has one handler, and
-its `Started`, `OnRequested`, and `Stopped` callbacks are serialized and
-non-reentrant. Callbacks for different transports are independent.
+The server has one handler, and its `Started`, `OnRequested`, and `Stopped`
+callbacks are serialized and non-reentrant. The client has one handler per
+request; callbacks for one such handler are serialized and non-reentrant, while
+callbacks for different requests may run concurrently. Callbacks for different
+transports are independent.
 
-`OnResponded` and `OnRequested` **MUST NOT** begin before `Started` returned
-successfully. `Stopped` **MUST NOT** begin until an already-running callback
-for that handler has returned. After invalidation begins, no new
-`OnResponded` or `OnRequested` may begin.
+`OnRequested` **MUST NOT** begin before `Started` returned successfully.
+`Stopped` **MUST NOT** begin until an already-running `OnRequested` has
+returned. After invalidation begins, no new `OnRequested` may begin.
 
 Each delivered request and response transfers one independently owned
 `UnionDataList` reference to the handler. The handler:
@@ -486,42 +558,45 @@ contract defines no callback timeout.
 
 | Result | Required meaning |
 | --- | --- |
-| `Ok` | The request was accepted; an id was assigned and entered the pending window. |
+| `Ok` | The request was accepted; the handler is bound and holds its client-local id. |
 | `InvalidMessage` | The request is null or cannot be serialized. |
 | `MessageTooBig` | The serialized payload exceeds `MessageMaxByteSize`. |
 | `NotConnected` | The client transport is not running. |
 | `BufferOverflow` | The implementation cannot accept the request because local outbound capacity is full. |
 | `Error` | Another synchronous sending failure occurred. |
 
-Every synchronous non-`Ok` result is non-fatal and **MUST NOT** by itself stop
-or invalidate the transport.
+`ArgumentNullException`, `ArgumentException`, and `InvalidOperationException`
+are thrown before the payload is consumed.
 
 ### 12.2 `Response`
 
 | Result | Required meaning |
 | --- | --- |
-| `Ok` | The response was locally accepted for the pending route. |
+| `Ok` | The response was locally accepted and the handle is closed. |
 | `InvalidMessage` | The response is null or cannot be serialized. |
 | `MessageTooBig` | The serialized payload exceeds `MessageMaxByteSize`. |
-| `InvalidAddress` | The id has no pending route: unknown, expired, already answered, or rejected. |
-| `Error` | The transport is not running or another synchronous failure occurred. |
+| `Error` | The handle is closed or the transport is not running. |
 | `BufferOverflow` | The implementation cannot accept the response because local outbound capacity is full. |
 
 `BufferOverflow` and the other non-`Ok` results carry no retry signal.
-Applications choose their own retry and backpressure policy, using a new
-payload buffer for each retry.
+Applications choose their own retry and backpressure policy, and must obtain a
+new handle for a new attempt; a handle is single-use.
+
+Every synchronous non-`Ok` result is non-fatal and **MUST NOT** by itself stop
+or invalidate the transport.
 
 ## 13. Failure, shutdown, and implementation-defined behavior
 
 An unrecoverable internal or carrier failure after a successful start **MUST**
-stop and invalidate the transport, clear all pending requests and routes,
-deliver the handler `Stopped` (if `Started` returned successfully), and invoke
-`onStopped` exactly once. No callback is delivered for an abandoned pending
-request or route. A transport may discard accepted but unsent work.
+stop and invalidate the transport, clear all pending requests and handles,
+deliver the server handler `Stopped` (if `Started` returned successfully), and
+invoke `onStopped` exactly once. No callback is delivered for an abandoned
+pending request. A transport may discard accepted but unsent work.
 
-An explicit `Stop` is a normal stop: pending requests and routes are
-abandoned, no response or request callback is fabricated, and neither peer is
-notified. RRUnreliable has no cancellation or finish message.
+An explicit `Stop` is a normal stop: pending requests are abandoned, client
+handlers are unbound, server response handles are closed, no request callback
+is fabricated, and neither peer is notified. RRUnreliable has no completion
+message.
 
 The following are implementation-defined, provided they do not weaken this
 specification:
@@ -543,9 +618,9 @@ values are configuration, not part of this contract.
 
 ## 14. Security considerations and conformance checklists
 
-RRUnreliable provides no peer authentication, authorization,
-confidentiality, cryptographic integrity, tamper detection, source-spoofing
-protection, or replay protection. A client source-route filter is routing, not
+RRUnreliable provides no peer authentication, authorization, confidentiality,
+cryptographic integrity, tamper detection, source-spoofing protection, or
+replay protection. A client source-route filter is routing, not
 authentication. A server handler can receive valid requests from any source
 reaching its listen address.
 
@@ -554,12 +629,19 @@ Applications handling sensitive, privileged, or non-idempotent operations
 anti-replay, deduplication, ordering, and receipt mechanisms above this
 transport, or choose a protected transport stack.
 
+A response handle is a capability for exactly one request. Applications
+**MUST NOT** hand it to code that is not authorized to answer that request.
+
 ### 14.1 Application-author checklist
 
-- [ ] Call `Init` exactly once before `Start`.
+- [ ] Call server `Init` exactly once before `Start`; the client needs no
+      `Init`.
+- [ ] Derive every request handler from `RRRequestHandler`.
+- [ ] Use a distinct handler for each concurrently pending request; reuse only
+      after the request completed, was cancelled, or expired.
 - [ ] Treat every accepted request as potentially lost and every accepted
       response as potentially lost.
-- [ ] Never expect more than one `OnResponded` per accepted request.
+- [ ] Never expect more than one `Response` per accepted request.
 - [ ] Treat `Ok` from `Request` or `Response` as local acceptance only.
 - [ ] Never access or release a payload after passing it to `Request` or
       `Response`.
@@ -574,30 +656,37 @@ transport, or choose a protected transport stack.
 
 ### 14.2 Transport-implementer checklist
 
-- [ ] Bind one handler with a one-time, pre-start `Init`.
-- [ ] Deliver `Started` before any request/response callback and `Stopped`
-      only after a successful `Started`.
-- [ ] Keep client and server callback sequences serialized and non-reentrant.
+- [ ] Bind one server handler with a one-time, pre-start `Init`; the client
+      requires no `Init`.
+- [ ] Deliver `Started` before `Start` returns `true` and before any request
+      callback, and `Stopped` only after a successful `Started`.
+- [ ] Keep server callbacks serialized and non-reentrant; keep each request
+      handler's callbacks serialized and non-reentrant.
 - [ ] Assign client-local ids and server-global ids that are unique for the
       transport lifetime, starting at `1`; server-global ids may have gaps.
-- [ ] Install the client pending id before submitting the request frame.
-- [ ] Deliver at most one response per client-local id and drop unknown,
-      expired, duplicate, and foreign-route responses.
-- [ ] Remove the server route on rejection and make the route single-use on
-      `Response`.
+- [ ] Bind the handler before submitting the request frame, and publish its
+      `RequestId`.
+- [ ] Deliver at most one response per request handler and drop unknown,
+      expired, duplicate, cancelled, and foreign-route responses.
+- [ ] Unbind the handler after its response callback returns or when the
+      request is cancelled, expired, or abandoned.
+- [ ] Close the response handle on success, rejection, expiry, or stop; a
+      closed handle returns `Error`.
 - [ ] Enforce both TTLs without fabricating callbacks for expiry.
 - [ ] Enforce `MessageMaxByteSize` on sent and received payloads.
 - [ ] Drop and log malformed or oversized inbound frames without stopping.
 - [ ] Transfer and release buffers according to this specification.
-- [ ] Treat `OnRequested` and `Started` exceptions as specified and keep
-      unrelated transport activity running.
+- [ ] Treat `OnRequested`, `Response`, and `Started` exceptions as specified
+      and keep unrelated transport activity running.
 - [ ] Preserve stop and `onStopped` ordering and the exact supplied reason.
 - [ ] Document configuration, TTLs, capacity, scheduling, and carrier failure
       behavior without weakening this contract.
 
 ## 15. Non-goals
 
-- No cancellation, finish, streaming, or multiple responses per request.
+- No completion/finish callback, streaming, or multiple responses per request.
+- No server notification of cancellation, and no cancellation of a server
+  response that is already in flight.
 - No acknowledgement, retry, confirmation, or response receipt.
 - No at-most-once, at-least-once, exactly-once, FIFO, causal, or total
   ordering guarantee.

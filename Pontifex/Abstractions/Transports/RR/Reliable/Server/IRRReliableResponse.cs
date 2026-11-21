@@ -1,5 +1,3 @@
-using Pontifex.Utils;
-
 namespace Pontifex.RR.Reliable
 {
     /// <summary>
@@ -16,31 +14,14 @@ namespace Pontifex.RR.Reliable
     /// <para>
     /// Calls may be made from any thread; the transport serializes them. A call made after the
     /// handle is closed — by a successful <see cref="Finish"/>, by
-    /// <see cref="IRRReliableServerTransport.ResponseTtl"/> expiry, or by a transport stop — returns
+    /// <see cref="IRRServerTransport.ResponseTtl"/> expiry, or by a transport stop — returns
     /// <see cref="SendResult.Error"/>. After <see cref="Reject"/> succeeded,
-    /// <see cref="Response"/> and <see cref="Finish"/> throw
+    /// <see cref="IRRResponse.Response"/> and <see cref="Finish"/> throw
     /// <see cref="System.InvalidOperationException"/> instead.
     /// </para>
     /// </remarks>
-    public interface IRRReliableResponse
+    public interface IRRReliableResponse : IRRResponse
     {
-        /// <summary>
-        /// Gets the server-global id of the request, unique across all clients.
-        /// </summary>
-        long RequestId { get; }
-
-        /// <summary>
-        /// Sends one response for the request and accepts the request if it is still undecided.
-        /// Multiple responses are allowed before <see cref="Finish"/>.
-        /// </summary>
-        /// <param name="response">The response payload. The transport owns it after a non-throwing
-        /// call.</param>
-        /// <returns>The result of the send attempt. <see cref="SendResult.Ok"/> means local
-        /// acceptance, not client receipt.</returns>
-        /// <exception cref="System.InvalidOperationException">The request was rejected with
-        /// <see cref="Reject"/>. The payload is not consumed.</exception>
-        SendResult Response(UnionDataList response);
-
         /// <summary>
         /// Completes the request normally and accepts the request if it is still undecided. After a
         /// successful call no further <see cref="Response"/> call is allowed.

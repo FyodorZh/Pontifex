@@ -24,13 +24,16 @@
     appears
 - [ ] Refactor RRUnreliable to request/response semantics
   - [x] Stage 1: formal refactoring (request/response API, request ids, TTLs, carrier-agnostic core)
-  - [x] Extract shared lifecycle into `RRUnreliableTransport<THandler>` (handler base, `Init`,
-    start/stop template, dispatch gate)
+  - [x] Extract shared lifecycle into `RRUnreliableTransport` / `RRUnreliableTransport<THandler>`
+    (carrier template, handler base, `Init`, dispatch gate)
   - [x] Stage 2a: `Specification.md` written
   - [ ] Stage 2b: align the implementation with the specification (failed-start handler callbacks,
-    `OnResponded`/`OnRequested` exception policy, client source filtering) and add conformance tests
+    `Response`/`OnRequested` exception policy, client source filtering) and add conformance tests
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
-  `IRRUnreliableTransport`)
+  `IRRUnreliableTransport`, `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`,
+  `IRRResponse`, `RRRequestHandler`, `RRResponse`)
+- [x] Unify the RR per-request model: per-request client handlers with `RequestId`/`Cancel` and a
+  server response handle for both families
 - [ ] Replace RRReliableAck and RRReliableNoAck with the RRReliable abstraction
   - [x] Stage 1: abstraction only (transport interfaces, per-request handlers, completion types,
     four-type matrix)
