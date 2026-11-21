@@ -6,17 +6,12 @@ namespace Pontifex.RR.Unreliable
     /// Client half of the RR unreliable contract: sends requests to a fixed server and receives the
     /// responses that are matched to them by request id.
     /// </summary>
-    public interface IRRUnreliableClientTransport : ITransport
+    public interface IRRUnreliableClientTransport : IRRUnreliableTransport
     {
         /// <summary>
         /// Gets the fixed route of the server this client sends to.
         /// </summary>
         IEndPoint ServerEndPoint { get; }
-
-        /// <summary>
-        /// Inclusive maximum payload size of one message, in bytes. Transport framing is not included.
-        /// </summary>
-        int MessageMaxByteSize { get; }
 
         /// <summary>
         /// Binds the application handler before the transport is started.

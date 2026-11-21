@@ -4,13 +4,8 @@ namespace Pontifex.RR.Reliable
     /// Server half of the RR reliable contract: receives requests from clients and lets application
     /// logic answer each one with zero or more responses and an explicit completion.
     /// </summary>
-    public interface IRRReliableServerTransport : ITransport
+    public interface IRRReliableServerTransport : IRRReliableTransport
     {
-        /// <summary>
-        /// Inclusive maximum payload size of one message, in bytes. Transport framing is not included.
-        /// </summary>
-        int MessageMaxByteSize { get; }
-
         /// <summary>
         /// Binds the application handler before the transport is started.
         /// </summary>
