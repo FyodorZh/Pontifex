@@ -332,3 +332,20 @@ values are configuration, not part of this contract.
 - No cross-implementation wire compatibility.
 - No authentication, authorization, confidentiality, integrity, or replay
   protection; see the common specification.
+
+## 11. Known limitations (non-normative)
+
+The UDP reference implementation selects a request for dispatch by reading the
+dispatch gate and then invoking `OnRequested`; the check is not synchronized
+with the stop transition. A frame that passes the check just before `Stop` may
+therefore reach `OnRequested` while the transport is stopping, and it may even
+run after `onStopped` has been invoked.
+
+The deviation is bounded. The response handle already returns `Error`, no
+second callback is delivered for the request, and no other handler callback
+overlaps it. A handler that releases its own state in `onStopped` must
+nevertheless tolerate one late request and release its payload.
+
+Closing this window requires a callback dispatcher that serializes dispatch
+with the stop transition; that work is deferred with the reliable
+implementation.

@@ -62,6 +62,13 @@ namespace Pontifex.RR.Unreliable
         /// </summary>
         /// <param name="source">The route that sent the datagram.</param>
         /// <param name="frame">The received frame. The method owns it.</param>
+        /// <remarks>
+        /// The dispatch gate is read before <see cref="IRRUnreliableServerHandler.OnRequested"/> is
+        /// invoked, without synchronizing with the stop transition. A frame that passes the check
+        /// just before the transport stops may still reach the handler, possibly after
+        /// <c>onStopped</c> has run. The response handle is already closed, so the handler can observe
+        /// the request but cannot answer it. A callback dispatcher would close this window.
+        /// </remarks>
         protected void OnFrameReceived(IEndPoint source, UnionDataList frame)
         {
             if (frame == null!)

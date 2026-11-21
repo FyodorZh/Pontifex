@@ -29,7 +29,9 @@
   - [x] Stage 2a: `Specification.md` written
   - [x] Stage 2b: align the implementation with the specification (failed-start callbacks,
     `Response`/`OnRequested` exception policy, client source filtering, inbound size limit)
-  - [ ] Stage 2c: conformance adapter and tests; residual `OnRequested`/`Stop` transition race
+  - [ ] Stage 2c: conformance adapter and tests
+  - [x] Accepted: `OnRequested` may begin across the stop transition, possibly after `onStopped`;
+    documented in the unreliable specification, to be closed by a callback dispatcher
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
   `IRRUnreliableTransport`, `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`,
   `IRRResponse`, `RRRequestHandler`, `RRResponse`)
