@@ -18,7 +18,7 @@ namespace Pontifex.NetSockets
         private readonly Action<EndPoint, UnionDataList> _onReceived;
         private readonly Action<SocketException> _onFail;
         
-        private readonly IPool<UnionDataList> _unionListPool;
+        private readonly ICollectablePool _unionListPool;
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
 
         private const int mBufferSize = 1024 * 4;
@@ -31,7 +31,7 @@ namespace Pontifex.NetSockets
         public UdpReceiver(Socket socket, IPEndPoint remoteEp, 
             Action<EndPoint, UnionDataList> onReceived,
             Action<SocketException> onFail,
-            IPool<UnionDataList> unionListPool,
+            ICollectablePool unionListPool,
             IPool<IMultiRefByteArray, int> bytesPool,
             ILogger logger,
             ITrafficCollectorSink trafficCollectorSink)
@@ -68,22 +68,25 @@ namespace Pontifex.NetSockets
 
             while (!_stopped)
             {
+                UnionDataList? data = null;
+                bool handedOff = false;
+
                 try
                 {
                     var count = _socket.ReceiveFrom(_buffer, SocketFlags.None, ref ep);
                     _trafficCollectorSink.IncInTraffic(count);
 
-                    var data = _unionListPool.Acquire();
-                    using var disposer = data.AsDisposable();
-                    
+                    data = _unionListPool.Acquire<UnionDataList>();
                     var byteSource = new ByteSourceFromRealArray(_buffer, 0, count);
-                    if (!data.Deserialize(ref byteSource, _bytesPool))
+                    if (!data.Deserialize(ref byteSource, _bytesPool, count))
                     {
                         Log.w("Failed to read message from {0}", ep);
                         continue;
                     }
-                    
-                    try 
+
+                    handedOff = true;
+
+                    try
                     {
                         _onReceived(ep, data);
                     }
@@ -111,12 +114,52 @@ namespace Pontifex.NetSockets
                 }
                 catch (SocketException ex)
                 {
-                    if (ex.SocketErrorCode != SocketError.Interrupted)
+                    if (_stopped || IsRecoverable(ex.SocketErrorCode))
+                    {
+                        continue;
+                    }
+
+                    try
                     {
                         _onFail(ex);
                     }
+                    catch (Exception inner)
+                    {
+                        Log.wtf(inner);
+                    }
+
                     break;
                 }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
+                finally
+                {
+                    if (!handedOff)
+                    {
+                        data?.Release();
+                    }
+                }
+            }
+        }
+
+        private static bool IsRecoverable(SocketError error)
+        {
+            switch (error)
+            {
+                case SocketError.ConnectionReset:
+                case SocketError.ConnectionRefused:
+                case SocketError.NetworkReset:
+                case SocketError.HostUnreachable:
+                case SocketError.NetworkUnreachable:
+                case SocketError.MessageSize:
+                case SocketError.Interrupted:
+                case SocketError.WouldBlock:
+                case SocketError.TryAgain:
+                    return true;
+                default:
+                    return false;
             }
         }
     }

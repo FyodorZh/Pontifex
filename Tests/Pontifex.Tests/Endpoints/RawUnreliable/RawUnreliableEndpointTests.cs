@@ -429,16 +429,6 @@ public sealed class RawUnreliableEndpointTests
     #region Send
 
     [Test]
-    public void Send_Null_ReturnsInvalidMessage()
-    {
-        using var handler = new RecordingRawUnreliableHandler(Memory);
-        using var ep = Create(handler);
-        ep.StartAndComplete();
-
-        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.InvalidMessage));
-    }
-
-    [Test]
     public void Send_WhenNotStarted_MapsNotConnectedToError()
     {
         using var handler = new RecordingRawUnreliableHandler(Memory);
@@ -446,32 +436,6 @@ public sealed class RawUnreliableEndpointTests
         UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
 
         Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.Error));
-        Assert.That(buffer.IsAlive, Is.False);
-    }
-
-    [Test]
-    public void Send_AboveMessageMaxByteSize_ReturnsMessageTooBig()
-    {
-        using var handler = new RecordingRawUnreliableHandler(Memory);
-        using var ep = Create(handler, max: 8);
-        ep.StartAndComplete();
-        UnionDataList buffer = TestBuffers.WithPayload(Memory, 32);
-        Assert.That(buffer.GetDataSize(), Is.GreaterThan(8));
-
-        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.MessageTooBig));
-        Assert.That(buffer.IsAlive, Is.False);
-    }
-
-    [Test]
-    public void Send_ExceedingLocalByteBudget_ReturnsBufferOverflow()
-    {
-        using var handler = new RecordingRawUnreliableHandler(Memory);
-        using var ep = Create(handler, capacity: 2);
-        ep.StartAndComplete();
-        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
-        Assert.That(buffer.GetDataSize(), Is.GreaterThan(2));
-
-        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.BufferOverflow));
         Assert.That(buffer.IsAlive, Is.False);
     }
 

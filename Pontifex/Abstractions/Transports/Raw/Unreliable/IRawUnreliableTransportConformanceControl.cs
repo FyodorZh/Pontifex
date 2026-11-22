@@ -4,8 +4,7 @@ namespace Pontifex.Raw.Unreliable
 {
     /// <summary>
     /// Test-only control for a RawUnreliable transport instance, obtained via
-    /// ITransport.GetControls before starting. Shared by the Ack and NoAck
-    /// contract variants.
+    /// ITransport.GetControls before starting.
     /// </summary>
     public interface IRawUnreliableTransportConformanceControl : IRawUnreliableConformanceControl
     {

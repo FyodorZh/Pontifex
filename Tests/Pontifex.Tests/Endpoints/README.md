@@ -137,8 +137,8 @@ Harness contains stubs, recording doubles, test implementations of abstract type
 drivers.
 
 - The root `Harness/` holds the suite-wide doubles (`ManualSerialActionQueue`,
-  `RecordingLogConsumer`, `RecordingRawHandler`, and `TestBuffers`) and the root layer's
-  `TestRawEndpoint`.
+  `RecordingLogConsumer`, `RecordingRawHandler`, and `TestBuffers`), the shared symbolic frame
+  constants (`RawReliableFrameTypes`), and the root layer's `TestRawEndpoint`.
 - `RawReliable/Harness/` holds the layer's `TestRawReliableEndpoint` and the handler double
   `RecordingRawReliableHandler`, which is shared by both client/server branches.
 - Client-specific harness stays in `RawReliable/Client/Harness/`; server-specific harness stays
@@ -195,7 +195,8 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=End
 2. Create the layer directory and add `Coverage.md` with layer identity, subject, directory,
    inheritance parent, contract link, covered tests, planned gaps, and deferred-by-design gaps.
 3. Add `Harness/` only if the layer needs new doubles; reuse ancestor harness where possible.
-4. Add `<Subject>Tests.cs` with `[Category("Endpoints")]`.
+4. Add `<Subject>Tests.cs` with `[Category("Endpoints")]`. This is an Abstract Test Suit, so the
+   file goes directly in the layer directory, not under `Tests/`.
 5. Add the layer row to the table and the directory layout in this README.
 6. Run the suite and record it in `Coverage.md`.
 
@@ -214,10 +215,13 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=End
 - Transports, carriers, sockets, networks, threads, timers, and real time. Those belong to the
   transport suite in `Tests/Pontifex.Tests/Transports` and the conformance project
   `Tests/Pontifex.Transports.Tests`.
-- Wrapper endpoints (`RawReliableBaseEndpointWrapper` and its descendants) and converter endpoints.
+- Wrapper endpoints (`RawReliableBaseEndpointWrapper` and its descendants) and converter
+  transports (`RawUnreliableToRawReliableConverter` and its client/server parts).
 - The conformance architecture: `IConformanceControl`, transport-level controls, failure injection, and
-  the conformance role of `GetControls`. Tests may arm an endpoint's gate counters purely as an observable
-  to pin delivery counts; `CheckPoint` behaviour itself belongs to its own suite.
+  the conformance behaviour of the controls published by `GetControls`. Tests may arm an endpoint's gate
+  counters purely as an observable to pin delivery counts; `CheckPoint` behaviour itself belongs to its
+  own suite. Publishing the controls themselves and honouring the `GetControls` predicate are part of the
+  endpoint contract and are covered by the `RawUnreliable` layer.
 - The background `Task.Run`/`Task.Delay` keep-alive loop wrapper. The synchronous
   `KeepAliveTick` body is covered; the scheduling wrapper is not.
 - End-to-end reliability, ordering, delivery, and reconnection behaviour.

@@ -11,6 +11,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
     /// backpressure with deadline-bounded teardown, and graceful final publication.
     /// </summary>
     [LowLevelTcpSocketSuite]
+    [Category(TestCategories.Loopback)]
     public class LoopbackSocketTests
     {
         [Test]

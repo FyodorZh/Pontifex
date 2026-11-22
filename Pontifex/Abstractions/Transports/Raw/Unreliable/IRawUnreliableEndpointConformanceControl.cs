@@ -5,7 +5,7 @@ namespace Pontifex.Raw.Unreliable
     /// <summary>
     /// Test-only control for a single IRawUnreliableEndpoint, obtained via
     /// IRawUnreliableEndpoint.GetControls after the endpoint is received in
-    /// OnStarted. Shared by the Ack and NoAck contract variants.
+    /// OnStarted.
     /// </summary>
     public interface IRawUnreliableEndpointConformanceControl : IControl
     {

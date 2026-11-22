@@ -133,6 +133,7 @@ Transports/
     │       ├── RawReliableServerTransportTests.cs
     │       ├── Harness/
     │       │   ├── ManualPeriodicLogicDriver.cs
+    │       │   ├── RecordingRawAdmissionServerHandler.cs
     │       │   ├── ScriptedSerialActionQueue.cs
     │       │   ├── TestRawReliableServerSession.cs
     │       │   └── TestRawReliableServerTransport.cs
@@ -146,7 +147,8 @@ Transports/
         ├── Coverage.md
         ├── RawUnreliableTransportTests.cs
         ├── Harness/
-        │   └── TestRawUnreliableTransport.cs
+        │   ├── TestRawUnreliableTransport.cs
+        │   └── TestRawUnreliableTransportWithoutDebugReliability.cs
         ├── Client/                                  RawUnreliableClientTransport layer
         │   ├── Coverage.md
         │   ├── RawUnreliableClientTransportTests.cs
@@ -362,8 +364,10 @@ the `RawTransport`/`RawReliableTransport` facades are not repeated.
   after a successful carrier start. Each tick calls `PeriodicTick` on every registered session; a
   stopped session is skipped, a session added after start is picked up, and an exception from one
   session does not prevent the others from ticking. Ticks after the transport stops are ignored, and
-  no ticker is created when the start fails. The test double supplies a hand-driven
-  `ILogicDriver<IPeriodicLogicDriverCtl>`, so no background thread or real time is involved.
+  no ticker is created when the start fails or when a carrier overrides
+  `DisconnectionByTimeoutCheck` to `false` (carriers without an idle-session timeout). The test
+  double supplies a hand-driven `ILogicDriver<IPeriodicLogicDriverCtl>`, so no background thread or
+  real time is involved.
 
 ### `RawUnreliableTransport` contract matrix
 
@@ -438,8 +442,9 @@ facade are not repeated.
 - **Stop**: the admission is closed and the routes are cleared under the admission lock before
   `StopCarrier` runs. The carrier stops first, then every removed endpoint is stopped with the transport
   reason through the one-shot entry. Every session handler observes the same reason instance.
-- **Concurrency**: factory invocation and route publication are serialized for one source; concurrent
-  triggers for the same unknown source produce exactly one factory call, one endpoint, and one route.
+- **Concurrency**: factory invocation and route publication are serialized globally, across all source
+  routes. Concurrent triggers for the same unknown source produce exactly one factory call, one endpoint,
+  and one route; concurrent triggers for different sources still never overlap in the factory.
 
 ## How it works
 

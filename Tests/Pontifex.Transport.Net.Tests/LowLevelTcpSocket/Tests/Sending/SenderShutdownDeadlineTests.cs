@@ -182,6 +182,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
         }
 
         [Test]
+        [Category(TestCategories.Timing)]
         public async Task RealTimerSmoke_ExpiryForcesAbort()
         {
             using var harness = new LowLevelSocketHarness();

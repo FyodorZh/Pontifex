@@ -13,7 +13,7 @@ namespace Pontifex.Factory.Tests.Bootstrap.Harness
     internal static class BootstrapTestData
     {
         public static readonly TransportType TypeA = TransportType.RawReliable;
-        public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
+        public static readonly TransportType TypeB = TransportType.RawUnreliable;
 
         public static ITransportFactoryBuilder NewBuilder()
         {

@@ -7,7 +7,7 @@ namespace Pontifex.Tests.Raw.Unreliable;
 /// <summary>
 /// Base test handler: captures the endpoint from OnStarted, auto-tracks it with
 /// the fixture (so Dispose resets its gates), and records the stopped reason.
-/// Shared by the Ack and NoAck conformance suites.
+/// Shared by the RawUnreliable conformance suite.
 /// </summary>
 public abstract class RawUnreliableTestHandler : IRawUnreliableHandler
 {

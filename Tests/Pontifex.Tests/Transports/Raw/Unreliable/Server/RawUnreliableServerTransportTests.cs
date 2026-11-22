@@ -47,12 +47,27 @@ public sealed class RawUnreliableServerTransportTests
     }
 
     private static void StartWithFactory(TestRawUnreliableServerTransport transport,
-        Func<IEndPoint, UnionDataList, IRawUnreliableHandler?> factory, out StopReason? callbackReason)
+        Func<IEndPoint, IRawUnreliableHandler?> factory, out StopReason? callbackReason)
     {
         StopReason? reason = null;
         Assert.That(transport.ExposedTryInitializeServer(factory), Is.True);
         Assert.That(transport.Start(r => reason = r), Is.True);
         callbackReason = reason;
+    }
+
+    private static void UpdateMax(ref int max, int value)
+    {
+        int observed = Volatile.Read(ref max);
+        while (value > observed)
+        {
+            int previous = Interlocked.CompareExchange(ref max, value, observed);
+            if (previous == observed)
+            {
+                return;
+            }
+
+            observed = previous;
+        }
     }
 
     [TearDown]
@@ -79,7 +94,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         using var transport = Create(messageMaxByteSize: 100, sendBudgetBytes: 250, sendBudgetMessages: 3);
         Assert.That(transport.ExposedSharedSendBudget, Is.Null);
-        Assert.That(transport.ExposedTryInitializeServer((source, trigger) => null), Is.True);
+        Assert.That(transport.ExposedTryInitializeServer(source => null), Is.True);
 
         Assert.That(transport.Start(_ => { }), Is.True);
 
@@ -97,7 +112,7 @@ public sealed class RawUnreliableServerTransportTests
     public void Start_CreatesSharedBudgetHonouringMessageCap()
     {
         using var transport = Create(sendBudgetBytes: 100_000, sendBudgetMessages: 2);
-        Assert.That(transport.ExposedTryInitializeServer((source, trigger) => null), Is.True);
+        Assert.That(transport.ExposedTryInitializeServer(source => null), Is.True);
 
         Assert.That(transport.Start(_ => { }), Is.True);
 
@@ -112,7 +127,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         using var transport = Create(sendBudgetBytes: 4096, sendBudgetMessages: 4);
         using var handler = new RecordingRawUnreliableHandler(Memory);
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
 
         UnionDataList first = TestBuffers.WithByte(Memory, 1);
         UnionDataList second = TestBuffers.WithByte(Memory, 2);
@@ -151,8 +166,8 @@ public sealed class RawUnreliableServerTransportTests
         using var first = new RecordingRawUnreliableHandler(Memory);
         using var second = new RecordingRawUnreliableHandler(Memory);
 
-        Assert.That(transport.ExposedTryInitializeServer((source, trigger) => first), Is.True);
-        Assert.That(transport.ExposedTryInitializeServer((source, trigger) => second), Is.False);
+        Assert.That(transport.ExposedTryInitializeServer(source => first), Is.True);
+        Assert.That(transport.ExposedTryInitializeServer(source => second), Is.False);
 
         Assert.That(transport.Start(_ => { }), Is.True);
         UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
@@ -169,7 +184,7 @@ public sealed class RawUnreliableServerTransportTests
         using var transport = Create();
         Assert.That(transport.Start(_ => { }), Is.False);
 
-        Assert.That(transport.ExposedTryInitializeServer((source, trigger) => null), Is.False);
+        Assert.That(transport.ExposedTryInitializeServer(source => null), Is.False);
         Assert.That(transport.ExposedHasStartBeenAttempted, Is.True);
     }
 
@@ -178,7 +193,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         using var transport = Create();
         transport.StartCarrierBehavior = static () => false;
-        Assert.That(transport.ExposedTryInitializeServer((source, trigger) => null), Is.True);
+        Assert.That(transport.ExposedTryInitializeServer(source => null), Is.True);
 
         Assert.That(transport.Start(_ => { }), Is.False);
 
@@ -194,7 +209,7 @@ public sealed class RawUnreliableServerTransportTests
         var logConsumer = new RecordingLogConsumer();
         using var transport = Create(logger: new Logger([logConsumer]));
         transport.StartCarrierException = new InvalidOperationException("server carrier failed");
-        Assert.That(transport.ExposedTryInitializeServer((source, trigger) => null), Is.True);
+        Assert.That(transport.ExposedTryInitializeServer(source => null), Is.True);
 
         Assert.That(transport.Start(_ => { }), Is.False);
 
@@ -213,7 +228,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         using var transport = Create();
         using var handler = new RecordingRawUnreliableHandler(Memory);
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
         var source = new StringEndPoint("source");
         UnionDataList trigger = TestBuffers.WithByte(Memory, 7);
 
@@ -248,7 +263,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         using var transport = Create();
         using var handler = new RecordingRawUnreliableHandler(Memory);
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
         var source = new StringEndPoint("source");
         transport.ExposedOnCarrierInbound(source, TestBuffers.WithByte(Memory, 1));
         var endpoint = (TestRawUnreliableServerEndpoint)transport.CreatedEndpoints[0];
@@ -275,7 +290,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         var logConsumer = new RecordingLogConsumer();
         using var transport = Create(logger: new Logger([logConsumer]));
-        StartWithFactory(transport, (source, trigger) => null, out _);
+        StartWithFactory(transport, source => null, out _);
         UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
 
         transport.ExposedOnCarrierInbound(new StringEndPoint("source"), trigger);
@@ -310,8 +325,8 @@ public sealed class RawUnreliableServerTransportTests
     {
         var logConsumer = new RecordingLogConsumer();
         using var transport = Create(logger: new Logger([logConsumer]));
-        transport.FactoryBehavior = (source, trigger) => throw new InvalidOperationException("factory failed");
-        StartWithFactory(transport, (source, trigger) => null, out _);
+        transport.FactoryBehavior = source => throw new InvalidOperationException("factory failed");
+        StartWithFactory(transport, source => null, out _);
         UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
 
         transport.ExposedOnCarrierInbound(new StringEndPoint("source"), trigger);
@@ -330,7 +345,7 @@ public sealed class RawUnreliableServerTransportTests
         using var transport = Create(logger: new Logger([logConsumer]));
         using var handler = new RecordingRawUnreliableHandler(Memory);
         transport.CreateEndpointException = new InvalidOperationException("endpoint creation failed");
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
         UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
 
         transport.ExposedOnCarrierInbound(new StringEndPoint("source"), trigger);
@@ -348,7 +363,7 @@ public sealed class RawUnreliableServerTransportTests
         using var transport = Create(logger: new Logger([logConsumer]));
         using var handler = new RecordingRawUnreliableHandler(Memory);
         transport.CreateEndpointReturnsNull = true;
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
         UnionDataList first = TestBuffers.WithByte(Memory, 1);
         UnionDataList second = TestBuffers.WithByte(Memory, 2);
 
@@ -372,7 +387,7 @@ public sealed class RawUnreliableServerTransportTests
     public void OnCarrierInbound_WithNullArguments_Throws()
     {
         using var transport = Create();
-        StartWithFactory(transport, (source, trigger) => null, out _);
+        StartWithFactory(transport, source => null, out _);
         UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
 
         try
@@ -394,7 +409,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         using var transport = Create();
         using var handler = new RecordingRawUnreliableHandler(Memory);
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
         Assert.That(transport.Stop(Reason()), Is.True);
         UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
 
@@ -425,7 +440,7 @@ public sealed class RawUnreliableServerTransportTests
         int factoryCalls = 0;
         Exception? threadFailure = null;
 
-        transport.FactoryBehavior = (s, t) =>
+        transport.FactoryBehavior = s =>
         {
             Interlocked.Increment(ref factoryCalls);
             factoryEntered.Set();
@@ -437,7 +452,7 @@ public sealed class RawUnreliableServerTransportTests
 
             return handler;
         };
-        StartWithFactory(transport, (s, t) => handler, out _);
+        StartWithFactory(transport, s => handler, out _);
 
         UnionDataList firstTrigger = TestBuffers.WithByte(Memory, 1);
         UnionDataList secondTrigger = TestBuffers.WithByte(Memory, 2);
@@ -499,6 +514,108 @@ public sealed class RawUnreliableServerTransportTests
         transport.StopAndDrainAll();
     }
 
+    [Test]
+    [Category("Transports.Concurrency")]
+    public void OnCarrierInbound_ConcurrentTriggersForTwoSources_SerializeFactoryCalls()
+    {
+        using var transport = Create();
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        using var startGate = new ManualResetEventSlim(false);
+        using var ready = new CountdownEvent(2);
+        using var factoryEntered = new ManualResetEventSlim(false);
+        using var releaseFactory = new ManualResetEventSlim(false);
+        var firstSource = new StringEndPoint("source-1");
+        var secondSource = new StringEndPoint("source-2");
+        int active = 0;
+        int maxActive = 0;
+        int factoryCalls = 0;
+        Exception? threadFailure = null;
+
+        transport.FactoryBehavior = s =>
+        {
+            int current = Interlocked.Increment(ref active);
+            UpdateMax(ref maxActive, current);
+            Interlocked.Increment(ref factoryCalls);
+            factoryEntered.Set();
+
+            try
+            {
+                if (!releaseFactory.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    throw new TimeoutException("The factory gate was not released.");
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref active);
+            }
+
+            return handler;
+        };
+        StartWithFactory(transport, s => handler, out _);
+
+        UnionDataList firstTrigger = TestBuffers.WithByte(Memory, 1);
+        UnionDataList secondTrigger = TestBuffers.WithByte(Memory, 2);
+
+        Thread Contender(IEndPoint source, UnionDataList trigger) => new(() =>
+        {
+            ready.Signal();
+            startGate.Wait();
+
+            try
+            {
+                transport.ExposedOnCarrierInbound(source, trigger);
+            }
+            catch (Exception ex)
+            {
+                threadFailure = ex;
+            }
+        });
+
+        var first = Contender(firstSource, firstTrigger);
+        var second = Contender(secondSource, secondTrigger);
+        first.IsBackground = true;
+        second.IsBackground = true;
+
+        try
+        {
+            first.Start();
+            second.Start();
+
+            Assert.That(ready.Wait(TimeSpan.FromSeconds(10)), Is.True,
+                "The contenders did not become ready.");
+            Assert.That(transport.ExposedRouteCount, Is.Zero);
+
+            startGate.Set();
+
+            Assert.That(factoryEntered.Wait(TimeSpan.FromSeconds(10)), Is.True,
+                "Neither contender entered the factory.");
+        }
+        finally
+        {
+            startGate.Set();
+            releaseFactory.Set();
+        }
+
+        Assert.That(first.Join(TimeSpan.FromSeconds(10)), Is.True, "The first contender did not finish.");
+        Assert.That(second.Join(TimeSpan.FromSeconds(10)), Is.True, "The second contender did not finish.");
+
+        Assert.That(threadFailure, Is.Null);
+        Assert.That(maxActive, Is.EqualTo(1),
+            "the admission lock is global, not per source route");
+        Assert.That(factoryCalls, Is.EqualTo(2));
+        Assert.That(transport.InvokeFactoryCalls, Is.EqualTo(2));
+        Assert.That(transport.CreateEndpointCalls, Is.EqualTo(2));
+        Assert.That(transport.ExposedRouteCount, Is.EqualTo(2));
+
+        foreach (var endpoint in transport.CreatedEndpoints)
+        {
+            ((TestRawUnreliableServerEndpoint)endpoint).DrainAll();
+        }
+
+        transport.StopAndDrainAll();
+    }
+
     #endregion
 
     #region Route removal and recreation
@@ -508,7 +625,7 @@ public sealed class RawUnreliableServerTransportTests
     {
         using var transport = Create();
         using var handler = new RecordingRawUnreliableHandler(Memory);
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
         var source = new StringEndPoint("source");
         transport.ExposedOnCarrierInbound(source, TestBuffers.WithByte(Memory, 1));
         var firstEndpoint = (TestRawUnreliableServerEndpoint)transport.CreatedEndpoints[0];
@@ -539,7 +656,7 @@ public sealed class RawUnreliableServerTransportTests
         var firstSource = new StringEndPoint("first");
         var secondSource = new StringEndPoint("second");
         StartWithFactory(transport,
-            (source, trigger) => ReferenceEquals(source, firstSource) ? firstHandler : secondHandler, out _);
+            source => ReferenceEquals(source, firstSource) ? firstHandler : secondHandler, out _);
         transport.ExposedOnCarrierInbound(firstSource, TestBuffers.WithByte(Memory, 1));
         transport.ExposedOnCarrierInbound(secondSource, TestBuffers.WithByte(Memory, 2));
         var firstEndpoint = (TestRawUnreliableServerEndpoint)transport.CreatedEndpoints[0];
@@ -577,7 +694,7 @@ public sealed class RawUnreliableServerTransportTests
         var secondSource = new StringEndPoint("second");
         StopReason? callbackReason = null;
         Assert.That(transport.ExposedTryInitializeServer(
-            (source, trigger) => ReferenceEquals(source, firstSource) ? firstHandler : secondHandler), Is.True);
+            source => ReferenceEquals(source, firstSource) ? firstHandler : secondHandler), Is.True);
         Assert.That(transport.Start(r => callbackReason = r), Is.True);
         transport.ExposedOnCarrierInbound(firstSource, TestBuffers.WithByte(Memory, 1));
         transport.ExposedOnCarrierInbound(secondSource, TestBuffers.WithByte(Memory, 2));
@@ -612,12 +729,12 @@ public sealed class RawUnreliableServerTransportTests
         using var transport = Create();
         using var handler = new RecordingRawUnreliableHandler(Memory);
         var reason = Reason();
-        transport.FactoryBehavior = (source, trigger) =>
+        transport.FactoryBehavior = source =>
         {
             transport.Stop(reason);
             return handler;
         };
-        StartWithFactory(transport, (source, trigger) => handler, out _);
+        StartWithFactory(transport, source => handler, out _);
         UnionDataList trigger = TestBuffers.WithByte(Memory, 3);
 
         transport.ExposedOnCarrierInbound(new StringEndPoint("source"), trigger);

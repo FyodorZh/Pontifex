@@ -38,10 +38,17 @@ namespace Pontifex.Factory.Tests.Bootstrap
             var first = BootstrapTestData.NewBuilder();
             var second = TransportFactoryBootstrap.CreateBuilder();
 
-            first.Build();
+            first.RegisterTransport(BootstrapTestData.CoreRegistration(
+                "alpha",
+                BootstrapTestData.TypeA,
+                _ => new FakeTransport(BootstrapTestData.TypeA)));
+            var firstFactory = first.Build();
 
-            // The second builder never registered the types, so its factory must
-            // not see them; this proves there is no hidden static registry.
+            Assert.That(firstFactory.Resolve("alpha()").Error, Is.Null,
+                "the first builder must resolve the transport it registered");
+
+            // The second builder never registered the transport, so its factory must
+            // not see it; this proves there is no hidden static registry.
             var result = second.Build().Resolve("alpha()");
 
             Assert.That(result.Formula, Is.Null);
@@ -69,6 +76,23 @@ namespace Pontifex.Factory.Tests.Bootstrap
             var exception = Assert.Throws<RegistrationException>(
                 () => builder.Registry.RegisterType(
                     new TransportTypeInfo(BootstrapTestData.TypeA, "TypeX")));
+
+            Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_BUILDER_SEALED"));
+            Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
+            Assert.That(exception.Error.Message, Is.EqualTo("registry builder has already been built"));
+        }
+
+        [Test]
+        public void RegisterTransport_AfterBuild_ThrowsBuilderSealed()
+        {
+            var builder = BootstrapTestData.NewBuilder();
+            builder.Build();
+
+            var exception = Assert.Throws<RegistrationException>(
+                () => builder.RegisterTransport(BootstrapTestData.CoreRegistration(
+                    "late",
+                    BootstrapTestData.TypeA,
+                    _ => new FakeTransport(BootstrapTestData.TypeA))));
 
             Assert.That(exception!.Error.Code, Is.EqualTo("E_REG_BUILDER_SEALED"));
             Assert.That(exception.Error.Phase, Is.EqualTo(FactoryPhase.Registration));
@@ -115,6 +139,38 @@ namespace Pontifex.Factory.Tests.Bootstrap
                 VoidLogger.Instance,
                 MemoryRental.Shared);
             Assert.That(factory.Compile("alpha()", compiler), Is.SameAs(transport));
+        }
+
+        [Test]
+        public void Create_IsInvokedOnlyByCompilation()
+        {
+            int createCalls = 0;
+            var builder = BootstrapTestData.NewBuilder();
+            builder.RegisterTransport(
+                BootstrapTestData.CoreRegistration(
+                    "alpha",
+                    BootstrapTestData.TypeA,
+                    _ =>
+                    {
+                        createCalls++;
+                        return new FakeTransport(BootstrapTestData.TypeA, "alpha");
+                    }));
+
+            var factory = builder.Build();
+
+            Assert.That(factory.Resolve("alpha()").Error, Is.Null);
+            Assert.That(createCalls, Is.Zero, "resolution must not construct a transport");
+
+            Assert.That(factory.Canonicalize("alpha()"), Is.EqualTo("alpha()"));
+            Assert.That(createCalls, Is.Zero, "canonicalization must not construct a transport");
+
+            var compiler = factory.CreateCompiler(
+                TransportRole.Server,
+                VoidLogger.Instance,
+                MemoryRental.Shared);
+
+            Assert.That(factory.Compile("alpha()", compiler), Is.Not.Null);
+            Assert.That(createCalls, Is.EqualTo(1), "compilation constructs the transport exactly once");
         }
 
         [Test]
@@ -527,6 +583,16 @@ namespace Pontifex.Factory.Tests.Bootstrap
             Assert.That(
                 exception.Error.Message,
                 Is.EqualTo("canonical scheme 'alpha' is already registered"));
+
+            // The rejected registration must not have disturbed the first one.
+            var factory = builder.Build();
+            var resolved = factory.Resolve("alpha()");
+
+            Assert.That(resolved.Error, Is.Null);
+            var transport = (ResolvedTransport)resolved.Formula!.Root;
+            Assert.That(transport.Constructor.Name, Is.EqualTo("alpha"));
+            Assert.That(transport.Type, Is.EqualTo(BootstrapTestData.TypeA));
+            Assert.That(factory.Resolve("alpha()").Formula, Is.Not.Null);
         }
     }
 }

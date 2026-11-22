@@ -15,6 +15,17 @@ public sealed class ParserTests
     #region Valid grammar forms
 
     [Test]
+    public void Parse_WithNullSource_ReturnsEmptyInputError()
+    {
+        var result = new FormulaParser().Parse(null!);
+
+        Assert.That(result.Formula, Is.Null);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Code, Is.EqualTo("E_SYN_EMPTY_INPUT"));
+        Assert.That(result.Error.Phase, Is.EqualTo(FactoryPhase.Parsing));
+    }
+
+    [Test]
     public void Parse_ForEmptyCall_ProducesEmptyArgumentList()
     {
         var formula = Parse("alpha()");
@@ -249,6 +260,28 @@ public sealed class ParserTests
         Assert.That(formula.Root.Cast, Is.Null);
     }
 
+    [Test]
+    public void Parse_ForAsAsNamedArgumentName_KeepsTheNameAndScalarValue()
+    {
+        var formula = Parse("alpha(as=1)");
+        var argument = formula.Root.Call.Arguments.Single();
+
+        Assert.That(argument.Name, Is.EqualTo("as"));
+        Assert.That(((AstScalar)argument.Value).Text, Is.EqualTo("1"));
+        Assert.That(formula.Root.Cast, Is.Null);
+    }
+
+    [Test]
+    public void Parse_ForAsAsStructFieldName_KeepsTheFieldNameAndScalarValue()
+    {
+        var formula = Parse("alpha({as=1})");
+        var structValue = (AstStruct)formula.Root.Call.Arguments.Single().Value;
+        var field = structValue.Fields.Single();
+
+        Assert.That(field.Name, Is.EqualTo("as"));
+        Assert.That(((AstScalar)field.Value).Text, Is.EqualTo("1"));
+    }
+
     #endregion
 
     #region AST spans and offsets
@@ -476,6 +509,15 @@ public sealed class ParserTests
 
         yield return SyntaxError("alpha(a,,b)", "E_SYN_UNEXPECTED_TOKEN", 8,
             "expected a value, got ','").SetName("MissingArgumentAfterComma");
+
+        yield return SyntaxError("alpha(p=)", "E_SYN_UNEXPECTED_TOKEN", 8,
+            "expected a value, got ')'").SetName("NamedArgumentMissingValue");
+
+        yield return SyntaxError("alpha(p=,q=1)", "E_SYN_UNEXPECTED_TOKEN", 8,
+            "expected a value, got ','").SetName("NamedArgumentValueIsComma");
+
+        yield return SyntaxError("alpha({p=})", "E_SYN_UNEXPECTED_TOKEN", 9,
+            "expected a value, got '}'").SetName("StructFieldMissingValue");
 
         yield return SyntaxError("alpha([,])", "E_SYN_UNEXPECTED_TOKEN", 7,
             "expected a value, got ','").SetName("ListStartsWithComma");

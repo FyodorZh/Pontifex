@@ -33,29 +33,6 @@ namespace Pontifex.TransportFormula.Parsing.Internal
             return token;
         }
 
-        public bool Match(FormulaTokenKind kind)
-        {
-            if (Current.Kind != kind)
-            {
-                return false;
-            }
-
-            Consume();
-            return true;
-        }
-
-        public bool MatchWord(string word)
-        {
-            if (Current.Kind != FormulaTokenKind.Word
-                || !string.Equals(Current.Text, word, System.StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            Consume();
-            return true;
-        }
-
         public bool IsCurrentAsKeyword()
         {
             return Current.Kind == FormulaTokenKind.Word

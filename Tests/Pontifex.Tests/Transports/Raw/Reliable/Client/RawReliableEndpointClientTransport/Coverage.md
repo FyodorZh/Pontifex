@@ -28,7 +28,6 @@
 | Gap | Reason |
 |---|---|
 | Inherited init, start/connect handoff, failed-start non-notification, and endpoint attach/detach ownership. | Covered once by `RawReliableClientTransportTests`; not repeated here. |
-| A Direct `RawReliable` carrier. | Both the `tcp` and `direct` RawReliable carriers exist. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
 | Handler factory, admission, and server-session hand-off. | Belongs to the reliable server layer and the Endpoints suite. |
 

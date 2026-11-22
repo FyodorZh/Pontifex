@@ -15,7 +15,7 @@ namespace Pontifex.Tests.Transports;
 /// <see cref="TestRawUnreliableServerEndpoint"/> sessions that share the transport-owned send budget.
 /// </summary>
 internal sealed class TestRawUnreliableServerTransport
-    : RawUnreliableServerTransport<Func<IEndPoint, UnionDataList, IRawUnreliableHandler?>>, IDisposable
+    : RawUnreliableServerTransport<Func<IEndPoint, IRawUnreliableHandler?>>, IDisposable
 {
     private readonly long _sendBudgetBytes;
     private readonly int _sendBudgetMessages;
@@ -40,17 +40,17 @@ internal sealed class TestRawUnreliableServerTransport
 
     public override int MessageMaxByteSize { get; }
 
-    public override TransportType Type => TransportType.RawUnreliableAck;
+    public override TransportType Type => TransportType.RawUnreliable;
 
     protected override long SendBudgetBytes => _sendBudgetBytes;
 
     protected override int SendBudgetMessages => _sendBudgetMessages;
 
     /// <summary>
-    /// Gets or sets the behavior that replaces the bound factory. It receives the source and the trigger
-    /// exactly like <see cref="InvokeFactory"/>.
+    /// Gets or sets the behavior that replaces the bound factory. It receives the source exactly like
+    /// <see cref="InvokeFactory"/>.
     /// </summary>
-    public Func<IEndPoint, UnionDataList, IRawUnreliableHandler?>? FactoryBehavior { get; set; }
+    public Func<IEndPoint, IRawUnreliableHandler?>? FactoryBehavior { get; set; }
 
     /// <summary>
     /// Gets or sets an exception thrown from <see cref="CreateEndpoint"/>.
@@ -105,7 +105,7 @@ internal sealed class TestRawUnreliableServerTransport
 
     public bool ExposedHasStartBeenAttempted => HasStartBeenAttempted;
 
-    public bool ExposedTryInitializeServer(Func<IEndPoint, UnionDataList, IRawUnreliableHandler?> factory)
+    public bool ExposedTryInitializeServer(Func<IEndPoint, IRawUnreliableHandler?> factory)
     {
         return TryInitializeServer(factory);
     }
@@ -151,14 +151,14 @@ internal sealed class TestRawUnreliableServerTransport
     }
 
     protected override IRawUnreliableHandler? InvokeFactory(
-        Func<IEndPoint, UnionDataList, IRawUnreliableHandler?> factory,
+        Func<IEndPoint, IRawUnreliableHandler?> factory,
         IEndPoint source,
         UnionDataList trigger)
     {
         InvokeFactoryCalls++;
         FactorySources.Add(source);
 
-        return FactoryBehavior != null ? FactoryBehavior(source, trigger) : factory(source, trigger);
+        return FactoryBehavior != null ? FactoryBehavior(source) : factory(source);
     }
 
     protected override RawUnreliableServerEndpoint? CreateEndpoint(IRawUnreliableHandler handler,

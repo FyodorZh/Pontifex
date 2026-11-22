@@ -144,6 +144,11 @@ namespace Pontifex.Tests.Delivery
             receiver.ProcessIncoming(msg);
 
             Assert.That(received, Is.EqualTo(1));
+
+            var reports = Capture(receiver);
+            Assert.That(reports, Has.Count.EqualTo(1));
+            Assert.That(reports[0].TryPopFirst(out bool isUser), Is.True);
+            Assert.That(isUser, Is.False);
         }
 
         [Test]
@@ -480,6 +485,41 @@ namespace Pontifex.Tests.Delivery
             }
 
             Assert.That(deliveredId, Is.EqualTo(new DeliveryId(1)));
+        }
+
+        [Test]
+        public void ProcessOutgoing_WhenDispatcherQueueIsFull_FiresFailedToDeliverOnce()
+        {
+            var dm = NewManager();
+            var failed = new List<DeliveryId>();
+            dm.FailedToDeliver += id => failed.Add(id);
+
+            const int capacity = 5000;
+            DeliveryId overflowId = default;
+            for (int i = 0; i < capacity + 1; i++)
+            {
+                Assert.That(dm.ScheduleDelivery(DataList(1), out var id), Is.EqualTo(SendResult.Ok));
+                if (i == capacity)
+                {
+                    overflowId = id;
+                }
+            }
+
+            int consumed = 0;
+            dm.ProcessOutgoing(RetryScheduler, T0,
+                new ConsumerDelegate<UnionDataList>(x =>
+                {
+                    consumed++;
+                    x.Release();
+                    return true;
+                }));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(failed, Is.EqualTo(new[] { overflowId }),
+                    "only the message the dispatcher could not admit is reported as failed");
+                Assert.That(consumed, Is.EqualTo(capacity));
+            });
         }
 
         [Test]

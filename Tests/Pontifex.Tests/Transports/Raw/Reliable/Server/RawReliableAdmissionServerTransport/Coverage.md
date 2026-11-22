@@ -21,8 +21,11 @@
 | `TryCreateHandler_WhenNotStarted_ReturnsNull` | The factory requires a started transport. | No handler is created and the factory is not called before start. | — |
 | `TryCreateHandler_ReturnsStopOnceWrapper` | A successful factory call returns a stop-once gate. | The result is a `StopOnceServerHandler` whose `Inner` is the factory's handler. | The wrapper changes handler identity; reference comparisons use `Inner`. |
 | `TryCreateHandler_WhenFactoryThrows_ReturnsNull` | A factory exception is isolated. | The result is null and the transport remains valid and started. | — |
+| `TryCreateHandler_AfterThrow_ReinvokesTheFactoryOnTheNextAdmission` | `parsing.md` reliable spec rules 4-5: a rejected `TryCreate` stays eligible. | After a throwing first call, the next admission calls the factory again and admits its handler. | `TryCreateCalls == 2`; the second handler is wrapped in `StopOnceServerHandler`. |
+| `TryCreateHandler_AfterNullResult_ReinvokesTheFactoryOnTheNextAdmission` | A null factory result must not be cached. | After a null first call, the next admission obtains a handler from a second call. | The scripted factory returns null once, then a handler. |
 | `TryCreateHandler_InvokesFactoryWithRemote` | The factory receives the remote endpoint. | The recorded remote endpoint is the same instance. | — |
 | `TryCreateHandler_CallsDoNotOverlap` | Factory invocations are serialized. | Two gated contenders produce two calls with at most one in the factory at a time. | `Transports.Concurrency`; gated threads are joined with bounded timeouts and the gates are released in `finally`. |
+| `TryCreateHandler_ConcurrentDistinctSources_SerializeFactoryCalls` | Factory serialization is global, not per remote route. | Two contenders for different `IEndPoint` values produce two calls with at most one in the factory at a time. | Same gated-thread discipline; the sources are distinct instances, so a per-source lock would let both enter. |
 | `AbandonAdmission_WithHandler_NotifiesOnStoppedOnce` | An abandoned admission notifies the created handler. | The gated handler receives one `OnStopped`; a later direct call is ignored and the session slot is released. | Uses the exact gate returned by `TryCreateHandler` for both calls. |
 | `CompleteAdmission_WhenSessionCannotStart_NotifiesOnStoppedOnce` | A session that cannot start has no terminal notification of its own, and the gate keeps the fallback one-shot. | The admission fallback delivers one `OnStopped`, the drained session adds no second one, and a later direct call through the gate is ignored. | Proves the stop-once wrapper, not the inherited admission mechanics (covered by `RawReliableServerTransportTests`). Covers the rejected-start path only. |
 | `CompleteAdmission_WhenTransportStopping_DoesNotPreemptStartedSession` | A started session owns its terminal notification and the gate keeps it one-shot. | The admission fallback stays silent immediately after completion; draining the session delivers one `OnStopped` and releases the slot; a later direct call through the gate is ignored. | Proves the stop-once wrapper, not the inherited admission mechanics (covered by `RawReliableServerTransportTests`). The base server-session double does not raise `OnConnected`/`OnDisconnected`, so those are not asserted. |
@@ -38,7 +41,6 @@
 | Gap | Reason |
 |---|---|
 | Inherited session admission, registry, transport stop, and ticker behaviour. | Covered once by `RawReliableServerTransportTests`; not repeated here. |
-| A Direct `RawReliable` carrier. | Both the `tcp` and `direct` RawReliable carriers exist. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
 | Real carrier accept loops and end-to-end sessions. | Carrier and integration behaviour belong to the carrier suites. |
 | Logging verification for factory exceptions. | Requires a custom observable `ILogSink`; the transport-level policy is already covered. |

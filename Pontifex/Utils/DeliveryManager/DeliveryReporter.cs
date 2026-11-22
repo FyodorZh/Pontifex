@@ -21,6 +21,12 @@ namespace Pontifex.Delivery
                 return;
 
             int packSize = (messageMaxByteSize - deliveryInfoSerializer.DeliveryInfoFixedOverhead - safetyMargin) / deliveryInfoSerializer.DeliveryInfoElementSize;
+            if (packSize < 1)
+            {
+                // A message budget at or below the fixed overhead must not make the batch loop
+                // emit zero-length reports forever; fall back to one confirmation per packet.
+                packSize = 1;
+            }
 
             int pos = 0;
             while (pos < count)

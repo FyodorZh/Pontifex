@@ -51,19 +51,22 @@ namespace Pontifex.Delivery
     internal interface IDeliveryManagerTransportSide
     {
         /// <summary>
-        /// Feed an incoming wire packet into the delivery system. The first element
-        /// must be the <c>ushort</c> packetId. The data is released internally —
-        /// do not release it yourself after this call.
+        /// Feed an incoming wire packet into the delivery system. The first element is the
+        /// <c>bool</c> <c>isUser</c> discriminator. For a user packet, the second element is the
+        /// <c>ushort</c> wire chunk id; for a delivery report, the remaining elements are the
+        /// serialized confirmations. The data is released internally — do not release it yourself
+        /// after this call.
         /// </summary>
-        /// <param name="data">The incoming wire packet with packetId as first element.</param>
+        /// <param name="data">The incoming wire packet with the discriminator as first element.</param>
         /// <returns>true if the packet was recognized (user data, ACK) and processed;
         /// false if it was malformed or caused a deduplicator overflow.</returns>
         bool ProcessIncoming(UnionDataList data);
 
         /// <summary>
         /// Pump outgoing wire packets (new deliveries, retransmissions, and batched delivery
-        /// confirmations) into the provided consumer. Each outgoing packet has the
-        /// <c>ushort</c> packetId as its first element. Call periodically (e.g., every 10-50ms).
+        /// confirmations) into the provided consumer. Each outgoing packet starts with the
+        /// <c>bool</c> <c>isUser</c> discriminator; user packets then carry the
+        /// <c>ushort</c> wire chunk id. Call periodically (e.g., every 10-50ms).
         /// Must be called from the same thread as <see cref="ProcessIncoming"/>.
         /// </summary>
         /// <param name="scheduler">Controls retry timing per delivery attempt.</param>
@@ -78,8 +81,10 @@ namespace Pontifex.Delivery
     internal interface IDeliveryManager : IDeliveryManagerUserSide, IDeliveryManagerTransportSide
     {
         /// <summary>
-        /// Reset all state: clear send/receive queues, pending deliveries, and partial
-        /// reassembly buffers. Call on connection close or reset.
+        /// Drop pending outgoing deliveries, queued unsent messages, retransmission state, and
+        /// partial reassembly buffers. Call on connection close or reset. The inbound
+        /// deduplication window and the delivery-id sequence are preserved; create a new manager
+        /// when they must also start over.
         /// </summary>
         void Clear();
     }

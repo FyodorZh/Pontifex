@@ -22,6 +22,22 @@ namespace Pontifex.Tests.Delivery
         }
 
         [Test]
+        public void Flush_WhenMaximumIsSmallerThanOneConfirmation_EmitsOnePerPacket()
+        {
+            var reporter = new DeliveryReporter();
+            reporter.Add(Info(1));
+            reporter.Add(Info(2));
+
+            var sent = Flush(reporter, 10);
+
+            Assert.That(sent, Has.Count.EqualTo(2));
+            Assert.That(sent[0].Elements[1].Alias.UShortValue, Is.EqualTo(1));
+            Assert.That(sent[0].Elements[2].Alias.UShortValue, Is.EqualTo(1));
+            Assert.That(sent[1].Elements[1].Alias.UShortValue, Is.EqualTo(1));
+            Assert.That(sent[1].Elements[2].Alias.UShortValue, Is.EqualTo(2));
+        }
+
+        [Test]
         public void Flush_WhenEmpty_ProducesNothing()
         {
             var reporter = new DeliveryReporter();

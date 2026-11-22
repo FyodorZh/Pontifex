@@ -1,7 +1,6 @@
 using Actuarius.Memory;
 using NUnit.Framework;
-using Pontifex.Raw.Unreliable.Ack.Direct;
-using Pontifex.Raw.Unreliable.NoAck.Direct;
+using Pontifex.Raw.Unreliable.Direct;
 using Scriba;
 
 namespace Pontifex.Tests.Raw;
@@ -28,41 +27,37 @@ public sealed class RawUnreliableDirectBudgetWiringTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(RawUnreliableAckDirectInfo.QueueCapacity, Is.EqualTo(100));
-            Assert.That(RawUnreliableAckDirectInfo.SendBudgetMessages, Is.EqualTo(100));
-            Assert.That(RawUnreliableAckDirectInfo.SendBudgetBytes, Is.EqualTo(104_857_600L));
-
-            Assert.That(RawUnreliableNoAckDirectInfo.QueueCapacity, Is.EqualTo(100));
-            Assert.That(RawUnreliableNoAckDirectInfo.SendBudgetMessages, Is.EqualTo(100));
-            Assert.That(RawUnreliableNoAckDirectInfo.SendBudgetBytes, Is.EqualTo(104_857_600L));
+            Assert.That(RawUnreliableDirectInfo.QueueCapacity, Is.EqualTo(100));
+            Assert.That(RawUnreliableDirectInfo.SendBudgetMessages, Is.EqualTo(100));
+            Assert.That(RawUnreliableDirectInfo.SendBudgetBytes, Is.EqualTo(104_857_600L));
         });
     }
 
     [Test]
-    public void AckDirectClientAndServer_DeriveTheInfoBudgetCaps()
+    public void DirectClientAndServer_DeriveTheInfoBudgetCaps()
     {
         var logger = new Logger([]);
-        var client = new RawUnreliableAckDirectClient("budget-wiring", logger, MemoryRental.Shared);
-        var server = new RawUnreliableAckDirectServer("budget-wiring", logger, MemoryRental.Shared);
+        var client = new RawUnreliableDirectClient("budget-wiring", logger, MemoryRental.Shared);
+        var server = new RawUnreliableDirectServer("budget-wiring", logger, MemoryRental.Shared);
 
         Assert.Multiple(() =>
         {
             Assert.That(
-                RawUnreliableAckDirectInfo.SendBudgetBytes,
-                Is.EqualTo((long)RawUnreliableAckDirectInfo.MessageMaxByteSize *
-                    RawUnreliableAckDirectInfo.QueueCapacity));
+                RawUnreliableDirectInfo.SendBudgetBytes,
+                Is.EqualTo((long)RawUnreliableDirectInfo.MessageMaxByteSize *
+                    RawUnreliableDirectInfo.QueueCapacity));
             Assert.That(
-                RawUnreliableAckDirectInfo.SendBudgetMessages,
-                Is.EqualTo(RawUnreliableAckDirectInfo.QueueCapacity));
+                RawUnreliableDirectInfo.SendBudgetMessages,
+                Is.EqualTo(RawUnreliableDirectInfo.QueueCapacity));
 
             Assert.That(client.ExposedSendBudgetBytes,
-                Is.EqualTo(RawUnreliableAckDirectInfo.SendBudgetBytes));
+                Is.EqualTo(RawUnreliableDirectInfo.SendBudgetBytes));
             Assert.That(client.ExposedSendBudgetMessages,
-                Is.EqualTo(RawUnreliableAckDirectInfo.SendBudgetMessages));
+                Is.EqualTo(RawUnreliableDirectInfo.SendBudgetMessages));
             Assert.That(server.ExposedSendBudgetBytes,
-                Is.EqualTo(RawUnreliableAckDirectInfo.SendBudgetBytes));
+                Is.EqualTo(RawUnreliableDirectInfo.SendBudgetBytes));
             Assert.That(server.ExposedSendBudgetMessages,
-                Is.EqualTo(RawUnreliableAckDirectInfo.SendBudgetMessages));
+                Is.EqualTo(RawUnreliableDirectInfo.SendBudgetMessages));
         });
     }
 }

@@ -25,6 +25,7 @@
 | `FinishStart_WhenNotStarting_InvokesOnFailAndFailsHard` | `FinishStart` is legal only while starting. | The failure callback runs and the endpoint becomes terminal. | No handler stop notification because the endpoint never started. |
 | `FinishStart_WhenAlreadyStarted_InvokesOnFailAndNotifiesStopped` | `FinishStart` after start is an invalid transition. | The failure callback runs and the started endpoint notifies `OnStopped(ExceptionFail)`. | Exercises the queue `onError` → `FailHard` path. |
 | `Send_Null_ReturnsInvalidMessage` | `Send(null)` is rejected as `InvalidMessage`. | Null is rejected without affecting lifecycle. | Buffer ownership does not transfer for `InvalidMessage`. |
+| `Send_ReleasedBuffer_ReturnsInvalidMessageAndKeepsCallerOwnership` | `Send` rejects a non-null buffer that is no longer alive as `InvalidMessage`. | A released buffer is rejected and is not released a second time. | The caller retains ownership on `InvalidMessage`; the buffer is already dead, so a double release would corrupt the pool. |
 | `Send_WhenNotStarted_ReturnsNotConnectedAndReleasesBuffer` | `Send` rejects with `NotConnected` before start and consumes the buffer. | Rejection releases the buffer exactly once. | Ownership transfers for every non-`InvalidMessage` result. |
 | `Send_TooBig_ReturnsMessageTooBigAndReleasesBuffer` | `Send` rejects payloads above `MessageMaxByteSize`. | The size guard rejects and releases the buffer. | Buffer size is verified to exceed the limit before the call. |
 | `Send_WhenRunning_ReturnsOkAndTransmitsOnDrain` | A valid send is admitted and transmitted on the serial queue. | The admitted payload reaches `DoSendRaw` after drain. | The double captures a clone for inspection and releases the original. |
@@ -64,8 +65,8 @@
 | Missing test | Owner | Reason |
 |---|---|---|
 | `Stopped` event raised once on every terminal path and subscriber exceptions isolated. | This layer | The public event is part of the endpoint contract but is not currently asserted. |
-| `IRawEndpoint`/`IBaseEndpoint` assignability and `GetControls` predicate overload. | This layer | Interface exposure and the predicate path are not covered. |
-| Inbound scheduling rejection releases the buffer. | This layer | The manual queue now has an opt-in reject-next seam; the test is not written yet. |
+| `IRawEndpoint`/`IBaseEndpoint` assignability. | This layer | Interface exposure is not covered. The `GetControls` predicate overload is covered by the `RawUnreliable` layer. |
+| Inbound scheduling rejection releases the buffer. | This layer | The manual queue exposes an opt-in reject-next seam; the test is not written yet. |
 | `OnReceived` throwing fails hard with `ExceptionFail` while releasing ownership. | This layer | Handler exception isolation is a documented failure path. |
 | `OnStopped` throwing and `Stopped` subscriber throwing are swallowed. | This layer | Callback exception isolation is a documented contract. |
 | `onFailToRun` accounting rollback when an accepted send is never executed. | This layer | Accepted-but-never-run actions are only produced by a released queue; the manual queue models no release barrier. |

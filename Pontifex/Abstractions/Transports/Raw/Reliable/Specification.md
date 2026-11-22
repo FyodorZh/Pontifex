@@ -19,7 +19,7 @@ This specification defines:
 - ordered delivery and buffer-ownership rules;
 - the `zip`/`reconnectable` wrapper negotiation and the transparent `log`
   wrapper;
-- the `RawUnreliableNoAck -> RawReliable` converter handshake.
+- the `RawUnreliable -> RawReliable` converter handshake.
 
 It does not define authentication, authorization, confidentiality, integrity,
 or replay protection. Those concerns belong to the application or to a protocol
@@ -257,8 +257,8 @@ stacked.
 ## 9. Converter
 
 The registered converter is
-`RawUnreliableNoAckToRawReliableConverter`. It converts a
-`RawUnreliableNoAck` transport into an `IRawReliableClient`/`IRawReliableServer`
+`RawUnreliableToRawReliableConverter`. It converts a
+`RawUnreliable` transport into an `IRawReliableClient`/`IRawReliableServer`
 by emulating reliable delivery over a `DeliveryManager`.
 
 The converter handshake runs as the first delivery-managed message, so it is

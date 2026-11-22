@@ -121,16 +121,19 @@ namespace Pontifex.Utils
             return false;
         }
 
-        public bool Deserialize<TByteSource>(ref TByteSource source, IPool<IMultiRefByteArray, int> pool)
+        public bool Deserialize<TByteSource>(ref TByteSource source, IPool<IMultiRefByteArray, int> pool,
+            int maxArraySize = int.MaxValue)
             where TByteSource : IByteSource
         {
             Clear();
             
             if (!ZigZagVarIntSerializer.ReadInt(ref source, out var count))
                 return false;
+            if (count < 0)
+                return false;
             for (int i = 0; i < count; i++)
             {
-                if (!UnionData.ReadFrom(ref source, pool, out var element))
+                if (!UnionData.ReadFrom(ref source, pool, out var element, maxArraySize))
                 {
                     return false;
                 }

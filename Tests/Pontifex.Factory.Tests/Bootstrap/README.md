@@ -27,7 +27,8 @@ The suite intentionally uses only the public surface (`TransportFactoryBootstrap
 `ITransportFactoryBuilder`, `ITransportFactory`, `IRegistryBuilder`,
 `IRegistry`, `ITransportRegistration`, `ITransportCompiler`, `TransportRole`)
 together with the public metadata DTOs. It does not construct internal components
-directly; `InternalsVisibleTo` is not used to reach bootstrap internals.
+directly; the suite does not rely on the `InternalsVisibleTo` grant to reach bootstrap
+internals.
 
 ## Contract references
 
@@ -86,7 +87,7 @@ Bootstrap/
 ├── Coverage.md
 ├── Harness/
 │   ├── BootstrapTestData.cs
-│   ├── FakeRawUnreliableNoAckClient.cs
+│   ├── FakeRawUnreliableClient.cs
 │   ├── FakeTransport.cs
 │   └── RecordingConvertersGraph.cs
 └── Tests/
@@ -112,7 +113,7 @@ There are no groups. All test files live directly under `Tests/`.
   exact instance a core constructor returned.
 - `RecordingConvertersGraph` — a converter-graph double that records
   `TryConvert` arguments and returns a scripted conversion factory.
-- `FakeRawUnreliableNoAckClient` — a non-I/O raw-unreliable client used only to
+- `FakeRawUnreliableClient` — a non-I/O raw-unreliable client used only to
   exercise the built-in converter through the default graph.
 
 There are no harness self-tests. The harness is local to this suite: the
@@ -156,7 +157,7 @@ dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --filter 
    DTOs. Do not call internal bootstrap types directly.
 3. Use the suite naming convention: `Method_Scenario_ExpectedResult`.
 4. Assert the result DTO or the exception type, `Error.Code`, and `Error.Phase`;
-   assert exact messages only for new templates.
+   assert exact messages for documented §13 templates (and for new templates).
 5. Record the test in [Coverage.md](Coverage.md).
 
 ## Adding a layer

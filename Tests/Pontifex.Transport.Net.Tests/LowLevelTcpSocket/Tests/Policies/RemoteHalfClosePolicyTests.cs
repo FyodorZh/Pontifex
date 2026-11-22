@@ -53,6 +53,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
         }
 
         [Test]
+        [Category(TestCategories.Timing)]
         public async Task GracefulSendShutdown_ForceFinalizesOnDeadline()
         {
             using var harness = new LowLevelSocketHarness(

@@ -237,7 +237,8 @@ namespace Pontifex.Utils
             return false;
         }
 
-        public static bool ReadFrom<TByteSource>(ref TByteSource bytes, IPool<IMultiRefByteArray, int> pool, out UnionData unionData)
+        public static bool ReadFrom<TByteSource>(ref TByteSource bytes, IPool<IMultiRefByteArray, int> pool, out UnionData unionData,
+            int maxArraySize = int.MaxValue)
             where TByteSource : IByteSource
         {
             unionData = default;
@@ -280,9 +281,14 @@ namespace Pontifex.Utils
                 {
                     if (!ZigZagVarIntSerializer.ReadInt(ref bytes, out var arraySize))
                         return false;
+                    if (arraySize < 0 || arraySize > maxArraySize)
+                        return false;
                     buffer = pool.Acquire(arraySize);
                     if (!bytes.TakeMany(buffer))
+                    {
+                        buffer.Release();
                         return false;
+                    }
                     break;
                 }
                 case UnionDataType.NullArray:

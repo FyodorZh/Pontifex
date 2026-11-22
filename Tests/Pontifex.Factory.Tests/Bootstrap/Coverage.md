@@ -22,11 +22,13 @@
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|
 | `CreateBuilder_FromPublicSeam_ReturnsBuilderWithEmptyRegistry` | `TransportFactoryBootstrap.CreateBuilder` contract | The static seam returns a usable builder whose empty registry resolves no schemes. | This is the first consumer-accessible entry point; all other constructors are internal. The optional converter argument defaults to `ConvertersGraph.Default`. |
-| `CreateBuilder_CalledTwice_ReturnsIndependentBuilders` | `TransportFactoryBootstrap` contract | Two builders do not share registrations. | The first builder is built before the second is queried, so a hidden shared registry would surface as a successful resolve. |
+| `CreateBuilder_CalledTwice_ReturnsIndependentBuilders` | `TransportFactoryBootstrap` contract | Two builders do not share registrations. | The first builder registers and resolves `alpha`; the second, never having registered it, still reports `E_SEM_UNKNOWN_SCHEME`. A hidden shared registry would let the second resolve it. |
 | `Build_CalledTwice_ReturnsTheSameFactory` | `ITransportFactoryBuilder.Build` contract | Repeated `Build` returns the same `ITransportFactory` instance. | Matches `TransportRegistryBuilder.Build`, which is also idempotent. |
-| `Build_SealsTheRegistry_SoLaterRegistrationThrows` | `parsing.md` §6.7 rule 12; `ITransportFactoryBuilder` and `ITransportFactory` contracts | Building freezes the formula registry; later registration throws `RegistrationException` with `E_REG_BUILDER_SEALED` and phase `Registration`. | The sealed check wins over the duplicate/invalid type name in this fixture. |
+| `Build_SealsTheRegistry_SoLaterRegistrationThrows` | `parsing.md` §6.7 rule 12; `ITransportFactoryBuilder` and `ITransportFactory` contracts | Building freezes the formula registry; later `Registry.RegisterType` throws `RegistrationException` with `E_REG_BUILDER_SEALED` and phase `Registration`. | The registered name is valid and unique, so the only failing rule is the seal. |
+| `RegisterTransport_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12; `ITransportFactoryBuilder.RegisterTransport` contract | The facade registration path is sealed after `Build` and reports the formula registry's `E_REG_BUILDER_SEALED`. | This is the path the Compilation README delegates to this suite; `Build_SealsTheRegistry_SoLaterRegistrationThrows` covers the sibling registry-level guard. |
 | `Build_WithoutRegistrations_ReturnsFactoryThatReportsUnknownScheme` | `ITransportFactoryBuilder` and `ITransportFactory` contracts | An empty pipeline is usable and reports `E_SEM_UNKNOWN_SCHEME` with phase `Resolution`. | Proves the factory is wired even with no constructors. |
 | `RegisterTransport_WithCoreRegistration_RegistersFormulaMetadataAndRuntimeConstructor` | `parsing.md` §6.9 | One core registration produces resolvable formula metadata and a runtime constructor that `Compile` can reach. | The transport instance returned by `Compile` is the exact instance the core registration created. |
+| `Create_IsInvokedOnlyByCompilation` | `parsing.md` §6.9 — the direct compiler is the only caller of `Create` | `Resolve` and `Canonicalize` invoke the core `Create` callback zero times; `Compile` invokes it exactly once. | The counter lives in the test registration lambda; no production seam was added. |
 | `RegisterTransport_WithCoreRegistration_NormalizesTheScheme` | `CoreRegistrationAdapter` normalization contract | A mixed-case core scheme becomes the canonical lowercase scheme in resolution and printing. | Normalization belongs to the adapter/formula registry, not the runtime registry. |
 | `RegisterTransport_WithCoreRegistration_PreservesAliases` | `ITransportFactoryBuilder` and `ITransportFactory` contracts | Core aliases remain resolvable and print as the canonical scheme. | Alias order and deduplication are formula-registry rules; this test covers carriage through the adapter. |
 | `RegisterTransport_WithCoreRegistration_MapsStringParameterMetadata` | `CoreRegistrationAdapter` and `ITransportFactory` contracts | A required core string parameter becomes a required formula parameter: omission is a resolution error and supply succeeds. | Parameter names are normalized by the adapter and then by the formula registry. |
@@ -40,7 +42,7 @@
 | `RegisterTransport_WithUnsortedCoreArrayElementRange_ThrowsInvalidIntegerRange` | parsing.md §6.5, §6.7 rule 7, §13.4 | Unsorted core integer array element bounds reach `E_REG_INVALID_INTEGER_RANGE`. | — |
 | `RegisterTransport_WithUnsortedCoreDecimalArrayElementRange_ThrowsInvalidDecimalRange` | parsing.md §6.5, §6.7 rule 7, §13.4 | Unsorted core decimal array element bounds reach `E_REG_INVALID_DECIMAL_RANGE`. | — |
 | `RegisterTransport_WithNullRegistration_ThrowsArgumentNullException` | `ITransportFactoryBuilder.RegisterTransport` contract | A null core registration is rejected before any registry changes. | The guard is the builder's, matching the core registration contract. |
-| `RegisterTransport_WithDuplicateCanonicalScheme_ThrowsRegistrationException` | `parsing.md` §6.7 rule 3; `ITransportFactoryBuilder` and `ITransportFactory` contracts | Two core registrations with the same normalized scheme surface the formula registry's duplicate error. | The duplicate is rejected before the runtime registry could drift. |
+| `RegisterTransport_WithDuplicateCanonicalScheme_ThrowsRegistrationException` | `parsing.md` §6.7 rule 3; `ITransportFactoryBuilder` and `ITransportFactory` contracts | Two core registrations with the same normalized scheme surface the formula registry's duplicate error; after the throw, `Build` still resolves the first `alpha` with its original type. | The post-throw build-and-resolve proves the rejected registration is atomic and left no partial state. |
 | `Resolve_WithValidFormula_ReturnsResolvedTransport` | `TransportFactory.Resolve` contract | `Resolve` parses and resolves, returning a `ResolvedTransport` in the result DTO. | The resolved root type and constructor name are asserted through the public DTOs. |
 | `Resolve_WithParseError_ReturnsResultInsteadOfThrowing` | `parsing.md` §12.3 | Parse errors are returned as `FormulaResolveResult.Error`, not thrown. | Phase is `Parsing` for `E_SYN_UNEXPECTED_TOKEN`. |
 | `Resolve_WithSemanticError_ReturnsResultInsteadOfThrowing` | `parsing.md` §12.3 | Resolution errors are returned as `FormulaResolveResult.Error`, not thrown. | Phase is `Resolution`. |
@@ -50,9 +52,12 @@
 | `Canonicalize_WithValidFormula_ReturnsCanonicalOutput` | `ITransportFactoryBuilder` and `ITransportFactory` contracts | Parse + resolve + print is wired end to end; scheme case is canonicalized. | `ALPHA(1)` prints as `alpha(1)`. |
 | `Canonicalize_WithParseError_ThrowsFactoryExceptionWithParsingPhase` | `parsing.md` §12.2–12.3 | The throwing entry point converts a parse error into `FactoryException` with the original code and phase. | Exact exception type is the base `FactoryException`. |
 | `Canonicalize_WithSemanticError_ThrowsFactoryExceptionWithResolutionPhase` | `parsing.md` §12.2–12.3 | The throwing entry point converts a resolution error into `FactoryException` with the original code and phase. | — |
+| `Canonicalize_WithNullFormula_ThrowsEmptyInput` | `ITransportFactory.Canonicalize` contract | A null formula is treated as empty input and reported as `E_SYN_EMPTY_INPUT` with phase `Parsing`. | — |
 | `Compile_WithValidFormula_PassesResolvedTreeToTheCompiler` | `ITransportFactoryBuilder` and `ITransportFactory` contracts | `Compile` resolves once and hands the tree to the caller's compiler, returning its output. | The compiler is opaque; bootstrap does not inspect `TOutput`. |
 | `Compile_WithParseError_DoesNotInvokeTheCompiler` | `parsing.md` §12.2–12.3 | The caller-supplied compiler is not called when parsing fails. | — |
 | `Compile_WithSemanticError_DoesNotInvokeTheCompiler` | `parsing.md` §12.2–12.3 | The caller-supplied compiler is not called when resolution fails; phase is `Resolution`. | — |
+| `Compile_WithNullFormula_ThrowsEmptyInputWithoutInvokingTheCompiler` | `ITransportFactory.Compile` contract | A null formula is treated as empty input (`E_SYN_EMPTY_INPUT`, phase `Parsing`) and the compiler is not called. | — |
+| `Compile_WithNullCompiler_ThrowsArgumentNullException` | `ITransportFactory.Compile` contract | The facade rejects a null compiler before parsing or resolving. | Public-contract invalid-input guard. |
 | `Compile_WhenTheCompilerThrows_PropagatesTheExceptionUnchanged` | `ITransportFactory.Compile` contract | Bootstrap does not relabel or wrap exceptions raised by the caller-supplied compiler. | Proven with a `CompilerException`; the same instance is rethrown and its phase stays `Compilation`. |
 | `CreateCompiler_WithServerRole_ReturnsCompilerForThatRole` | `parsing.md` §9.2; `ITransportFactory.CreateCompiler` contract | `CreateCompiler` carries the requested server role into the compiler. | Role is compiler configuration, not formula data. |
 | `CreateCompiler_WithClientRole_ReturnsCompilerForThatRole` | `parsing.md` §9.2; `ITransportFactory.CreateCompiler` contract | `CreateCompiler` carries the requested client role into the compiler. | Confirms the role is not fixed by the factory. |
@@ -65,11 +70,13 @@
 | `Resolve_WithCoreOneOfTypeSet_AcceptsEitherNestedType` | `parsing.md` §7.5 | A core `OneOf(TypeA, TypeB)` nested parameter accepts both child types. | Complements the `Exactly` rejection test. |
 | `Resolve_WithCoreTransportListRangeAndHomogeneity_EnforcesAll` | `parsing.md` §7.5, §13.3 | Core `Min`, `Max`, and `Homogeneous` values survive the adapter and are enforced by resolution. | Asserts exact messages and phase for `E_SEM_LIST_MIN`, `E_SEM_LIST_MAX`, and `E_SEM_LIST_HOMOGENEITY` in one fixture. |
 | `Compile_WithInjectedConverterGraph_UsesTheGraphForTheCast` | `ITransportFactory` contract | The facade binds the injected converter graph; a changing cast asks it for the conversion and the compiler passes the inner transport factory. | Logger and memory identity (`VoidLogger.Instance`, `MemoryRental.Shared`) is asserted. |
-| `Compile_WithDefaultConverterGraph_UsesTheBuiltInConversion` | `TransportFactoryBootstrap.CreateBuilder` and `ITransportFactory` contracts | A builder created without an argument uses `ConvertersGraph.Default`; the built-in RawUnreliableNoAck → RawReliable path converts the transport. | Uses a non-I/O raw-unreliable client and a real `Scriba.Logger`, because the built-in wrapper requires `ILoggerExt`. |
+| `Compile_WithDefaultConverterGraph_UsesTheBuiltInConversion` | `TransportFactoryBootstrap.CreateBuilder` and `ITransportFactory` contracts | A builder created without an argument uses `ConvertersGraph.Default`; the built-in RawUnreliable → RawReliable path converts the transport. | Uses a non-I/O raw-unreliable client and a real `Scriba.Logger`, because the built-in wrapper requires `ILoggerExt`. |
 
 ## Planned
 
-None. Remaining compiler-invariant coverage is owned by the `Factory.Compilation` suite.
+| Missing test or gap | Owner | Reason |
+|---|---|---|
+| Adapter rejection of an unsupported parameter or field kind. | This layer | Reachable only through a hand-written `ITransportRegistration`; no test supplies a custom `TransportParameter`/`StructField`.
 
 ## Deferred by design
 
@@ -82,10 +89,12 @@ None. Remaining compiler-invariant coverage is owned by the `Factory.Compilation
   to the `Factory.Compilation` suite and its direct transport compiler. This
   suite proves the documented integration error plus pass-through of a
   caller-raised `CompilerException`.
-- **Separate observation of the runtime registry seal.** `RegisterTransport`
-  checks the formula registry first, so the facade always reports the formula
-  registry's `E_REG_BUILDER_SEALED`. Direct seal behaviour of
-  `TransportConstructorRegistry` is covered by the Compilation suite.
+- **Separate observation of the runtime registry seal.** `RegisterTransport` validates
+  the null guard, adapts the registration, then registers it with the formula registry
+  before the runtime registry. After `Build`, the formula registry reports
+  `E_REG_BUILDER_SEALED` first; the adapter can still reject malformed input before that
+  check. Direct seal behaviour of `TransportConstructorRegistry` is covered by the
+  Compilation suite.
 - **Formula assembly isolation.** The formula assembly must not reference
   transports, converters, logging, or memory. This is a project-reference and
   API-shape property. `Tests/RULES.md` TEST-01 forbids reflection, so it is

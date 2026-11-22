@@ -3,8 +3,8 @@ using Pontifex.Factory;
 using Pontifex.Factory.Registration;
 using Pontifex.Raw.Reliable.Direct;
 using Pontifex.Raw.Reliable.Tcp;
-using Pontifex.Raw.Unreliable.NoAck.Direct;
-using Pontifex.Raw.Unreliable.NoAck.Udp;
+using Pontifex.Raw.Unreliable.Direct;
+using Pontifex.Raw.Unreliable.Udp;
 using Scriba;
 using Scriba.Consumers;
 using FormulaRegistry = Pontifex.TransportFormula.Registry;
@@ -42,8 +42,8 @@ public static class TransportRegistry
 
         builder.RegisterTransport(RawReliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
-        builder.RegisterTransport(RawUnreliableNoAckDirectBinding.CreateRegistration());
-        builder.RegisterTransport(RawUnreliableNoAckUdpBinding.CreateRegistration());
+        builder.RegisterTransport(RawUnreliableDirectBinding.CreateRegistration());
+        builder.RegisterTransport(RawUnreliableUdpBinding.CreateRegistration());
 
         Factory = builder.Build();
     }

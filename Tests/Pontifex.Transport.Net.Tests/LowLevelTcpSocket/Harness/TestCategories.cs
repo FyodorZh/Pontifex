@@ -22,5 +22,11 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests.Harness
 
         /// <summary>Longer steady-state throughput/latency/retention probes; Release only.</summary>
         public const string Load = LowLevelTcpSocket + ".Load";
+
+        /// <summary>Real loopback TCP checks; kept out of the deterministic correctness filter.</summary>
+        public const string Loopback = LowLevelTcpSocket + ".Loopback";
+
+        /// <summary>Real timer/wall-clock deadline smokes; kept out of the deterministic correctness filter.</summary>
+        public const string Timing = LowLevelTcpSocket + ".Timing";
     }
 }

@@ -300,6 +300,91 @@ public sealed class StructValidatorTests
     }
 
     [Test]
+    public void Validate_ForIntegerArrayAtMaximumCount_AcceptsEveryElement()
+    {
+        var fields = SemanticsAssertions.ValidateStruct(
+            "{counts=[0, 0, 0]}",
+            ArraysSchema());
+
+        Assert.That(fields, Has.Count.EqualTo(1));
+        var counts = (ArrayValue)fields[0].Value;
+        Assert.That(counts.Elements, Has.Count.EqualTo(3));
+        Assert.That(
+            counts.Elements.Cast<IntegerValue>().Select(e => e.Value),
+            Is.EqualTo(new[] { 0L, 0L, 0L }));
+    }
+
+    [Test]
+    public void Validate_ForIntegerFieldReceivingList_ReportsExpectedScalarWithListShape()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=[1]}",
+            NumberStructSchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            "field 'count' expects a scalar value, got list");
+    }
+
+    [Test]
+    public void Validate_ForIntegerFieldReceivingStruct_ReportsExpectedScalarWithStructShape()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count={a=1}}",
+            NumberStructSchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            "field 'count' expects a scalar value, got struct");
+    }
+
+    [Test]
+    public void Validate_ForDecimalFieldReceivingList_ReportsExpectedScalarWithListShape()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=1, ratio=[1]}",
+            NumberStructSchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            "field 'ratio' expects a scalar value, got list");
+    }
+
+    [Test]
+    public void Validate_ForDecimalFieldReceivingStruct_ReportsExpectedScalarWithStructShape()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{count=1, ratio={a=1}}",
+            NumberStructSchema(),
+            "E_SEM_STRUCT_FIELD_EXPECTED_SCALAR",
+            "field 'ratio' expects a scalar value, got struct");
+    }
+
+    [Test]
+    public void Validate_ForStringArrayElementWithStructShape_ReportsElementType()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], names=[{}]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            "array element 'names[0]' of parameter 'config' expects a string, got struct");
+    }
+
+    [Test]
+    public void Validate_ForDecimalArrayElementWithStructShape_ReportsElementType()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{counts=[0], ratios=[{}]}",
+            ArraysSchema(),
+            "E_SEM_ARRAY_ELEMENT_TYPE",
+            "array element 'ratios[0]' of parameter 'config' expects a decimal, got struct");
+    }
+
+    [Test]
+    public void Validate_ForThrowingStringArrayElementValidator_ReportsIndexedPath()
+    {
+        SemanticsAssertions.ValidateStructError(
+            "{names=[x]}",
+            ThrowingArraysSchema(),
+            "E_SEM_VALIDATOR_FAILED",
+            "field 'names[0]' of parameter 'config' is invalid: validation failed");
+    }
+
+    [Test]
     public void Validate_ForArrayBelowMinimum_ReportsArrayMin()
     {
         SemanticsAssertions.ValidateStructError(
@@ -462,6 +547,11 @@ public sealed class StructValidatorTests
     private static StructSchema ArraysSchema()
     {
         return SchemaOf("arrays");
+    }
+
+    private static StructSchema ThrowingArraysSchema()
+    {
+        return SchemaOf("throwingArrays");
     }
 
     private static StructSchema NestedArraysSchema()

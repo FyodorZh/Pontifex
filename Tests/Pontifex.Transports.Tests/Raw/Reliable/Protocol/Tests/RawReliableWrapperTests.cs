@@ -50,6 +50,87 @@ public sealed class RawReliableWrapperTests
     }
 
     [Test]
+    public void Client_WhenProcessReceivedDataReturnsFalse_StopsWithTextFail()
+    {
+        using var pair = new WrapperPair();
+        pair.ClientLogic.ProcessReceivedResult = false;
+        pair.Start();
+
+        Assert.That(pair.ServerHandler!.Endpoint!.Send(Payload.Create("x")), Is.EqualTo(SendResult.Ok));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ClientHandler.ReceivedCount, Is.Zero,
+                "a rejected payload must not reach the application handler");
+            Assert.That(pair.ClientHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<TextFail>());
+            Assert.That(pair.ClientHandler.Endpoint!.IsConnected, Is.False);
+        });
+    }
+
+    [Test]
+    public void Server_WhenProcessReceivedDataReturnsFalse_DisconnectsWithTextFail()
+    {
+        using var pair = new WrapperPair();
+        pair.ServerLogic.ProcessReceivedResult = false;
+        pair.Start();
+
+        Assert.That(pair.ClientHandler.Endpoint!.Send(Payload.Create("x")), Is.EqualTo(SendResult.Ok));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ServerHandler!.ReceivedCount, Is.Zero,
+                "a rejected payload must not reach the application handler");
+            Assert.That(pair.ServerHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+            Assert.That(pair.ServerHandler.StopReason, Is.TypeOf<TextFail>());
+            Assert.That(pair.ServerSession!.Endpoint.IsConnected, Is.False);
+        });
+    }
+
+    [Test]
+    public void ServerHandshakeTimeout_RejectsWithTimeoutTextAndStopsAfterLinger()
+    {
+        var clock = new ManualNegotiationClock();
+        var log = new Logger([]);
+        var logic = new RecordingWrapperLogic(log, MemoryRental.Shared);
+        var inner = new FakeReliableServer();
+        var server = new RawReliableWrapperServer("server", "layer", inner, logic, 1, 128, null, clock);
+        var factory = new RecordingServerFactory(_ => new RecordingRawReliableServerHandler());
+
+        Assert.That(server.Init(factory), Is.True);
+        Assert.That(server.Start(_ => { }), Is.True);
+
+        var session = inner.Connect();
+
+        Assert.That(clock.PendingDelays, Is.EqualTo(new[] { TimeSpan.FromSeconds(10) }));
+        Assert.That(factory.Calls, Is.Zero);
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(factory.Calls, Is.Zero, "a timed-out session must never reach the factory");
+            Assert.That(session.Endpoint.Sent, Has.Count.EqualTo(1));
+            Assert.That(Payload.Describe(session.Endpoint.Sent[0]), Is.EqualTo(
+                new[] { "h:1", "s:layer", "b:2", "s:negotiation timeout" }));
+            Assert.That(session.Endpoint.IsConnected, Is.True,
+                "the rejection linger keeps the inner session open");
+            Assert.That(clock.PendingDelays, Is.EqualTo(new[] { TimeSpan.FromSeconds(2) }));
+            Assert.That(logic.ConnectedCount, Is.Zero);
+        });
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.Endpoint.IsConnected, Is.False);
+            Assert.That(clock.PendingCount, Is.Zero);
+        });
+    }
+
+    [Test]
     public void VersionMismatch_StopsClientWithoutOnConnected()
     {
         var client = new FakeReliableClient();
@@ -263,6 +344,48 @@ public sealed class RawReliableWrapperTests
                 new[] { "h:1", "s:layer", "b:0", "s:k" }));
             Assert.That(Payload.Describe(pair.ServerSession!.Endpoint.Sent[0]), Is.EqualTo(
                 new[] { "h:1", "s:layer", "b:1", "s:v" }));
+        });
+    }
+
+    [Test]
+    public void ServerVersionMismatch_RejectsClientSkipsFactoryAndDisconnectsAfterLinger()
+    {
+        using var pair = new WrapperPair(clientVersion: 2);
+        pair.Start();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ClientHandler.ConnectedCount, Is.Zero);
+            Assert.That(pair.ClientHandler.Events, Is.EqualTo(new[] { "stopped" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.Factory.Calls, Is.Zero);
+            Assert.That(pair.ServerHandler, Is.Null);
+            Assert.That(Payload.Describe(pair.ServerSession!.Endpoint.Sent[0]), Is.EqualTo(
+                new[] { "h:1", "s:layer", "b:2", "s:version mismatch" }));
+            Assert.That(pair.Clock.PendingDelays, Is.EqualTo(new[] { TimeSpan.FromSeconds(2) }));
+        });
+
+        pair.Clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.That(pair.ServerSession!.Endpoint.Connected, Is.False,
+            "the linger must disconnect the inner session exactly once");
+        Assert.That(pair.Clock.PendingCount, Is.Zero);
+    }
+
+    [Test]
+    public void ServerNameMismatch_RejectsClientSkipsFactory()
+    {
+        using var pair = new WrapperPair(clientName: "other");
+        pair.Start();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.ClientHandler.ConnectedCount, Is.Zero);
+            Assert.That(pair.ClientHandler.Events, Is.EqualTo(new[] { "stopped" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.Factory.Calls, Is.Zero);
+            Assert.That(pair.ServerHandler, Is.Null);
+            Assert.That(Payload.Describe(pair.ServerSession!.Endpoint.Sent[0]), Is.EqualTo(
+                new[] { "h:1", "s:layer", "b:2", "s:name mismatch" }));
         });
     }
 

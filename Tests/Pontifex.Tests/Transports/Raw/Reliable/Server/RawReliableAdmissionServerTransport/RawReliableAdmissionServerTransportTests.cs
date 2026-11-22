@@ -172,6 +172,57 @@ public sealed class RawReliableAdmissionServerTransportTests
     }
 
     [Test]
+    public void TryCreateHandler_AfterNullResult_ReinvokesTheFactoryOnTheNextAdmission()
+    {
+        var transport = Create();
+        using var handler = new RecordingRawReliableHandshakeServerHandler(Memory);
+        int calls = 0;
+        var factory = new RecordingRawReliableAdmissionServerHandlerFactory(
+            _ => ++calls == 1 ? null : handler);
+        InitializeAndStart(transport, factory);
+
+        Assert.That(transport.ExposedTryCreateHandler(Remote), Is.Null);
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(1));
+
+        IRawReliableServerHandler? second = transport.ExposedTryCreateHandler(Remote);
+
+        Assert.That(second, Is.TypeOf<StopOnceServerHandler>());
+        Assert.That(((StopOnceServerHandler)second!).Inner, Is.SameAs(handler));
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(2),
+            "a null factory result must not be cached");
+    }
+
+    [Test]
+    public void TryCreateHandler_AfterThrow_ReinvokesTheFactoryOnTheNextAdmission()
+    {
+        var transport = Create();
+        using var handler = new RecordingRawReliableHandshakeServerHandler(Memory);
+        bool first = true;
+        var factory = new RecordingRawReliableAdmissionServerHandlerFactory(
+            _ =>
+            {
+                if (first)
+                {
+                    first = false;
+                    throw new InvalidOperationException("factory failure");
+                }
+
+                return handler;
+            });
+        InitializeAndStart(transport, factory);
+
+        Assert.That(transport.ExposedTryCreateHandler(Remote), Is.Null);
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(1));
+
+        IRawReliableServerHandler? second = transport.ExposedTryCreateHandler(Remote);
+
+        Assert.That(second, Is.TypeOf<StopOnceServerHandler>());
+        Assert.That(((StopOnceServerHandler)second!).Inner, Is.SameAs(handler));
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(2),
+            "a throwing factory must remain eligible for a later attempt");
+    }
+
+    [Test]
     public void TryCreateHandler_InvokesFactoryWithRemote()
     {
         var transport = Create();
@@ -263,6 +314,90 @@ public sealed class RawReliableAdmissionServerTransportTests
 
         Assert.That(threadFailure, Is.Null);
         Assert.That(maxActive, Is.EqualTo(1));
+        Assert.That(factory.TryCreateCalls, Is.EqualTo(2));
+    }
+
+    [Test]
+    [Category("Transports.Concurrency")]
+    public void TryCreateHandler_ConcurrentDistinctSources_SerializeFactoryCalls()
+    {
+        var transport = Create(maxConcurrentHandshakes: 4, maxActiveSessions: 4);
+        using var ready = new CountdownEvent(2);
+        using var startGate = new ManualResetEventSlim(false);
+        using var factoryEntered = new ManualResetEventSlim(false);
+        using var releaseFactory = new ManualResetEventSlim(false);
+        int active = 0;
+        int maxActive = 0;
+        Exception? threadFailure = null;
+        var factory = new RecordingRawReliableAdmissionServerHandlerFactory(_ =>
+        {
+            int current = Interlocked.Increment(ref active);
+            UpdateMax(ref maxActive, current);
+            factoryEntered.Set();
+
+            try
+            {
+                if (!releaseFactory.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    throw new TimeoutException("The factory gate was not released.");
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref active);
+            }
+
+            return null;
+        });
+        InitializeAndStart(transport, factory);
+
+        var secondRemote = new StringEndPoint("remote-2");
+
+        Thread Contender(IEndPoint remote) => new(() =>
+        {
+            ready.Signal();
+            startGate.Wait();
+
+            try
+            {
+                transport.ExposedTryCreateHandler(remote);
+            }
+            catch (Exception ex)
+            {
+                threadFailure = ex;
+            }
+        });
+
+        var first = Contender(Remote);
+        var second = Contender(secondRemote);
+        first.IsBackground = true;
+        second.IsBackground = true;
+
+        try
+        {
+            first.Start();
+            second.Start();
+
+            Assert.That(ready.Wait(TimeSpan.FromSeconds(10)), Is.True,
+                "The contenders did not become ready.");
+
+            startGate.Set();
+
+            Assert.That(factoryEntered.Wait(TimeSpan.FromSeconds(10)), Is.True,
+                "Neither contender entered the factory.");
+        }
+        finally
+        {
+            startGate.Set();
+            releaseFactory.Set();
+        }
+
+        Assert.That(first.Join(TimeSpan.FromSeconds(10)), Is.True, "The first contender did not finish.");
+        Assert.That(second.Join(TimeSpan.FromSeconds(10)), Is.True, "The second contender did not finish.");
+
+        Assert.That(threadFailure, Is.Null);
+        Assert.That(maxActive, Is.EqualTo(1),
+            "the factory lock is global, not per source route");
         Assert.That(factory.TryCreateCalls, Is.EqualTo(2));
     }
 

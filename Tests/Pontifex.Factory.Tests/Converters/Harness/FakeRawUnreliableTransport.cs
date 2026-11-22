@@ -4,7 +4,6 @@ using Actuarius.Memory;
 using Pontifex;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Unreliable;
-using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
@@ -12,20 +11,20 @@ using Scriba;
 namespace Pontifex.Factory.Tests.Converters.Harness;
 
 /// <summary>
-/// A synchronous in-process raw-unreliable-noack pair. Every send is delivered on the caller's thread;
+/// A synchronous in-process raw-unreliable pair. Every send is delivered on the caller's thread;
 /// no sockets, timers, or background threads are created by the doubles themselves.
 /// </summary>
 internal sealed class FakeRawUnreliableNetwork
 {
     public FakeRawUnreliableNetwork(int clientMessageMaxByteSize = 4096, int serverMessageMaxByteSize = 4096)
     {
-        Client = new FakeRawUnreliableNoAckClient(this, clientMessageMaxByteSize);
-        Server = new FakeRawUnreliableNoAckServer(this, serverMessageMaxByteSize);
+        Client = new FakeRawUnreliableClient(this, clientMessageMaxByteSize);
+        Server = new FakeRawUnreliableServer(this, serverMessageMaxByteSize);
     }
 
-    public FakeRawUnreliableNoAckClient Client { get; }
+    public FakeRawUnreliableClient Client { get; }
 
-    public FakeRawUnreliableNoAckServer Server { get; }
+    public FakeRawUnreliableServer Server { get; }
 }
 
 internal sealed class FakeEndPoint : IEndPoint
@@ -43,7 +42,7 @@ internal sealed class FakeEndPoint : IEndPoint
     public override string ToString() => _name;
 }
 
-internal sealed class FakeRawUnreliableNoAckClient : IRawUnreliableNoAckClient
+internal sealed class FakeRawUnreliableClient : IRawUnreliableClient
 {
     private readonly FakeRawUnreliableNetwork _network;
     private readonly int _messageMaxByteSize;
@@ -52,7 +51,7 @@ internal sealed class FakeRawUnreliableNoAckClient : IRawUnreliableNoAckClient
     private FakeClientEndpoint? _endpoint;
     private bool _started;
 
-    public FakeRawUnreliableNoAckClient(FakeRawUnreliableNetwork network, int messageMaxByteSize)
+    public FakeRawUnreliableClient(FakeRawUnreliableNetwork network, int messageMaxByteSize)
     {
         _network = network;
         _messageMaxByteSize = messageMaxByteSize;
@@ -64,7 +63,7 @@ internal sealed class FakeRawUnreliableNoAckClient : IRawUnreliableNoAckClient
 
     public FakeClientEndpoint? Endpoint => _endpoint;
 
-    public TransportType Type => TransportType.RawUnreliableNoAck;
+    public TransportType Type => TransportType.RawUnreliable;
 
     public string Name => "fake-unreliable-client";
 
@@ -156,7 +155,7 @@ internal sealed class FakeRawUnreliableNoAckClient : IRawUnreliableNoAckClient
     }
 }
 
-internal sealed class FakeRawUnreliableNoAckServer : IRawUnreliableNoAckServer
+internal sealed class FakeRawUnreliableServer : IRawUnreliableServer
 {
     private readonly FakeRawUnreliableNetwork _network;
     private readonly int _messageMaxByteSize;
@@ -166,14 +165,14 @@ internal sealed class FakeRawUnreliableNoAckServer : IRawUnreliableNoAckServer
     private Func<IEndPoint, IRawUnreliableHandler?>? _factory;
     private bool _started;
 
-    public FakeRawUnreliableNoAckServer(FakeRawUnreliableNetwork network, int messageMaxByteSize)
+    public FakeRawUnreliableServer(FakeRawUnreliableNetwork network, int messageMaxByteSize)
     {
         _network = network;
         _messageMaxByteSize = messageMaxByteSize;
         _log = new Logger([]);
     }
 
-    public TransportType Type => TransportType.RawUnreliableNoAck;
+    public TransportType Type => TransportType.RawUnreliable;
 
     public string Name => "fake-unreliable-server";
 
@@ -241,7 +240,7 @@ internal sealed class FakeRawUnreliableNoAckServer : IRawUnreliableNoAckServer
         return true;
     }
 
-    internal void DeliverFromClient(FakeRawUnreliableNoAckClient client, UnionDataList data)
+    internal void DeliverFromClient(FakeRawUnreliableClient client, UnionDataList data)
     {
         if (!_started || _factory == null)
         {
@@ -266,7 +265,7 @@ internal sealed class FakeRawUnreliableNoAckServer : IRawUnreliableNoAckServer
         endpoint.Deliver(data);
     }
 
-    internal void SendToClient(FakeRawUnreliableNoAckClient client, UnionDataList data)
+    internal void SendToClient(FakeRawUnreliableClient client, UnionDataList data)
     {
         client.Receive(data);
     }
@@ -274,13 +273,13 @@ internal sealed class FakeRawUnreliableNoAckServer : IRawUnreliableNoAckServer
 
 internal sealed class FakeClientEndpoint : IRawUnreliableEndpoint
 {
-    private readonly FakeRawUnreliableNoAckClient _owner;
+    private readonly FakeRawUnreliableClient _owner;
     private readonly IRawUnreliableHandler _handler;
     private readonly int _messageMaxByteSize;
     private volatile bool _valid = true;
 
     public FakeClientEndpoint(
-        FakeRawUnreliableNoAckClient owner,
+        FakeRawUnreliableClient owner,
         IRawUnreliableHandler handler,
         int messageMaxByteSize)
     {
@@ -331,15 +330,15 @@ internal sealed class FakeClientEndpoint : IRawUnreliableEndpoint
 
 internal sealed class FakeServerEndpoint : IRawUnreliableEndpoint
 {
-    private readonly FakeRawUnreliableNoAckServer _owner;
-    private readonly FakeRawUnreliableNoAckClient _client;
+    private readonly FakeRawUnreliableServer _owner;
+    private readonly FakeRawUnreliableClient _client;
     private readonly IRawUnreliableHandler _handler;
     private readonly int _messageMaxByteSize;
     private volatile bool _valid = true;
 
     public FakeServerEndpoint(
-        FakeRawUnreliableNoAckServer owner,
-        FakeRawUnreliableNoAckClient client,
+        FakeRawUnreliableServer owner,
+        FakeRawUnreliableClient client,
         IRawUnreliableHandler handler,
         int messageMaxByteSize)
     {
@@ -397,56 +396,6 @@ internal sealed class FakeServerEndpoint : IRawUnreliableEndpoint
 
     public void GetControls(List<IControl> dst, Predicate<IControl>? predicate = null)
     {
-    }
-}
-
-/// <summary>
-/// A raw-unreliable handler that records the first received payload and can answer it with a scripted
-/// callback. The callback owns the incoming buffer.
-/// </summary>
-internal sealed class RecordingRawUnreliableHandler : IRawUnreliableHandler
-{
-    private readonly Action<RecordingRawUnreliableHandler, IRawUnreliableEndpoint, UnionDataList>? _onReceived;
-
-    public RecordingRawUnreliableHandler(
-        Action<RecordingRawUnreliableHandler, IRawUnreliableEndpoint, UnionDataList>? onReceived = null)
-    {
-        _onReceived = onReceived;
-    }
-
-    public IRawUnreliableEndpoint? Endpoint { get; private set; }
-
-    public int ReceivedCount { get; private set; }
-
-    public UnionDataList? LastReceived { get; private set; }
-
-    public List<UnionDataList> Received { get; } = new List<UnionDataList>();
-
-    public void OnStarted(IRawUnreliableEndpoint endpoint)
-    {
-        Endpoint = endpoint;
-    }
-
-    public void OnReceived(UnionDataList data)
-    {
-        ReceivedCount++;
-        LastReceived = data;
-        Received.Add(data);
-        _onReceived?.Invoke(this, Endpoint!, data);
-    }
-
-    public void OnStopped(StopReason reason)
-    {
-    }
-
-    public void DisposeReceived()
-    {
-        foreach (var data in Received)
-        {
-            data.Release();
-        }
-
-        Received.Clear();
     }
 }
 

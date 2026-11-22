@@ -240,6 +240,26 @@ public sealed class LexerTests
     }
 
     [Test]
+    public void TryLex_WithBackslashBeforeCarriageReturn_ReturnsInvalidEscapeNotRawNewline()
+    {
+        var error = LexError("alpha(\"x\\\ry\")");
+
+        Assert.That(error.Code, Is.EqualTo("E_LEX_INVALID_ESCAPE"));
+        Assert.That(error.Phase, Is.EqualTo(FactoryPhase.Lexing));
+        Assert.That(error.Span!.Value.Start, Is.EqualTo(8));
+        Assert.That(error.Message, Does.Contain("invalid escape sequence"));
+    }
+
+    [Test]
+    public void TryLex_WithNullSource_ReturnsEmptyInputError()
+    {
+        var error = LexError(null!);
+
+        Assert.That(error.Code, Is.EqualTo("E_SYN_EMPTY_INPUT"));
+        Assert.That(error.Phase, Is.EqualTo(FactoryPhase.Parsing));
+    }
+
+    [Test]
     public void TryLex_WithBackslashBeforeUnpairedSurrogate_ReturnsInvalidEscapeNotInvalidUnicode()
     {
         var error = LexError("alpha(\"x\\" + '\uD800' + "\")");

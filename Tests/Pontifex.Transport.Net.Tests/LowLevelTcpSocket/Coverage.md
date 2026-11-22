@@ -19,41 +19,44 @@ Validation paths run against scripted accessors; loopback acceptance uses `RealS
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
-| `SecondArgsCreationFailure_DisposesFirstArgs_LeavesAccessorOwnedByCaller` | Construction rollback | Second Args Creation Failure Disposes First Args Leaves Accessor Owned By Caller. | Scripted validation; no real time. |
-| `FirstArgsCreationFailure_HasNoPartialOwnership` | Construction rollback | First Args Creation Failure Has No Partial Ownership. | Scripted validation; no real time. |
+| `SecondArgsCreationFailure_DisposesFirstArgs_LeavesAccessorOwnedByCaller` | Construction rollback | Second Args Creation Failure Disposes First Args Leaves Accessor Owned By Caller. | Real loopback socket; host-internal, no network dependency. |
+| `FirstArgsCreationFailure_HasNoPartialOwnership` | Construction rollback | First Args Creation Failure Has No Partial Ownership. | Real loopback socket; host-internal, no network dependency. |
 
 #### `DeadlineValidationTests` — Deadline validation
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
 | `InvalidShutdownDeadline_LeavesSenderOpen` | Deadline validation | Invalid Shutdown Deadline Leaves Sender Open. | 2 parameterized cases. |
-| `InvalidDisposeTimeout_DoesNotDispose` | Deadline validation | Invalid Dispose Timeout Does Not Dispose. | Scripted validation; no real time. |
-| `InvalidConstructorDeadline_CreatesNoArgs` | Deadline validation | Invalid Constructor Deadline Creates No Args. | Scripted validation; no real time. |
-| `InvalidDeadlineParameters_AreRejectedByEveryOverload` | Deadline validation | Invalid Deadline Parameters Are Rejected By Every Overload. | Scripted validation; no real time. |
-| `ValidDeadlineBoundaryValues_AreAccepted` | Deadline validation | Valid Deadline Boundary Values Are Accepted. | Scripted validation; no real time. |
-| `DeadlineValidator_ComparesByTicksExactly` | Deadline validation | Deadline Validator Compares By Ticks Exactly. | Scripted validation; no real time. |
+| `InvalidDisposeTimeout_DoesNotDispose` | Deadline validation | Invalid Dispose Timeout Does Not Dispose. | Real loopback socket; host-internal, no network dependency. |
+| `InvalidConstructorDeadline_CreatesNoArgs` | Deadline validation | Invalid Constructor Deadline Creates No Args. | Real loopback socket; host-internal, no network dependency. |
+| `InvalidDeadlineParameters_AreRejectedByEveryOverload` | Deadline validation | Invalid Deadline Parameters Are Rejected By Every Overload. | Real loopback socket; host-internal, no network dependency. |
+| `ValidDeadlineBoundaryValues_AreAccepted` | Deadline validation | Valid Deadline Boundary Values Are Accepted. | Real loopback socket; host-internal, no network dependency. |
+| `DeadlineValidator_ComparesByTicksExactly` | Deadline validation | Deadline Validator Compares By Ticks Exactly. | Real loopback socket; host-internal, no network dependency. |
 
 #### `LowLevelTcpSocketConstructionTests` — Constructor validation and endpoint exposure
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
-| `NullSocket_Throws` | Constructor validation and endpoint exposure | Null Socket Throws. | Scripted validation; no real time. |
-| `NullSource_Throws` | Constructor validation and endpoint exposure | Null Source Throws. | Scripted validation; no real time. |
-| `NullOnReceived_Throws` | Constructor validation and endpoint exposure | Null On Received Throws. | Scripted validation; no real time. |
-| `NullPool_Throws` | Constructor validation and endpoint exposure | Null Pool Throws. | Scripted validation; no real time. |
-| `InvalidPolicy_Throws` | Constructor validation and endpoint exposure | Invalid Policy Throws. | Scripted validation; no real time. |
-| `NonPositiveReceiveBufferSize_Throws` | Constructor validation and endpoint exposure | Non Positive Receive Buffer Size Throws. | Scripted validation; no real time. |
-| `Endpoints_AreExposed` | Constructor validation and endpoint exposure | Endpoints Are Exposed. | Scripted validation; no real time. |
+| `NullSocket_Throws` | Constructor validation and endpoint exposure | Null Socket Throws. | Real loopback socket; host-internal, no network dependency. |
+| `NullSource_Throws` | Constructor validation and endpoint exposure | Null Source Throws. | Real loopback socket; host-internal, no network dependency. |
+| `NullOnReceived_Throws` | Constructor validation and endpoint exposure | Null On Received Throws. | Real loopback socket; host-internal, no network dependency. |
+| `NullPool_Throws` | Constructor validation and endpoint exposure | Null Pool Throws. | Real loopback socket; host-internal, no network dependency. |
+| `InvalidPolicy_Throws` | Constructor validation and endpoint exposure | Invalid Policy Throws. | Real loopback socket; host-internal, no network dependency. |
+| `NonPositiveReceiveBufferSize_Throws` | Constructor validation and endpoint exposure | Non Positive Receive Buffer Size Throws. | Real loopback socket; host-internal, no network dependency. |
+| `Endpoints_AreExposed` | Constructor validation and endpoint exposure | Endpoints Are Exposed. | Real loopback socket; host-internal, no network dependency. |
 
-#### `SystemSocketTests` — System socket acceptance
+This fixture pins the production `SystemSocket` accessor that `LowLevelTcpSocket` depends on. It is
+subject coverage of a supporting type, not harness self-coverage.
+
+#### `SystemSocketTests` — System socket acceptance (supporting production type)
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
-| `Rejects_NonTcpSocket` | System socket acceptance | Rejects Non Tcp Socket. | Scripted validation; no real time. |
-| `Rejects_UnconnectedTcpSocket` | System socket acceptance | Rejects Unconnected Tcp Socket. | Scripted validation; no real time. |
-| `Rejects_DisposedSocket` | System socket acceptance | Rejects Disposed Socket. | Scripted validation; no real time. |
-| `Rejects_NullSocket` | System socket acceptance | Rejects Null Socket. | Scripted validation; no real time. |
-| `Accepts_ConnectedLoopbackSocket` | System socket acceptance | Accepts Connected Loopback Socket. | Scripted validation; no real time. |
+| `Rejects_NonTcpSocket` | System socket acceptance | Rejects Non Tcp Socket. | Real loopback socket; host-internal, no network dependency. |
+| `Rejects_UnconnectedTcpSocket` | System socket acceptance | Rejects Unconnected Tcp Socket. | Real loopback socket; host-internal, no network dependency. |
+| `Rejects_DisposedSocket` | System socket acceptance | Rejects Disposed Socket. | Real loopback socket; host-internal, no network dependency. |
+| `Rejects_NullSocket` | System socket acceptance | Rejects Null Socket. | Real loopback socket; host-internal, no network dependency. |
+| `Accepts_ConnectedLoopbackSocket` | System socket acceptance | Accepts Connected Loopback Socket. | Real loopback socket; host-internal, no network dependency. |
 
 ### Sending
 
@@ -95,7 +98,7 @@ The source, accessor, and deadline scheduler are scripted; no sleeping or real t
 | `RemoteEof_UsesConstructorDefault_AndDoesNotRestartEstablishedDeadline` | Sender shutdown deadline scheduling | Remote Eof Uses Constructor Default And Does Not Restart Established Deadline. | Scripted source/accessor; no real time. |
 | `ImmediateEscalation_PreservesActiveDefault` | Sender shutdown deadline scheduling | Immediate Escalation Preserves Active Default. | Scripted source/accessor; no real time. |
 | `TerminalSender_DoesNotRearm` | Sender shutdown deadline scheduling | Terminal Sender Does Not Rearm. | Scripted source/accessor; no real time. |
-| `RealTimerSmoke_ExpiryForcesAbort` | Sender shutdown deadline scheduling | Real Timer Smoke Expiry Forces Abort. | Scripted source/accessor; no real time. |
+| `RealTimerSmoke_ExpiryForcesAbort` | Sender shutdown deadline scheduling | Real Timer Smoke Expiry Forces Abort. | Production `SystemDeadlineScheduler`; expiry is expected within ~40 ms, so this test carries the `LowLevelTcpSocket.Timing` facet. |
 
 #### `SenderShutdownTests` — Sender shutdown semantics
 
@@ -112,6 +115,13 @@ The source, accessor, and deadline scheduler are scripted; no sleeping or real t
 | `TryShutdown_ObjectDisposedIsBenign` | Sender shutdown semantics | Try Shutdown Object Disposed Is Benign. | Scripted source/accessor; no real time. |
 | `TryShutdown_OperationAbortedIsBenign` | Sender shutdown semantics | Try Shutdown Operation Aborted Is Benign. | Scripted source/accessor; no real time. |
 | `TryShutdown_ConnectionAbortedIsBenign` | Sender shutdown semantics | Try Shutdown Connection Aborted Is Benign. | Scripted source/accessor; no real time. |
+
+#### `ReceiverShutdownTests` — Receiver shutdown semantics
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `LocalShutdown_WithBenignSocketError_CompletesAsLocalShutdown` | Receiver shutdown semantics; benign teardown classification | `NotConnected`, `Shutdown`, `OperationAborted`, and `ConnectionAborted` on the receiver `Shutdown` produce `LocalShutdown` with no error. | Parameterized over the four socket errors; each case releases the in-flight receive with `OperationAborted`. |
+| `LocalShutdown_WithObjectDisposed_CompletesAsLocalShutdown` | Receiver shutdown semantics; benign teardown classification | A disposed socket during receiver `Shutdown` is a normal teardown outcome. | Complements the non-benign `ReceiveShutdownFailure_FaultsReceiver` case. |
 
 #### `SynchronousSendTests` — Synchronous send completion
 
@@ -138,7 +148,10 @@ The source, accessor, and deadline scheduler are scripted; no sleeping or real t
 
 The socket accessor and pool are scripted. Consumer-owned buffers and partial views are released by the test or a tracking harness.
 
-#### `PartialReceiveViewTests` — Partial receive view lifetime
+This fixture pins `ReusablePartialView.Create` and partial-view lifetime, a production supporting
+type used by the receive path. It is subject coverage, not harness self-coverage.
+
+#### `PartialReceiveViewTests` — Partial receive view lifetime (supporting production type)
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
@@ -295,7 +308,7 @@ Completion quiescence includes `onReceived` callbacks but excludes `SourceDraine
 
 ### Teardown and disposal
 
-Bounded paths use the manual teardown executor and deterministic scheduler; every blocker is released in `finally` so eventual cleanup is verified.
+Bounded paths normally use the manual teardown executor and deterministic scheduler; every blocker is released in `finally` so eventual cleanup is verified. The two `BoundedDisposeAsync_ForceFinalizesWithPending*` tests and `RealTimerSmoke_BoundedDisposePublishesWhileCleanupIsBlocked` instead use the production `SystemDeadlineScheduler` with real 100–200 ms budgets and carry `LowLevelTcpSocket.Timing`.
 
 #### `AccessorDisposalTests` — Accessor disposal and classification
 
@@ -303,6 +316,7 @@ Bounded paths use the manual teardown executor and deterministic scheduler; ever
 | --- | --- | --- | --- |
 | `GracefulClose_DisposalFailure_IsInAggregateResult` | Accessor disposal and classification | Graceful Close Disposal Failure Is In Aggregate Result. | Manual executor/scheduler; blockers released in finally. |
 | `LocalDispose_DisposalFailure_IsSecondary` | Accessor disposal and classification | Local Dispose Disposal Failure Is Secondary. | Manual executor/scheduler; blockers released in finally. |
+| `Close_AfterConstruction_PublishesDisposedAndDisposesAccessor` | `ILowLevelTcpSocket.Close` contract | Close after construction publishes `Disposed` and disposes the accessor exactly once. | `Close()` is the synchronous best-effort alias for `Dispose()`; no native operation is pending, so the teardown completes synchronously. |
 | `PrimaryIoFault_IsNotReplacedByDisposeFailure` | Accessor disposal and classification | Primary Io Fault Is Not Replaced By Dispose Failure. | Manual executor/scheduler; blockers released in finally. |
 | `DisposalIsAttemptedOnce_AcrossRepeatedTeardown` | Accessor disposal and classification | Disposal Is Attempted Once Across Repeated Teardown. | Manual executor/scheduler; blockers released in finally. |
 | `AlreadyDisposedAccessor_TeardownIsTolerated` | Accessor disposal and classification | Already Disposed Accessor Teardown Is Tolerated. | Manual executor/scheduler; blockers released in finally. |
@@ -319,8 +333,8 @@ Bounded paths use the manual teardown executor and deterministic scheduler; ever
 | `InvalidTimeouts_RejectBeforeAnySideEffect` | Bounded-disposal deadline sharing | Invalid Timeouts Reject Before Any Side Effect. | Manual executor/scheduler; blockers released in finally. |
 | `ExactInfinity_SchedulesNoTimer` | Bounded-disposal deadline sharing | Exact Infinity Schedules No Timer. | Manual executor/scheduler; blockers released in finally. |
 | `ExpiredForcedResult_RemainsImmutable` | Bounded-disposal deadline sharing | Expired Forced Result Remains Immutable. | Manual executor/scheduler; blockers released in finally. |
-| `BoundedDisposeAsync_ForceFinalizesWithPendingSend` | Bounded-disposal deadline sharing | Bounded Dispose Async Force Finalizes With Pending Send. | Manual executor/scheduler; blockers released in finally. |
-| `BoundedDisposeAsync_ForceFinalizesWithPendingReceive` | Bounded-disposal deadline sharing | Bounded Dispose Async Force Finalizes With Pending Receive. | Manual executor/scheduler; blockers released in finally. |
+| `BoundedDisposeAsync_ForceFinalizesWithPendingSend` | Bounded-disposal deadline sharing | Bounded Dispose Async Force Finalizes With Pending Send. | Production `SystemDeadlineScheduler` with a real 200 ms budget; carries `LowLevelTcpSocket.Timing`. |
+| `BoundedDisposeAsync_ForceFinalizesWithPendingReceive` | Bounded-disposal deadline sharing | Bounded Dispose Async Force Finalizes With Pending Receive. | Production `SystemDeadlineScheduler` with a real 200 ms budget; carries `LowLevelTcpSocket.Timing`. |
 
 #### `BoundedDisposalTests` — Bounded logical disposal
 
@@ -334,7 +348,7 @@ Bounded paths use the manual teardown executor and deterministic scheduler; ever
 | `FiniteSuccessfulDisposal_ReportsFullyCapturedErrors` | Bounded logical disposal | Finite Successful Disposal Reports Fully Captured Errors. | Manual executor/scheduler; blockers released in finally. |
 | `RepeatedConcurrentRequests_ReserveOneNativeTeardown` | Bounded logical disposal | Repeated Concurrent Requests Reserve One Native Teardown. | Manual executor/scheduler; blockers released in finally. |
 | `LateSourcePop_KeepsSourceQuiescedIndependent` | Bounded logical disposal | Late Source Pop Keeps Source Quiesced Independent. | Manual executor/scheduler; blockers released in finally. |
-| `RealTimerSmoke_BoundedDisposePublishesWhileCleanupIsBlocked` | Bounded logical disposal | Real Timer Smoke Bounded Dispose Publishes While Cleanup Is Blocked. | Manual executor/scheduler; blockers released in finally. |
+| `RealTimerSmoke_BoundedDisposePublishesWhileCleanupIsBlocked` | Bounded logical disposal | Real Timer Smoke Bounded Dispose Publishes While Cleanup Is Blocked. | Production `SystemDeadlineScheduler` with a real 100 ms budget; carries `LowLevelTcpSocket.Timing`. |
 
 #### `DirectionalShutdownFaultTests` — Directional shutdown fault surfacing
 
@@ -414,30 +428,15 @@ Policy tests pin completion reasons; the loopback variants validate the resultin
 
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
-| `AbortConnection_AbortsAndClosesOnRemoteEof` | Remote half-close policy | Abort Connection Aborts And Closes On Remote Eof. | Loopback only; not a network guarantee. |
-| `KeepSendOpen_LeavesSenderOpenAndCompletionPendingOnRemoteEof` | Remote half-close policy | Keep Send Open Leaves Sender Open And Completion Pending On Remote Eof. | Loopback only; not a network guarantee. |
-| `GracefulSendShutdown_ShutsDownSenderOnRemoteEof` | Remote half-close policy | Graceful Send Shutdown Shuts Down Sender On Remote Eof. | Loopback only; not a network guarantee. |
-| `GracefulSendShutdown_ForceFinalizesOnDeadline` | Remote half-close policy | Graceful Send Shutdown Force Finalizes On Deadline. | Loopback only; not a network guarantee. |
-| `RemoteDrivenAbort_IsNotReportedAsLocalDispose` | Remote half-close policy | Remote Driven Abort Is Not Reported As Local Dispose. | Loopback only; not a network guarantee. |
+| `AbortConnection_AbortsAndClosesOnRemoteEof` | Remote half-close policy | Abort Connection Aborts And Closes On Remote Eof. | Scripted accessor; loopback FIN/abort outcome is covered by `LoopbackHalfClosePolicyTests`. |
+| `KeepSendOpen_LeavesSenderOpenAndCompletionPendingOnRemoteEof` | Remote half-close policy | Keep Send Open Leaves Sender Open And Completion Pending On Remote Eof. | Scripted accessor; loopback FIN/abort outcome is covered by `LoopbackHalfClosePolicyTests`. |
+| `GracefulSendShutdown_ShutsDownSenderOnRemoteEof` | Remote half-close policy | Graceful Send Shutdown Shuts Down Sender On Remote Eof. | Scripted accessor; loopback FIN/abort outcome is covered by `LoopbackHalfClosePolicyTests`. |
+| `GracefulSendShutdown_ForceFinalizesOnDeadline` | Remote half-close policy | Graceful Send Shutdown Force Finalizes On Deadline. | Scripted accessor; loopback FIN/abort outcome is covered by `LoopbackHalfClosePolicyTests`. |
+| `RemoteDrivenAbort_IsNotReportedAsLocalDispose` | Remote half-close policy | Remote Driven Abort Is Not Reported As Local Dispose. | Scripted accessor; loopback FIN/abort outcome is covered by `LoopbackHalfClosePolicyTests`. |
 
 ### Application composition and loopback integration
 
 Producer/consumer examples are test-local. Loopback tests use real local TCP but remain bounded and deterministic.
-
-#### `ApplicationByteLedgerTests` — Application byte-budget accounting
-
-| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
-| --- | --- | --- | --- |
-| `WeightedByteAdmission_RejectsOversizedItem_WithoutTakingOwnership` | Application byte-budget accounting | Weighted Byte Admission Rejects Oversized Item Without Taking Ownership. | Test-local composition; bounded loopback. |
-| `ConsumerHeldBytes_RemainAccountedAfterSocketCompletion` | Application byte-budget accounting | Consumer Held Bytes Remain Accounted After Socket Completion. | Test-local composition; bounded loopback. |
-| `QueuedPendingHeldAndDeferredCleanup_AreSeparate` | Application byte-budget accounting | Queued Pending Held And Deferred Cleanup Are Separate. | Test-local composition; bounded loopback. |
-
-#### `ApplicationLivenessWatchdogTests` — External liveness monitoring
-
-| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
-| --- | --- | --- | --- |
-| `LivenessComposition_CanAbortStalledNormalIo` | External liveness monitoring | Liveness Composition Can Abort Stalled Normal Io. | Test-local composition; bounded loopback. |
-| `LivenessDisabled_LeavesNormalIoIntentionallyPending` | External liveness monitoring | Liveness Disabled Leaves Normal Io Intentionally Pending. | Test-local composition; bounded loopback. |
 
 #### `LoopbackHalfClosePolicyTests` — Remote-EOF half-close outcome on loopback
 
@@ -462,9 +461,7 @@ Producer/consumer examples are test-local. Loopback tests use real local TCP but
 | Test | Contract clause / behaviour | What it proves | Non-extractable notes |
 | --- | --- | --- | --- |
 | `ProducerHandoffHelper_WaitsForSourceQuiesced` | Producer seal, shutdown, and drain composition | Producer Handoff Helper Waits For Source Quiesced. | Test-local composition; bounded loopback. |
-| `FixtureTeardown_CompletesOutstandingFakeOperations` | Producer seal, shutdown, and drain composition | Fixture Teardown Completes Outstanding Fake Operations. | Test-local composition; bounded loopback. |
 | `NativePendingProbe_RetainsBorrowedBufferUntilLateCompletion` | Producer seal, shutdown, and drain composition | Native Pending Probe Retains Borrowed Buffer Until Late Completion. | Test-local composition; bounded loopback. |
-| `StrictSingleWriter_RejectsConcurrentProducerPublication` | Producer seal, shutdown, and drain composition | Strict Single Writer Rejects Concurrent Producer Publication. | Test-local composition; bounded loopback. |
 
 ### Allocation and load probes
 
@@ -563,9 +560,36 @@ Harness self-tests validate the test infrastructure itself. They are optional, c
 | `DoubleRelease_IsDetected_EvenWhenFinalReleaseCountIsOne` | Tracking buffer ref-count diagnostics | Double Release Is Detected Even When Final Release Count Is One. | Optional harness self-test; .Harness category only. |
 | `BalancedAcquireRelease_RecordsSingleFinalReleaseAndZeroRefs` | Tracking buffer ref-count diagnostics | Balanced Acquire Release Records Single Final Release And Zero Refs. | Optional harness self-test; .Harness category only. |
 
+#### `ApplicationByteLedgerTests` — Application byte-budget accounting (harness self-test)
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `WeightedByteAdmission_RejectsOversizedItem_WithoutTakingOwnership` | Application byte-budget accounting (harness self-test) | Weighted Byte Admission Rejects Oversized Item Without Taking Ownership. | Optional harness self-test; .Harness category only. |
+| `ConsumerHeldBytes_RemainAccountedAfterSocketCompletion` | Application byte-budget accounting (harness self-test) | Consumer Held Bytes Remain Accounted After Socket Completion. | Optional harness self-test; .Harness category only. |
+| `QueuedPendingHeldAndDeferredCleanup_AreSeparate` | Application byte-budget accounting (harness self-test) | Queued Pending Held And Deferred Cleanup Are Separate. | Optional harness self-test; .Harness category only. |
+
+#### `ApplicationLivenessWatchdogTests` — External liveness monitoring (harness self-test)
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `LivenessComposition_CanAbortStalledNormalIo` | External liveness monitoring (harness self-test) | Liveness Composition Can Abort Stalled Normal Io. | Optional harness self-test; .Harness category only. |
+| `LivenessDisabled_LeavesNormalIoIntentionallyPending` | External liveness monitoring (harness self-test) | Liveness Disabled Leaves Normal Io Intentionally Pending. | Optional harness self-test; .Harness category only. |
+
+#### `ProducerHarnessTests` — Producer composition harness doubles
+
+| Test | Contract clause / behaviour | What it proves | Non-extractable notes |
+| --- | --- | --- | --- |
+| `FixtureTeardown_CompletesOutstandingFakeOperations` | Harness composition helper | Fixture teardown completes pending fake native operations and returns borrowed buffers through the guarded pool. | Optional harness self-test; .Harness category only. |
+| `StrictSingleWriter_RejectsConcurrentProducerPublication` | Strict SPSC double | Concurrent producer publication is rejected and counted as a writer violation. | Optional harness self-test; .Harness category only. |
+
 ## Planned coverage
 
-No known missing tests or missing layers are currently recorded. New gaps discovered during review must be added here with the owning layer and a short reason.
+| Missing test | Owner | Reason |
+|---|---|---|
+| Async receive `WouldBlock` exhaustion. | `LowLevelTcpSocket` | Only the synchronous exhaustion path is scripted. |
+| Receiver `Shutdown()` before `Start()` and repeated shutdown. | `LowLevelTcpSocket` | All existing receiver tests start the receiver first. |
+| `ReusablePartialView` pool bound, revive-after-release, and delegated diagnostics. | `LowLevelTcpSocket` | Only `Create`, indexer, `CopyTo` range, and underflow are covered. |
+| Remote EOF after teardown under the half-close policies. | `LowLevelTcpSocket` | No test combines an in-flight abort/dispose with a later remote EOF. |
 
 ## Deferred by design
 

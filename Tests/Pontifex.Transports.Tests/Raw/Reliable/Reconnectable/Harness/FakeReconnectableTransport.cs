@@ -321,8 +321,11 @@ namespace Pontifex.Tests.Raw.Reliable.Reconnectable.Harness
 
         public int HandlerStoppedCount { get; private set; }
 
+        public int ReceivedCount { get; private set; }
+
         public void DeliverToServer(UnionDataList data)
         {
+            ReceivedCount++;
             Handler.OnReceived(data);
         }
 

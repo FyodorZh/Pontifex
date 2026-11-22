@@ -22,8 +22,8 @@ public sealed class RawReliableConverterTests
     {
         public Pair(
             FakeRawUnreliableNetwork network,
-            RawUnreliableNoAckToRawReliableClient client,
-            RawUnreliableNoAckToRawReliableServer server,
+            RawUnreliableToRawReliableClient client,
+            RawUnreliableToRawReliableServer server,
             RecordingRawReliableClientHandler clientHandler,
             RecordingRawReliableServerHandler serverHandler,
             RecordingRawReliableServerHandlerFactory factory)
@@ -38,9 +38,9 @@ public sealed class RawReliableConverterTests
 
         public FakeRawUnreliableNetwork Network { get; }
 
-        public RawUnreliableNoAckToRawReliableClient Client { get; }
+        public RawUnreliableToRawReliableClient Client { get; }
 
-        public RawUnreliableNoAckToRawReliableServer Server { get; }
+        public RawUnreliableToRawReliableServer Server { get; }
 
         public RecordingRawReliableClientHandler ClientHandler { get; }
 
@@ -98,6 +98,60 @@ public sealed class RawReliableConverterTests
     }
 
     [Test]
+    public void Client_HandshakeRequest_DecodesVersionNameAndDeliveryMaximum()
+    {
+        var network = new FakeRawUnreliableNetwork();
+        var peer = new RawUnreliableDeliveryPeer(4096);
+        network.Server.Init(_ => peer);
+        Assert.That(network.Server.Start(_ => { }), Is.True);
+
+        short requestVersion = 0;
+        string? requestName = null;
+        int requestMax = 0;
+        bool parsed = false;
+        peer.UserReceived += data =>
+        {
+            try
+            {
+                parsed = ConverterHandshake.TryParseRequest(
+                    data,
+                    out requestVersion,
+                    out requestName,
+                    out requestMax);
+            }
+            finally
+            {
+                data.Release();
+            }
+        };
+
+        var clientHandler = new RecordingRawReliableClientHandler();
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Assert.That(client.Start(_ => { }), Is.True);
+
+        try
+        {
+            Assert.That(peer.ReceivedEvent.Wait(Timeout), Is.True, "the server did not receive the handshake request");
+
+            Assert.That(parsed, Is.True, "the first peer payload must be a well-formed handshake request");
+            Assert.That(requestVersion, Is.EqualTo(ConverterHandshake.Version));
+            Assert.That(requestName, Is.EqualTo(ConverterHandshake.Name));
+            // The request carries the client delivery-manager maximum, a derived
+            // chunking bound; recompute it the same way the converter does.
+            Assert.That(
+                requestMax,
+                Is.EqualTo(DeliveryMax(network.Client.MessageMaxByteSize)));
+        }
+        finally
+        {
+            client.Stop(new UserIntention("test"));
+            network.Server.Stop(new UserIntention("test"));
+            clientHandler.DisposeReceived();
+        }
+    }
+
+    [Test]
     public void Client_DoesNotRaiseOnConnectedBeforeTheHandshakeResponse()
     {
         var network = new FakeRawUnreliableNetwork();
@@ -106,7 +160,7 @@ public sealed class RawReliableConverterTests
         Assert.That(network.Server.Start(_ => { }), Is.True);
 
         var clientHandler = new RecordingRawReliableClientHandler();
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
 
@@ -138,7 +192,7 @@ public sealed class RawReliableConverterTests
         Assert.That(network.Server.Start(_ => { }), Is.True);
 
         var clientHandler = new RecordingRawReliableClientHandler();
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
         Assert.That(client.Init(clientHandler), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
 
@@ -157,6 +211,47 @@ public sealed class RawReliableConverterTests
             Assert.That(clientHandler.DisconnectedCount, Is.Zero);
             Assert.That(clientHandler.StoppedCount, Is.EqualTo(1));
             Assert.That(clientHandler.StopReason, Is.TypeOf<ProtocolMismatch>());
+        }
+        finally
+        {
+            client.Stop(new UserIntention("test"));
+            network.Server.Stop(new UserIntention("test"));
+            clientHandler.DisposeReceived();
+        }
+    }
+
+    [TestCase((int)Status.VersionMismatch, typeof(ProtocolMismatch))]
+    [TestCase((int)Status.NameMismatch, typeof(ProtocolMismatch))]
+    [TestCase((int)Status.Rejected, typeof(HandshakeRejected))]
+    [TestCase((int)Status.CapacityExceeded, typeof(HandshakeRejected))]
+    public void Client_WithRejectStatus_MapsToTheExpectedStopReason(
+        int statusValue,
+        Type expectedReason)
+    {
+        var status = (Status)statusValue;
+        var network = new FakeRawUnreliableNetwork();
+        var peer = new RawUnreliableDeliveryPeer(4096);
+        network.Server.Init(_ => peer);
+        Assert.That(network.Server.Start(_ => { }), Is.True);
+
+        var clientHandler = new RecordingRawReliableClientHandler();
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
+        Assert.That(client.Init(clientHandler), Is.True);
+        Assert.That(client.Start(_ => { }), Is.True);
+
+        try
+        {
+            Assert.That(peer.ReceivedEvent.Wait(Timeout), Is.True, "the server did not receive the handshake request");
+            Assert.That(peer.Send(ConverterHandshake.BuildReject(
+                    ConverterHandshake.Version,
+                    "converter",
+                    status,
+                    "rejected")),
+                Is.EqualTo(SendResult.Ok));
+
+            Assert.That(clientHandler.StoppedEvent.Wait(Timeout), Is.True, "the client did not stop after the reject");
+            Assert.That(clientHandler.ConnectedCount, Is.Zero);
+            Assert.That(clientHandler.StopReason, Is.TypeOf(expectedReason));
         }
         finally
         {
@@ -207,6 +302,23 @@ public sealed class RawReliableConverterTests
     }
 
     [Test]
+    public void Handshake_WhenServerMaximumIsSmaller_ClientLowersToIt()
+    {
+        const int clientInnerMax = 140;
+        const int serverInnerMax = 100;
+        using var pair = CreatePair(clientInnerMax, serverInnerMax);
+
+        WaitConnected(pair.ClientHandler, "client");
+        WaitConnected(pair.ServerHandler, "server");
+
+        var expected = Math.Min(DeliveryMax(clientInnerMax), DeliveryMax(serverInnerMax));
+        Assert.That(expected, Is.EqualTo(DeliveryMax(serverInnerMax)),
+            "precondition: the server side is the smaller maximum");
+        Assert.That(pair.ClientHandler.Endpoint!.MessageMaxByteSize, Is.EqualTo(expected));
+        Assert.That(pair.ServerHandler.Endpoint!.MessageMaxByteSize, Is.EqualTo(expected));
+    }
+
+    [Test]
     public void AdmittedSession_DeliversTheOrderedLifecycleExactlyOnce()
     {
         using var pair = CreatePair();
@@ -241,7 +353,7 @@ public sealed class RawReliableConverterTests
 
         var serverHandler = new RecordingRawReliableServerHandler();
         var factory = new RecordingRawReliableServerHandlerFactory(_ => serverHandler);
-        var server = new RawUnreliableNoAckToRawReliableServer(network.Server, null, null);
+        var server = new RawUnreliableToRawReliableServer(network.Server, null, null);
         Assert.That(server.Init(factory), Is.True);
         Assert.That(server.Start(_ => { }), Is.True);
         Assert.That(network.Client.Start(_ => { }), Is.True);
@@ -292,8 +404,8 @@ public sealed class RawReliableConverterTests
         var serverHandler = new RecordingRawReliableServerHandler();
         var factory = new RecordingRawReliableServerHandlerFactory(_ => serverHandler);
 
-        var server = new RawUnreliableNoAckToRawReliableServer(network.Server, null, null);
-        var client = new RawUnreliableNoAckToRawReliableClient(network.Client, null, null);
+        var server = new RawUnreliableToRawReliableServer(network.Server, null, null);
+        var client = new RawUnreliableToRawReliableClient(network.Client, null, null);
 
         Assert.That(server.Init(factory), Is.True);
         Assert.That(client.Init(clientHandler), Is.True);

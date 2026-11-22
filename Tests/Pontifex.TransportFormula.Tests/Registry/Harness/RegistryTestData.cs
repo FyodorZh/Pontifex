@@ -10,9 +10,9 @@ namespace Pontifex.TransportFormula.Tests.Registry.Harness;
 internal static class RegistryTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliable;
-    public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
-    public static readonly TransportType TypeC = TransportType.RawUnreliableAck;
-    public static readonly TransportType UnregisteredType = TransportType.RRReliableAck;
+    public static readonly TransportType TypeB = TransportType.RawUnreliable;
+    public static readonly TransportType TypeC = TransportType.RRReliable;
+    public static readonly TransportType UnregisteredType = TransportType.RRUnreliable;
 
     public static TransportTypeInfo TypeInfo(TransportType type, string canonicalName)
     {

@@ -37,6 +37,6 @@
 - `TestRawTransport : RawTransport` supplies the abstract `MessageMaxByteSize`, `Type`, and
   lifecycle hooks. It passes a trivial conformance control only because the production
   constructor requires one; the control is never armed, inspected, or asserted.
-- The three unreliable bases that used to be missing layers now have their own layers under
+- The unreliable base, client, and server transports are covered by their own layers under
   `Raw/Unreliable`: `RawUnreliableTransport`, `RawUnreliableClientTransport`, and
   `RawUnreliableServerTransport<TFactory>`.

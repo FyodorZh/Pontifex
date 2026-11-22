@@ -25,7 +25,7 @@ internal sealed class TestRawUnreliableTransport : RawUnreliableTransport, IRawU
 
     public override int MessageMaxByteSize => 1024;
 
-    public override TransportType Type => TransportType.RawUnreliableAck;
+    public override TransportType Type => TransportType.RawUnreliable;
 
     /// <summary>
     /// Gets or sets the value reported by <see cref="TryMakeReliableForDebug"/>.

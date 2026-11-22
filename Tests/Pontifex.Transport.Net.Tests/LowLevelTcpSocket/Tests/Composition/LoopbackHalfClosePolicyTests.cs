@@ -13,6 +13,7 @@ namespace Pontifex.Tests.NetSockets.LowLevelTcpSocketTests
     /// <see cref="RemoteHalfClosePolicy.AbortConnection"/> must abort the connection.
     /// </summary>
     [LowLevelTcpSocketSuite]
+    [Category(TestCategories.Loopback)]
     public class LoopbackHalfClosePolicyTests
     {
         [Test]

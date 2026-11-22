@@ -350,6 +350,29 @@ public sealed class TransportRegistryBuilderTests
     }
 
     [Test]
+    public void RegisterTransport_WithSharedStructSchema_ValidatesItOnceAndReusesIt()
+    {
+        var builder = RegistryTestData.NewStandardBuilder();
+        var shared = RegistryTestData.Schema(
+            RegistryTestData.CreateStringField("value", required: true));
+
+        builder.RegisterTransport(RegistryTestData.Registration(
+            "alpha",
+            RegistryTestData.TypeA,
+            Array.Empty<string>(),
+            RegistryTestData.CreateStructParam("first", shared),
+            RegistryTestData.CreateStructParam("second", shared)));
+
+        var constructor = builder.Build().FindCanonical("alpha")!;
+        var first = ((StructParam)constructor.Params[0]).Schema;
+        var second = ((StructParam)constructor.Params[1]).Schema;
+
+        Assert.That(first, Is.SameAs(second),
+            "one source schema instance must produce one normalized instance");
+        Assert.That(first.Fields.Select(f => f.Name), Is.EqualTo(new[] { "value" }));
+    }
+
+    [Test]
     public void RegisterTransport_NormalizesArrayFieldMetadata()
     {
         var builder = RegistryTestData.NewStandardBuilder();
@@ -964,6 +987,43 @@ public sealed class TransportRegistryBuilderTests
     }
 
     [Test]
+    public void RegisterTransport_WithTwoParametersHavingAbsentExpectedTypes_ReportsFirstParameter()
+    {
+        var builder = RegistryTestData.NewBuilder(RegistryTestData.TypeAInfo());
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateTransportParam(
+                    "first",
+                    RegistryTestData.Exactly(RegistryTestData.TypeB)),
+                RegistryTestData.CreateTransportParam(
+                    "second",
+                    RegistryTestData.Exactly(RegistryTestData.TypeC)))),
+            "E_REG_TYPE_NOT_IN_CATALOG",
+            "transport type " + RegistryTestData.TypeB + " is not present in the type catalog");
+    }
+
+    [Test]
+    public void RegisterTransport_WithTwoAbsentMembersInOneExpectedSet_ReportsFirstMember()
+    {
+        var builder = RegistryTestData.NewBuilder(RegistryTestData.TypeAInfo());
+
+        RegistryAssertions.ThrowsRegistration(
+            () => builder.RegisterTransport(RegistryTestData.Registration(
+                "alpha",
+                RegistryTestData.TypeA,
+                Array.Empty<string>(),
+                RegistryTestData.CreateTransportParam(
+                    "input",
+                    RegistryTestData.OneOf(RegistryTestData.TypeB, RegistryTestData.TypeC)))),
+            "E_REG_TYPE_NOT_IN_CATALOG",
+            "transport type " + RegistryTestData.TypeB + " is not present in the type catalog");
+    }
+
+    [Test]
     public void RegisterTransport_WithTwoInvalidParameterNames_ReportsFirstInDeclarationOrder()
     {
         var builder = RegistryTestData.NewStandardBuilder();
@@ -1024,5 +1084,30 @@ public sealed class TransportRegistryBuilderTests
                 Array.Empty<string>())),
             "E_REG_BUILDER_SEALED",
             "registry builder has already been built");
+    }
+
+    [Test]
+    public void RegisterType_WithNullInfo_ThrowsArgumentNullException()
+    {
+        var builder = RegistryTestData.NewBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.RegisterType(null!));
+    }
+
+    [Test]
+    public void RegisterTransport_WithNullRegistration_ThrowsArgumentNullException()
+    {
+        var builder = RegistryTestData.NewBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.RegisterTransport(null!));
+    }
+
+    [Test]
+    public void RegisterTransport_WithNullConstructor_ThrowsArgumentNullException()
+    {
+        var builder = RegistryTestData.NewBuilder();
+        var registration = new TransportRegistration(null!, Array.Empty<string>());
+
+        Assert.Throws<ArgumentNullException>(() => builder.RegisterTransport(registration));
     }
 }

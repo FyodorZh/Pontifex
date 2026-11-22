@@ -1,8 +1,7 @@
 using System.Net;
 using Actuarius.Memory;
 using NUnit.Framework;
-using Pontifex.Raw.Unreliable.Ack.Udp;
-using Pontifex.Raw.Unreliable.NoAck.Udp;
+using Pontifex.Raw.Unreliable.Udp;
 using Scriba;
 
 namespace Pontifex.Tests.Raw;
@@ -29,41 +28,37 @@ public sealed class RawUnreliableUdpBudgetWiringTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(RawUnreliableAckUdpInfo.QueueCapacity, Is.EqualTo(100));
-            Assert.That(RawUnreliableAckUdpInfo.SendBudgetMessages, Is.EqualTo(100));
-            Assert.That(RawUnreliableAckUdpInfo.SendBudgetBytes, Is.EqualTo(49_000L));
-
-            Assert.That(RawUnreliableNoAckUdpInfo.QueueCapacity, Is.EqualTo(100));
-            Assert.That(RawUnreliableNoAckUdpInfo.SendBudgetMessages, Is.EqualTo(100));
-            Assert.That(RawUnreliableNoAckUdpInfo.SendBudgetBytes, Is.EqualTo(49_000L));
+            Assert.That(RawUnreliableUdpInfo.QueueCapacity, Is.EqualTo(100));
+            Assert.That(RawUnreliableUdpInfo.SendBudgetMessages, Is.EqualTo(100));
+            Assert.That(RawUnreliableUdpInfo.SendBudgetBytes, Is.EqualTo(49_000L));
         });
     }
 
     [Test]
-    public void AckUdpClientAndServer_DeriveTheInfoBudgetCaps()
+    public void UdpClientAndServer_DeriveTheInfoBudgetCaps()
     {
         var logger = new Logger([]);
-        var client = new RawUnreliableAckUdpClient(IPAddress.Loopback, 0, logger, MemoryRental.Shared);
-        var server = new RawUnreliableAckUdpServer(IPAddress.Loopback, 0, logger, MemoryRental.Shared);
+        var client = new RawUnreliableUdpClient(IPAddress.Loopback, 0, logger, MemoryRental.Shared);
+        var server = new RawUnreliableUdpServer(IPAddress.Loopback, 0, logger, MemoryRental.Shared);
 
         Assert.Multiple(() =>
         {
             Assert.That(
-                RawUnreliableAckUdpInfo.SendBudgetBytes,
-                Is.EqualTo((long)RawUnreliableAckUdpInfo.MessageMaxByteSize *
-                    RawUnreliableAckUdpInfo.QueueCapacity));
+                RawUnreliableUdpInfo.SendBudgetBytes,
+                Is.EqualTo((long)RawUnreliableUdpInfo.MessageMaxByteSize *
+                    RawUnreliableUdpInfo.QueueCapacity));
             Assert.That(
-                RawUnreliableAckUdpInfo.SendBudgetMessages,
-                Is.EqualTo(RawUnreliableAckUdpInfo.QueueCapacity));
+                RawUnreliableUdpInfo.SendBudgetMessages,
+                Is.EqualTo(RawUnreliableUdpInfo.QueueCapacity));
 
             Assert.That(client.ExposedSendBudgetBytes,
-                Is.EqualTo(RawUnreliableAckUdpInfo.SendBudgetBytes));
+                Is.EqualTo(RawUnreliableUdpInfo.SendBudgetBytes));
             Assert.That(client.ExposedSendBudgetMessages,
-                Is.EqualTo(RawUnreliableAckUdpInfo.SendBudgetMessages));
+                Is.EqualTo(RawUnreliableUdpInfo.SendBudgetMessages));
             Assert.That(server.ExposedSendBudgetBytes,
-                Is.EqualTo(RawUnreliableAckUdpInfo.SendBudgetBytes));
+                Is.EqualTo(RawUnreliableUdpInfo.SendBudgetBytes));
             Assert.That(server.ExposedSendBudgetMessages,
-                Is.EqualTo(RawUnreliableAckUdpInfo.SendBudgetMessages));
+                Is.EqualTo(RawUnreliableUdpInfo.SendBudgetMessages));
         });
     }
 }

@@ -4,7 +4,11 @@ Black-box contract tests for the Api negotiation layer that `Pontifex.Api` runs
 on top of an already-admitted reliable raw transport: `ClientSideApi`,
 `ServerSideApiFactory`, and `ServerSideApiInstance`. Every test runs over
 hand-written fake reliable transports with synchronous, caller-driven
-delivery: no real time, timers, sockets, or networks.
+delivery: no real time is awaited, and there are no real sockets or networks.
+The shared negotiation session accepts a clock seam; the tests inject
+`ManualApiNegotiationClock` through the Api's internal constructor overloads,
+so deadlines and the rejection linger are driven explicitly. The public
+constructors keep the production clock, and disposal still cancels its timers.
 
 ## Suite type
 
@@ -77,6 +81,8 @@ All harness types are hand-written (no mocking library) and test-only:
   `ServerToClient` hooks let a test replace or drop one direction.
 - `TailAppendingClientSideApi` overrides `AppendNegotiationData` to prove the
   append-only hook.
+- `ManualApiNegotiationClock` implements `INegotiationClock`; tests advance it
+  to fire the negotiation deadline and the rejection linger without real time.
 
 There are no harness self-tests, so the
 `RawReliableApiNegotiation.Harness` category is not used.

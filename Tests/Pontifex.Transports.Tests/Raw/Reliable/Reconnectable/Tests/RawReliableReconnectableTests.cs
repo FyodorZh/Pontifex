@@ -174,6 +174,124 @@ public sealed class RawReliableReconnectableTests
             "a message queued before the drop must be replayed after reattach");
     }
 
+    [Test]
+    public void ReplayedMessageAfterReattach_IsDeliveredOnce()
+    {
+        using var pair = new ReconnectablePair();
+        pair.Start();
+
+        var serverHandler = pair.ServerHandler;
+        Assert.That(serverHandler, Is.Not.Null);
+
+        // A server-side send resets the report-flush window, so the delivery report
+        // for the client's message is not emitted in the same tick.
+        Assert.That(serverHandler!.Endpoint!.Send(ReconnectablePayload.CreateInt(1)),
+            Is.EqualTo(SendResult.Ok));
+        pair.TickAll();
+
+        Assert.That(pair.ClientHandler.Endpoint!.Send(ReconnectablePayload.CreateInt(44)),
+            Is.EqualTo(SendResult.Ok));
+        pair.TickAll();
+
+        Assert.That(serverHandler.Received, Is.EqualTo(new[] { 44 }),
+            "the first transmission must reach the server before the drop");
+
+        pair.DropPhysicalConnection(new UserIntention("test", "fall"));
+        pair.Reconnect();
+        pair.TickAll();
+
+        Assert.That(pair.ServerSession!.ReceivedCount, Is.EqualTo(2),
+            "the server must receive the reattach tail and one replayed message");
+        Assert.That(serverHandler.Received, Is.EqualTo(new[] { 44 }),
+            "a replayed unconfirmed message must be suppressed as a duplicate");
+        Assert.That(pair.Factory.Calls, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void UnknownSessionId_IsRejectedWithoutFactoryCallOrSessionDamage()
+    {
+        using var pair = new ReconnectablePair();
+        pair.Start();
+
+        var firstHandler = pair.ServerHandler;
+        Assert.That(firstHandler, Is.Not.Null);
+
+        pair.DropPhysicalConnection(new UserIntention("test", "fall"));
+        pair.Reconnect(endpoint => endpoint.Transform = input => OffsetReattachInt(0, 1000, input));
+
+        var rejected = pair.ServerSession;
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.Factory.Calls, Is.EqualTo(1),
+                "an unknown session id must not create a new user session");
+            Assert.That(firstHandler!.Events, Is.EqualTo(new[] { "connected" }),
+                "the existing session must be untouched");
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.ClientHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+            Assert.That(rejected!.HandlerStoppedCount, Is.Zero,
+                "the rejected physical session waits for the linger");
+        });
+
+        pair.Clock.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.That(rejected!.HandlerStoppedCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void StaleGeneration_IsRejectedWithoutFactoryCallOrSessionDamage()
+    {
+        using var pair = new ReconnectablePair();
+        pair.Start();
+
+        var firstHandler = pair.ServerHandler;
+        Assert.That(firstHandler, Is.Not.Null);
+
+        pair.DropPhysicalConnection(new UserIntention("test", "fall"));
+        pair.Reconnect(endpoint => endpoint.Transform = input => OffsetReattachInt(1, 1, input));
+
+        var rejected = pair.ServerSession;
+        Assert.Multiple(() =>
+        {
+            Assert.That(pair.Factory.Calls, Is.EqualTo(1));
+            Assert.That(firstHandler!.Events, Is.EqualTo(new[] { "connected" }));
+            Assert.That(pair.ClientHandler.StopReason, Is.TypeOf<HandshakeRejected>());
+            Assert.That(pair.ClientHandler.Events,
+                Is.EqualTo(new[] { "connected", "disconnected", "stopped" }));
+        });
+
+        pair.Clock.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.That(rejected!.HandlerStoppedCount, Is.EqualTo(1));
+    }
+
+    private static UnionDataList OffsetReattachInt(int index, int delta, UnionDataList input)
+    {
+        var elements = new List<UnionData>();
+        while (input.TryPopFirst(out var element))
+        {
+            elements.Add(element);
+        }
+
+        input.Release();
+
+        var result = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+        int intIndex = 0;
+        foreach (var element in elements)
+        {
+            if (element.Type == UnionDataType.Int && intIndex++ == index)
+            {
+                result.PutLast(new UnionData(element.Alias.IntValue + delta));
+            }
+            else
+            {
+                result.PutLast(element);
+            }
+        }
+
+        return result;
+    }
+
     private static UnionDataList ReplaceLastArrayWithWrongSecret(UnionDataList input)
     {
         var elements = new List<UnionData>();

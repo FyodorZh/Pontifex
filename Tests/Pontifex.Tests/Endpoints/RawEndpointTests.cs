@@ -209,6 +209,20 @@ public sealed class RawEndpointTests
     }
 
     [Test]
+    public void Send_ReleasedBuffer_ReturnsInvalidMessageAndKeepsCallerOwnership()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        buffer.Release();
+        Assert.That(buffer.IsAlive, Is.False);
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.InvalidMessage));
+        Assert.That(buffer.IsAlive, Is.False, "the endpoint must not release a buffer it never owned");
+    }
+
+    [Test]
     public void Send_WhenNotStarted_ReturnsNotConnectedAndReleasesBuffer()
     {
         using var handler = new RecordingRawHandler(Memory);

@@ -1,15 +1,12 @@
-using Pontifex.Raw.Unreliable.Ack;
-using Pontifex.Raw.Unreliable.NoAck;
 using Pontifex.Utils.CheckPointGate;
 
 namespace Pontifex.Raw.Unreliable
 {
     /// <summary>
     /// Test-only conformance control for a single IRawUnreliableEndpoint.
-    /// Implements both the Ack and NoAck contract variants. All checkpoint
-    /// gates are inactive until armed by a conformance adapter.
+    /// All checkpoint gates are inactive until armed by a conformance adapter.
     /// </summary>
-    public sealed class RawUnreliableEndpointConformanceControl : IRawUnreliableNoAckEndpointConformanceControl, IRawUnreliableAckEndpointConformanceControl
+    public sealed class RawUnreliableEndpointConformanceControl : IRawUnreliableEndpointConformanceControl
     {
         private readonly CheckPoint _beforeEndpointStopStateTransitionGate = new();
         private readonly CheckPoint _beforeHandlerStoppedGate = new();

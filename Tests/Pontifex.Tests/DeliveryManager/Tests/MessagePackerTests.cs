@@ -283,6 +283,42 @@ namespace Pontifex.Tests.Delivery
             Assert.That(peeked, Is.False);
         }
 
+        [Test]
+        public void TryUnpackUserMessage_Empty_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList();
+
+            bool unpacked = packer.TryUnpackUserMessage(data, out _);
+            data.Release();
+
+            Assert.That(unpacked, Is.False);
+        }
+
+        [Test]
+        public void TryUnpackUserMessage_SingleMissingId_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)1));
+
+            bool unpacked = packer.TryUnpackUserMessage(data, out _);
+            data.Release();
+
+            Assert.That(unpacked, Is.False);
+        }
+
+        [Test]
+        public void TryUnpackUserMessage_MultiMissingPayload_ReturnsFalse()
+        {
+            var packer = CreatePackEnvironment();
+            var data = WireList(new UnionData((byte)2), new UnionData((byte)1), new UnionData((ushort)42));
+
+            bool unpacked = packer.TryUnpackUserMessage(data, out _);
+            data.Release();
+
+            Assert.That(unpacked, Is.False);
+        }
+
         // ── Error cases ──
 
         [Test]

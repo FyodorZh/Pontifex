@@ -19,8 +19,8 @@ namespace Pontifex.TransportFormula.Tests.Semantics.Harness;
 internal static class SemanticsTestData
 {
     public static readonly TransportType TypeA = TransportType.RawReliable;
-    public static readonly TransportType TypeB = TransportType.RawUnreliableNoAck;
-    public static readonly TransportType TypeC = TransportType.RawUnreliableAck;
+    public static readonly TransportType TypeB = TransportType.RawUnreliable;
+    public static readonly TransportType TypeC = TransportType.RRReliable;
 
     public const string ParameterValidatorReason = "value must not be 'bad'";
     public const string FieldValidatorReason = "field must not be 'bad'";
@@ -559,6 +559,23 @@ internal static class SemanticsTestData
                         "ratios",
                         -1.5m,
                         1.5m)),
+                required: true,
+                positional: true));
+
+        // Harness extension: a string array with a throwing element validator.
+        Register(
+            builder,
+            "throwingArrays",
+            TypeA,
+            Array.Empty<string>(),
+            CreateStructParam(
+                "config",
+                Schema(CreateStringArrayField(
+                    "names",
+                    min: 1,
+                    max: 2,
+                    required: true,
+                    validate: ThrowingValidator)),
                 required: true,
                 positional: true));
 

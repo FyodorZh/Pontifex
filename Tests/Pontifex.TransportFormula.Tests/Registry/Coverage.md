@@ -52,7 +52,8 @@
 | `RegisterTransport_WithInvertedDecimalFieldRange_ThrowsInvalidDecimalRange` | §6.5, §6.7 rule 7, §13.4 | Decimal field ranges are validated in schema order. | Exact message asserted. |
 | `RegisterTransport_WithInvalidIntegerRangeAndInvalidStructField_ReportsIntegerRangeFirst` | §6.7 rules 5, 7 | Parameter scalar ranges are validated before struct schemas. | Cross-pass order. |
 | `RegisterTransport_WithLaterScalarRangeAndEarlierListRange_ReportsScalarRangeFirst` | §6.7 rules 5-6 | A full scalar-range pass precedes the transport-list-range pass. | Later scalar error wins over an earlier list error. |
-| `RegisterTransport_NormalizesArrayFieldMetadata` | §6.5, §6.7 rule 7 | Array fields keep names, order, count ranges, element types, and element ranges. | `StringType` validators are preserved. |
+| `RegisterTransport_NormalizesArrayFieldMetadata` | §6.5, §6.7 rule 7 | Array fields keep names, order, count ranges, element types, and element ranges. | A `StringType` validator is retained (asserted non-null); its invocation is not observed here. |
+| `RegisterTransport_WithSharedStructSchema_ValidatesItOnceAndReusesIt` | §6.7 rule 7 — each distinct `StructSchema` instance is visited once | One source schema referenced by two parameters produces one normalized schema instance shared by both parameters. | The validator uses a reference-keyed memo; identity assertion proves the second visit reused the first result. |
 | `RegisterTransport_WithNegativeArrayMinimum_ThrowsInvalidArrayRange` | §6.5, §6.7 rule 7, §13.4 | A negative array minimum is rejected with the unbounded maximum spelling. | Exact message asserted. |
 | `RegisterTransport_WithArrayMaximumBelowMinimum_ThrowsInvalidArrayRange` | §6.5, §6.7 rule 7, §13.4 | `Max < Min` for an array field is rejected with both bounds. | Exact message asserted. |
 | `RegisterTransport_WithUnsortedIntegerArrayElementRange_ThrowsInvalidIntegerRange` | §6.5, §6.7 rule 7, §13.4 | Unsorted integer array element bounds reach `E_REG_INVALID_INTEGER_RANGE`. | Exact message asserted. |
@@ -83,6 +84,13 @@
 | `RegisterTransport_WithInvalidStructFieldAndDuplicateAliasForType_ReportsStructFieldFirst` | §6.7 rules 7, 9 | Struct validation precedes alias-to-type checks. | — |
 | `RegisterTransport_WithDuplicateAliasAndExpectedTypeAbsent_ReportsDuplicateAliasFirst` | §6.7 rules 9, 11 | Alias-to-type checks precede catalog membership. | — |
 | `RegisterTransport_WithConstructorAndExpectedTypesAbsent_ReportsConstructorTypeFirst` | §6.7 rule 11 | The constructor type is checked before expected-set members. | Expected members are checked in parameter declaration order. |
+| `RegisterTransport_WithTwoParametersHavingAbsentExpectedTypes_ReportsFirstParameter` | §6.7 rule 11 | Expected-set membership is validated in parameter declaration order; the first parameter's first absent member wins. | Both parameters have an absent member. |
+| `RegisterTransport_WithTwoAbsentMembersInOneExpectedSet_ReportsFirstMember` | §6.7 rule 11 | Members inside one expected set are validated in their stored order. | `OneOf(TypeB, TypeC)` with neither in the catalog reports `TypeB`. |
+| `RegisterTransport_WithNullRegistration_ThrowsArgumentNullException` | `IRegistryBuilder` argument contract | A null registration is rejected before any registry rule runs. | Defensive guard; no `E_REG_*` error is produced. |
+| `RegisterTransport_WithNullConstructor_ThrowsArgumentNullException` | `IRegistryBuilder` argument contract | A registration with a null constructor is rejected before rule 2. | — |
+| `RegisterType_WithNullInfo_ThrowsArgumentNullException` | `IRegistryBuilder` argument contract | A null catalog entry is rejected before rule 0. | — |
+| `GetCanonicalName_ForUnknownType_ThrowsInvalidOperationException` | `parsing.md` §6.6; `ITransportTypeCatalog` contract | The non-total accessor fails fast outside the catalog instead of returning a fabricated name. | Exact message asserted. |
+| `FindCanonicalAndCandidates_WithNullScheme_ReturnEmptyResults` | §6.8 | Null is treated as an absent scheme by both lookups. | No exception. |
 | `RegisterTransport_AfterBuild_ThrowsBuilderSealed` | `parsing.md` §6.7 rule 12, §13.4 | A built registry cannot gain transports. | Lifecycle guard `E_REG_BUILDER_SEALED`; no offset. |
 | `Build_WithNoRegistrations_ReturnsEmptyRegistry` | `IRegistry` contract | An empty build produces empty collections and no candidates. | — |
 | `Build_ReturnsConstructorsInRegistrationOrder` | `IRegistryBuilder.Build` contract | `Constructors` is the ordered constructor list, not a map order. | — |
@@ -130,7 +138,7 @@ phase `Registration`, and no span.
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| None currently identified. | Registry layer | New tests are added with the contract change that requires them. |
+| `Min == Max` range boundaries. | Registry layer | Only inverted bounds are tested. |
 
 ## Deferred by design
 
@@ -138,6 +146,7 @@ phase `Registration`, and no span.
 |---|---|
 | Two catalog entries with the same `TransportType` value and different names. | `parsing.md` §6.6 requires unique names, not unique type values; the behavior for repeated values is unspecified, so the suite does not pin it. The implementation keeps the first canonical name for type-to-name lookup. |
 | Unsupported custom `Param` or `StructField` subclasses. | The public DTO contract defines `StringParam`, `TransportParam`, `TransportListParam`, `StructParam` and `StringField`, `NestedStructField` only; a foreign subtype is outside the contract. |
+| Self-referencing (cyclic) `StructSchema`. | `StructSchema` copies its field list in the constructor, so a field cannot reference its own schema through the public API. The validator's cycle-safe memo is therefore unobservable from this suite. |
 | Invalid `SuggestedAliases` identifiers. | `SuggestedAliases` are hints and are not registered or validated as part of the registration catalogue; only aliases passed to `RegisterTransport` are policy. |
 | Concurrency and concurrent reads. | The built registry is an immutable snapshot, but proving thread-safety, throughput, and allocation behavior is non-functional and belongs to a stress category. |
 | Culture-sensitive case folding. | `grammar.md` §3 and `parsing.md` §6.6 define ASCII identifiers and ASCII case-insensitive lookup. |

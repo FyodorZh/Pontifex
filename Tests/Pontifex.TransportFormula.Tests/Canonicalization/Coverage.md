@@ -111,6 +111,9 @@
 | Test | Subject | Contract clause / behaviour | What it proves | Non-extractable notes |
 |---|---|---|---|---|
 | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam` | `PrinterInvariantValidator` | §10, §13.5 | A missing required parameter reports `E_PRN_MISSING_REQUIRED_PARAM`. | — |
+| `Validate_WhenNestedTransportMissesRequiredParameter_ReportsNestedScheme` | `PrinterInvariantValidator` | §10 depth-first validation | A missing required parameter inside a nested transport is reported for the nested scheme. | Proves validation recurses into expression-valued parameters. |
+| `Validate_WhenFormulaRootIsNull_ReportsUnspecifiedInvariantViolation` | `PrinterInvariantValidator` | §10.1, §13.5 | A null formula root is reported as an inconsistent tree with the unspecified-invariant detail. | Reachable only by constructing the DTO directly; the resolver never produces it. |
+| `Validate_WhenCastInnerIsNull_ReportsUnspecifiedInvariantViolation` | `PrinterInvariantValidator` | §10.1, §13.5 | A cast with a null inner expression is reported as an inconsistent tree with the unspecified-invariant detail. | Complements the null-root guard. |
 | `Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder` | `PrinterInvariantValidator` | §10, §13.5 | Multiple missing required parameters report the first in declaration order. | — |
 | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam` | `PrinterInvariantValidator` | §10, §13.5 | A provided parameter absent from metadata reports `E_PRN_UNKNOWN_PARAM`. | — |
 | `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference` | `PrinterInvariantValidator` | §10.2, §13.5 | A structurally equal but recreated parameter is unknown; matching is by reference. | — |
@@ -214,7 +217,7 @@ phase `Printing`, and no span.
 
 | Code | Tests |
 |---|---|
-| `E_PRN_INCONSISTENT_TREE` | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree`, `Validate_ChecksProvidedOrderBeforeParameterKinds`, `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenTransportExpressionIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenListElementIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenStructFieldsAreOutOfSchemaOrder_ReportsStructOrderViolation`, `Validate_ChecksStructOrderBeforeFieldKinds`, `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup`, `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree`, `InconsistentTree_ForKnownDetail_FormatsTemplate` |
+| `E_PRN_INCONSISTENT_TREE` | `Validate_WhenProvidedParametersAreOutOfDeclarationOrder_ReportsInconsistentTree`, `Validate_ChecksProvidedOrderBeforeParameterKinds`, `Validate_WhenSchemeNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenParameterNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenStructFieldNameIsNotCanonical_ReportsInconsistentTree`, `Validate_WhenStructFieldNameStartsWithADigit_ReportsInconsistentTree`, `Validate_WhenTransportExpressionIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenListElementIsOutsideExpectedSet_ReportsMembershipViolation`, `Validate_WhenStructFieldsAreOutOfSchemaOrder_ReportsStructOrderViolation`, `Validate_ChecksStructOrderBeforeFieldKinds`, `Validate_WhenCastIsAnIdentity_ReportsInconsistentTreeBeforeCatalogLookup`, `Validate_WhenTransportTypeIsAbsentFromCatalog_ReportsInconsistentTree`, `InconsistentTree_ForKnownDetail_FormatsTemplate` |
 | `E_PRN_MISSING_REQUIRED_PARAM` | `Validate_WhenRequiredParameterIsAbsent_ReportsMissingRequiredParam`, `Validate_WhenMultipleRequiredParametersAreAbsent_ReportsFirstInDeclarationOrder`, `Validate_ChecksMissingRequiredBeforeUnknownProvidedParameters`, `MissingRequiredParam_FormatsTemplate` |
 | `E_PRN_UNKNOWN_PARAM` | `Validate_WhenProvidedParameterIsNotDeclared_ReportsUnknownParam`, `Validate_WhenDeclaredParameterNameIsRecreated_ReportsUnknownParamByReference`, `Validate_ChecksUnknownBeforeDuplicate`, `UnknownParam_FormatsTemplate` |
 | `E_PRN_DUPLICATE_PARAM` | `Validate_WhenParameterIsProvidedTwice_ReportsDuplicateParam`, `Validate_ChecksDuplicateBeforeProvidedParameterOrder`, `DuplicateParam_FormatsTemplate` |
@@ -227,15 +230,15 @@ phase `Printing`, and no span.
 | `E_PRN_STRUCT_FIELD_UNKNOWN` | `Validate_WhenStructContainsUndeclaredField_ReportsUnknownField`, `Validate_WhenNestedStructContainsUndeclaredField_ReportsFullPath`, `Validate_WhenStructBindingUsesARecreatedField_ReportsUnknownFieldByReference`, `Validate_ChecksUnknownStructFieldBeforeMissingRequiredField`, `StructFieldUnknown_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_MISSING` | `Validate_WhenRequiredStructFieldIsAbsent_ReportsMissingField`, `Validate_WhenMultipleRequiredStructFieldsAreAbsent_ReportsFirstInSchemaOrder`, `Validate_WhenNestedRequiredStructFieldIsAbsent_ReportsFullPath`, `Validate_ChecksMissingStructFieldBeforeDuplicateField`, `StructFieldMissing_FormatsTemplate` |
 | `E_PRN_STRUCT_FIELD_DUPLICATE` | `Validate_WhenStructFieldAppearsTwice_ReportsDuplicateField`, `Validate_ChecksDuplicateStructFieldBeforeSchemaOrder`, `StructFieldDuplicate_FormatsTemplate` |
-| `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | `Validate_WhenStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenNestedStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenIntegerFieldHasWrongKind_ReportsStructFieldKindMismatch`, `Validate_WhenStringFieldReceivesInteger_ReportsStructFieldKindMismatch`, `Validate_WhenDecimalFieldReceivesString_ReportsStructFieldKindMismatch`, `Validate_WhenArrayFieldHasNonArrayValue_ReportsKindMismatchExpectedArray`, `StructFieldKindMismatch_FormatsTemplate` |
+| `E_PRN_STRUCT_FIELD_KIND_MISMATCH` | `Validate_WhenStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenNestedStructFieldHasWrongKind_ReportsKindMismatch`, `Validate_WhenIntegerFieldHasWrongKind_ReportsStructFieldKindMismatch`, `Validate_WhenStringFieldReceivesInteger_ReportsStructFieldKindMismatch`, `Validate_WhenDecimalFieldReceivesString_ReportsStructFieldKindMismatch`, `Validate_WhenIntegerFieldReceivesArray_ReportsStructFieldKindMismatch`, `Validate_WhenNestedStructFieldReceivesArray_ReportsStructFieldKindMismatch`, `Validate_WhenArrayFieldHasNonArrayValue_ReportsKindMismatchExpectedArray`, `StructFieldKindMismatch_FormatsTemplate` |
 | `E_PRN_INVALID_CAST_TARGET` | `Validate_WhenCastTargetIsAbsentFromCatalog_ReportsInvalidCastTarget`, `Validate_WhenCastTargetAndInnerAreInvalid_ReportsCastTargetFirst`, `InvalidCastTarget_UsesTransportTypeToString` |
-| `E_PRN_INVALID_SCALAR` | `Format_ForCarriageReturn_ThrowsInvalidScalarWithU000D`, `Format_ForLineFeed_ThrowsInvalidScalarWithU000A`, `Format_ForBothNewlineKinds_ReportsFirstCodeUnitInTextOrder`, `Format_ForUnpairedHighSurrogate_ThrowsInvalidScalarWithUD800`, `Format_ForUnpairedLowSurrogate_ThrowsInvalidScalarWithUDC00`, `Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr`, `Validate_WhenStringFieldContainsCarriageReturn_ReportsInvalidScalar`, `Validate_WhenStringArrayElementContainsCr_ReportsInvalidScalar`, `InvalidScalar_FormatsFirstOffendingCodeUnitAsFourUppercaseHexDigits` |
+| `E_PRN_INVALID_SCALAR` | `Format_ForCarriageReturn_ThrowsInvalidScalarWithU000D`, `Format_ForLineFeed_ThrowsInvalidScalarWithU000A`, `Format_ForBothNewlineKinds_ReportsFirstCodeUnitInTextOrder`, `Format_ForUnpairedHighSurrogate_ThrowsInvalidScalarWithUD800`, `Format_ForUnpairedLowSurrogate_ThrowsInvalidScalarWithUDC00`, `Format_ForCrBeforeUnpairedSurrogate_ReportsTheCr`, `Validate_WhenStringFieldContainsCarriageReturn_ReportsInvalidScalar`, `Validate_WhenStringArrayElementContainsCr_ReportsInvalidScalar`, `Validate_WhenStringParameterContainsCarriageReturn_ReportsInvalidScalar`, `InvalidScalar_FormatsFirstOffendingCodeUnitAsFourUppercaseHexDigits` |
 
 ## Planned
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| None currently identified. | Canonicalization layer | New tests are added with the contract change that requires them. |
+| Remaining accessor-kind and name-shape combinations. | Canonicalization layer | Field-level kinds are now covered for string, integer, decimal, nested struct, and array; parameter-level and array-element combinations are covered by sibling rows. |
 
 ## Deferred by design
 
@@ -267,9 +270,10 @@ phase `Printing`, and no span.
   a null span.
 - Parameterized methods count as one row in this table; their `TestCaseData`
   rows cover the individual examples listed in the description.
-- The standard registry fixture is the `parsing.md` §14 registry plus named
-  harness extensions documented in the suite README. Extensions exist only to
-  reach canonicalization branches the §14 table does not exercise.
+- The standard registry fixture follows the `parsing.md` §14 registry shape for
+  `alpha`, `beta`, `gamma`, `outer`, and `structy`, with named harness extensions
+  for numeric and array cases. It is not a verbatim copy: `dual` and
+  `numberStruct.nested` are not registered.
 - Registration lowercases scheme names. The §14 name `emptyStruct` is therefore
   printed as `emptystruct`; the expected output reflects the normalized metadata
   view required by `parsing.md` §6.1 and §10.2.

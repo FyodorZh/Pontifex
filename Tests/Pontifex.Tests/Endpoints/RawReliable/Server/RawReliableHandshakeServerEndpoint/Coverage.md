@@ -27,7 +27,6 @@
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| An `OnDisconnected` handler exception is logged and swallowed, so the stop still completes. | This layer | The exception isolation in the disconnect notification is not covered. |
 | A `FailHard` before the start attempt notifies no reliable callback. | This layer | The constructed-stage hard failure is owned by the root layer; the reliable-specific latch state is not asserted. |
 
 ## Deferred by design
@@ -37,7 +36,6 @@
 | A real periodic driver, timer, or transport ticker. | `PeriodicTick` is driven directly; scheduling is out of scope. |
 | Default `DateTime.Now` clock and real-time timeout behaviour. | Tests use the `Now` seam for determinism. |
 | Real transport session admission and teardown. | Covered by the transport suites and the carrier integration tests. |
-| A Direct `RawReliable` carrier. | Both the `tcp` and `direct` RawReliable carriers exist. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
 
 ## Notes
