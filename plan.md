@@ -143,14 +143,17 @@ and a new shared Direct channel carrier.
 2. Add an internal `DirectRrChannelClient`:
    - constructor takes server endpoint, a client endpoint, logger, inbound
      `Action<UnionDataList>`, optional owner-disposal `Action`, an optional
-     owner-live-session `Action`, and two `Func<IDeliverySystem>?` factories;
+     owner-live-session `Action`, and two `Func<IDeliverySystem>?` factories
+     named `clientToServerFactory` and `serverToClientFactory`; the binding
+     builds one fresh system per direction per connect from the same `delivery`
+     value;
    - serialize the connect/install path, `TrySend`, and `Stop` with one private
-     lock; the `Disposed` handler receives the disposed channel, and under the
-     lock it calls `ChannelManager.Disconnect(server, client)` and the owner
-     callback **only when `_channel` still references that channel**; a stale
-     notification for an older channel is ignored;
-   - the owner callback is invoked **after the carrier lock is released**; the
-     caller (`Fail`) must never be called under that lock;
+     lock. The `Disposed` handler receives the disposed channel; under the lock
+     it checks identity, clears `_channel`, unsubscribes, and records an owner
+     notification flag; it calls `ChannelManager.Disconnect` and the owner
+     callback **after the lock is released**. Clearing first makes the reentrant
+     `Disconnect` disposal skip the callback. A stale notification is ignored;
+   - the owner callback (`Fail`) is never invoked under the carrier lock;
    - `TrySend(frame, acceptWithoutPeer)`:
      - if no channel or the channel is disposed, call
        `ChannelManager.Connect(server, client)`;
@@ -167,15 +170,17 @@ and a new shared Direct channel carrier.
      - assign `_channel` only after the handler and systems install succeeds;
        wrap the per-connect factory/install in try/catch; on a throw
        unsubscribe/clear before disconnecting and disposing the just-created
-       channel, release any created systems, and return `Error`; the owner
-       callback must not run under the carrier lock;
+       channel, release any created systems, release the request frame exactly
+       once, and return `Error`; the owner callback must not run under the
+       carrier lock;
      - send with `SendToServer` inside try/catch; a delivery-system exception is
        caught, the frame is released exactly once, and the result is `Error`;
-       translate `NotConnected` by calling
-       `ChannelManager.Disconnect(server, client)` and clearing the channel
-       under the lock before returning the no-peer result; this purges the
-       stale registry entry even when the disposal notification is blocked on
-       the lock (the channel already released the frame);
+       translate `NotConnected` by clearing the channel under the lock first,
+       then calling `ChannelManager.Disconnect(server, client)` outside the lock
+       (so the reentrant `Disposed` handler's identity check skips the owner
+       callback) and returning the no-peer result; this purges the stale
+       registry entry even when the disposal notification is blocked on the
+       lock (the channel already released the frame);
      - on the first successful `SendToServer`, invoke the live-session callback
        **under the lock before releasing it**, so the owner records
        `_hasLiveSession` before a concurrent disposal can consult it;
@@ -202,8 +207,10 @@ and a new shared Direct channel carrier.
    - `Disposed` removes the matching channel **by identity** and invokes
      `onClientDisconnected(clientEp)` only when the disposed channel is still
      the one registered for that endpoint; a stale notification is ignored;
-   - `TrySend(destination, frame)` sends `SendToClient`; missing destination
-     releases and returns `Error`; `NotConnected` maps to `Error`;
+   - `TrySend(destination, frame)` sends `SendToClient` inside try/catch; a
+     carrier/delivery exception releases the frame exactly once and returns
+     `Error`; missing destination releases and returns `Error`; `NotConnected`
+     maps to `Error`;
    - `Stop` sets `_stopping = true` before unregistering, then disposes all
      channels, clears, and releases callbacks;
    - internal `RegisteredClientCount` and a deterministic
@@ -216,7 +223,7 @@ and a new shared Direct channel carrier.
      delivery factories, and optional `IDateTimeProvider`;
    - the transport owns one fixed `GuidEndPoint` for its lifetime and passes it
      to the carrier, following `RawUnreliableDirectClientTransport`;
-   - `MessageMaxByteSize` from `RRDirectInfo`;
+   - `MessageMaxByteSize => RRDirectInfo.MessageMaxByteSize`;
    - `StartCarrier` returns true; `StopCarrier` stops the carrier;
    - `SendFrame` uses `acceptWithoutPeer: true`;
    - channel disposal is a loss, not a failure; inbound frames go to
@@ -278,9 +285,9 @@ and a new shared Direct channel carrier.
    pending storage, reconnect policy, capacity, payload-only max size,
    process-wide `id` uniqueness across Direct transports, the single dispatch
    queue as the callback scheduler, channel-disposal failure detection, and
-   logging. State the single-queue
-   server-callback serialization as a guarantee in §3/§6/§7, not an open choice.
-   In §7 declare the bounded deviations: a request whose
+   logging. Do not restate the type guarantee. Every §7 deviation names the
+   requirement, cause, impact, and handler tolerance. In §7 declare the bounded
+   deviations: a request whose
    `ResponseTtl` expired while queued may still be presented to
    `OnRequested` (shared §6.5 says SHOULD NOT), `OnRequested` already running at
    stop may complete after `onStopped` because dispatch disposal is
@@ -311,7 +318,8 @@ and a new shared Direct channel carrier.
      a restarted server serves it;
    - response TTL starts at receipt: block the dispatch queue, enqueue a
      request, advance the manual clock past `ResponseTtl`, release the queue,
-     and assert the handle is closed and `Response` returns `Error`;
+     and assert the request is presented with an already-closed handle and
+     `Response` returns `Error`; the presentation deviation is declared in §7;
    - channel loss without a server restart: use the internal `CurrentChannel`
      seam to dispose the channel, then the next request reconnects and receives
      a response; the registry entry is purged. The defensive `NotConnected`
@@ -329,9 +337,10 @@ and a new shared Direct channel carrier.
    - a scripted `IDeliverySystem` drops/duplicates; a duplicate response yields
      exactly one callback; a dropped request expires silently;
    - a system installed on a channel that is rejected during install is
-     released; a full dispatch queue releases the frame without blocking; a
-     frame still queued at stop is released by the queue disposer; a throwing
-     delivery system is caught and the frame released;
+     released; a full dispatch queue releases the frame without blocking; the
+     101st pre-`OnStarted` pending frame is released without blocking; a frame
+     still queued or pending at stop is released; a throwing delivery system
+     is caught and the frame released;
    - two clients cannot enter the server handler concurrently; starting a
      second server with the same id returns false and leaves the first server
      usable;
@@ -349,7 +358,8 @@ and a new shared Direct channel carrier.
 9. Register the binding in `FactoryBindingsTests` and `TransportRegistry`; add
    compile cases for both roles, TTLs, delivery, invalid delivery, wrong roles,
    and canonicalization. In `FactoryBindingsTests`, cast compiled transports to
-   the RR interfaces and assert TTL defaults/values, and add one binding-created
+   the RR interfaces and assert `MessageMaxByteSize == RRDirectInfo.MessageMaxByteSize`
+   for both roles and schemes, TTL defaults/values, and add one binding-created
    round trip that starts the compiled server/client and exchanges a request and
    a response, using the bounded signal wait pattern of the existing RR UDP
    round-trip tests.
@@ -415,9 +425,10 @@ suites.
      shared §11; leave §11 as the inherited reference, do not restate it;
    - §5.1 Handlers row and §10 processing sentence: scope concurrency to
      different request handlers, not the single server handler;
-   - §15: add the implementer-checklist items "serialize the single server
-     handler's callbacks" and "schedule the terminal Finish before onStopped
-     begins; it may complete after".
+   - §7.1 callback-matrix row and §15 stop item: replace "then onStopped" /
+     "before onStopped begins" with "scheduled before onStopped begins; it may
+     complete after"; add the implementer-checklist item "serialize the single
+     server handler's callbacks".
    Record the correction in the commit message.
 2. Add `RRReliableFrame` (internal static):
    - Request `[type][requestId]` + payload;
@@ -448,9 +459,11 @@ suites.
    add/duplicate/get-without-remove/take/clear and concurrent access.
 5. Add `RRReliableTransport` (public abstract `AnyTransport`,
    `IRRReliableTransport`): `Type`, abstract `MessageMaxByteSize`,
-   `FrameMaxByteSize`, `TryValidatePayload`, `NextServerRequestId`,
-   `StartCarrier`, `StopCarrier`, `ClearPendingRequests`, `TryStart`,
-   `OnStopped`; stop clears pending without waiting.
+   `FrameMaxByteSize` (protected: `MessageMaxByteSize` plus the largest
+   reliable header plus one; Direct does not consume it), `TryValidatePayload`,
+   `NextServerRequestId`, `StartCarrier`, `StopCarrier`,
+   `ClearPendingRequests`, `TryStart`, `OnStopped`; stop clears pending without
+   waiting.
 6. Add `RRReliableTransport<THandler>` (public abstract): one-time `Init`,
    `DispatchHandler`, start/stop gating.
 7. Add a **public** `IRRReliableTimerFactory` at
@@ -468,10 +481,9 @@ suites.
      timer factory as a tightly coupled helper group; category
      `Direct.RRReliableCoreHelpers`;
    - `RR/RRReliableTransport/` Abstract Test Suit: root `RRReliableTransport`
-     (including the timer-factory lifecycle) and child
-     `RRReliableTransport<THandler>`; category `Direct.RRReliableTransport`;
-     record the planned client layer in the root Coverage and the planned
-     server layer in the generic layer Coverage.
+     and child `RRReliableTransport<THandler>`; category
+     `Direct.RRReliableTransport`; record the planned client layer in the root
+     Coverage and the planned server layer in the generic layer Coverage.
 9. Add a single loose
    `Tests/Pontifex.Transport.Direct.Tests/RR/TestSupport/ManualTimerFactory.cs`
    outside all suites. All three RR suites live in the same test project, so the
@@ -483,10 +495,10 @@ suites.
    an RR suite.
 10. Tests:
    - helpers: every frame type/ordinal, malformed frames, header boundary,
-     table non-removing lookup/terminal removal/concurrency, state transitions;
-   - root layer: lifecycle, payload validation, id allocation, timer-factory
-     fire/suppress/dispose and production schedule/dispose without waiting
-     (real-fire deferred by design), stop scheduling;
+     table non-removing lookup/terminal removal/concurrency, state transitions,
+     manual timer fire/suppress/dispose and production timer
+     schedule/dispose without waiting (real-fire deferred by design);
+   - root layer: lifecycle, payload validation, id allocation, stop scheduling;
    - generic layer: `Init` rules and dispatch gating.
 11. Run the verification.
 
@@ -503,9 +515,11 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj
 dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj
 ```
 
-Expected: 0 errors; full Direct, core, and Net tests pass. Also inspect:
+Expected: 0 errors; full Direct, core, and Net tests pass. Each filtered
+command must match at least one test; zero matches is a failure. Also inspect:
 `Pontifex/Abstractions/Transports/RR/Reliable/Specification.md` §4/§5.1/§6.3/
-§6.4/§8/§10/§15 match the corrected text; §11 remains the inherited reference; the root/generic `Coverage.md` record the
+§6.4/§7.1/§8/§10/§15 match the corrected text; §11 remains the inherited
+reference; the root/generic `Coverage.md` record the
 planned client/server layers in the correct ancestor; the helper and abstract
 suites pass CHECK-01..12. The full Direct project run must include a non-zero
 number of tests from both new categories.
@@ -538,8 +552,9 @@ tests.
    - `protected virtual ushort CreateRandomRequestId()` default crypto; tests
      override;
    - `Request`: handler checks first (null, wrong type, already bound), then
-     payload validation, then `IsStarted` **before** taking the state lock;
-     reserve the handler; allocate the next id
+     transport state (`IsStarted`) **before** taking the state lock, then
+     message validity and size (delegate to `TryValidatePayload` with
+     `NotConnected`), then reserve the handler; allocate the next id
      with the RRUnreliable loop (next id, `TryAdd`, at most 65536 attempts,
      else `BufferOverflow`); add a **provisional** entry under the state lock;
      then `Bind` to publish `RequestId` and the cancel action; expose an
@@ -618,9 +633,10 @@ tests.
      the **client-local id**; it records every terminal id after presentation:
      `Finish`, `Reject`, `Cancel`, and `ResponseTtl` expiry. The server-global
      id is never a duplicate-suppression key; frames carry the client-local
-     id. After 65,536 terminal requests the bitmap is full; new requests are
-     rejected until the session is re-established. This is the declared
-     per-session cap in §7 and the global DoD; add a bitmap-wrap test;
+     id. After 65,536 terminal requests the bitmap is full; the server rejects
+     new requests with `Reject` so the client receives `Finish(Rejected)`, and
+     re-establishing the session requires a new client transport. This is the
+     declared per-session cap in §7 and the global DoD; add a bitmap-wrap test;
    - inbound Request: payload check, ignore a duplicate live or completed id in
      the same session, assign a server-global id from 1, create a handle with a
      response timer, dispatch `OnRequested` through the queue; a full queue
@@ -732,7 +748,8 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj
 dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj
 ```
 
-Expected: all core behaviour tests pass; full Direct, core, and Net tests green;
+Expected: all core behaviour tests pass; each filtered category must match at
+least one test (zero matches is a failure); full Direct, core, and Net tests green;
 no real-time sleeps. Also inspect: the ATS README layer table declares the
 client and server layers with their parents; each new layer has `Coverage.md`
 with covered/planned/deferred sections; the root/generic Coverage no longer
@@ -802,14 +819,16 @@ binding, specification, E2E tests, and factory registration.
    bitmap), completion transport, timer factory, capacity, no persistence,
    payload-only max, process-wide `id` uniqueness across Direct transports,
    the dispatch queue as the callback scheduler, channel-disposal failure
-   detection, and logging. State the single-dispatch-queue `OnRequested`
-   serialization as a guarantee in §3/§6/§7, not an open choice. In §7 declare the bounded deviations: a request
-   arriving before the server's `OnStarted` is held until the gate opens; an
+   detection, and logging. Record the dispatch queue as the §8 callback-scheduler
+   choice; do not restate the type guarantee. In §7 declare only the bounded
+   deviations with requirement, cause, impact, and handler tolerance: an
    `OnRequested` already running at stop may complete after `onStopped` because
-   dispatch disposal is non-blocking; and `OnRequested` may begin during the
-   final phase of `Start` after `OnStarted` before the caller observes the
-   return (shared §7.2). A request whose response TTL expired while queued is
-   not presented: the worker releases it and records the id terminal.
+   dispatch disposal is non-blocking; `OnRequested` may begin during the final
+   phase of `Start` after `OnStarted` before the caller observes the return
+   (shared §7.2); and the per-session 65,536-request cap rejects new requests
+   with `Finish(Rejected)` and requires a new client transport. A request whose
+   response TTL expired while queued is not presented: the worker releases it
+   and records the id terminal.
 5. Add the RRReliable Direct Test Suit at
    `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableDirect/` with
    `README.md`, root `Coverage.md`, tests under `Tests/`, and category
@@ -842,7 +861,8 @@ binding, specification, E2E tests, and factory registration.
      channel immediately.
 6. Register the binding in `FactoryBindingsTests` and `TransportRegistry`; add
    compile cases for both roles, TTLs, wrong roles, unknown `delivery`, and
-   canonicalization; assert `RequestTtl`/`ResponseTtl` defaults and explicit
+   canonicalization; assert `MessageMaxByteSize == RRDirectInfo.MessageMaxByteSize`
+   for both roles and schemes, `RequestTtl`/`ResponseTtl` defaults and explicit
    values via the RR interfaces; add one binding-created round trip.
 7. Run the full verification.
 
@@ -885,13 +905,25 @@ transports.
 - Both bindings exist, compile for both roles, and are registered in factory
   tests.
 - Both Direct transports run over `Channel`/`ChannelManager` and satisfy their
-  family specs.
+  family specs except the bounded deviations listed below.
 - RRUnreliable reuses the existing core; RRReliable uses the new reusable core.
 - TTL defaults 3 s/3 s; RRUnreliable exposes netem; reconnects use fresh systems.
 - No-server: RRReliable `Error`, RRUnreliable `Ok` + silent expiry.
 - Suites: `Direct.RRUnreliable`, `Direct.RRReliable` Test Suits;
   `Direct.RRReliableCoreHelpers` Test Suit; `Direct.RRReliableTransport`
   Abstract Test Suit; each with README/Coverage per RULES.
+- Declared bounded deviations (each named in the implementation spec §7 with
+  requirement, cause, impact, and handler tolerance):
+  - `OnRequested` may begin during the final phase of `Start` after `OnStarted`
+    before the caller observes the return (shared §7.2); handlers tolerate it.
+  - `OnRequested` already running at stop may finish after `onStopped` (shared
+    §7.4); handlers tolerate it.
+  - RRUnreliable may present a request whose `ResponseTtl` expired while
+    queued (shared §6.5 SHOULD NOT); handlers tolerate an already-closed handle.
+  - Netem teardown may wait up to five seconds for its dequeue thread (shared
+    §7.3 promptness); callers tolerate a bounded stop delay.
+  - RRReliable has a per-session 65,536-request duplicate-window cap; the
+    application re-establishes the session before the cap (reliable §10 scope).
 - `dotnet build Pontifex.sln` 0 errors; all Direct, Transports, Transport,
   Factory, core, and Net tests pass.
 - Working tree clean after stage commits; the executor deletes the plan in its
