@@ -46,7 +46,12 @@ namespace Pontifex.RR.Unreliable.Udp
         {
             try
             {
-                _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                AddressFamily addressFamily = _localEndPoint.AddressFamily;
+                IPAddress anyAddress = addressFamily == AddressFamily.InterNetworkV6
+                    ? IPAddress.IPv6Any
+                    : IPAddress.Any;
+
+                _socket = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
 
                 try
                 {
@@ -56,7 +61,7 @@ namespace Pontifex.RR.Unreliable.Udp
                 {
                     if (ex.SocketErrorCode == SocketError.AddressNotAvailable)
                     {
-                        var anyEp = new IPEndPoint(IPAddress.Any, _localEndPoint.Port);
+                        var anyEp = new IPEndPoint(anyAddress, _localEndPoint.Port);
                         _socket.Bind(anyEp);
                         _localEndPoint = anyEp;
                     }
@@ -66,7 +71,7 @@ namespace Pontifex.RR.Unreliable.Udp
                     }
                 }
 
-                IPEndPoint anyRemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
+                IPEndPoint anyRemoteEndPoint = new IPEndPoint(anyAddress, 0);
                 _receiver = new UdpReceiver(_socket, anyRemoteEndPoint, OnReceived, (ex) =>
                 {
                     if (ex.SocketErrorCode != SocketError.ConnectionReset)
@@ -101,7 +106,7 @@ namespace Pontifex.RR.Unreliable.Udp
                 }
                 _receiver = null;
                 _sender = null;
-                FailException("StartCarrier", ex);
+                Log.wtf(ex);
                 return false;
             }
         }

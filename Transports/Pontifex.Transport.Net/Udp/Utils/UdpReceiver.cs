@@ -111,12 +111,33 @@ namespace Pontifex.NetSockets
                 }
                 catch (SocketException ex)
                 {
-                    if (ex.SocketErrorCode != SocketError.Interrupted)
+                    if (_stopped || IsRecoverable(ex.SocketErrorCode))
                     {
-                        _onFail(ex);
+                        continue;
                     }
+
+                    _onFail(ex);
                     break;
                 }
+            }
+        }
+
+        private static bool IsRecoverable(SocketError error)
+        {
+            switch (error)
+            {
+                case SocketError.ConnectionReset:
+                case SocketError.ConnectionRefused:
+                case SocketError.NetworkReset:
+                case SocketError.HostUnreachable:
+                case SocketError.NetworkUnreachable:
+                case SocketError.MessageSize:
+                case SocketError.Interrupted:
+                case SocketError.WouldBlock:
+                case SocketError.TryAgain:
+                    return true;
+                default:
+                    return false;
             }
         }
     }

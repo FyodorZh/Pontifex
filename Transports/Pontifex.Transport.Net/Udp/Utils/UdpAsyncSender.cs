@@ -155,18 +155,30 @@ namespace Pontifex.NetSockets
             {
                 return SendResult.InvalidMessage;
             }
-            
-            switch (_queueToSend.EnqueueEx((remoteEP, serializedData)))
+
+            bool queued = false;
+            try
             {
-                case ValveEnqueueResult.Ok:
-                    _resetEvent.Set();
-                    return SendResult.Ok;
-                case ValveEnqueueResult.Overflown:
-                    return SendResult.BufferOverflow;
-                case ValveEnqueueResult.Rejected:
-                    return SendResult.NotConnected;
-                default:
-                    throw new ArgumentOutOfRangeException();
+                switch (_queueToSend.EnqueueEx((remoteEP, serializedData)))
+                {
+                    case ValveEnqueueResult.Ok:
+                        queued = true;
+                        _resetEvent.Set();
+                        return SendResult.Ok;
+                    case ValveEnqueueResult.Overflown:
+                        return SendResult.BufferOverflow;
+                    case ValveEnqueueResult.Rejected:
+                        return SendResult.NotConnected;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+            }
+            finally
+            {
+                if (!queued)
+                {
+                    serializedData.Release();
+                }
             }
         }
 

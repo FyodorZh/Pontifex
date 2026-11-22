@@ -75,7 +75,15 @@ namespace Pontifex.RR.Unreliable.Udp
                     Memory.ByteArraysPool,
                     (ex) =>
                     {
-                        FailException("Sender.Exception", ex);
+                        if (IsStarted)
+                        {
+                            FailException("Sender.Exception", ex);
+                        }
+                        else
+                        {
+                            Log.w("{0} ignored a send failure after the stop began: {1}", Name,
+                                ex.Message);
+                        }
                     },
                     _trafficCollector);
 
@@ -83,7 +91,15 @@ namespace Pontifex.RR.Unreliable.Udp
 
                 _receiver = new UdpReceiver(_socket, _remoteEndPoint, OnReceived, (ex) =>
                     {
-                        FailException("UDP.Receiver", ex);
+                        if (IsStarted)
+                        {
+                            FailException("UDP.Receiver", ex);
+                        }
+                        else
+                        {
+                            Log.w("{0} ignored a receive failure after the stop began: {1}", Name,
+                                ex.Message);
+                        }
                     },
                     Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log,
                     _trafficCollector);
@@ -106,7 +122,7 @@ namespace Pontifex.RR.Unreliable.Udp
                     _receiver = null;
                 }
 
-                FailException("StartCarrier", ex);
+                Log.wtf(ex);
                 return false;
             }
         }

@@ -11,7 +11,6 @@ namespace Pontifex.RR.Unreliable.Udp
     public static class RRUnreliableUdpBinding
     {
         public const string SchemeName = RRUdpInfo.TransportName + "_rr";
-        public const string LegacyAlias = RRUdpInfo.TransportName;
 
         public static ITransportRegistration CreateRegistration()
         {
@@ -33,13 +32,18 @@ namespace Pontifex.RR.Unreliable.Udp
                         positional: false,
                         new IntegerType(1, int.MaxValue))
                 },
-                Create,
-                new[] { LegacyAlias });
+                Create);
         }
 
         private static ITransport Create(ITransportBuildContext context)
         {
             NetBindingSupport.ResolveAddress(context, out var ipAddress, out var port);
+
+            if (context.Role != TransportRole.Server && port == 0)
+            {
+                throw new InvalidOperationException(
+                    "A client transport requires a non-zero server port.");
+            }
 
             if (context.Role == TransportRole.Server)
             {
