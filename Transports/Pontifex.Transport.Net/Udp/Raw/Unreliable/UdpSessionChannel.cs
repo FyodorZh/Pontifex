@@ -50,7 +50,7 @@ namespace Pontifex.Raw.Unreliable.Udp
             SendResult result = _sender.Send(_remoteEndPoint, message);
             if (result == SendResult.InvalidMessage)
             {
-                message.Release();
+                //message.Release(); // DO not release InvalidMessage. It can spread possible message corruption 
             }
         }
     }

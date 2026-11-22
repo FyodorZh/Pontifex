@@ -120,7 +120,7 @@ namespace Pontifex.Raw.Unreliable.Udp
                 SendResult result = sender.Send(bufferToSend);
                 if (result == SendResult.InvalidMessage)
                 {
-                    bufferToSend.Release();
+                    //bufferToSend.Release(); // don't release invalid buffer to prevent error spreading.
                 }
             }
             catch (Exception ex)
