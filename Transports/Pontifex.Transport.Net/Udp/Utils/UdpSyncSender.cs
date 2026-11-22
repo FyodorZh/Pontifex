@@ -47,10 +47,19 @@ namespace Pontifex.NetSockets
                 return SendResult.InvalidMessage;
             }
 
-            using var disposer = dataToSend.AsDisposable();
-            
-            if (dataToSend.GetDataSize() > _maxMessageSize)
+            int size;
+            try
             {
+                size = dataToSend.GetDataSize();
+            }
+            catch (Exception)
+            {
+                return SendResult.InvalidMessage;
+            }
+
+            if (size > _maxMessageSize)
+            {
+                dataToSend.Release();
                 return SendResult.MessageTooBig;
             }
 
@@ -58,6 +67,8 @@ namespace Pontifex.NetSockets
             {
                 return SendResult.InvalidMessage;
             }
+
+            using var disposer = dataToSend.AsDisposable();
             using var serializedDisposer = serializedData.AsDisposable();
             
             lock (_locker)

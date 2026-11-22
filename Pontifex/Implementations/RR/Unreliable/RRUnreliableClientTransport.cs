@@ -62,12 +62,23 @@ namespace Pontifex.RR.Unreliable
         /// <see langword="false"/>.</returns>
         protected override bool TryStart()
         {
+            ushort seed;
+            try
+            {
+                seed = CreateRandomRequestId();
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                return false;
+            }
+
             if (!base.TryStart())
             {
                 return false;
             }
 
-            _nextRequestId = CreateRandomRequestId() - 1;
+            _nextRequestId = seed - 1L;
             return true;
         }
 
@@ -129,12 +140,49 @@ namespace Pontifex.RR.Unreliable
                 return failure;
             }
 
-            ushort requestId = NextRequestId();
-            bindable.Bind(requestId, CancelRequest);
-            _pendingResponses.Add(requestId, handler, UnbindExpired);
+            ushort requestId = 0;
+            bool added = false;
+
+            for (int attempt = 0; attempt <= ushort.MaxValue; attempt++)
+            {
+                requestId = NextRequestId();
+                bindable.Bind(requestId, CancelRequest);
+
+                if (_pendingResponses.TryAdd(requestId, handler, UnbindExpired))
+                {
+                    added = true;
+                    break;
+                }
+            }
+
+            if (!added)
+            {
+                bindable.Unbind();
+                return SendResult.BufferOverflow;
+            }
+
+            if (!IsStarted)
+            {
+                _pendingResponses.TryTakeExact(requestId, handler, out _, out _);
+                bindable.Unbind();
+                return SendResult.NotConnected;
+            }
+
             RRUnreliableFrame.Encode(request, requestId);
 
-            SendResult result = SendFrame(request);
+            SendResult result;
+            try
+            {
+                result = SendFrame(request);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                _pendingResponses.TryTakeExact(requestId, handler, out _, out _);
+                bindable.Unbind();
+                return SendResult.Error;
+            }
+
             if (result != SendResult.Ok)
             {
                 _pendingResponses.TryTakeExact(requestId, handler, out _, out _);
@@ -191,6 +239,12 @@ namespace Pontifex.RR.Unreliable
         /// </summary>
         /// <param name="source">The source route of the datagram.</param>
         /// <param name="frame">The received frame. The method owns it.</param>
+        /// <remarks>
+        /// The stop check and the callback are not synchronized: a response taken from the pending
+        /// window can reach <see cref="IRRUnreliableRequestHandler.Response"/> while stopping, possibly
+        /// after <c>onStopped</c> has run. The response is released when that is detected, but the
+        /// check-then-act window remains until a callback dispatcher exists.
+        /// </remarks>
         protected void OnFrameReceived(IEndPoint source, UnionDataList frame)
         {
             if (frame == null!)
@@ -233,6 +287,13 @@ namespace Pontifex.RR.Unreliable
             }
 
             if (expired)
+            {
+                bindable.Unbind();
+                frame.Release();
+                return;
+            }
+
+            if (!IsStarted)
             {
                 bindable.Unbind();
                 frame.Release();

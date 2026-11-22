@@ -130,8 +130,13 @@ namespace Pontifex.RR.Unreliable
         /// <returns>The result of the send attempt.</returns>
         internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload)
         {
-            if (response.IsClosed || !IsStarted)
+            if (response.IsClosed || !IsStarted || _timeProvider.Now > response.ExpiresAt)
             {
+                if (!response.IsClosed)
+                {
+                    response.Close();
+                }
+
                 payload?.Release();
                 return SendResult.Error;
             }
@@ -141,17 +146,20 @@ namespace Pontifex.RR.Unreliable
                 return SendResult.InvalidMessage;
             }
 
-            if (payload.GetDataSize() > MessageMaxByteSize)
+            int size;
+            try
+            {
+                size = payload.GetDataSize();
+            }
+            catch (Exception)
+            {
+                return SendResult.InvalidMessage;
+            }
+
+            if (size > MessageMaxByteSize)
             {
                 payload.Release();
                 return SendResult.MessageTooBig;
-            }
-
-            if (_timeProvider.Now > response.ExpiresAt)
-            {
-                response.Close();
-                payload.Release();
-                return SendResult.Error;
             }
 
             if (!response.TryClose())
@@ -161,7 +169,16 @@ namespace Pontifex.RR.Unreliable
             }
 
             RRUnreliableFrame.Encode(payload, response.ClientRequestId);
-            return SendFrame(response.Client, payload);
+
+            try
+            {
+                return SendFrame(response.Client, payload);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                return SendResult.Error;
+            }
         }
     }
 }

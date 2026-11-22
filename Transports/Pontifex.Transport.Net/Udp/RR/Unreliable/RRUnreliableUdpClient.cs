@@ -36,54 +36,24 @@ namespace Pontifex.RR.Unreliable.Udp
 
         protected override bool StartCarrier()
         {
-            IPEndPoint? localEndPoint = null;
             try
             {
                 var addressFamily = _remoteEndPoint.AddressFamily;
                 var bindedAddress = addressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
 
                 _socket = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
+                _socket.Bind(new IPEndPoint(bindedAddress, 0));
 
-                bool binded = false;
-
-                Random rnd = new Random();
-                for (int i = 0; i < 30; ++i) // do I need to put it in the config?
-                {
-                    try
-                    {
-                        int randomPort = 10000 + rnd.Next(30000);
-                        localEndPoint = new IPEndPoint(bindedAddress, randomPort);
-                        _socket.Bind(localEndPoint); // any port?
-                    }
-                    catch (Exception)
-                    {
-                        continue;
-                    }
-                    binded = true;
-                    break;
-                }
-
-                if (!binded || localEndPoint == null)
-                {
-                    _socket.Close();
-                    _socket = null;
-                    return false;
-                }
+                IPEndPoint localEndPoint = (IPEndPoint)_socket.LocalEndPoint!;
 
                 Log.i("UDP.Sender from local='{0}' to remote='{1}'", localEndPoint, _remoteEndPoint);
                 _sender = new UdpSyncSender(_socket, _remoteEndPoint, FrameMaxByteSize,
                     Memory.ByteArraysPool,
                     (ex) =>
                     {
-                        if (IsStarted)
-                        {
-                            FailException("Sender.Exception", ex);
-                        }
-                        else
-                        {
-                            Log.w("{0} ignored a send failure after the stop began: {1}", Name,
-                                ex.Message);
-                        }
+                        // A synchronous send failure is reported through SendResult.Error; it must
+                        // not invalidate the transport (unreliable family, send-result rule).
+                        Log.wtf(ex);
                     },
                     _trafficCollector);
 
@@ -101,7 +71,7 @@ namespace Pontifex.RR.Unreliable.Udp
                                 ex.Message);
                         }
                     },
-                    Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log,
+                    Memory.CollectablePool, Memory.ByteArraysPool, Log,
                     _trafficCollector);
 
                 return true;

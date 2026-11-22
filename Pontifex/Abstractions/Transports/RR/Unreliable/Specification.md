@@ -346,6 +346,11 @@ second callback is delivered for the request, and no other handler callback
 overlaps it. A handler that releases its own state in `onStopped` must
 nevertheless tolerate one late request and release its payload.
 
-Closing this window requires a callback dispatcher that serializes dispatch
+The client response dispatch has the same shape: a response taken from the
+pending window can reach `Response` while stopping, possibly after `onStopped`
+has run. The transport releases it when the stop is detected, but the
+check-then-act window remains.
+
+Closing these windows requires a callback dispatcher that serializes dispatch
 with the stop transition; that work is deferred with the reliable
 implementation.

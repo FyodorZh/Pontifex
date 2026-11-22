@@ -34,9 +34,10 @@ namespace Pontifex.RR.Unreliable
 
         /// <summary>
         /// Gets the inclusive carrier-frame size that fits <see cref="MessageMaxByteSize"/> plus the
-        /// request-id header.
+        /// request-id header. One extra byte covers the serialized element-count prefix growing when
+        /// the header element is prepended (for example 63 elements becoming 64).
         /// </summary>
-        protected int FrameMaxByteSize => MessageMaxByteSize + RRUnreliableFrame.OverheadBytes;
+        protected int FrameMaxByteSize => MessageMaxByteSize + RRUnreliableFrame.OverheadBytes + 1;
 
         /// <summary>
         /// Validates an outbound payload and releases it on failure.
@@ -66,7 +67,18 @@ namespace Pontifex.RR.Unreliable
                 return false;
             }
 
-            if (message.GetDataSize() > MessageMaxByteSize)
+            int size;
+            try
+            {
+                size = message.GetDataSize();
+            }
+            catch (Exception)
+            {
+                failure = SendResult.InvalidMessage;
+                return false;
+            }
+
+            if (size > MessageMaxByteSize)
             {
                 message.Release();
                 failure = SendResult.MessageTooBig;

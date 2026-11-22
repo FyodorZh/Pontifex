@@ -131,54 +131,59 @@ namespace Pontifex.NetSockets
             {
                 return SendResult.InvalidMessage;
             }
-            using var disposer = dataToSend.AsDisposable();
-            
+
             if (remoteEP == null!)
             {
+                dataToSend.Release();
                 return SendResult.InvalidAddress;
             }
-            
-            if (dataToSend.GetDataSize() > _maxMessageSize)
+
+            int size;
+            try
             {
+                size = dataToSend.GetDataSize();
+            }
+            catch (Exception)
+            {
+                return SendResult.InvalidMessage;
+            }
+
+            if (size > _maxMessageSize)
+            {
+                dataToSend.Release();
                 return SendResult.MessageTooBig;
             }
-            
+
             lock (_lock)
             {
                 if (_stopped)
                 {
+                    dataToSend.Release();
                     return SendResult.NotConnected;
                 }
             }
-            
+
             if (!dataToSend.Serialize(_bytesPool, out var serializedData))
             {
                 return SendResult.InvalidMessage;
             }
 
-            bool queued = false;
-            try
+            using var disposer = dataToSend.AsDisposable();
+
+            switch (_queueToSend.EnqueueEx((remoteEP, serializedData)))
             {
-                switch (_queueToSend.EnqueueEx((remoteEP, serializedData)))
-                {
-                    case ValveEnqueueResult.Ok:
-                        queued = true;
-                        _resetEvent.Set();
-                        return SendResult.Ok;
-                    case ValveEnqueueResult.Overflown:
-                        return SendResult.BufferOverflow;
-                    case ValveEnqueueResult.Rejected:
-                        return SendResult.NotConnected;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-            }
-            finally
-            {
-                if (!queued)
-                {
+                case ValveEnqueueResult.Ok:
+                    _resetEvent.Set();
+                    return SendResult.Ok;
+                case ValveEnqueueResult.Overflown:
                     serializedData.Release();
-                }
+                    return SendResult.BufferOverflow;
+                case ValveEnqueueResult.Rejected:
+                    // The valve processor already released the rejected item.
+                    return SendResult.NotConnected;
+                default:
+                    serializedData.Release();
+                    throw new ArgumentOutOfRangeException();
             }
         }
 

@@ -181,7 +181,7 @@ namespace Pontifex.Raw.Unreliable.Udp
                 Log.i("UDP.Listener from local='{0}' of remote='{1}'", localEndPoint, _remoteEndPoint);
                 _receiver = new UdpReceiver(socket, _remoteEndPoint,
                     OnReceivedInternal, ex => FailEndpoint(ex, "UDP.Receiver"),
-                    Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log,
+                    Memory.CollectablePool, Memory.ByteArraysPool, Log,
                     _trafficCollector);
 
                 return null;

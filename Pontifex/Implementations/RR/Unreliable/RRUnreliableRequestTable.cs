@@ -46,19 +46,21 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
-        /// Adds an entry with a fresh deadline and prunes expired entries.
+        /// Adds an entry with a provisional deadline and prunes expired entries. The deadline is set
+        /// by <see cref="ReArm"/> once the frame is submitted.
         /// </summary>
         /// <param name="requestId">The id of the entry.</param>
         /// <param name="value">The value to store.</param>
         /// <param name="onExpired">Invoked for every value removed while pruning expired
         /// entries.</param>
-        public void Add(ushort requestId, TValue value, Action<TValue>? onExpired = null)
+        /// <returns><see langword="true"/> when the entry was added; <see langword="false"/> when the
+        /// id is already present.</returns>
+        public bool TryAdd(ushort requestId, TValue value, Action<TValue>? onExpired = null)
         {
             lock (_locker)
             {
-                DateTime now = _timeProvider.Now;
-                Sweep(now, onExpired);
-                _entries.Add(requestId, new Entry(value, now + _ttl));
+                Sweep(_timeProvider.Now, onExpired);
+                return _entries.TryAdd(requestId, new Entry(value, DateTime.MaxValue));
             }
         }
 

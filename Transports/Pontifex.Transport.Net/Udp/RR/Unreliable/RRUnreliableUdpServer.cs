@@ -62,6 +62,8 @@ namespace Pontifex.RR.Unreliable.Udp
                     if (ex.SocketErrorCode == SocketError.AddressNotAvailable)
                     {
                         var anyEp = new IPEndPoint(anyAddress, _localEndPoint.Port);
+                        Log.w("{0} could not bind {1}; falling back to {2}", Name, _localEndPoint,
+                            anyEp);
                         _socket.Bind(anyEp);
                         _localEndPoint = anyEp;
                     }
@@ -74,11 +76,16 @@ namespace Pontifex.RR.Unreliable.Udp
                 IPEndPoint anyRemoteEndPoint = new IPEndPoint(anyAddress, 0);
                 _receiver = new UdpReceiver(_socket, anyRemoteEndPoint, OnReceived, (ex) =>
                 {
-                    if (ex.SocketErrorCode != SocketError.ConnectionReset)
+                    if (IsStarted)
                     {
-                        Log.e("UDP.Receiver SocketException with code " + ex.ErrorCode + " received. Continue working!!!");
+                        FailException("UDP.Receiver", ex);
                     }
-                }, Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool, Log,
+                    else
+                    {
+                        Log.w("{0} ignored a receive failure after the stop began: {1}", Name,
+                            ex.Message);
+                    }
+                }, Memory.CollectablePool, Memory.ByteArraysPool, Log,
                     _trafficCollector);
 
                 Log.i("UDP.Sender from local={0}", _localEndPoint);

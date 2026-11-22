@@ -131,7 +131,7 @@ namespace Pontifex.Raw.Unreliable.Udp
                         {
                             Log.e($"UDP.Receiver SocketException with code {ex.ErrorCode} received. Continue working!!!");
                         }
-                    }, Memory.SmallObjectsPool.GetPool<UnionDataList>(), Memory.ByteArraysPool,
+                    }, Memory.CollectablePool, Memory.ByteArraysPool,
                     Log,
                     _trafficCollector);
 

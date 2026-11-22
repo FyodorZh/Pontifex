@@ -39,10 +39,10 @@ namespace Pontifex.RR.Unreliable.Udp
         {
             NetBindingSupport.ResolveAddress(context, out var ipAddress, out var port);
 
-            if (context.Role != TransportRole.Server && port == 0)
+            if (port == 0)
             {
                 throw new InvalidOperationException(
-                    "A client transport requires a non-zero server port.");
+                    "An RR unreliable UDP transport requires a non-zero port.");
             }
 
             if (context.Role == TransportRole.Server)

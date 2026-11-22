@@ -21,7 +21,8 @@ public sealed class RRUnreliableRequestTableTests
         var clock = new ManualClock { Now = Start };
         var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
         var value = new Box(42);
-        table.Add(1, value);
+        table.TryAdd(1, value);
+        table.ReArm(1);
 
         clock.Now = Start + TimeSpan.FromSeconds(9);
 
@@ -36,7 +37,8 @@ public sealed class RRUnreliableRequestTableTests
         var clock = new ManualClock { Now = Start };
         var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
         var value = new Box(42);
-        table.Add(1, value);
+        table.TryAdd(1, value);
+        table.ReArm(1);
 
         clock.Now = Start + TimeSpan.FromSeconds(11);
 
@@ -52,10 +54,11 @@ public sealed class RRUnreliableRequestTableTests
         var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
         var pruned = new List<Box>();
         var expired = new Box(42);
-        table.Add(1, expired);
+        table.TryAdd(1, expired);
+        table.ReArm(1);
 
         clock.Now = Start + TimeSpan.FromSeconds(11);
-        table.Add(2, new Box(7), pruned.Add);
+        table.TryAdd(2, new Box(7), pruned.Add);
 
         Assert.That(pruned, Has.Count.EqualTo(1));
         Assert.That(pruned[0], Is.SameAs(expired));
@@ -68,7 +71,8 @@ public sealed class RRUnreliableRequestTableTests
         var clock = new ManualClock { Now = Start };
         var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
         var value = new Box(42);
-        table.Add(1, value);
+        table.TryAdd(1, value);
+        table.ReArm(1);
 
         clock.Now = Start + TimeSpan.FromSeconds(9);
         table.ReArm(1);
@@ -81,12 +85,28 @@ public sealed class RRUnreliableRequestTableTests
     }
 
     [Test]
+    public void TryTake_ProvisionalEntry_StaysLiveUntilReArmed()
+    {
+        var clock = new ManualClock { Now = Start };
+        var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
+        var value = new Box(42);
+        table.TryAdd(1, value);
+
+        clock.Now = Start + TimeSpan.FromSeconds(11);
+
+        Assert.That(table.TryTake(1, out Box taken, out bool expired), Is.True);
+        Assert.That(taken, Is.SameAs(value));
+        Assert.That(expired, Is.False);
+    }
+
+    [Test]
     public void TryReapExpired_RemovesOnlyAnExpiredMatchingEntry()
     {
         var clock = new ManualClock { Now = Start };
         var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
         var value = new Box(42);
-        table.Add(1, value);
+        table.TryAdd(1, value);
+        table.ReArm(1);
 
         clock.Now = Start + TimeSpan.FromSeconds(5);
         Assert.That(table.TryReapExpired(1, value), Is.False);
