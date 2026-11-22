@@ -90,7 +90,9 @@ introduces each transport.
 
 - RR implementations over TCP, UDP, or any other carrier.
 - A shared RR conformance suite or conformance controls.
-- Reconnection, persistence, or restart recovery for `RRReliable`.
+- Post-session reconnection, persistence, or restart recovery for
+  `RRReliable`; the first lazy connect and a retry before any session exists
+  are in scope.
 - Changes to the `RawReliable`/`RawUnreliable` transports.
 - Protocol-layer, converter, TestUI, or API-layer integration.
 - Authentication, confidentiality, integrity, or replay protection.
@@ -162,9 +164,11 @@ and a new shared Direct channel carrier.
        a later reconnect is not refused by a stale registry entry;
      - if no peer, release the frame and return `Ok` for
        `acceptWithoutPeer: true`, otherwise `Error`;
-     - wrap the per-connect delivery-system factory calls in try/catch; a throw
-       disconnects and disposes the just-created channel, clears `_channel`, and
-       releases any created systems; the result is `Error`;
+     - assign `_channel` only after the handler and systems install succeeds;
+       wrap the per-connect factory/install in try/catch; on a throw
+       unsubscribe/clear before disconnecting and disposing the just-created
+       channel, release any created systems, and return `Error`; the owner
+       callback must not run under the carrier lock;
      - send with `SendToServer` inside try/catch; a delivery-system exception is
        caught, the frame is released exactly once, and the result is `Error`;
        translate `NotConnected` by calling
@@ -200,7 +204,8 @@ and a new shared Direct channel carrier.
      the one registered for that endpoint; a stale notification is ignored;
    - `TrySend(destination, frame)` sends `SendToClient`; missing destination
      releases and returns `Error`; `NotConnected` maps to `Error`;
-   - `Stop` unregisters, disposes all channels, clears, and releases callbacks;
+   - `Stop` sets `_stopping = true` before unregistering, then disposes all
+     channels, clears, and releases callbacks;
    - internal `RegisteredClientCount` and a deterministic
      `StartGateForTests` hook signalled after registration/queue creation and
      optionally blocking `TryStart` until released, so the start-window test
@@ -309,13 +314,14 @@ and a new shared Direct channel carrier.
      and assert the handle is closed and `Response` returns `Error`;
    - channel loss without a server restart: use the internal `CurrentChannel`
      seam to dispose the channel, then the next request reconnects and receives
-     a response; the registry entry is purged; a send racing a disposal purges
-     the entry and the next request reconnects;
-   - a channel disposed during connect/install releases the just-installed
-     systems and returns the no-peer result; the transport's internal
-     `CurrentCarrier` seam lets the suite reach the carrier;
-   - the carrier's `acceptWithoutPeer: false` branch returns `Error` with no
-     live session; the live-session callback fires exactly once on the first
+     a response; the registry entry is purged. The defensive `NotConnected`
+     translation is recorded as unreachable-by-seam in Coverage; the
+     disposal-notification path covers the purge;
+   - a channel disposed or rejected during connect/install releases the
+     just-installed systems and returns the no-peer result; the transport's
+     internal `CurrentCarrier` seam lets the suite reach the carrier; the
+     carrier's `acceptWithoutPeer: false` branch returns `Error` with no live
+     session; the live-session callback fires exactly once on the first
      successful send and never on a pre-session loss;
    - reconnecting with a tracking delivery factory creates fresh systems, not
      released ones; the real netem reconnect lives only in the integration
@@ -326,7 +332,9 @@ and a new shared Direct channel carrier.
      released; a full dispatch queue releases the frame without blocking; a
      frame still queued at stop is released by the queue disposer; a throwing
      delivery system is caught and the frame released;
-   - two clients cannot enter the server handler concurrently;
+   - two clients cannot enter the server handler concurrently; starting a
+     second server with the same id returns false and leaves the first server
+     usable;
    - registry removal, `TrySend` to a removed destination returns `Error`, stop
      clears the count; send-after-dispose returns the no-peer policy, never
      `NotConnected`;
@@ -403,12 +411,13 @@ suites.
    - §4, §6.4, §8: the type requires no correlation header, but an
      implementation MAY add an implementation-defined header under §12;
      `MessageMaxByteSize` excludes transport framing and that header;
-   - §6.3/§11: `OnRequested` callbacks are serialized and non-reentrant,
-     matching shared §11;
+   - §6.3: `OnRequested` callbacks are serialized and non-reentrant, matching
+     shared §11; leave §11 as the inherited reference, do not restate it;
    - §5.1 Handlers row and §10 processing sentence: scope concurrency to
      different request handlers, not the single server handler;
-   - §15: add the implementer-checklist item "serialize the single server
-     handler's callbacks" so the new MUST is traceable.
+   - §15: add the implementer-checklist items "serialize the single server
+     handler's callbacks" and "schedule the terminal Finish before onStopped
+     begins; it may complete after".
    Record the correction in the commit message.
 2. Add `RRReliableFrame` (internal static):
    - Request `[type][requestId]` + payload;
@@ -455,7 +464,8 @@ suites.
 8. Add suites **in `Tests/Pontifex.Transport.Direct.Tests`** (the core is a
    friend assembly there), not in `Tests/Pontifex.Tests`:
    - `RR/RRReliableCoreHelpers/` Test Suit for `RRReliableFrame`,
-     `RRReliableRequestTable`, and `RRReliableRequestState`; category
+     `RRReliableRequestTable`, `RRReliableRequestState`, and the production
+     timer factory as a tightly coupled helper group; category
      `Direct.RRReliableCoreHelpers`;
    - `RR/RRReliableTransport/` Abstract Test Suit: root `RRReliableTransport`
      (including the timer-factory lifecycle) and child
@@ -495,7 +505,7 @@ dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.cspr
 
 Expected: 0 errors; full Direct, core, and Net tests pass. Also inspect:
 `Pontifex/Abstractions/Transports/RR/Reliable/Specification.md` §4/§5.1/§6.3/
-§6.4/§8/§10/§11/§15 match the corrected text; the root/generic `Coverage.md` record the
+§6.4/§8/§10/§15 match the corrected text; §11 remains the inherited reference; the root/generic `Coverage.md` record the
 planned client/server layers in the correct ancestor; the helper and abstract
 suites pass CHECK-01..12. The full Direct project run must include a non-zero
 number of tests from both new categories.
@@ -527,12 +537,15 @@ tests.
      release the frame on every path;
    - `protected virtual ushort CreateRandomRequestId()` default crypto; tests
      override;
-   - `Request`: check `IsStarted` **before** taking the state lock; handler
-     checks and payload validation; reserve the handler; allocate the next id
+   - `Request`: handler checks first (null, wrong type, already bound), then
+     payload validation, then `IsStarted` **before** taking the state lock;
+     reserve the handler; allocate the next id
      with the RRUnreliable loop (next id, `TryAdd`, at most 65536 attempts,
      else `BufferOverflow`); add a **provisional** entry under the state lock;
-     then `Bind` to publish `RequestId` and the cancel action; re-check a
-     state-lock-protected `_stopping` flag and the cancel flag under the lock
+     then `Bind` to publish `RequestId` and the cancel action; expose an
+     internal `BeforeSendGateForTests` hook after `Bind` and before the
+     re-check/send; re-check a state-lock-protected `_stopping` flag and the
+     cancel flag under the lock
      (never call `IsStarted` under the lock); on failure remove the provisional
      entry, unbind, and return `NotConnected`/`Error`; send; on `Ok`, mark
      accepted only if still provisional and arm the TTL (dispose immediately
@@ -549,14 +562,18 @@ tests.
      in wire order; if accepted, hold the terminal behind the expected ordinal
      sequence, drain every buffered response in order, then invoke one `Finish`
      through the gate and unbind inside the gate after the callback returns; a
-     terminal already buffered causes later responses to be dropped;
+     terminal already buffered causes only responses with an ordinal above the
+     terminal position to be dropped; lower ordinals fill the gap; a
+     zero-response `Finish(Normal)` is delivered immediately;
    - `Cancel`: suppress responses, best-effort `Cancel` frame, one
      `Finish(Canceled)`, deferred inside a callback; a provisional request is
      removed silently;
-   - the client callback gate is a transport-owned serialized pump. Each
-     request has a pending-terminal slot drained by the pump; a terminal
-     requested inside a callback is deferred until the callback returns; a
-     stop-scheduled terminal is posted to the pump. Expose an internal
+   - the client callback gate is a transport-owned **unbounded** serialized
+     pump. Each request has a pending-terminal slot drained by the pump; a
+     terminal requested inside a callback is deferred until the callback
+     returns; a stop-scheduled terminal is posted to the pump. The pump stays
+     alive until every scheduled terminal has run; its disposer delivers them
+     if the transport is tearing down. Expose an internal
      `PumpGateForTests`/`ScheduledTerminalCount` seam so a test can hold the
      pump, call `Stop`, assert the scheduled count in `onStopped`, then release
      the pump and observe exactly one `Finish(Failed)`;
@@ -594,14 +611,16 @@ tests.
      may begin during the final phase of `Start` before the caller observes the
      return (declared deviation, §7);
    - `Init` rules mirror RRUnreliable;
-   - per-client sessions keyed by source; a lock-protected session map and a
+   - per-client sessions keyed by source; a lock-protected session map, a
+     per-session live map keyed by client-local id (request handle/state), and a
      lock-protected completed window per session;
    - a full 16-bit **per-session** completed bitmap (65536 bits, 8 KB) keyed by
      the **client-local id**; it records every terminal id after presentation:
-     `Finish`, `Reject`, `Cancel`, and `ResponseTtl` expiry, so duplicate
-     suppression covers the whole id domain with no eviction. The server-global
+     `Finish`, `Reject`, `Cancel`, and `ResponseTtl` expiry. The server-global
      id is never a duplicate-suppression key; frames carry the client-local
-     id;
+     id. After 65,536 terminal requests the bitmap is full; new requests are
+     rejected until the session is re-established. This is the declared
+     per-session cap in §7 and the global DoD; add a bitmap-wrap test;
    - inbound Request: payload check, ignore a duplicate live or completed id in
      the same session, assign a server-global id from 1, create a handle with a
      response timer, dispatch `OnRequested` through the queue; a full queue
@@ -613,9 +632,11 @@ tests.
      client-local id terminal, and does **not** present `OnRequested`;
    - inbound Cancel closes the matching live request, records the id terminal,
      and suppresses later responses;
-   - `OnSessionClosed(source)` atomically marks that session's handles closed
-     and disposes their timers without waiting for an in-flight `Response`;
-     later calls return `Error`; other sessions stay usable;
+   - `OnSessionClosed(source)` atomically marks that session's handles closed,
+     disposes their timers without waiting for an in-flight `Response`, sends
+     nothing (the route is gone; the client's own stop supplies
+     `Finish(Failed)`), and removes the session entry after closing; later calls
+     return `Error`; other sessions stay usable;
    - override `ClearPendingRequests` to close every session handle and dispose
      its timer without waiting for a running callback;
    - response-TTL expiry sends `Finish(Failed)`, closes the handle, disposes
@@ -642,21 +663,28 @@ tests.
      they mark the handle closed atomically, so a stopping thread never waits
      for an in-flight `Response`; a terminal transition is exactly once;
 4. Add client and server layers to the ATS parent-first; update README and
-   Coverage; assign each test to its layer. Put the scripted carrier shared by
-   the client and server layers in the ATS root `Harness/`, documented in the
-   README; sibling layers must not own or reference each other's harness.
+   Coverage; assign each test to its layer. Add additional filtering categories
+   `Direct.RRReliableTransport.Client` and
+   `Direct.RRReliableTransport.Server` to the respective fixtures (the suite
+   root category remains on every fixture per STRUCT-09). Put the scripted
+   carrier shared by the client and server layers in the ATS root `Harness/`,
+   documented in the README; sibling layers must not own or reference each
+   other's harness.
 5. Tests with a scripted carrier and the loose manual timer:
-   - ordered responses + `Finish(Normal)`;
+   - ordered responses + `Finish(Normal)`; a zero-response
+     `Finish(Normal)` is delivered immediately;
    - duplicate response ordinal → one callback; response after `Finish` dropped;
    - duplicate request before `Finish` presented once; after `Finish`/`Reject`/
      `Cancel`/`ResponseTtl` suppressed by the per-session completed window; two
-     clients with the same client-local id do not suppress each other;
+     clients with the same client-local id do not suppress each other; a
+     bitmap-wrap unit test exhausts the 16-bit window and documents the session
+     cap;
    - a non-`Ok` `Request` schedules no `Finish`, including a stop or channel
      loss during `SendFrame`; a response or terminal frame arriving while the
      request is provisional is buffered and released on non-`Ok`, never
      delivered; a synchronous server `Finish`/`Reject` inside `SendFrame` is
-     buffered and delivered only after `Ok`; a `Stop` or `Cancel` injected in
-     the bind-to-add window is observed and the request returns non-`Ok` with
+     buffered and delivered only after `Ok`; a `Stop` or `Cancel` injected at
+     `BeforeSendGateForTests` is observed and the request returns non-`Ok` with
      no callback;
    - an out-of-order response ordinal is buffered until the expected ordinal
      arrives; a `Finish` arriving before a lower ordinal is held until the
@@ -696,6 +724,10 @@ tests.
 ```bash
 dotnet build Pontifex.sln
 dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.RRReliableTransport.Client"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.RRReliableTransport.Server"
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj
 dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj
 ```
@@ -822,6 +854,7 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
   --filter "TestCategory=Direct.RRReliable&TestCategory!=Direct.RRReliable.Integration"
 dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
   --filter "TestCategory=Direct.RRReliable.Integration"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj
 dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj
 dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj
 dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj
