@@ -9,9 +9,11 @@ using Pontifex.Raw.Reliable.Reconnectable;
 using Pontifex.Raw.Reliable.Logger;
 using Pontifex.Raw.Reliable.Tcp;
 using Pontifex.Raw.Reliable.Zip;
+using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.Raw.Unreliable.Udp;
 using Pontifex.RR.Unreliable.Udp;
+using Pontifex.TransportFormula;
 using Pontifex.Utils;
 using Scriba;
 using FormulaRegistry = Pontifex.TransportFormula.Registry;
@@ -25,7 +27,7 @@ public sealed class FactoryBindingsTests
     private static readonly object[] CompileCases =
     {
         Case(Registration.TransportRole.Server, "direct(\"node-1\")", TransportType.RawReliable),
-        Case(Registration.TransportRole.Server, "direct-raw-unreliable(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliable),
+        Case(Registration.TransportRole.Server, "direct-raw-unreliable(\"node-1\")", TransportType.RawUnreliable),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
@@ -36,6 +38,7 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Server, "log(tcp(\"127.0.0.1\", 9000))", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "direct(\"node-1\")", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable(\"node-1\")", TransportType.RawUnreliable),
+        Case(Registration.TransportRole.Client, "direct-raw-unreliable(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliable),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
@@ -93,6 +96,71 @@ public sealed class FactoryBindingsTests
         Assert.That(
             factory.Canonicalize("LOG(TCP(\"127.0.0.1\", 9000))"),
             Is.EqualTo("log(tcp(127.0.0.1, 9000))"));
+    }
+
+    [Test]
+    public void Compile_ServerDelivery_Throws()
+    {
+        var factory = BuildFactory();
+        var compiler = factory.CreateCompiler(
+            Registration.TransportRole.Server,
+            new Logger([]),
+            MemoryRental.Shared);
+
+        var exception = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-raw-unreliable(\"node-1\", delivery = { type = \"perfect\" })",
+            compiler));
+        Assert.That(exception.InnerException, Is.TypeOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Compile_UnknownDeliveryType_Throws()
+    {
+        var factory = BuildFactory();
+        var compiler = factory.CreateCompiler(
+            Registration.TransportRole.Client,
+            new Logger([]),
+            MemoryRental.Shared);
+
+        var exception = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-raw-unreliable(\"node-1\", delivery = { type = \"bogus\" })",
+            compiler));
+        Assert.That(exception.InnerException, Is.TypeOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Compile_FourStateWithoutParameters_Throws()
+    {
+        var factory = BuildFactory();
+        var compiler = factory.CreateCompiler(
+            Registration.TransportRole.Client,
+            new Logger([]),
+            MemoryRental.Shared);
+
+        var exception = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-raw-unreliable(\"node-1\", delivery = { type = \"netem\", lossmodel = \"fourState\" })",
+            compiler));
+        Assert.That(exception.InnerException, Is.TypeOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Compile_PartialNetemConfiguration_ProducesAClient()
+    {
+        var factory = BuildFactory();
+        var compiler = factory.CreateCompiler(
+            Registration.TransportRole.Client,
+            new Logger([]),
+            MemoryRental.Shared);
+
+        var transport = factory.Compile(
+            "direct-raw-unreliable(\"node-1\", delivery = { type = \"netem\", latencyns = 1000, correlation = { delayrho = 1 } })",
+            compiler);
+        Assert.That(transport, Is.InstanceOf<IRawUnreliableClient>());
+
+        var client = (IRawUnreliableClient)transport;
+        Assert.That(client.Init(new NoopUnreliableHandler()), Is.True);
+        Assert.That(client.Start(_ => { }), Is.True);
+        Assert.That(client.Stop(), Is.True);
     }
 
     [Test]
@@ -195,6 +263,22 @@ public sealed class FactoryBindingsTests
     }
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+
+    private sealed class NoopUnreliableHandler : IRawUnreliableHandler
+    {
+        public void OnStarted(IRawUnreliableEndpoint endpoint)
+        {
+        }
+
+        public void OnReceived(UnionDataList receivedBuffer)
+        {
+            receivedBuffer.Release();
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+        }
+    }
 
     private sealed class RecordingRawReliableServerHandlerFactory
         : IRawReliableServerHandlerFactory<IRawReliableServerHandler>

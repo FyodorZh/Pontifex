@@ -40,7 +40,8 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             if (!value.TryGetString("type", out var type))
             {
-                return new PerfectDeliverySystem();
+                throw new ArgumentException(
+                    "The 'delivery' value requires a 'type' field.", nameof(value));
             }
 
             switch (type)
@@ -48,21 +49,18 @@ namespace Pontifex.Raw.Unreliable.Direct
                 case "perfect":
                     return new PerfectDeliverySystem();
                 case "netem":
-                    return BuildNetem(value, memory) ?? new PerfectDeliverySystem();
+                    return BuildNetem(value, memory);
                 default:
-                    return new PerfectDeliverySystem();
+                    throw new ArgumentException(
+                        $"Unknown delivery type '{type}'.", nameof(value));
             }
         }
 
-        private static IDeliverySystem? BuildNetem(
+        private static IDeliverySystem BuildNetem(
             ITransportStructValue value,
             IMemoryRental memory)
         {
             var config = ParseNetemConfig(value);
-            if (config is null)
-            {
-                return null;
-            }
 
             try
             {
@@ -71,19 +69,16 @@ namespace Pontifex.Raw.Unreliable.Direct
                     memory.CollectablePool,
                     memory.ByteArraysPool);
             }
-            catch
+            catch (Exception ex)
             {
-                return null;
+                throw new ArgumentException(
+                    "The netem delivery configuration is invalid.", nameof(value), ex);
             }
         }
 
-        private static NetemConfig? ParseNetemConfig(ITransportStructValue value)
+        internal static NetemConfig ParseNetemConfig(ITransportStructValue value)
         {
-            if (!TryGetLong(value, "latencyns", out var latencyNs))
-            {
-                return null;
-            }
-
+            TryGetLong(value, "latencyns", out var latencyNs);
             TryGetLong(value, "jitterns", out var jitterNs);
             TryGetUInt32(value, "lossprobability", out var lossProbability);
             TryGetUInt32(value, "duplicateprobability", out var duplicateProbability);
@@ -93,76 +88,51 @@ namespace Pontifex.Raw.Unreliable.Direct
             TryGetInt32(value, "packetoverhead", out var packetOverhead);
             TryGetUInt32(value, "cellsize", out var cellSize);
             TryGetInt32(value, "celloverhead", out var cellOverhead);
-            TryGetInt32(value, "queuelimit", out var queueLimit);
+            if (!TryGetInt32(value, "queuelimit", out var queueLimit))
+            {
+                queueLimit = int.MaxValue;
+            }
 
-            LossModelKind? lossModel = null;
+            var lossModel = LossModelKind.Random;
             if (TryGetString(value, "lossmodel", out var lossModelText))
             {
                 lossModel = ParseLossModelKind(lossModelText);
-                if (lossModel is null)
-                {
-                    return null;
-                }
             }
 
-            CorrelationParams? correlation = null;
+            var correlation = default(CorrelationParams);
             if (TryGetStruct(value, "correlation", out var correlationValue))
             {
                 correlation = ParseCorrelation(correlationValue);
-                if (correlation is null)
-                {
-                    return null;
-                }
             }
 
-            SlotConfig? slot = null;
+            var slot = default(SlotConfig);
             if (TryGetStruct(value, "slot", out var slotValue))
             {
                 slot = ParseSlotConfig(slotValue);
-                if (slot is null)
-                {
-                    return null;
-                }
             }
 
             DistributionTable? delayDistribution = null;
             if (TryGetStruct(value, "delaydistribution", out var delayDistributionValue))
             {
                 delayDistribution = ParseDistributionTable(delayDistributionValue);
-                if (delayDistribution is null)
-                {
-                    return null;
-                }
             }
 
             DistributionTable? slotDistribution = null;
             if (TryGetStruct(value, "slotdistribution", out var slotDistributionValue))
             {
                 slotDistribution = ParseDistributionTable(slotDistributionValue);
-                if (slotDistribution is null)
-                {
-                    return null;
-                }
             }
 
             FourStateParams? fourState = null;
             if (TryGetStruct(value, "fourstate", out var fourStateValue))
             {
                 fourState = ParseFourStateParams(fourStateValue);
-                if (fourState is null)
-                {
-                    return null;
-                }
             }
 
             GilbertElliotParams? gilbertElliot = null;
             if (TryGetStruct(value, "gilbertelliot", out var gilbertElliotValue))
             {
                 gilbertElliot = ParseGilbertElliotParams(gilbertElliotValue);
-                if (gilbertElliot is null)
-                {
-                    return null;
-                }
             }
 
             return new NetemConfig
@@ -178,9 +148,9 @@ namespace Pontifex.Raw.Unreliable.Direct
                 CellSize = cellSize,
                 CellOverhead = cellOverhead,
                 QueueLimit = queueLimit,
-                LossModel = lossModel ?? LossModelKind.Random,
-                Correlation = correlation ?? default,
-                Slot = slot ?? default,
+                LossModel = lossModel,
+                Correlation = correlation,
+                Slot = slot,
                 DelayDistribution = delayDistribution,
                 SlotDistribution = slotDistribution,
                 FourState = fourState,
@@ -188,73 +158,40 @@ namespace Pontifex.Raw.Unreliable.Direct
             };
         }
 
-        private static LossModelKind? ParseLossModelKind(string value)
+        private static LossModelKind ParseLossModelKind(string value)
         {
-            return value switch
+            switch (value)
             {
-                "random" => LossModelKind.Random,
-                "fourState" => LossModelKind.FourState,
-                "gilbertElliot" => LossModelKind.GilbertElliot,
-                _ => null
-            };
+                case "random":
+                    return LossModelKind.Random;
+                case "fourState":
+                    return LossModelKind.FourState;
+                case "gilbertElliot":
+                    return LossModelKind.GilbertElliot;
+                default:
+                    throw new ArgumentException(
+                        $"Unknown loss model '{value}'.", nameof(value));
+            }
         }
 
-        private static CorrelationParams? ParseCorrelation(ITransportStructValue value)
+        private static CorrelationParams ParseCorrelation(ITransportStructValue value)
         {
-            if (!TryGetUInt32(value, "delayrho", out var delayRho))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "lossrho", out var lossRho))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "duplicaterho", out var duplicateRho))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "reorderrho", out var reorderRho))
-            {
-                return null;
-            }
+            TryGetUInt32(value, "delayrho", out var delayRho);
+            TryGetUInt32(value, "lossrho", out var lossRho);
+            TryGetUInt32(value, "duplicaterho", out var duplicateRho);
+            TryGetUInt32(value, "reorderrho", out var reorderRho);
 
             return new CorrelationParams(delayRho, lossRho, duplicateRho, reorderRho);
         }
 
-        private static SlotConfig? ParseSlotConfig(ITransportStructValue value)
+        private static SlotConfig ParseSlotConfig(ITransportStructValue value)
         {
-            if (!TryGetLong(value, "mindelayns", out var minDelayNs))
-            {
-                return null;
-            }
-
-            if (!TryGetLong(value, "maxdelayns", out var maxDelayNs))
-            {
-                return null;
-            }
-
-            if (!TryGetLong(value, "distdelayns", out var distDelayNs))
-            {
-                return null;
-            }
-
-            if (!TryGetLong(value, "distjitterns", out var distJitterNs))
-            {
-                return null;
-            }
-
-            if (!TryGetInt32(value, "maxpackets", out var maxPackets))
-            {
-                return null;
-            }
-
-            if (!TryGetInt32(value, "maxbytes", out var maxBytes))
-            {
-                return null;
-            }
+            TryGetLong(value, "mindelayns", out var minDelayNs);
+            TryGetLong(value, "maxdelayns", out var maxDelayNs);
+            TryGetLong(value, "distdelayns", out var distDelayNs);
+            TryGetLong(value, "distjitterns", out var distJitterNs);
+            TryGetInt32(value, "maxpackets", out var maxPackets);
+            TryGetInt32(value, "maxbytes", out var maxBytes);
 
             return new SlotConfig(
                 minDelayNs,
@@ -265,12 +202,13 @@ namespace Pontifex.Raw.Unreliable.Direct
                 maxBytes);
         }
 
-        private static DistributionTable? ParseDistributionTable(
+        private static DistributionTable ParseDistributionTable(
             ITransportStructValue value)
         {
             if (!value.TryGetArray("values", out var values) || values.Count == 0)
             {
-                return null;
+                throw new ArgumentException(
+                    "A distribution table requires at least one value.", nameof(value));
             }
 
             var shorts = new short[values.Count];
@@ -278,68 +216,35 @@ namespace Pontifex.Raw.Unreliable.Direct
             {
                 if (!values.TryGetInt64(i, out var number))
                 {
-                    return null;
+                    throw new ArgumentException(
+                        $"The distribution value at index {i} is not an integer.", nameof(value));
                 }
 
-                shorts[i] = (short)number;
+                shorts[i] = checked((short)number);
             }
 
             return new DistributionTable(shorts);
         }
 
-        private static FourStateParams? ParseFourStateParams(
+        private static FourStateParams ParseFourStateParams(
             ITransportStructValue value)
         {
-            if (!TryGetUInt32(value, "p13", out var p13))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "p31", out var p31))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "p32", out var p32))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "p14", out var p14))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "p23", out var p23))
-            {
-                return null;
-            }
+            TryGetUInt32(value, "p13", out var p13);
+            TryGetUInt32(value, "p31", out var p31);
+            TryGetUInt32(value, "p32", out var p32);
+            TryGetUInt32(value, "p14", out var p14);
+            TryGetUInt32(value, "p23", out var p23);
 
             return new FourStateParams(p13, p31, p32, p14, p23);
         }
 
-        private static GilbertElliotParams? ParseGilbertElliotParams(
+        private static GilbertElliotParams ParseGilbertElliotParams(
             ITransportStructValue value)
         {
-            if (!TryGetUInt32(value, "p", out var p))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "r", out var r))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "h", out var h))
-            {
-                return null;
-            }
-
-            if (!TryGetUInt32(value, "k1", out var k1))
-            {
-                return null;
-            }
+            TryGetUInt32(value, "p", out var p);
+            TryGetUInt32(value, "r", out var r);
+            TryGetUInt32(value, "h", out var h);
+            TryGetUInt32(value, "k1", out var k1);
 
             return new GilbertElliotParams(p, r, h, k1);
         }

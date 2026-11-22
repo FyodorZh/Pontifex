@@ -41,6 +41,17 @@ namespace Pontifex.Raw.Unreliable.Direct
         private Channel? _channel;
         private bool _deliverySystemsInstalled;
 
+        /// <summary>
+        /// Gets the channel acquired by this endpoint, for carrier-specific tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; the channel is present only
+        /// after the first send acquired it and before teardown.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Channel? ChannelForTests => _channel;
+
         internal RawUnreliableDirectClientEndpoint(
             string transportName,
             IEndPoint serverEndPoint,
@@ -160,7 +171,7 @@ namespace Pontifex.Raw.Unreliable.Direct
                 return null;
             }
 
-            channel.ClientHandler = Deliver;
+            channel.ClientHandler = OnChannelMessage;
             channel.SetClientDeliverySystem(_clientDeliverySystem);
             channel.SetServerDeliverySystem(_serverDeliverySystem);
             _deliverySystemsInstalled = true;
@@ -175,6 +186,23 @@ namespace Pontifex.Raw.Unreliable.Direct
             }
 
             return channel;
+        }
+
+        /// <summary>
+        /// Checks one inbound frame against the message limit and hands it to the endpoint inbox.
+        /// </summary>
+        /// <param name="message">The received message. Ownership transfers to this method on every
+        /// path.</param>
+        private void OnChannelMessage(UnionDataList message)
+        {
+            if (message.GetDataSize() > MessageMaxByteSize)
+            {
+                message.Release();
+                Log.e("Inbound message exceeds MessageMaxByteSize and was discarded");
+                return;
+            }
+
+            Deliver(message);
         }
 
         /// <summary>

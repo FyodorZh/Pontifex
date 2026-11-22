@@ -63,6 +63,18 @@ namespace Pontifex.Raw.Unreliable.Direct
         internal long ExposedSendBudgetBytes => SendBudgetBytes;
 
         /// <summary>
+        /// Gets the endpoint created for this transport, for carrier-specific tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; the endpoint is present from
+        /// a successful start until teardown.</description></item>
+        /// </list>
+        /// </remarks>
+        internal RawUnreliableDirectClientEndpoint? CurrentEndpoint =>
+            AttachedEndpoint as RawUnreliableDirectClientEndpoint;
+
+        /// <summary>
         /// Gets the derived message budget for budget-wiring tests.
         /// </summary>
         /// <remarks>

@@ -33,6 +33,13 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             if (context.Role == TransportRole.Server)
             {
+                if (context.TryGetStruct("delivery", out _))
+                {
+                    throw new ArgumentException(
+                        "The 'delivery' parameter is valid only for a client transport.",
+                        nameof(context));
+                }
+
                 return new RawUnreliableDirectServer(id, context.Logger, context.Memory);
             }
 
