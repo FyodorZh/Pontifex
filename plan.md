@@ -61,7 +61,9 @@ introduces each transport.
   `ImplicitUsings`, and `TreatWarningsAsErrors`; libraries use
   `TreatWarningsAsErrors=true`.
 - Read the matching specifications before changing a transport abstraction or
-  implementation. The RR specifications are normative.
+  implementation. The RR specifications are normative; a bounded deviation is
+  allowed only when the implementation spec §7 names the requirement, cause,
+  impact, and handler tolerance, and the deviation is listed in the global DoD.
 - New test suites follow `Tests/RULES.md`. Test Suites need `README.md`,
   `Coverage.md`, a root category, tests under `Tests/`, and no nested layers.
   Abstract Test Suits use one layer per abstract type and add layers
@@ -160,6 +162,9 @@ and a new shared Direct channel carrier.
        a later reconnect is not refused by a stale registry entry;
      - if no peer, release the frame and return `Ok` for
        `acceptWithoutPeer: true`, otherwise `Error`;
+     - wrap the per-connect delivery-system factory calls in try/catch; a throw
+       disconnects and disposes the just-created channel, clears `_channel`, and
+       releases any created systems; the result is `Error`;
      - send with `SendToServer` inside try/catch; a delivery-system exception is
        caught, the frame is released exactly once, and the result is `Error`;
        translate `NotConnected` by calling
@@ -183,7 +188,8 @@ and a new shared Direct channel carrier.
      use it from every reject path; expose an internal
      `RejectChannelForTests(clientEp, channel)` hook, or make `RejectChannel`
      internal, so the reject path can be tested against a live registry entry;
-   - `OnChannelCreated` rejects when stopping, disposes through
+   - `OnChannelCreated` rejects on the carrier's `_stopping` flag only; it must
+     not call `IsStarted` while `TryStart` holds `_locker`. It disposes through
      `RejectChannel` on failed `TryAdd`, sets
      `channel.ServerHandler = (clientEp, message) => inbound(clientEp, message)`,
      subscribes to `Disposed`, and re-checks the stopping state and
@@ -222,11 +228,13 @@ and a new shared Direct channel carrier.
      stop. The InboundFrame disposer releases `frame.Message` for frames still
      queued at stop;
    - override `OnStarted` to open a `_dispatchReady` gate under one lock that
-     also owns the pending list: `OnStarted` sets the flag and swaps the list
-     under the lock, then posts the swapped frames; the inbound callback under
-     the same lock either appends to the list or posts directly. Frames
-     received before the gate opens are held in a bounded transport-owned
-     pending list, not inside the queue worker; stop releases the list. A
+     also owns the pending list: `OnStarted` sets the flag, swaps the list, and
+     posts the swapped frames **while still holding the lock** (`Post` is
+     non-blocking); the inbound callback under the same lock either appends or
+     posts. Frames
+     received before the gate opens are held in a transport-owned pending list
+     bounded by `RRDirectInfo.DispatchQueueCapacity`; a full list releases the
+     frame; stop releases the list. A
      queued frame is never popped and held. No `OnRequested` begins before
      `OnStarted`; a callback may begin during the final phase of `Start` before
      the caller observes the return, which the implementation spec §7 declares
@@ -235,11 +243,12 @@ and a new shared Direct channel carrier.
      receipt timestamp;
    - the RR server's inbound callback captures
      `DateTime receivedAt = _timeProvider.Now` **before** posting;
-   - add a protected overload
+   - add an **internal** overload
      `OnFrameReceived(IEndPoint source, UnionDataList frame, DateTime receivedAt)`
-     to `RRUnreliableServerTransport` (or an equivalent additive internal seam)
-     that computes the response-handle deadline from `receivedAt`; the existing
-     `OnFrameReceived(source, frame)` calls the overload with `Now`;
+     to `RRUnreliableServerTransport` that computes the response-handle deadline
+     from `receivedAt`; the existing `OnFrameReceived(source, frame)` calls the
+     overload with `Now`. The overload is internal because the constraints allow
+     additive internal seams only; Direct is a friend assembly.
    - `SendFrame` delegates to the server carrier;
    - inbound frames are serialized before `OnFrameReceived(source, frame,
      receivedAt)`; a full queue releases the frame (loss is permitted); the
@@ -261,8 +270,10 @@ and a new shared Direct channel carrier.
    - reject wrong-role TTLs and `delivery` on the server.
 7. Add `Transports/Pontifex.Transport.Direct/RR/Unreliable/Specification.md`
    with all nine sections and the open areas: wire correlation, TTL values,
-   pending storage, reconnect policy, capacity, payload-only max size, and
-   process-wide `id` uniqueness across Direct transports. State the single-queue
+   pending storage, reconnect policy, capacity, payload-only max size,
+   process-wide `id` uniqueness across Direct transports, the single dispatch
+   queue as the callback scheduler, channel-disposal failure detection, and
+   logging. State the single-queue
    server-callback serialization as a guarantee in §3/§6/§7, not an open choice.
    In §7 declare the bounded deviations: a request whose
    `ResponseTtl` expired while queued may still be presented to
@@ -306,8 +317,9 @@ and a new shared Direct channel carrier.
    - the carrier's `acceptWithoutPeer: false` branch returns `Error` with no
      live session; the live-session callback fires exactly once on the first
      successful send and never on a pre-session loss;
-   - reconnecting with `delivery = netem` creates fresh systems, not released
-     ones;
+   - reconnecting with a tracking delivery factory creates fresh systems, not
+     released ones; the real netem reconnect lives only in the integration
+     group;
    - a scripted `IDeliverySystem` drops/duplicates; a duplicate response yields
      exactly one callback; a dropped request expires silently;
    - a system installed on a channel that is rejected during install is
@@ -320,10 +332,10 @@ and a new shared Direct channel carrier.
      `NotConnected`;
    - binding-created transports expose 3 s defaults and explicit TTLs through a
      hand-written `ITransportBuildContext` harness;
-   - a binding-created client/server round trip through the real binding; a
-     binding-created reconnect with `delivery = netem` in a separately
-     categorised `Integration` test with a bounded wait, excluded from the
-     deterministic default filter.
+   - a binding-created client/server round trip through the real binding, in
+     the `Tests/Integration/` group with category
+     `Direct.RRUnreliable.Integration`, using the bounded signal wait pattern;
+     a binding-created reconnect with `delivery = netem` in the same group;
    - category `Direct.RRUnreliable`; integration category
      `Direct.RRUnreliable.Integration`.
 9. Register the binding in `FactoryBindingsTests` and `TransportRegistry`; add
@@ -353,7 +365,9 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj
 
 Expected: 0 build errors; RRUnreliable, factory, full transport, and full Direct
 tests pass. At least one test must match
-`Direct.RRUnreliable.Integration`; zero matches is a failure. Also inspect
+`Direct.RRUnreliable.Integration`; zero matches is a failure. The default
+filter must contain no real netem, sleep, or uncontrolled thread; the
+integration group is excluded. Also inspect
 manually: `Transports/Pontifex.Transport.Direct/RR/
 Unreliable/Specification.md` has all nine sections, the §5 parameter table, the
 §7 deviations, every §8 open-area choice, and the §9 implementer checklist; the
@@ -441,12 +455,13 @@ suites.
 8. Add suites **in `Tests/Pontifex.Transport.Direct.Tests`** (the core is a
    friend assembly there), not in `Tests/Pontifex.Tests`:
    - `RR/RRReliableCoreHelpers/` Test Suit for `RRReliableFrame`,
-     `RRReliableRequestTable`, `RRReliableRequestState`, and the production
-     timer factory; category `Direct.RRReliableCoreHelpers`;
+     `RRReliableRequestTable`, and `RRReliableRequestState`; category
+     `Direct.RRReliableCoreHelpers`;
    - `RR/RRReliableTransport/` Abstract Test Suit: root `RRReliableTransport`
-     and child `RRReliableTransport<THandler>`; category
-     `Direct.RRReliableTransport`; record the planned client layer in the root
-     Coverage and the planned server layer in the generic layer Coverage.
+     (including the timer-factory lifecycle) and child
+     `RRReliableTransport<THandler>`; category `Direct.RRReliableTransport`;
+     record the planned client layer in the root Coverage and the planned
+     server layer in the generic layer Coverage.
 9. Add a single loose
    `Tests/Pontifex.Transport.Direct.Tests/RR/TestSupport/ManualTimerFactory.cs`
    outside all suites. All three RR suites live in the same test project, so the
@@ -458,10 +473,10 @@ suites.
    an RR suite.
 10. Tests:
    - helpers: every frame type/ordinal, malformed frames, header boundary,
-     table non-removing lookup/terminal removal/concurrency, state transitions,
-     manual timer fire/suppress/dispose, production timer schedule/dispose
-     without waiting; record real-fire as deferred-by-design;
-   - root layer: lifecycle, payload validation, id allocation, stop scheduling;
+     table non-removing lookup/terminal removal/concurrency, state transitions;
+   - root layer: lifecycle, payload validation, id allocation, timer-factory
+     fire/suppress/dispose and production schedule/dispose without waiting
+     (real-fire deferred by design), stop scheduling;
    - generic layer: `Init` rules and dispatch gating.
 11. Run the verification.
 
@@ -512,15 +527,20 @@ tests.
      release the frame on every path;
    - `protected virtual ushort CreateRandomRequestId()` default crypto; tests
      override;
-   - `Request`: handler checks, payload validation, reserve/bind, consume a
-     pre-publication cancel, add a **provisional** pending entry under the
-     state lock, then publish `RequestId` before `SendFrame`; re-check
-     `IsStarted` and the cancel flag under the same lock before sending; on
-     failure remove the provisional entry, unbind, and return
-     `NotConnected`/`Error`; send; on `Ok`, mark accepted only if still
-     provisional and arm the TTL (dispose immediately otherwise); if a
-     concurrent stop/cancel removed the provisional entry, return `Error` with
-     no callback; no callback is scheduled for a request that returns non-`Ok`;
+   - `Request`: check `IsStarted` **before** taking the state lock; handler
+     checks and payload validation; reserve the handler; allocate the next id
+     with the RRUnreliable loop (next id, `TryAdd`, at most 65536 attempts,
+     else `BufferOverflow`); add a **provisional** entry under the state lock;
+     then `Bind` to publish `RequestId` and the cancel action; re-check a
+     state-lock-protected `_stopping` flag and the cancel flag under the lock
+     (never call `IsStarted` under the lock); on failure remove the provisional
+     entry, unbind, and return `NotConnected`/`Error`; send; on `Ok`, mark
+     accepted only if still provisional and arm the TTL (dispose immediately
+     otherwise); if a concurrent stop/cancel removed the provisional entry,
+     return `Error` with no callback; no callback is scheduled for a request
+     that returns non-`Ok`. The state lock never nests `_locker`; `Request`
+     reads `IsStarted` outside it; `ClearPendingRequests` sets `_stopping` under
+     the state lock;
    - inbound `Response`: if the entry is provisional, buffer the response in
      the request state; if accepted, get without removing, buffer a higher
      ordinal until the expected gap is filled, drop lower/duplicate ordinals,
@@ -533,19 +553,22 @@ tests.
    - `Cancel`: suppress responses, best-effort `Cancel` frame, one
      `Finish(Canceled)`, deferred inside a callback; a provisional request is
      removed silently;
-   - deferred terminal mechanism: each request has a pending-terminal slot
-     drained in the callback wrapper's `finally` on the same thread; no
-     reentrant `Finish` and no unplanned thread-pool deferral;
+   - the client callback gate is a transport-owned serialized pump. Each
+     request has a pending-terminal slot drained by the pump; a terminal
+     requested inside a callback is deferred until the callback returns; a
+     stop-scheduled terminal is posted to the pump. Expose an internal
+     `PumpGateForTests`/`ScheduledTerminalCount` seam so a test can hold the
+     pump, call `Stop`, assert the scheduled count in `onStopped`, then release
+     the pump and observe exactly one `Finish(Failed)`;
    - `Stop` from a callback also defers `Finish(Failed)`;
    - the TTL timer delivers one `Finish(Failed)` through the gate and is
      disposed on every terminal close; the terminal action unbinds after the
      `Finish` callback returns, never before;
-   - `ClearPendingRequests`: remove provisional entries silently; for each
-     **accepted** pending request, mark terminal and **schedule** the
-     `Finish(Failed)` through the gate without unbinding; increment an internal
-     `ScheduledTerminalCount` when the finish is queued and decrement when it
-     runs, so an `onStopped` callback can assert a terminal is scheduled but not
-     yet executed; do not wait for a running callback. `onStopped` may begin
+   - `ClearPendingRequests`: set `_stopping` under the state lock; remove
+     provisional entries silently; for each **accepted** pending request, mark
+     terminal and post the `Finish(Failed)` to the pump without unbinding;
+     increment `ScheduledTerminalCount` when queued and decrement when it runs;
+     do not wait for a running callback. `onStopped` may begin
      before the scheduled finish runs; the finish is scheduled before
      `onStopped`, and the gate unbinds after the callback returns.
 2. Add `RRReliableServerTransport` (public abstract):
@@ -563,19 +586,20 @@ tests.
      calls `StartDispatch()` before carrier registration and `StopDispatch()`
      on start failure and in `StopCarrier`;
    - dispatch is gated by a `_dispatchReady` flag opened in `OnStarted` under
-     one lock that also owns the pending list; `OnStarted` sets the flag and
-     swaps the list under the lock, then posts; the inbound path under the same
-     lock either appends or posts. Frames received before ready are held in the
-     pending list and flushed on start, or released by `StopDispatch`; no
-     `OnRequested` begins before `OnStarted`; a callback may begin during the
-     final phase of `Start` before the caller observes the return (declared
-     deviation, §7);
+     one lock that also owns the pending list; `OnStarted` sets the flag, swaps
+     the list, and posts the swapped frames while still holding the lock; the
+     inbound path under the same lock either appends or posts. Frames received
+     before ready are held in the pending list and flushed on start, or released
+     by `StopDispatch`; no `OnRequested` begins before `OnStarted`; a callback
+     may begin during the final phase of `Start` before the caller observes the
+     return (declared deviation, §7);
    - `Init` rules mirror RRUnreliable;
    - per-client sessions keyed by source; a lock-protected session map and a
      lock-protected completed window per session;
-   - a bounded completed window (1024 ids, FIFO) **per session**, keyed by the
-     **client-local id**; it records every terminal id after presentation:
-     `Finish`, `Reject`, `Cancel`, and `ResponseTtl` expiry. The server-global
+   - a full 16-bit **per-session** completed bitmap (65536 bits, 8 KB) keyed by
+     the **client-local id**; it records every terminal id after presentation:
+     `Finish`, `Reject`, `Cancel`, and `ResponseTtl` expiry, so duplicate
+     suppression covers the whole id domain with no eviction. The server-global
      id is never a duplicate-suppression key; frames carry the client-local
      id;
    - inbound Request: payload check, ignore a duplicate live or completed id in
@@ -600,8 +624,12 @@ tests.
      handle to `SendFrame`.
 3. Add `RRReliableResponse` (internal sealed):
    - undecided/accepted/rejected/closed; timer handle disposed on every close;
-   - `Response` allocates the next `uint` ordinal, sends, keeps open; `Finish`
-     sends Normal and closes; `Reject` sends Rejected and closes;
+   - `Response` sends first; the `uint` ordinal is committed only after
+     `SendFrame` returns `Ok`, so a failed send consumes no ordinal and the
+     client stream never stalls; `Finish` sends Normal and closes; `Reject`
+     sends Rejected and closes; an internal `SendFailed()` sends
+     `Finish(Failed)` and closes, used by the response-TTL and session-close
+     paths;
    - precedence: while running, a handle closed by `Reject` throws
      `InvalidOperationException` on later `Response`/`Finish`; repeated
      `Reject` returns `Ok`; `Reject` after acceptance throws; `Finish` after
@@ -738,11 +766,12 @@ binding, specification, E2E tests, and factory registration.
      TTLs in `Create`.
 4. Add `Transports/Pontifex.Transport.Direct/RR/Reliable/Specification.md`
    with all nine sections and open areas: wire correlation (request id + `uint`
-   ordinal), duplicate-suppression scope (per-session 1024 terminal client-local
-   ids), completion transport, timer factory, capacity, no persistence,
-   payload-only max, and process-wide `id` uniqueness across Direct transports.
-   State the single-dispatch-queue `OnRequested` serialization as a guarantee in
-   §3/§6/§7, not an open choice. In §7 declare the bounded deviations: a request
+   ordinal), duplicate-suppression scope (per-session 64K-bit client-local-id
+   bitmap), completion transport, timer factory, capacity, no persistence,
+   payload-only max, process-wide `id` uniqueness across Direct transports,
+   the dispatch queue as the callback scheduler, channel-disposal failure
+   detection, and logging. State the single-dispatch-queue `OnRequested`
+   serialization as a guarantee in §3/§6/§7, not an open choice. In §7 declare the bounded deviations: a request
    arriving before the server's `OnStarted` is held until the gate opens; an
    `OnRequested` already running at stop may complete after `onStopped` because
    dispatch disposal is non-blocking; and `OnRequested` may begin during the
@@ -771,10 +800,11 @@ binding, specification, E2E tests, and factory registration.
    - two clients independent;
    - two concurrent requests from one client, second answered first, each
      handler gets its own response/Finish and distinct server ids;
-   - a binding-created client/server round trip through the real binding (only
-     the TTL tests use internal transports because the binding does not expose
-     a timer factory; use the bounded signal wait pattern of the existing RR
-     UDP round-trip tests);
+   - a binding-created client/server round trip through the real binding, in a
+     `Tests/Integration/` group with category `Direct.RRReliable.Integration`
+     (only the TTL tests use internal transports because the binding does not
+     expose a timer factory; use the bounded signal wait pattern of the existing
+     RR UDP round-trip tests);
    - the pre-session loss case is induced through the internal `CurrentCarrier`
      seam or a test-owned `ChannelManager` server entry that disposes the
      channel immediately.
@@ -788,7 +818,10 @@ binding, specification, E2E tests, and factory registration.
 
 ```bash
 dotnet build Pontifex.sln
-dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.RRReliable&TestCategory!=Direct.RRReliable.Integration"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.RRReliable.Integration"
 dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj
 dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj
 dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj
@@ -797,7 +830,9 @@ dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.cspr
 ```
 
 Expected: 0 errors; all Direct, Transports, Transport, Factory, core, and Net
-tests pass. Also inspect: the RRReliable Direct `Specification.md` has all nine
+tests pass. At least one test must match `Direct.RRReliable.Integration`; zero
+matches is a failure. The default filter must contain no real timer wait or
+uncontrolled thread; TTL tests use the manual factory. Also inspect: the RRReliable Direct `Specification.md` has all nine
 sections, §5, §7 deviations, §8 choices, §9 implementer checklist; the Direct suite README/Coverage
 pass CHECK-01..12; the new `FactoryBindingsTests` case names are present and
 executed (both schemes × both roles × TTLs × wrong roles × unknown `delivery` ×
