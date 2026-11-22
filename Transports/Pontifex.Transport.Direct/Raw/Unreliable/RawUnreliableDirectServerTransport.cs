@@ -10,9 +10,8 @@ using Scriba;
 namespace Pontifex.Raw.Unreliable.Direct
 {
     /// <summary>
-    /// Base class for all RawUnreliable Direct server transports. Owns the in-process channel registry
-    /// for the unreliable Direct carrier. The generic parameter is the server handler-factory delegate
-    /// type.
+    /// In-process RawUnreliable Direct server transport. Owns the channel registry for the unreliable
+    /// Direct carrier.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
@@ -23,24 +22,53 @@ namespace Pontifex.Raw.Unreliable.Direct
     /// still-registered channel, which stops the session endpoints that hold it.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawUnreliableDirectServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>,
-        IRawUnreliableDebugReliability
-        where TFactory : Delegate
+    public sealed class RawUnreliableDirectServerTransport
+        : RawUnreliableServerTransport<Func<IEndPoint, IRawUnreliableHandler?>>, IRawUnreliableServer,
+            IRawUnreliableDebugReliability
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels =
             new ConcurrentDictionary<IEndPoint, Channel>();
 
+        public override TransportType Type => TransportType.RawUnreliable;
+
+        public override int MessageMaxByteSize => RawUnreliableDirectInfo.MessageMaxByteSize;
+
         /// <summary>
         /// Gets the capacity of the carrier queue that bounds the shared outbound budget.
         /// </summary>
-        protected abstract int QueueCapacity { get; }
+        private int QueueCapacity => RawUnreliableDirectInfo.QueueCapacity;
 
-        protected RawUnreliableDirectServerTransport(string typeName, string serverName, ILogger logger,
+        /// <summary>
+        /// Initializes the in-process unreliable server transport.
+        /// </summary>
+        /// <param name="serverName">The name of the server.</param>
+        /// <param name="logger">The logging system used by the transport.</param>
+        /// <param name="memoryRental">The memory rental system used by the transport.</param>
+        public RawUnreliableDirectServerTransport(string serverName, ILogger logger,
             IMemoryRental memoryRental)
-            : base(typeName, logger, memoryRental)
+            : base(RawUnreliableDirectInfo.TransportName, logger, memoryRental)
         {
             _serverEp = new StringEndPoint(serverName);
+        }
+
+        /// <inheritdoc/>
+        public bool Init(Func<IEndPoint, IRawUnreliableHandler?> handlerFactory)
+        {
+            if (handlerFactory == null)
+            {
+                throw new ArgumentNullException(nameof(handlerFactory));
+            }
+
+            return TryInitializeServer(handlerFactory);
+        }
+
+        /// <inheritdoc/>
+        protected override IRawUnreliableHandler? InvokeFactory(
+            Func<IEndPoint, IRawUnreliableHandler?> factory, IEndPoint source,
+            UnionDataList triggeringMessage)
+        {
+            return factory(source);
         }
 
         /// <inheritdoc/>

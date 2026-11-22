@@ -85,21 +85,21 @@ public sealed class RawUnreliableDirectChannelOwnershipTests
             "A registered channel survived the server stop.");
     }
 
-    private RawUnreliableDirectServer StartServer(out string serverName)
+    private RawUnreliableDirectServerTransport StartServer(out string serverName)
     {
         serverName = "ownership-" + Guid.NewGuid().ToString("N");
-        var server = new RawUnreliableDirectServer(serverName, Logger, MemoryRental.Shared);
+        var server = new RawUnreliableDirectServerTransport(serverName, Logger, MemoryRental.Shared);
         Assert.That(server.Init(_ => null), Is.True);
         Assert.That(server.Start(_ => { }), Is.True);
         _transports.Add(server);
         return server;
     }
 
-    private RawUnreliableDirectClient StartClient(string serverName, out RecordingHandler handler)
+    private RawUnreliableDirectClientTransport StartClient(string serverName, out RecordingHandler handler)
     {
         handler = new RecordingHandler();
         var recording = handler;
-        var client = new RawUnreliableDirectClient(serverName, Logger, MemoryRental.Shared);
+        var client = new RawUnreliableDirectClientTransport(serverName, Logger, MemoryRental.Shared);
         Assert.That(client.Init(recording), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
         _transports.Add(client);

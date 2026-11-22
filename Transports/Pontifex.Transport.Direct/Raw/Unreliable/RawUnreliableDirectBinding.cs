@@ -40,10 +40,10 @@ namespace Pontifex.Raw.Unreliable.Direct
                         nameof(context));
                 }
 
-                return new RawUnreliableDirectServer(id, context.Logger, context.Memory);
+                return new RawUnreliableDirectServerTransport(id, context.Logger, context.Memory);
             }
 
-            var transport = new RawUnreliableDirectClient(id, context.Logger, context.Memory);
+            var transport = new RawUnreliableDirectClientTransport(id, context.Logger, context.Memory);
             if (context.TryGetStruct("delivery", out var delivery))
             {
                 transport.SetDeliverySystem(

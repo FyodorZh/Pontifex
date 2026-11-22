@@ -9,8 +9,8 @@ using Scriba;
 namespace Pontifex.Raw.Unreliable.Direct
 {
     /// <summary>
-    /// Base class for all RawUnreliable Direct client transports. Owns the client configuration shared by
-    /// RawUnreliable; the endpoint owns the in-process channel.
+    /// In-process RawUnreliable Direct client transport. Owns the client configuration; the endpoint owns
+    /// the in-process channel.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
@@ -22,7 +22,7 @@ namespace Pontifex.Raw.Unreliable.Direct
     /// afterwards.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawUnreliableDirectClientTransport : RawUnreliableClientTransport,
+    public sealed class RawUnreliableDirectClientTransport : RawUnreliableClientTransport,
         IRawUnreliableDebugReliability
     {
         private readonly IEndPoint _serverEp;
@@ -36,20 +36,24 @@ namespace Pontifex.Raw.Unreliable.Direct
 
         private bool _askedForReliableDelivery;
 
+        public override TransportType Type => TransportType.RawUnreliable;
+
+        public override int MessageMaxByteSize => RawUnreliableDirectInfo.MessageMaxByteSize;
+
         /// <summary>
         /// Gets the capacity of the carrier queue that bounds this transport's outbound budget.
         /// </summary>
-        protected abstract int QueueCapacity { get; }
+        private int QueueCapacity => RawUnreliableDirectInfo.QueueCapacity;
 
         /// <summary>
         /// Gets the byte cap of the client endpoint's local outbound budget.
         /// </summary>
-        protected long SendBudgetBytes => (long)MessageMaxByteSize * QueueCapacity;
+        private long SendBudgetBytes => (long)MessageMaxByteSize * QueueCapacity;
 
         /// <summary>
         /// Gets the message cap of the client endpoint's inbox.
         /// </summary>
-        protected int SendBudgetMessages => QueueCapacity;
+        private int SendBudgetMessages => QueueCapacity;
 
         /// <summary>
         /// Gets the derived byte budget for budget-wiring tests.
@@ -84,9 +88,15 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </remarks>
         internal int ExposedSendBudgetMessages => SendBudgetMessages;
 
-        protected RawUnreliableDirectClientTransport(string typeName, string serverName, ILogger logger,
+        /// <summary>
+        /// Initializes the in-process unreliable client transport.
+        /// </summary>
+        /// <param name="serverName">The name of the server to connect to.</param>
+        /// <param name="logger">The logging system used by the transport.</param>
+        /// <param name="memoryRental">The memory rental system used by the transport.</param>
+        public RawUnreliableDirectClientTransport(string serverName, ILogger logger,
             IMemoryRental memoryRental)
-            : base(typeName, logger, memoryRental)
+            : base(RawUnreliableDirectInfo.TransportName, logger, memoryRental)
         {
             _serverEp = new StringEndPoint(serverName);
             _clientEp = new GuidEndPoint(Guid.NewGuid());

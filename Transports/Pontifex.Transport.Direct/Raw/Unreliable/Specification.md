@@ -26,8 +26,8 @@ and **MAY** in this document are to be interpreted as described in
 
 The carrier is registered for `TransportType.RawUnreliable` with the scheme
 `direct-raw-unreliable`. The binding is `RawUnreliableDirectBinding`, and the
-concrete transports are `RawUnreliableDirectClient` and
-`RawUnreliableDirectServer`. Each transport is constructed with a server `id`, a
+concrete transports are `RawUnreliableDirectClientTransport` and
+`RawUnreliableDirectServerTransport`. Each transport is constructed with a server `id`, a
 logger, and a memory rental; the binding exposes `id` as the required positional
 parameter.
 

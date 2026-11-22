@@ -28,7 +28,7 @@ public sealed class RawUnreliableDirectDeliverySystemTests
     [Test]
     public void ClientStop_ReleasesConfiguredSystemsThatWereNeverInstalled()
     {
-        var client = new RawUnreliableDirectClient(
+        var client = new RawUnreliableDirectClientTransport(
             "lifetime-" + Guid.NewGuid().ToString("N"), Logger, MemoryRental.Shared);
         var clientDelivery = new TrackingDeliverySystem();
         var serverDelivery = new TrackingDeliverySystem();
@@ -58,7 +58,7 @@ public sealed class RawUnreliableDirectDeliverySystemTests
     [Test]
     public void SetDeliverySystem_AfterStart_IsRejected()
     {
-        var client = new RawUnreliableDirectClient(
+        var client = new RawUnreliableDirectClientTransport(
             "lifetime-" + Guid.NewGuid().ToString("N"), Logger, MemoryRental.Shared);
         Assert.That(client.Init(new NoopHandler()), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);

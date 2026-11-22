@@ -31,7 +31,7 @@ public sealed class DirectRawUnreliableConformanceAdapter
         private readonly string _serverName;
 
         public Fixture(string serverName, ILogger logger, IMemoryRental memory)
-            : base(new RawUnreliableDirectServer(serverName, logger, memory), logger, memory)
+            : base(new RawUnreliableDirectServerTransport(serverName, logger, memory), logger, memory)
         {
             _serverName = serverName;
         }
@@ -40,6 +40,6 @@ public sealed class DirectRawUnreliableConformanceAdapter
             => Server.Init(factory);
 
         protected override IRawUnreliableClient CreateClientCore()
-            => new RawUnreliableDirectClient(_serverName, Logger, Memory);
+            => new RawUnreliableDirectClientTransport(_serverName, Logger, Memory);
     }
 }

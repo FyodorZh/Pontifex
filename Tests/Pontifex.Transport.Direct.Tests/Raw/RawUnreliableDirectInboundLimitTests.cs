@@ -29,8 +29,8 @@ public sealed class RawUnreliableDirectInboundLimitTests
     public void OversizedInboundMessage_IsDroppedWithoutStoppingTheClient()
     {
         var serverName = "inbound-" + Guid.NewGuid().ToString("N");
-        var server = new RawUnreliableDirectServer(serverName, Logger, MemoryRental.Shared);
-        var client = new RawUnreliableDirectClient(serverName, Logger, MemoryRental.Shared);
+        var server = new RawUnreliableDirectServerTransport(serverName, Logger, MemoryRental.Shared);
+        var client = new RawUnreliableDirectClientTransport(serverName, Logger, MemoryRental.Shared);
         var handler = new RecordingHandler();
 
         try
