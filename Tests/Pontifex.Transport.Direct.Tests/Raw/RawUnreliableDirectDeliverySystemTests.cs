@@ -1,8 +1,6 @@
 using System;
 using System.Threading;
 using Actuarius.Memory;
-using Pontifex;
-using Pontifex.Endpoints;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.StopReasons;
@@ -10,13 +8,14 @@ using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 using Scriba;
 
-namespace Pontifex.Tests.VirtualDelivery;
+namespace Pontifex.Tests.Raw;
 
 /// <summary>
-/// Pins delivery-system ownership: a replaced or discarded system is cleared and, when disposable, disposed.
+/// Pins the unreliable Direct client's delivery-system ownership: configured systems are released even when
+/// the endpoint never installed them on a channel.
 /// </summary>
 [TestFixture]
-public sealed class DeliverySystemLifetimeTests
+public sealed class RawUnreliableDirectDeliverySystemTests
 {
     private static readonly ILogger Logger = new Logger([]);
 
@@ -24,42 +23,6 @@ public sealed class DeliverySystemLifetimeTests
     public void OneTimeTearDown()
     {
         Logger.Dispose();
-    }
-
-    [Test]
-    public void ReplacingAChannelDeliverySystem_ReleasesTheOldSystem()
-    {
-        using var channel = new Channel(new StringEndPoint("server"), new StringEndPoint("client"));
-        var first = new TrackingDeliverySystem();
-
-        channel.SetClientDeliverySystem(first);
-        channel.SetClientDeliverySystem(new PerfectDeliverySystem());
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(first.ClearCount, Is.EqualTo(1));
-            Assert.That(first.DisposeCount, Is.EqualTo(1));
-        });
-    }
-
-    [Test]
-    public void DisposingAChannel_ReleasesBothDirectionSystems()
-    {
-        var channel = new Channel(new StringEndPoint("server"), new StringEndPoint("client"));
-        var client = new TrackingDeliverySystem();
-        var server = new TrackingDeliverySystem();
-
-        channel.SetClientDeliverySystem(client);
-        channel.SetServerDeliverySystem(server);
-        channel.Dispose();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(client.ClearCount, Is.EqualTo(1));
-            Assert.That(client.DisposeCount, Is.EqualTo(1));
-            Assert.That(server.ClearCount, Is.EqualTo(1));
-            Assert.That(server.DisposeCount, Is.EqualTo(1));
-        });
     }
 
     [Test]
@@ -73,10 +36,23 @@ public sealed class DeliverySystemLifetimeTests
         client.SetDeliverySystem(clientDelivery, serverDelivery);
         Assert.That(client.Init(new NoopHandler()), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
-        Assert.That(client.Stop(), Is.True);
 
-        WaitFor(() => clientDelivery.DisposeCount == 1 && serverDelivery.DisposeCount == 1,
-            "The transport did not release delivery systems that were never installed on a channel.");
+        var endpoint = client.CurrentEndpoint;
+        Assert.That(endpoint, Is.Not.Null);
+        using var endpointStopped = new ManualResetEventSlim(false);
+        endpoint!.Stopped += _ => endpointStopped.Set();
+
+        Assert.That(client.Stop(), Is.True);
+        Assert.That(endpointStopped.Wait(TimeSpan.FromSeconds(5)), Is.True,
+            "The endpoint did not reach its terminal state.");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(clientDelivery.DisposeCount, Is.EqualTo(1),
+                "The transport did not release a configured system that was never installed.");
+            Assert.That(serverDelivery.DisposeCount, Is.EqualTo(1),
+                "The transport did not release a configured system that was never installed.");
+        });
     }
 
     [Test]
@@ -95,20 +71,6 @@ public sealed class DeliverySystemLifetimeTests
         finally
         {
             client.Stop();
-        }
-    }
-
-    private static void WaitFor(Func<bool> condition, string message)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
-        while (!condition())
-        {
-            if (DateTime.UtcNow > deadline)
-            {
-                Assert.Fail(message);
-            }
-
-            Thread.Sleep(1);
         }
     }
 

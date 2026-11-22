@@ -1,8 +1,9 @@
 using Pontifex.VirtualDelivery.Netem;
 
-namespace Pontifex.Tests.VirtualDelivery.Netem;
+namespace Pontifex.Tests.VirtualDelivery;
 
 [TestFixture]
+[Category("Direct.VirtualDelivery")]
 public class RateLimiterTests
 {
     [Test]
@@ -76,12 +77,17 @@ public class RateLimiterTests
     }
 
     [Test]
-    public void Packet_exactly_filling_cells_calculates_correctly()
+    public void Packet_filling_whole_cells_uses_the_exact_time()
     {
         var limiter = new RateLimiter(1_000_000_000, 0, 100, 0);
-        long timeNs = limiter.PacketTimeNs(300);
 
-        Assert.That(timeNs, Is.GreaterThan(0));
+        Assert.Multiple(() =>
+        {
+            Assert.That(limiter.PacketTimeNs(300), Is.EqualTo(300),
+                "Three whole cells must not be rounded up.");
+            Assert.That(limiter.PacketTimeNs(301), Is.EqualTo(400),
+                "A partial fourth cell must be rounded up.");
+        });
     }
 
     [Test]

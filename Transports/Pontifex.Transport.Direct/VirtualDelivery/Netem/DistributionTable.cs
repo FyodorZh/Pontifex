@@ -10,6 +10,17 @@ namespace Pontifex.VirtualDelivery.Netem
 
         public DistributionTable(short[] table)
         {
+            if (table == null)
+            {
+                throw new ArgumentNullException(nameof(table));
+            }
+
+            if (table.Length == 0)
+            {
+                throw new ArgumentException(
+                    "A distribution table cannot be empty.", nameof(table));
+            }
+
             _table = table;
         }
 

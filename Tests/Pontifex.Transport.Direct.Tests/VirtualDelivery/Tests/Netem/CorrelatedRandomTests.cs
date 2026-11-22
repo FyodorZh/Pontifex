@@ -1,8 +1,9 @@
 using Pontifex.VirtualDelivery.Netem;
 
-namespace Pontifex.Tests.VirtualDelivery.Netem;
+namespace Pontifex.Tests.VirtualDelivery;
 
 [TestFixture]
+[Category("Direct.VirtualDelivery")]
 public class CorrelatedRandomTests
 {
     [Test]
@@ -103,18 +104,6 @@ public class CorrelatedRandomTests
         {
             Assert.That(count, Is.GreaterThanOrEqualTo((int)(expectedPerBucket * 0.85)));
             Assert.That(count, Is.LessThanOrEqualTo((int)(expectedPerBucket * 1.15)));
-        }
-    }
-
-    [Test]
-    public void Next_returns_uint_values()
-    {
-        var crng = new CorrelatedRandom(0x80000000, 42);
-
-        for (int i = 0; i < 1000; i++)
-        {
-            uint val = crng.Next();
-            Assert.That(val, Is.TypeOf<uint>());
         }
     }
 }
