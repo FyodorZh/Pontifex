@@ -16,6 +16,7 @@ namespace Pontifex.RR
         private Action<IRRRequestHandler>? _cancel;
         private int _requestId = -1;
         private int _bound;
+        private int _cancelRequested;
 
         /// <inheritdoc/>
         public ushort? RequestId
@@ -34,6 +35,14 @@ namespace Pontifex.RR
             if (cancel != null)
             {
                 cancel(this);
+                return;
+            }
+
+            if (IsBound)
+            {
+                // The transport reserved the handler but has not published the request yet; remember
+                // the cancellation so Request can abandon it before submitting the frame.
+                Volatile.Write(ref _cancelRequested, 1);
             }
         }
 
@@ -48,7 +57,22 @@ namespace Pontifex.RR
         /// </summary>
         internal bool TryReserve()
         {
-            return Interlocked.CompareExchange(ref _bound, 1, 0) == 0;
+            if (Interlocked.CompareExchange(ref _bound, 1, 0) != 0)
+            {
+                return false;
+            }
+
+            Volatile.Write(ref _cancelRequested, 0);
+            return true;
+        }
+
+        /// <summary>
+        /// Returns <see langword="true"/> once when a cancellation arrived before the request was
+        /// published.
+        /// </summary>
+        internal bool ConsumeCancelRequested()
+        {
+            return Interlocked.Exchange(ref _cancelRequested, 0) != 0;
         }
 
         /// <summary>
@@ -67,6 +91,7 @@ namespace Pontifex.RR
         {
             Volatile.Write(ref _cancel, null);
             Volatile.Write(ref _bound, 0);
+            Volatile.Write(ref _cancelRequested, 0);
         }
     }
 }

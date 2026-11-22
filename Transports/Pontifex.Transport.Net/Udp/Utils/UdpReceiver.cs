@@ -119,7 +119,15 @@ namespace Pontifex.NetSockets
                         continue;
                     }
 
-                    _onFail(ex);
+                    try
+                    {
+                        _onFail(ex);
+                    }
+                    catch (Exception inner)
+                    {
+                        Log.wtf(inner);
+                    }
+
                     break;
                 }
                 catch (Exception ex)

@@ -115,9 +115,13 @@ namespace Pontifex.Raw.Unreliable.Udp
             Conformance.BeforeSendCommitGate.Hit();
             try
             {
-                // The sender wraps the buffer in its disposer and releases it on every exit, including a
-                // throw, so this catch must not release it again.
-                sender.Send(bufferToSend);
+                // The sender releases the buffer on every result except InvalidMessage, where the
+                // payload remains with the caller (common ownership rule).
+                SendResult result = sender.Send(bufferToSend);
+                if (result == SendResult.InvalidMessage)
+                {
+                    bufferToSend.Release();
+                }
             }
             catch (Exception ex)
             {

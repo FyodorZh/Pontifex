@@ -32,6 +32,9 @@
   - [ ] Stage 2c: conformance adapter and tests
   - [x] Accepted: `OnRequested` may begin across the stop transition, possibly after `onStopped`;
     documented in the unreliable specification, to be closed by a callback dispatcher
+- [ ] Propagate a decode bound to byte-stream carriers (TCP handshake, Protocol, DeliveryManager):
+  the `UnionData.maxArraySize` default of `int.MaxValue` still allows a declared multi-GB array
+  allocation before the source runs out
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
   `IRRUnreliableTransport`, `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`,
   `IRRResponse`, `RRRequestHandler`, `RRResponse`)

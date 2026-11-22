@@ -55,11 +55,16 @@ namespace Pontifex.RR.Unreliable
         /// entries.</param>
         /// <returns><see langword="true"/> when the entry was added; <see langword="false"/> when the
         /// id is already present.</returns>
-        public bool TryAdd(ushort requestId, TValue value, Action<TValue>? onExpired = null)
+        public bool TryAdd(ushort requestId, TValue value, Action<TValue>? onExpired = null,
+            bool sweep = true)
         {
             lock (_locker)
             {
-                Sweep(_timeProvider.Now, onExpired);
+                if (sweep)
+                {
+                    Sweep(_timeProvider.Now, onExpired);
+                }
+
                 return _entries.TryAdd(requestId, new Entry(value, DateTime.MaxValue));
             }
         }

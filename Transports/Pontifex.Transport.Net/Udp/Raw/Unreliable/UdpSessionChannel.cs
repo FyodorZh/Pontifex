@@ -32,12 +32,12 @@ namespace Pontifex.Raw.Unreliable.Udp
         /// Submits one message to the shared sender.
         /// </summary>
         /// <param name="message">The message to send. Ownership transfers to the sender on every
-        /// path.</param>
+        /// result except <see cref="SendResult.InvalidMessage"/>, where this channel releases
+        /// it.</param>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The send result is deliberately ignored. Unreliable mode has
-        /// no post-admission reporting; overflow and a stopped sender both release the message and drop
-        /// it.</description></item>
+        /// <item><description><b>Other notes</b>: The send result is ignored for delivery reporting.
+        /// Overflow and a stopped sender both release the message and drop it.</description></item>
         /// </list>
         /// </remarks>
         public void Send(UnionDataList message)
@@ -47,8 +47,11 @@ namespace Pontifex.Raw.Unreliable.Udp
                 return;
             }
 
-            // The sender consumes and releases the message on every result, including overflow and stop.
-            _sender.Send(_remoteEndPoint, message);
+            SendResult result = _sender.Send(_remoteEndPoint, message);
+            if (result == SendResult.InvalidMessage)
+            {
+                message.Release();
+            }
         }
     }
 }

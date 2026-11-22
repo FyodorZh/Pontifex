@@ -148,7 +148,8 @@ namespace Pontifex.RR.Unreliable
                 requestId = NextRequestId();
                 bindable.Bind(requestId, CancelRequest);
 
-                if (_pendingResponses.TryAdd(requestId, handler, UnbindExpired))
+                bool sweep = attempt == 0;
+                if (_pendingResponses.TryAdd(requestId, handler, sweep ? UnbindExpired : null, sweep))
                 {
                     added = true;
                     break;
@@ -158,13 +159,29 @@ namespace Pontifex.RR.Unreliable
             if (!added)
             {
                 bindable.Unbind();
+                request.Release();
                 return SendResult.BufferOverflow;
+            }
+
+            if (!bindable.IsBound || bindable.ConsumeCancelRequested())
+            {
+                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                {
+                    bindable.Unbind();
+                }
+
+                request.Release();
+                return SendResult.Error;
             }
 
             if (!IsStarted)
             {
-                _pendingResponses.TryTakeExact(requestId, handler, out _, out _);
-                bindable.Unbind();
+                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                {
+                    bindable.Unbind();
+                }
+
+                request.Release();
                 return SendResult.NotConnected;
             }
 
@@ -178,15 +195,21 @@ namespace Pontifex.RR.Unreliable
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                _pendingResponses.TryTakeExact(requestId, handler, out _, out _);
-                bindable.Unbind();
+                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                {
+                    bindable.Unbind();
+                }
+
                 return SendResult.Error;
             }
 
             if (result != SendResult.Ok)
             {
-                _pendingResponses.TryTakeExact(requestId, handler, out _, out _);
-                bindable.Unbind();
+                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                {
+                    bindable.Unbind();
+                }
+
                 return result;
             }
 
