@@ -2,6 +2,14 @@
 
 Before creating, restructuring, or reviewing a test suite, read `Tests/RULES.md`. It is normative.
 
+## Transport specifications
+
+Before changing a transport abstraction or implementation, read its specification. It is normative.
+
+- Abstraction: `Pontifex/Abstractions/Transports/<Model>/[<Family>/]Specification.md`; for RR also read the shared `RR/Specification.md`.
+- Implementation: the `Specification.md` beside the carrier, wrapper, or converter, plus the abstraction it implements.
+- Before writing or reviewing a specification, read `Pontifex/Abstractions/Transports/TransportSpecificationsSpecification.md`.
+
 ## Project requirements
 
 Every `.csproj` states all four settings explicitly. No `latest`, no implicit defaults.
