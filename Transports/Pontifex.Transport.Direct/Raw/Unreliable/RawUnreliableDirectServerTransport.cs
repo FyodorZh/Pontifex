@@ -70,6 +70,17 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </remarks>
         internal int ExposedSendBudgetMessages => SendBudgetMessages;
 
+        /// <summary>
+        /// Gets the number of channels currently registered with this server.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; it exposes the registry size
+        /// so ownership tests can prove that a disposed channel is removed.</description></item>
+        /// </list>
+        /// </remarks>
+        internal int RegisteredChannelCount => _channels.Count;
+
         /// <inheritdoc/>
         protected override bool StartCarrier()
         {
@@ -143,7 +154,32 @@ namespace Pontifex.Raw.Unreliable.Direct
             }
 
             channel.ServerHandler = (clientEp, message) => OnCarrierInbound(clientEp, message);
-            _channels.TryAdd(channel.ClientEp, channel);
+
+            if (!_channels.TryAdd(channel.ClientEp, channel))
+            {
+                channel.ServerHandler = null;
+                channel.Dispose();
+                return;
+            }
+
+            channel.Disposed += () => RemoveChannel(channel);
+
+            // A concurrent stop may have swept the registry before the channel was added, and the channel
+            // may already have been disposed while it was being registered. Both cases must leave no entry.
+            if (channel.IsDisposed || IsStopping || !IsStarted)
+            {
+                RemoveChannel(channel);
+                channel.Dispose();
+            }
+        }
+
+        private void RemoveChannel(Channel channel)
+        {
+            if (_channels.TryGetValue(channel.ClientEp, out Channel? current)
+                && ReferenceEquals(current, channel))
+            {
+                _channels.TryRemove(channel.ClientEp, out _);
+            }
         }
 
         public override string ToString()

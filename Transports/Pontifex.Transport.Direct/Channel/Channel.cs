@@ -57,7 +57,7 @@ namespace Pontifex
                 clientDeliverySystem.Delivered += OnClientDeliveredMessage;
                 var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, clientDeliverySystem);
                 oldClient.Delivered -= OnClientDeliveredMessage;
-                oldClient.Clear();
+                DeliverySystemLifetime.Release(oldClient);
             }
         }
 
@@ -72,7 +72,7 @@ namespace Pontifex
                 serverDeliverySystem.Delivered += OnServerDeliveredMessage;
                 var oldServer = Interlocked.Exchange(ref _serverDeliverySystem, serverDeliverySystem);
                 oldServer.Delivered -= OnServerDeliveredMessage;
-                oldServer.Clear();
+                DeliverySystemLifetime.Release(oldServer);
             }
         }
         
@@ -129,11 +129,11 @@ namespace Pontifex
 
             var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, new PerfectDeliverySystem());
             oldClient.Delivered -= OnClientDeliveredMessage;
-            oldClient.Clear();
+            DeliverySystemLifetime.Release(oldClient);
 
             var oldServer = Interlocked.Exchange(ref _serverDeliverySystem, new PerfectDeliverySystem());
             oldServer.Delivered -= OnServerDeliveredMessage;
-            oldServer.Clear();
+            DeliverySystemLifetime.Release(oldServer);
 
             _clientHandler = null;
             _serverHandler = null;

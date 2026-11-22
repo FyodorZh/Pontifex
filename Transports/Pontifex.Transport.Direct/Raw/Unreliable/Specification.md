@@ -110,7 +110,8 @@ server registry. A disposed channel stops both endpoint halves.
 
 The delivery systems installed on a channel are owned by that channel and are
 disposed with it. A delivery system that the client never installed on a channel
-is disposed when the client transport stops.
+is disposed when the client transport stops. Delivery configuration is accepted
+only before the client transport starts.
 
 The carrier enforces these limits:
 

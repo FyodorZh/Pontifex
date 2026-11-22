@@ -39,6 +39,7 @@ namespace Pontifex.Raw.Unreliable.Direct
         private readonly SerializedCallbackQueue<UnionDataList> _sendQueue;
 
         private Channel? _channel;
+        private bool _deliverySystemsInstalled;
 
         internal RawUnreliableDirectClientEndpoint(
             string transportName,
@@ -162,6 +163,7 @@ namespace Pontifex.Raw.Unreliable.Direct
             channel.ClientHandler = Deliver;
             channel.SetClientDeliverySystem(_clientDeliverySystem);
             channel.SetServerDeliverySystem(_serverDeliverySystem);
+            _deliverySystemsInstalled = true;
             channel.Disposed += _onChannelDisposed;
             _channel = channel;
 
@@ -198,6 +200,15 @@ namespace Pontifex.Raw.Unreliable.Direct
         {
             _sendQueue.Dispose();
             CleanupChannel();
+
+            if (!_deliverySystemsInstalled)
+            {
+                DeliverySystemLifetime.Release(_clientDeliverySystem);
+                if (!ReferenceEquals(_clientDeliverySystem, _serverDeliverySystem))
+                {
+                    DeliverySystemLifetime.Release(_serverDeliverySystem);
+                }
+            }
         }
 
         /// <summary>

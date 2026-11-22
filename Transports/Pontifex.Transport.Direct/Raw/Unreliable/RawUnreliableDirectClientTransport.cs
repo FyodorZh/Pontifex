@@ -31,6 +31,9 @@ namespace Pontifex.Raw.Unreliable.Direct
         private volatile IDeliverySystem _clientDeliverySystem = new PerfectDeliverySystem();
         private volatile IDeliverySystem _serverDeliverySystem = new PerfectDeliverySystem();
 
+        private IDeliverySystem? _handedOffClientDeliverySystem;
+        private IDeliverySystem? _handedOffServerDeliverySystem;
+
         private bool _askedForReliableDelivery;
 
         /// <summary>
@@ -87,13 +90,46 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <item><description><b>Preconditions/Postconditions</b>: Must be called before the transport
         /// starts. Reliable debug mode overrides both systems for endpoints created after
         /// it.</description></item>
+        /// <item><description><b>Ownership</b>: The transport takes ownership of both systems and releases
+        /// them when the channel is disposed or when the transport stops without installing them.</description></item>
         /// </list>
         /// </remarks>
         public void SetDeliverySystem(IDeliverySystem clientDeliverySystem,
             IDeliverySystem serverDeliverySystem)
         {
+            if (clientDeliverySystem == null)
+            {
+                throw new ArgumentNullException(nameof(clientDeliverySystem));
+            }
+
+            if (serverDeliverySystem == null)
+            {
+                throw new ArgumentNullException(nameof(serverDeliverySystem));
+            }
+
+            if (HasStartBeenAttempted)
+            {
+                throw new InvalidOperationException(
+                    "Delivery systems must be configured before the transport starts.");
+            }
+
+            var oldClient = _clientDeliverySystem;
+            var oldServer = _serverDeliverySystem;
             _clientDeliverySystem = clientDeliverySystem;
             _serverDeliverySystem = serverDeliverySystem;
+
+            if (!ReferenceEquals(oldClient, clientDeliverySystem)
+                && !ReferenceEquals(oldClient, serverDeliverySystem))
+            {
+                DeliverySystemLifetime.Release(oldClient);
+            }
+
+            if (!ReferenceEquals(oldServer, clientDeliverySystem)
+                && !ReferenceEquals(oldServer, serverDeliverySystem)
+                && !ReferenceEquals(oldServer, oldClient))
+            {
+                DeliverySystemLifetime.Release(oldServer);
+            }
         }
 
         /// <inheritdoc/>
@@ -106,7 +142,24 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <inheritdoc/>
         protected override void StopCarrier(StopReason reason)
         {
-            // The endpoint owns the channel and releases it during its own stop transition.
+            // The endpoint owns the systems it was constructed with; it releases them even when it never
+            // installed them on a channel. The transport releases only systems that were never handed over,
+            // for example when reliable debug mode replaced them.
+            var client = _clientDeliverySystem;
+            var server = _serverDeliverySystem;
+            _clientDeliverySystem = new PerfectDeliverySystem();
+            _serverDeliverySystem = new PerfectDeliverySystem();
+
+            if (!ReferenceEquals(client, _handedOffClientDeliverySystem))
+            {
+                DeliverySystemLifetime.Release(client);
+            }
+
+            if (!ReferenceEquals(server, _handedOffServerDeliverySystem)
+                && !ReferenceEquals(server, client))
+            {
+                DeliverySystemLifetime.Release(server);
+            }
         }
 
         /// <inheritdoc/>
@@ -118,6 +171,12 @@ namespace Pontifex.Raw.Unreliable.Direct
             IDeliverySystem serverDeliverySystem = _askedForReliableDelivery
                 ? new PerfectDeliverySystem()
                 : _serverDeliverySystem;
+
+            if (!_askedForReliableDelivery)
+            {
+                _handedOffClientDeliverySystem = clientDeliverySystem;
+                _handedOffServerDeliverySystem = serverDeliverySystem;
+            }
 
             return new RawUnreliableDirectClientEndpoint(
                 Name,
@@ -150,8 +209,13 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </remarks>
         public bool TryMakeReliableForDebug()
         {
+            if (HasStartBeenAttempted)
+            {
+                return false;
+            }
+
             _askedForReliableDelivery = true;
-            return IsStarted == false;
+            return true;
         }
     }
 }
