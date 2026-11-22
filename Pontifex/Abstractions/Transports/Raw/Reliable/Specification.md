@@ -109,6 +109,11 @@ public interface IRawReliableTransport : IRawTransport
 {
 }
 
+public interface IRawReliableServerTransport<THandler> : IRawReliableTransport
+    where THandler : class, IRawReliableServerHandler
+{
+}
+
 public interface IRawReliableEndpoint : IRawEndpoint
 {
     bool IsConnected { get; }
@@ -282,10 +287,14 @@ handler factory.
 Passing null to `Init` **MUST** throw `ArgumentNullException` without changing
 the transport state.
 
-`Init` is one-time and pre-start. Concurrent calls are safe, but at most one call
-**MUST** return true; every racing or later call **MUST** return false. A
+`Init` is one-time and pre-start. Concurrent calls are safe, but at most one
+call **MUST** return true; every racing or later call **MUST** return false. A
 successful `Init` **MUST NOT** start carrier activity or invoke a handler
 callback.
+
+A client transport whose valid `Init` call cannot bind its handler **MUST**
+become invalid. A server transport whose `Init` returns false **MUST** remain
+valid and startable.
 
 `Init` **MUST** return false after a start has been attempted, after the
 transport is invalid, or after stopping begins.
@@ -296,7 +305,7 @@ transport is invalid, or after stopping begins.
 stateDiagram-v2
     [*] --> Constructed
     Constructed --> Initialized: Init succeeds
-    Constructed --> Invalid: Init returns false
+    Constructed --> Invalid: client Init fails or Start returns false
     Initialized --> Running: Start succeeds
     Initialized --> Invalid: Start returns false
     Running --> Stopping: Stop or unrecoverable failure
@@ -339,7 +348,7 @@ handler callback may begin. A running callback may finish asynchronously.
 | --- | --- |
 | Transport `Start` returns false | none |
 | `Start` returns true, connection fails before `OnConnected` | exactly one `OnStopped` |
-| `OnConnected` delivered | `OnConnected`, then `OnDisconnected`, then `OnStopped`, each once |
+| `OnConnected` delivered | `OnConnected`, zero or more `OnReceived`, then `OnDisconnected`, then `OnStopped`, each once |
 | Server handler created, but session endpoint creation, start, or admission fails | exactly one `OnStopped` |
 | Handshake rejected or timed out | exactly one `OnStopped` |
 | Transport stops while sessions are live | `OnDisconnected` then `OnStopped` per session |
@@ -531,8 +540,10 @@ These controls serve the Carrier-Independent Core Conformance profile of
 ## 15. Transport-implementer checklist
 
 - [ ] Provide one-time, pre-start `Init` and one-time `Start`.
-- [ ] Invalidate the transport on a failed `Init` or `Start` and invoke no
-      handler callback in that case.
+- [ ] Invalidate a client transport whose `Init` cannot bind its handler, and
+      leave a server transport valid when `Init` returns false.
+- [ ] Invalidate the transport on a failed `Start` and invoke no handler
+      callback in that case.
 - [ ] Perform the handshake before delivering `OnConnected`.
 - [ ] Validate frame type, version, and name in the order of section 6.3.
 - [ ] Enforce `HandshakeMaxByteSize` before allocating a body.
@@ -540,6 +551,9 @@ These controls serve the Carrier-Independent Core Conformance profile of
       `CapacityExceeded`.
 - [ ] Agree `MessageMaxByteSize` as the minimum of both peers and keep it
       immutable.
+- [ ] Admit an empty `UnionDataList` within the agreed limit.
+- [ ] Never deliver a handshake frame through `OnReceived`.
+- [ ] Never return `Unknown` from `Send`.
 - [ ] Map every rejection status to the client-observable cause of section 6.4.
 - [ ] Call `TryCreate` only after version and name are accepted, and never
       concurrently.

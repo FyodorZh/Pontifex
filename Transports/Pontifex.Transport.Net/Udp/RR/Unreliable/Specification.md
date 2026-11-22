@@ -96,6 +96,7 @@ adds no source-spoofing protection.
 | TTL defaults | 30 seconds for `request_ttl`, 10 seconds for `response_ttl`. |
 | Payload limit | 490 bytes. |
 | Address resolution | Host and port resolved at construction. |
+| Capacity | Bounded by the datagram send queue; a full queue yields `BufferOverflow`. |
 
 ## 9. Implementer checklist
 

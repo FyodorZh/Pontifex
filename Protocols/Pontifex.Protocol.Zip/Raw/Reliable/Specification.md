@@ -88,6 +88,7 @@ not encryption and provides no confidentiality.
 | Negotiation deadline | Fixed at 10 seconds. |
 | Reject linger | Fixed at 2 seconds. |
 | Stacking | Any number of `RawReliable` wrappers may be stacked. |
+| Capacity | Inherited from the nested transport; the wrapper adds no queue of its own. |
 
 ## 9. Implementer checklist
 

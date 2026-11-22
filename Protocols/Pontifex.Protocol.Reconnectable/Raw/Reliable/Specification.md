@@ -46,9 +46,9 @@ Response: [version, name, NegotiationStatus.Accepted, ...custom tail]
 Reject:   [serverVersion, serverName, NegotiationStatus.Rejected, text?]
 ```
 
-The status element is always the discriminator. The wrapper enforces its own
-handshake limit and handshake deadline, and it waits before disconnecting the
-inner transport after a reject.
+The status element is always the discriminator. The wrapper enforces a
+handshake limit of 128 bytes and a handshake deadline of 10 seconds, and it
+waits 2 seconds before disconnecting the inner transport after a reject.
 
 A reconnect reuses the session id and generation with a fresh secret check. The
 server keeps the negotiation response so that a returning client can reattach to
@@ -101,6 +101,9 @@ adds no confidentiality.
 | Session limit | 20000 tracked server sessions. |
 | Reattach acceptance | Server-side validation of session id, generation, and secret. |
 | Delivery state | Shared across underlying connections for the session lifetime. |
+| Negotiation deadline | 10 seconds. |
+| Reject linger | 2 seconds. |
+| Capacity | Inherited from the nested transport; the wrapper adds no queue of its own. |
 
 ## 9. Implementer checklist
 

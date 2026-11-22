@@ -71,6 +71,7 @@ Logging writes to the configured log sink and adds no protection.
 | Log sink | The transport `Log` instance. |
 | Logged content | Lifecycle events and message metadata; payload bytes only where the wrapper chooses. |
 | Overhead | One wrapper layer with no additional scheduling. |
+| Capacity | Inherited from the nested transport; the wrapper adds no queue of its own. |
 
 ## 9. Implementer checklist
 

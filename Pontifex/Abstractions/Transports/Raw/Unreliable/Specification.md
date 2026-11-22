@@ -74,6 +74,10 @@ public interface IRawUnreliableClient : IRawUnreliableTransport
     bool Init(IRawUnreliableHandler handler);
 }
 
+public interface IRawUnreliableTransport : IRawTransport
+{
+}
+
 public interface IRawUnreliableEndpoint : IRawEndpoint
 {
     bool IsValid { get; }
@@ -219,11 +223,11 @@ may return `true`. Every racing or later call **MUST** return `false`. A
 successful `Init` does not invoke `OnStarted`, create a server endpoint, or start
 carrier activity.
 
-The initial eligible `Init` attempt either succeeds or terminally invalidates the
-transport. If it returns `false`, `IsValid` **MUST** become false, no later `Init`
-or `Start` may succeed, and no `onStopped` callback is invoked. Calling `Init`
-after a successful `Start`, after stopping begins, or after the transport is
-invalid **MUST** return `false`.
+The initial eligible `Init` attempt either succeeds or returns `false`. A
+rejected `Init` **MUST** return `false` without changing the bound handler and
+without invalidating the transport; a rejected call is not a transport failure.
+Calling `Init` after a successful `Start`, after stopping begins, or on an
+invalid transport **MUST** return `false`.
 
 `Start` requires a successful `Init`. Calling `Start` before successful
 initialization **MUST** return `false` and terminally invalidate the transport.
@@ -234,7 +238,7 @@ initialization **MUST** return `false` and terminally invalidate the transport.
 stateDiagram-v2
     [*] --> Constructed
     Constructed --> Initialized: Init succeeds
-    Constructed --> Invalid: Init returns false
+    Constructed --> Invalid: Start returns false
     Initialized --> Running: Start succeeds
     Initialized --> Invalid: Start returns false
     Running --> Stopping: Stop or unrecoverable failure
@@ -552,6 +556,8 @@ bool TryMakeReliable();
 | --- | --- | --- |
 | `BeforeStopStateTransitionGate` | A running transport is about to leave the running state. | A transport that was never started. |
 | `BeforeStoppedCallbackGate` | The transport is about to invoke `onStopped`. | A failed `Start`. |
+| `FailNextStart()` | Armed before `Start`; makes the next `Start` fail and invalidate the transport. | A transport that has begun starting. |
+| `InjectUnrecoverableFailure()` | Called on a running transport; drives the ordinary failure path. | A stopped or invalid transport. |
 | `BeforeHandlerFactoryGate` | The server is about to call the factory, under the admission lock. | Malformed, oversized, or discarded inbound data; a client transport. |
 | `BeforeHandlerStartedGate` | A created server endpoint is about to start, after route publication. | A missing handler or a route that created no endpoint; a client endpoint. |
 | `TryMakeReliable()` | Armed before `Start`; makes every route deliver `Ok` messages exactly once in FIFO order per direction. | A transport that has begun starting. |
@@ -585,8 +591,9 @@ result is named Carrier-Independent Core Conformant.
 
 ## 15. Transport-implementer checklist
 
-- [ ] Provide one-time, pre-start `Init` and terminal invalidation on a failed
-      `Init` or `Start`.
+- [ ] Provide one-time, pre-start `Init`; a rejected `Init` returns false without
+      invalidating the transport.
+- [ ] Invalidate the transport on a failed `Start`.
 - [ ] Provide connectionless operation without admission, handshake, sessions, or
       peer lifecycle callbacks.
 - [ ] Create server endpoints atomically per equal source route.
@@ -594,6 +601,11 @@ result is named Carrier-Independent Core Conformant.
 - [ ] Recreate a server endpoint after the previous endpoint for the same source
       terminates.
 - [ ] Serialize all factory invocations globally.
+- [ ] Expose through a client handler only messages accepted from its configured
+      remote destination.
+- [ ] Never return `NotConnected` from `Send`.
+- [ ] Use equality and hash code as the only route-binding keys, never object
+      identity or cache lifetime.
 - [ ] Preserve complete-message boundaries and logical content for every
       delivery.
 - [ ] Permit loss, duplication, and reordering without claiming a stronger

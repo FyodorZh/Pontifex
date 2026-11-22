@@ -67,6 +67,10 @@ public interface IRRReliableClientTransport : IRRClientTransport
     SendResult Request(UnionDataList request, IRRReliableRequestHandler handler);
 }
 
+public interface IRRReliableTransport : IRRTransport
+{
+}
+
 public interface IRRReliableRequestHandler : IRRRequestHandler
 {
     void Response(UnionDataList response);
@@ -300,13 +304,16 @@ correlation header.
 
 ## 9. Send results
 
-After the shared handler checks of section 6.3, `Request` returns:
+An implementation **MUST** select a `Request` result in this order: the shared
+handler checks of section 6.3, which throw rather than return; transport state;
+message validity; message size; outbound capacity; other synchronous errors.
 
 | Result | Required meaning |
 | --- | --- |
 | `Ok` | The request was accepted; exactly one `Finish` will follow. |
 | `InvalidMessage` | The request is null or cannot be serialized. |
 | `MessageTooBig` | The payload exceeds `MessageMaxByteSize`. |
+| `InvalidAddress` | The client route is fixed at construction, so this transport never returns it. |
 | `NotConnected` | The client is not running. |
 | `BufferOverflow` | The implementation cannot accept the request because local capacity is full. |
 | `Error` | Another synchronous transport error occurred. |
@@ -397,6 +404,11 @@ No conformance controls are defined.
 - [ ] Suppress duplicates within the documented persistence scope.
 - [ ] Reject a handler that does not derive from `RRRequestHandler` with
       `ArgumentException`.
+- [ ] Throw `ArgumentNullException` for a null handler and
+      `InvalidOperationException` for an already-bound handler before consuming
+      the payload.
+- [ ] Start client-local ids from a fresh random value on every start and
+      increment them with 16-bit wraparound.
 - [ ] Publish `RequestId` before the first callback and before carrier
       visibility.
 - [ ] Accept responses only from `ServerEndPoint`.

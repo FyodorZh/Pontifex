@@ -75,6 +75,7 @@ boundary for isolation.
 | Reject path | Synchronous delivery, zero linger. |
 | Scheduling | Endpoint callbacks use the carrier's in-process scheduler. |
 | Logging | Channel failures are logged through `Log`. |
+| Capacity | Bounded by the channel queue; a full queue yields `BufferOverflow`. |
 
 ## 9. Implementer checklist
 

@@ -87,6 +87,7 @@ authentication, confidentiality, or integrity protection; TCP provides none.
 | Socket options | Keep-alive, buffer sizes, and no-delay follow the platform defaults used by the carrier. |
 | `disconnection_timeout` semantics | The carrier treats it as a grace period before tearing down a socket. |
 | Logging | Carrier failures are logged through `Log`; dropped packets are not logged. |
+| Capacity | Bounded by the socket send queue; a full queue yields `BufferOverflow`. |
 
 ## 9. Implementer checklist
 

@@ -72,6 +72,10 @@ public interface IRRUnreliableClientTransport : IRRClientTransport
         IRRUnreliableRequestHandler handler);
 }
 
+public interface IRRUnreliableTransport : IRRTransport
+{
+}
+
 public interface IRRUnreliableRequestHandler : IRRRequestHandler
 {
     void Response(UnionDataList response);
@@ -200,22 +204,14 @@ Neither side receives a timeout callback.
 
 ### 6.6 Responses and completion
 
-After the shared handler checks, `Request` returns:
-
-| Result | Required meaning |
-| --- | --- |
-| `Ok` | The request was accepted; the handler is bound and holds its client-local request id. |
-| `InvalidMessage` | The request is null or cannot be serialized. |
-| `MessageTooBig` | The serialized payload exceeds `MessageMaxByteSize`. |
-| `NotConnected` | The client transport is not running. |
-| `BufferOverflow` | The implementation cannot accept the request because local outbound capacity is full. |
-| `Error` | Another synchronous sending failure occurred. |
-| `Unknown` | Reserved enumeration value. `Request` never returns it. |
+`Request` returns a result from section 9.
 
 On `Ok`, `handler.RequestId` is the 16-bit client-local request id of the
-request, widened to `long`. The id enters the pending window before the frame is
-submitted to the carrier. The request may still be lost; `Ok` is not a peer or
-response guarantee.
+request. The 64-bit `long` id belongs to `IRRResponse.RequestId` and identifies
+the request on the server side.
+
+The id enters the pending window before the frame is submitted to the carrier.
+The request may still be lost; `Ok` is not a peer or response guarantee.
 
 If the carrier call fails after the id entered the pending window, the id
 **MUST** be removed, the handler **MUST** be unbound, and the call **MUST NOT**
@@ -300,9 +296,23 @@ header from `MessageMaxByteSize`.
 
 ## 9. Send results
 
-`Request` results are defined in section 6.6. `Response` results are defined in
-section 6.6. Every synchronous non-`Ok` result is non-fatal and **MUST NOT** by
-itself stop or invalidate the transport.
+An implementation **MUST** select a `Request` result in this order: the shared
+handler checks, which throw rather than return; transport state; message
+validity; message size; outbound capacity; other synchronous errors.
+
+| Result | Required meaning |
+| --- | --- |
+| `Ok` | The request was accepted; the handler is bound and holds its client-local request id. |
+| `InvalidMessage` | The request is null or cannot be serialized. |
+| `MessageTooBig` | The serialized payload exceeds `MessageMaxByteSize`. |
+| `InvalidAddress` | The client route is fixed at construction, so this transport never returns it. |
+| `NotConnected` | The client transport is not running. |
+| `BufferOverflow` | The implementation cannot accept the request because local outbound capacity is full. |
+| `Error` | Another synchronous sending failure occurred. |
+| `Unknown` | Reserved enumeration value. `Request` never returns it. |
+
+`Response` results are defined in section 6.6. Every synchronous non-`Ok` result
+is non-fatal and **MUST NOT** by itself stop or invalidate the transport.
 
 `BufferOverflow` and the other non-`Ok` results carry no retry signal.
 Applications choose their own retry and backpressure policy, and must obtain a
@@ -395,8 +405,14 @@ No conformance controls are defined.
 - [ ] Bind one server handler with a one-time, pre-start `Init`.
 - [ ] Keep server callbacks serialized and non-reentrant.
 - [ ] Keep each request handler's callbacks serialized and non-reentrant.
-- [ ] Assign client-local request ids and server-global ids unique for the
-      transport lifetime, starting at `1`.
+- [ ] Assign server-global ids unique for the transport lifetime, starting at
+      `1`.
+- [ ] Start client-local ids from a fresh random value on every start and
+      increment them with 16-bit wraparound.
+- [ ] Throw `ArgumentNullException` for a null handler before consuming the
+      payload.
+- [ ] Throw `InvalidOperationException` for an already-bound handler before
+      consuming the payload.
 - [ ] Bind the handler before submitting the request frame and publish its
       `RequestId`.
 - [ ] Deliver at most one response per request handler.
