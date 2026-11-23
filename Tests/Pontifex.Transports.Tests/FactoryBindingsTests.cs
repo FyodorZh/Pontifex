@@ -13,6 +13,8 @@ using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.Raw.Unreliable.Udp;
 using Pontifex.RR;
+using Pontifex.RR.Reliable;
+using Pontifex.RR.Reliable.Direct;
 using Pontifex.RR.Unreliable;
 using Pontifex.RR.Unreliable.Direct;
 using Pontifex.RR.Unreliable.Udp;
@@ -33,6 +35,8 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Server, "direct-raw-unreliable(\"node-1\")", TransportType.RawUnreliable),
         Case(Registration.TransportRole.Server, "direct-rr-unreliable(\"node-1\")", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Server, "direct-rr-unreliable(\"node-1\", response_ttl = 5)", TransportType.RRUnreliable),
+        Case(Registration.TransportRole.Server, "direct-rr-reliable(\"node-1\")", TransportType.RRReliable),
+        Case(Registration.TransportRole.Server, "direct-rr-reliable(\"node-1\", response_ttl = 5)", TransportType.RRReliable),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
@@ -47,6 +51,8 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Client, "direct-rr-unreliable(\"node-1\")", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Client, "direct-rr-unreliable(\"node-1\", request_ttl = 5)", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Client, "direct-rr-unreliable(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RRUnreliable),
+        Case(Registration.TransportRole.Client, "direct-rr-reliable(\"node-1\")", TransportType.RRReliable),
+        Case(Registration.TransportRole.Client, "direct-rr-reliable(\"node-1\", request_ttl = 5)", TransportType.RRReliable),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
@@ -92,6 +98,12 @@ public sealed class FactoryBindingsTests
         Assert.That(
             factory.Canonicalize("direct-rr-unreliable(\"node-1\", response_ttl = 5)"),
             Is.EqualTo("direct-rr-unreliable(node-1, response_ttl=5)"));
+        Assert.That(
+            factory.Canonicalize("DIRECT-RR-RELIABLE( \"node-1\", request_ttl = 5 )"),
+            Is.EqualTo("direct-rr-reliable(node-1, request_ttl=5)"));
+        Assert.That(
+            factory.Canonicalize("direct-rr-reliable(\"node-1\", response_ttl = 5)"),
+            Is.EqualTo("direct-rr-reliable(node-1, response_ttl=5)"));
         Assert.That(
             factory.Canonicalize("TCP(\"127.0.0.1\", 9000)"),
             Is.EqualTo("tcp(127.0.0.1, 9000)"));
@@ -397,6 +409,134 @@ public sealed class FactoryBindingsTests
         }
     }
 
+    [Test]
+    public void Compile_RRReliable_ExposesByteLimitAndTtlDefaults()
+    {
+        var factory = BuildFactory();
+
+        var serverTransport = factory.Compile(
+            "direct-rr-reliable(\"rr-node-1\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
+        var clientTransport = factory.Compile(
+            "direct-rr-reliable(\"rr-node-1\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
+
+        var server = (IRRReliableServerTransport)serverTransport;
+        var client = (IRRReliableClientTransport)clientTransport;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(server.MessageMaxByteSize, Is.EqualTo(1024 * 1024));
+            Assert.That(client.MessageMaxByteSize, Is.EqualTo(1024 * 1024));
+            Assert.That(server.ResponseTtl, Is.EqualTo(TimeSpan.FromSeconds(3)));
+            Assert.That(client.RequestTtl, Is.EqualTo(TimeSpan.FromSeconds(3)));
+        });
+    }
+
+    [Test]
+    public void Compile_RRReliable_ExposesExplicitTtls()
+    {
+        var factory = BuildFactory();
+
+        var server = (IRRReliableServerTransport)factory.Compile(
+            "direct-rr-reliable(\"rr-node-1\", response_ttl = 7)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
+        var client = (IRRReliableClientTransport)factory.Compile(
+            "direct-rr-reliable(\"rr-node-1\", request_ttl = 9)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(server.ResponseTtl, Is.EqualTo(TimeSpan.FromSeconds(7)));
+            Assert.That(client.RequestTtl, Is.EqualTo(TimeSpan.FromSeconds(9)));
+        });
+    }
+
+    [Test]
+    public void Compile_RRReliableWithWrongRoleTtl_Throws()
+    {
+        var factory = BuildFactory();
+
+        var serverException = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-rr-reliable(\"rr-node-1\", request_ttl = 5)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared)));
+        var clientException = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-rr-reliable(\"rr-node-1\", response_ttl = 5)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(serverException.InnerException, Is.TypeOf<ArgumentException>());
+            Assert.That(clientException.InnerException, Is.TypeOf<InvalidOperationException>());
+        });
+    }
+
+    [Test]
+    public void Compile_RRReliableDelivery_Throws()
+    {
+        var factory = BuildFactory();
+
+        var exception = Assert.Throws<FactoryException>(() => factory.Compile(
+            "direct-rr-reliable(\"rr-node-1\", delivery = { type = \"perfect\" })",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared)));
+
+        Assert.That(exception.Error.Code, Is.EqualTo("E_SEM_UNKNOWN_PARAM"));
+    }
+
+    [Test]
+    [Category("Integration")]
+    public void DirectRRReliableBinding_CompilesAndRoundTrips()
+    {
+        var factory = BuildFactory();
+        var serverId = "rr-reliable-bind-" + Guid.NewGuid().ToString("N");
+
+        var serverTransport = factory.Compile(
+            $"direct-rr-reliable(\"{serverId}\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
+        var clientTransport = factory.Compile(
+            $"direct-rr-reliable(\"{serverId}\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
+
+        var server = (IRRReliableServerTransport)serverTransport;
+        var client = (IRRReliableClientTransport)clientTransport;
+        using var serverHandler = new RecordingRRReliableServerHandler();
+        using var clientHandler = new RecordingRRReliableClientHandler();
+
+        try
+        {
+            Assert.That(server.Init(serverHandler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            Assert.That(client.Start(_ => { }), Is.True);
+
+            var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            request.PutLast(41);
+            Assert.That(client.Request(request, clientHandler), Is.EqualTo(SendResult.Ok));
+
+            Assert.That(serverHandler.Requested.Wait(Timeout), Is.True,
+                "the server must receive the request through the compiled binding");
+            Assert.That(clientHandler.Responded.Wait(Timeout), Is.True,
+                "the client must receive the response through the compiled binding");
+            Assert.That(clientHandler.Finished.Wait(Timeout), Is.True,
+                "the client must receive the completion through the compiled binding");
+            Assert.That(clientHandler.ResponseValue, Is.EqualTo(42));
+            Assert.That(clientHandler.Completion, Is.EqualTo(RRReliableCompletionType.Normal));
+        }
+        finally
+        {
+            client.Stop();
+            server.Stop();
+        }
+    }
+
     private static ITransportFactory BuildFactory()
     {
         var builder = TransportFactoryBootstrap.CreateBuilder();
@@ -410,6 +550,7 @@ public sealed class FactoryBindingsTests
         builder.RegisterTransport(RawReliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RRUnreliableDirectBinding.CreateRegistration());
+        builder.RegisterTransport(RRReliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableUdpBinding.CreateRegistration());
         builder.RegisterTransport(RRUnreliableUdpBinding.CreateRegistration());
@@ -558,6 +699,70 @@ public sealed class FactoryBindingsTests
                 Assert.That(response.Response(payload), Is.EqualTo(SendResult.Ok));
                 Requested.Set();
                 return true;
+            }
+            finally
+            {
+                request.Release();
+            }
+        }
+
+        public void Dispose()
+        {
+            Requested.Dispose();
+        }
+    }
+
+    private sealed class RecordingRRReliableClientHandler : RRRequestHandler,
+        IRRReliableRequestHandler, IDisposable
+    {
+        public ManualResetEventSlim Responded { get; } = new(false);
+
+        public ManualResetEventSlim Finished { get; } = new(false);
+
+        public int ResponseValue { get; private set; }
+
+        public RRReliableCompletionType? Completion { get; private set; }
+
+        public void Response(UnionDataList response)
+        {
+            try
+            {
+                ResponseValue = response.Elements[0].Alias.IntValue;
+                Responded.Set();
+            }
+            finally
+            {
+                response.Release();
+            }
+        }
+
+        public void Finish(RRReliableCompletionType type)
+        {
+            Completion = type;
+            Finished.Set();
+        }
+
+        public void Dispose()
+        {
+            Responded.Dispose();
+            Finished.Dispose();
+        }
+    }
+
+    private sealed class RecordingRRReliableServerHandler : IRRReliableServerHandler, IDisposable
+    {
+        public ManualResetEventSlim Requested { get; } = new(false);
+
+        public void OnRequested(IEndPoint client, UnionDataList request, IRRReliableResponse response)
+        {
+            try
+            {
+                int value = request.Elements[0].Alias.IntValue;
+                var payload = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+                payload.PutLast(value + 1);
+                Assert.That(response.Response(payload), Is.EqualTo(SendResult.Ok));
+                Assert.That(response.Finish(), Is.EqualTo(SendResult.Ok));
+                Requested.Set();
             }
             finally
             {

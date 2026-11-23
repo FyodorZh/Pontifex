@@ -123,7 +123,8 @@ New harness types belong in `Harness/`; groups must not contain harness.
 - The reusable RR unreliable core: it is covered by the core suites.
 - The VirtualDelivery algorithms and netem statistics: they belong to the
   VirtualDelivery suite.
-- The RRReliable core and the RRReliable Direct carrier: later stages.
+- The RRReliable core and the RRReliable Direct carrier: they have their own
+  suites.
 - Cross-process or socket behaviour: the Direct carrier is in-process only.
 
 ## Rules

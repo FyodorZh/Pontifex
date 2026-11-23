@@ -5,6 +5,7 @@ using Pontifex.Raw.Reliable.Direct;
 using Pontifex.Raw.Reliable.Tcp;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.Raw.Unreliable.Udp;
+using Pontifex.RR.Reliable.Direct;
 using Pontifex.RR.Unreliable.Direct;
 using Scriba;
 using Scriba.Consumers;
@@ -45,6 +46,7 @@ public static class TransportRegistry
         builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RRUnreliableDirectBinding.CreateRegistration());
+        builder.RegisterTransport(RRReliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableUdpBinding.CreateRegistration());
 
         Factory = builder.Build();
