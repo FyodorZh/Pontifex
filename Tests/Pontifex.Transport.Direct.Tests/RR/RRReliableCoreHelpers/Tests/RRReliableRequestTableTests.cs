@@ -107,6 +107,24 @@ public sealed class RRReliableRequestTableTests
         });
     }
 
+    [Test]
+    public void TakeAll_RemovesEveryEntryOutsideTheTableLock()
+    {
+        var table = new RRReliableRequestTable();
+
+        for (ushort id = 1; id <= 4; id++)
+        {
+            Assert.That(table.TryAdd(id, CreateHandler(id, out RRReliableRequestState state), state),
+                Is.True);
+        }
+
+        List<RRReliableRequestEntry> entries = table.TakeAll();
+
+        Assert.That(entries.Count, Is.EqualTo(4));
+        Assert.That(table.Count, Is.Zero);
+        Assert.That(table.TryGet(1, out _), Is.False);
+    }
+
     private static RecordingReliableRequestHandler CreateHandler(out RRReliableRequestState state)
     {
         return CreateHandler(0, out state);

@@ -117,6 +117,20 @@ namespace Pontifex.RR.Reliable
         }
 
         /// <summary>
+        /// Removes and returns every entry. The caller processes them outside the table lock, so a
+        /// state transition never runs while the table is locked.
+        /// </summary>
+        public List<RRReliableRequestEntry> TakeAll()
+        {
+            lock (_locker)
+            {
+                var entries = new List<RRReliableRequestEntry>(_entries.Values);
+                _entries.Clear();
+                return entries;
+            }
+        }
+
+        /// <summary>
         /// Removes every entry.
         /// </summary>
         /// <param name="onRemoved">Invoked for every removed entry while the table is

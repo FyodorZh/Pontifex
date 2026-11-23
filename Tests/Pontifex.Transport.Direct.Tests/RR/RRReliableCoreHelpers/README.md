@@ -103,7 +103,7 @@ New harness types belong in `Harness/`; groups must not contain harness.
 ## Out of scope
 
 - The client and server transport behaviour: the `RRReliableTransport` abstract
-  suite and the later client/server layers own it.
+  suite and its client and server layers own it.
 - Real timer firing: the production factory is tested for synchronous
   scheduling and disposal only; deterministic TTL tests use the manual factory.
 - The Direct carrier and binding: a later stage.

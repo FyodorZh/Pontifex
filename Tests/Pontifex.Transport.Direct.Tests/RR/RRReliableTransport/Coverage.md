@@ -31,9 +31,11 @@
 
 | Missing test | Owner layer |
 | --- | --- |
-| `RRReliableClientTransport` | Planned client layer (`Direct.RRReliableTransport.Client`), added with the core client behaviour. |
-| Client request lifecycle, ordered responses, cancellation, TTLs, and stop scheduling | Planned client layer. |
-| Client request-id allocation, provisional buffering, and callback pump | Planned client layer. |
+| None. The client and server layers exist and own their behaviour. | — |
+
+The root layer also hosts `Harness/ScriptedReliableCarrier.cs`, the deterministic
+carrier shared by the client and server layers. It has no self-tests; the two
+transport layers exercise it.
 
 ## Deferred By Design
 

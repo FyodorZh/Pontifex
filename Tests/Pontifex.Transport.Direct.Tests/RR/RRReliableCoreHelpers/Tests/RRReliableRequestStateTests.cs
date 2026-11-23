@@ -281,6 +281,78 @@ public sealed class RRReliableRequestStateTests
         late.Dispose();
     }
 
+    [Test]
+    public void HeldTerminal_WaitsForTheMissingExpectedOrdinal()
+    {
+        RRReliableRequestState state = CreateState();
+        Assert.That(state.TryAccept(), Is.True);
+        UnionDataList second = Payload(2);
+        UnionDataList first = Payload(1);
+
+        Assert.That(state.TryAcceptResponse(2, second),
+            Is.EqualTo(RRReliableResponseAcceptance.Buffered));
+        Assert.That(state.TryHoldTerminal(RRReliableCompletionType.Normal, out uint position),
+            Is.True);
+        Assert.That(position, Is.EqualTo(2u));
+        Assert.That(state.TryCompleteHeldTerminal(out _, out _), Is.False);
+        Assert.That(state.TryAcceptResponse(1, first),
+            Is.EqualTo(RRReliableResponseAcceptance.Ready));
+        Assert.That(state.TryTakeBufferedResponse(out UnionDataList ready), Is.True);
+        Assert.That(ready, Is.SameAs(second));
+        Assert.That(state.TryCompleteHeldTerminal(out RRReliableCompletionType completion, out _),
+            Is.True);
+        Assert.That(completion, Is.EqualTo(RRReliableCompletionType.Normal));
+        Assert.That(state.IsTerminal, Is.True);
+
+        first.Release();
+        ready.Release();
+    }
+
+    [Test]
+    public void HeldTerminal_CommitsImmediatelyWithoutAResponse()
+    {
+        RRReliableRequestState state = CreateState();
+        Assert.That(state.TryAccept(), Is.True);
+
+        Assert.That(state.TryHoldTerminal(RRReliableCompletionType.Normal, out uint position),
+            Is.True);
+        Assert.That(position, Is.Zero);
+        Assert.That(state.TryCompleteHeldTerminal(out RRReliableCompletionType completion, out _),
+            Is.True);
+        Assert.That(completion, Is.EqualTo(RRReliableCompletionType.Normal));
+    }
+
+    [Test]
+    public void AResponseAboveTheHeldTerminalPosition_IsDropped()
+    {
+        RRReliableRequestState state = CreateState();
+        Assert.That(state.TryAccept(), Is.True);
+        UnionDataList second = Payload(2);
+        UnionDataList third = Payload(3);
+
+        Assert.That(state.TryAcceptResponse(2, second),
+            Is.EqualTo(RRReliableResponseAcceptance.Buffered));
+        Assert.That(state.TryHoldTerminal(RRReliableCompletionType.Normal, out _), Is.True);
+        Assert.That(state.TryAcceptResponse(3, third),
+            Is.EqualTo(RRReliableResponseAcceptance.Dropped));
+        Assert.That(third.IsAlive, Is.False);
+
+        second.Release();
+    }
+
+    [Test]
+    public void AFirstTerminalCause_OverridesTheHeldTerminal()
+    {
+        RRReliableRequestState state = CreateState();
+        Assert.That(state.TryAccept(), Is.True);
+        Assert.That(state.TryHoldTerminal(RRReliableCompletionType.Normal, out _), Is.True);
+
+        Assert.That(state.TryBeginTerminal(RRReliableCompletionType.Canceled, out _), Is.True);
+        Assert.That(state.TryCompleteHeldTerminal(out _, out _), Is.False);
+        Assert.That(state.TakePendingTerminal(),
+            Is.EqualTo(RRReliableCompletionType.Canceled));
+    }
+
     private static RRReliableRequestState CreateState()
     {
         return new RRReliableRequestState(1, new RecordingReliableRequestHandler());

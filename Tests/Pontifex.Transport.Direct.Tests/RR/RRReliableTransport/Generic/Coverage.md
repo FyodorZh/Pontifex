@@ -25,14 +25,11 @@
 
 | Missing test | Owner layer |
 | --- | --- |
-| `RRReliableServerTransport` | Planned server layer (`Direct.RRReliableTransport.Server`), added with the core server behaviour. |
-| One-time `Init` mirroring and dispatch start/stop for the server | Planned server layer. |
-| Server dispatch queue gating before `OnStarted` | Planned server layer. |
-| Per-session response handles and duplicate suppression | Planned server layer. |
+| None. The server layer exists and owns the server behaviour. | — |
 
 ## Deferred By Design
 
 | Requirement | Reason |
 | --- | --- |
 | Carrier registration during `Init` | `Init` must not start carrier activity; the concrete carrier registers in `StartCarrier`. |
-| Handler callbacks during the initial-start window | The generic layer only exposes the gate; callback scheduling belongs to the planned client and server layers. |
+| Handler callbacks during the initial-start window | The generic layer only exposes the gate; callback scheduling belongs to the client and server layers. |

@@ -6,8 +6,11 @@
 carrier start and stop, payload validation, server-global id allocation, the
 frame-size ceiling, and the injectable TTL timer seam.
 `RRReliableTransport<THandler>` adds one-time `Init` and the dispatch gate that
-hides the server handler until `Start` succeeds. The suite pins that contract
-before the client and server layers are added.
+hides the server handler until `Start` succeeds.
+`RRReliableClientTransport` adds the request lifecycle, ordered responses,
+cancellation, TTLs, and the serialized callback pump.
+`RRReliableServerTransport` adds per-client sessions, duplicate suppression,
+response handles, the serialized `OnRequested` dispatch, and session closure.
 
 ## Suite type
 
@@ -22,14 +25,14 @@ Selected inheritance tree:
 
 ```text
 RRReliableTransport
+├── RRReliableClientTransport         (client layer)
 └── RRReliableTransport<THandler>
-    ├── RRReliableClientTransport     (planned, client layer)
-    └── RRReliableServerTransport     (planned, server layer)
+    └── RRReliableServerTransport     (server layer)
 ```
 
-The two planned concrete branches belong to the later core-behaviour stage. The
-client layer is recorded as planned in the root `Coverage.md`; the server layer
-is recorded as planned in the generic layer `Coverage.md`.
+The client layer declares the root as its inheritance parent; the server layer
+declares the generic layer as its inheritance parent. The server layer is placed
+beside the generic layer; directory nesting does not imply inheritance.
 
 ## Contract references
 
@@ -38,6 +41,9 @@ is recorded as planned in the generic layer `Coverage.md`.
 - [Shared RR specification](../../../../Pontifex/Abstractions/Transports/RR/Specification.md)
   — sections 7 and 11.
 - [RRReliableTransport.cs](../../../../Pontifex/Implementations/RR/Reliable/RRReliableTransport.cs)
+- [RRReliableClientTransport.cs](../../../../Pontifex/Implementations/RR/Reliable/RRReliableClientTransport.cs)
+- [RRReliableServerTransport.cs](../../../../Pontifex/Implementations/RR/Reliable/RRReliableServerTransport.cs)
+- [RRReliableResponse.cs](../../../../Pontifex/Implementations/RR/Reliable/RRReliableResponse.cs)
 - [IRRReliableTransport.cs](../../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTransport.cs)
 - [IRRReliableTimerFactory.cs](../../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTimerFactory.cs)
 
@@ -50,6 +56,8 @@ directory, inheritance parent, and coverage file.
 | --- | --- | --- | --- | --- |
 | `RRReliableTransport` | `Pontifex.RR.Reliable.RRReliableTransport` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport` | none (root) | [`Coverage.md`](Coverage.md) |
 | `RRReliableTransportGeneric` | `Pontifex.RR.Reliable.RRReliableTransport<THandler>` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Generic` | `RRReliableTransport` | [`Generic/Coverage.md`](Generic/Coverage.md) |
+| `RRReliableClientTransport` | `Pontifex.RR.Reliable.RRReliableClientTransport` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Client` | `RRReliableTransport` | [`Client/Coverage.md`](Client/Coverage.md) |
+| `RRReliableServerTransport` | `Pontifex.RR.Reliable.RRReliableServerTransport` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Server` | `RRReliableTransport<THandler>` | [`Server/Coverage.md`](Server/Coverage.md) |
 
 Directory nesting does not imply inheritance. The inheritance parent is the one
 declared in the table.
@@ -61,9 +69,12 @@ declared in the table.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
 - Test methods = `Scenario_ExpectedResult`, for example
   `Stop_SchedulesTerminalWorkBeforeOnStoppedBegins`.
-- Namespace = `Pontifex.Tests.RR.RRReliableTransport` for every file, including
-  harness files.
-- Every fixture carries `[Category("Direct.RRReliableTransport")]`.
+- Test namespace = `Pontifex.Tests.RR.RRReliableTransport`; harness namespaces
+  are `Pontifex.Tests.RR.RRReliableTransport.<Layer>.Harness`, so siblings do not
+  share a harness namespace.
+- Every fixture carries `[Category("Direct.RRReliableTransport")]`; the client
+  and server layers add `Direct.RRReliableTransport.Client` and
+  `Direct.RRReliableTransport.Server` respectively.
 
 ## Directory layout
 
@@ -74,11 +85,22 @@ RR/RRReliableTransport/
   RRReliableTransportTests.cs
   Harness/
     TestRRReliableTransport.cs
+    ScriptedReliableCarrier.cs
   Generic/                                           RRReliableTransport<THandler> layer
     Coverage.md
     RRReliableTransportGenericTests.cs
     Harness/
       TestRRReliableTransportGeneric.cs
+  Client/                                            RRReliableClientTransport layer
+    Coverage.md
+    RRReliableClientTransportTests.cs
+    Harness/
+      TestReliableClientTransport.cs
+  Server/                                            RRReliableServerTransport layer
+    Coverage.md
+    RRReliableServerTransportTests.cs
+    Harness/
+      TestReliableServerTransport.cs
 ```
 
 In an Abstract Test Suit, test files sit directly in their layer directory;
@@ -95,14 +117,25 @@ All harness types are hand-written and test-only:
 - `Generic/Harness/TestRRReliableTransportGeneric.cs` is a concrete
   carrier-free generic subject that exposes `DispatchHandler` and records carrier
   calls; it also holds the empty `TestReliableHandler`.
+- `Harness/ScriptedReliableCarrier.cs` is the deterministic scripted carrier
+  shared by the client and server layers. It records and queues frames, exposes
+  optional per-direction send overrides, and releases undelivered frames. It
+  lives in the root layer because that is the nearest common ancestor of the two
+  sibling layers; neither sibling references the other's harness.
+- `Client/Harness/TestReliableClientTransport.cs` is the concrete client subject
+  and its recording request handler.
+- `Server/Harness/TestReliableServerTransport.cs` is the concrete server subject
+  and its recording server handler.
 
 Each harness belongs to its own layer. The generic layer does not reference the
-root harness, and the root layer does not reference the generic harness.
+root harness, and the root layer does not reference the generic harness. The
+client and server layers reference only the root scripted carrier and their own
+harness.
 
 There are no harness self-tests, so the `Direct.RRReliableTransport.Harness`
 category is not used.
 
-The layer also uses the loose
+The suite also uses the loose
 [`ManualTimerFactory`](../TestSupport/ManualTimerFactory.cs) shared with the
 helpers suite.
 
@@ -112,15 +145,23 @@ Coverage is recorded per layer:
 
 - [`Coverage.md`](Coverage.md) — `RRReliableTransport`
 - [`Generic/Coverage.md`](Generic/Coverage.md) — `RRReliableTransport<THandler>`
+- [`Client/Coverage.md`](Client/Coverage.md) — `RRReliableClientTransport`
+- [`Server/Coverage.md`](Server/Coverage.md) — `RRReliableServerTransport`
 
 ## Categories and commands
 
 - Suite root category: `Direct.RRReliableTransport`. Every fixture carries it.
+- Additional client filter: `Direct.RRReliableTransport.Client`.
+- Additional server filter: `Direct.RRReliableTransport.Server`.
 - Harness category: not used (no harness self-tests).
 
 ```bash
 dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
   --filter "TestCategory=Direct.RRReliableTransport"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.RRReliableTransport.Client"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.RRReliableTransport.Server"
 ```
 
 ## Adding a layer
@@ -138,12 +179,12 @@ that layer's `Coverage.md` in the same change.
 
 ## Out of scope
 
-- The client and server transport behaviour: the planned client and server
-  layers of the later stage.
 - Concrete carriers, bindings, and in-process Direct channels.
 - Real timers and real time: the manual factory drives scheduling assertions.
 - The frame codec, request state, and request table: the
   `Direct.RRReliableCoreHelpers` suite owns them.
+- A live client-server round trip: the Direct carrier integration belongs to the
+  later Direct stage.
 
 ## Rules
 

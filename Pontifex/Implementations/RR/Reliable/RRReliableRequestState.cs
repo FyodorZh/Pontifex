@@ -87,9 +87,12 @@ namespace Pontifex.RR.Reliable
 
         private RRReliableRequestStatus _status = RRReliableRequestStatus.Provisional;
         private RRReliableCompletionType? _pendingTerminal;
+        private RRReliableCompletionType? _heldTerminal;
         private IDisposable? _timer;
         private bool _cancelRequested;
         private bool _callbackRunning;
+        private bool _terminalHeld;
+        private uint _terminalPosition;
         private uint _expectedOrdinal = 1;
         private uint _lastDeliveredOrdinal;
 
@@ -101,6 +104,17 @@ namespace Pontifex.RR.Reliable
             _handler = handler ?? throw new ArgumentNullException(nameof(handler));
             _clientLocalId = clientLocalId;
         }
+
+        /// <summary>
+        /// Gets the lock that guards the whole transition sequence of this request.
+        /// </summary>
+        /// <remarks>
+        /// The individual methods lock the same object and are therefore reentrant. The transport
+        /// holds this lock across several transitions and the callback posts that follow them, so
+        /// the per-request callback order matches the wire order even when frames arrive on
+        /// different threads.
+        /// </remarks>
+        internal object SyncRoot => _locker;
 
         /// <summary>Gets the client-local request id.</summary>
         public ushort ClientLocalId => _clientLocalId;
@@ -189,6 +203,35 @@ namespace Pontifex.RR.Reliable
             }
         }
 
+        /// <summary>
+        /// Gets whether a terminal frame arrived but is held behind a missing expected response
+        /// ordinal.
+        /// </summary>
+        public bool IsTerminalHeld
+        {
+            get
+            {
+                lock (_locker)
+                {
+                    return _terminalHeld;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the highest response ordinal that belongs before the held terminal frame.
+        /// </summary>
+        public uint TerminalPosition
+        {
+            get
+            {
+                lock (_locker)
+                {
+                    return _terminalPosition;
+                }
+            }
+        }
+
         /// <summary>Gets the number of frames held in the provisional buffer.</summary>
         public int ProvisionalBufferCount
         {
@@ -251,6 +294,69 @@ namespace Pontifex.RR.Reliable
                 }
 
                 _status = RRReliableRequestStatus.Terminal;
+                _terminalHeld = false;
+                _heldTerminal = null;
+                _pendingTerminal = completion;
+                deferred = _callbackRunning;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Holds an inbound terminal frame behind the expected response ordinal.
+        /// </summary>
+        /// <param name="completion">The completion type carried by the terminal frame.</param>
+        /// <param name="terminalPosition">The highest response ordinal that belongs before the
+        /// terminal frame.</param>
+        /// <returns><see langword="true"/> when the terminal was held; <see langword="false"/> when
+        /// the request is not accepted or already has a held terminal.</returns>
+        /// <remarks>
+        /// The position is the highest ordinal known at arrival: the last delivered ordinal or the
+        /// highest out-of-order response already buffered. Responses at or below it may still fill
+        /// the gap; a later response above it is a duplicate of a pre-terminal response and is
+        /// dropped.
+        /// </remarks>
+        public bool TryHoldTerminal(RRReliableCompletionType completion, out uint terminalPosition)
+        {
+            lock (_locker)
+            {
+                if (_status != RRReliableRequestStatus.Accepted || _terminalHeld)
+                {
+                    terminalPosition = 0;
+                    return false;
+                }
+
+                _terminalHeld = true;
+                _heldTerminal = completion;
+                _terminalPosition = Math.Max(_lastDeliveredOrdinal, HighestBufferedOrdinal());
+                terminalPosition = _terminalPosition;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Commits a held terminal once every response at or below its position has been delivered.
+        /// </summary>
+        /// <param name="completion">The held completion type when the method returns
+        /// <see langword="true"/>.</param>
+        /// <param name="deferred">Whether a callback was running, so the caller delivers the
+        /// completion after that callback returns.</param>
+        /// <returns><see langword="true"/> for the single call that commits the terminal.</returns>
+        public bool TryCompleteHeldTerminal(out RRReliableCompletionType completion, out bool deferred)
+        {
+            lock (_locker)
+            {
+                if (!_terminalHeld || _expectedOrdinal <= _terminalPosition)
+                {
+                    completion = default;
+                    deferred = false;
+                    return false;
+                }
+
+                _terminalHeld = false;
+                _status = RRReliableRequestStatus.Terminal;
+                completion = _heldTerminal ?? RRReliableCompletionType.Normal;
+                _heldTerminal = null;
                 _pendingTerminal = completion;
                 deferred = _callbackRunning;
                 return true;
@@ -434,6 +540,12 @@ namespace Pontifex.RR.Reliable
                     return RRReliableResponseAcceptance.Dropped;
                 }
 
+                if (_terminalHeld && ordinal > _terminalPosition)
+                {
+                    response.Release();
+                    return RRReliableResponseAcceptance.Dropped;
+                }
+
                 if (ordinal == _expectedOrdinal)
                 {
                     _expectedOrdinal++;
@@ -534,6 +646,21 @@ namespace Pontifex.RR.Reliable
             }
 
             timer?.Dispose();
+        }
+
+        private uint HighestBufferedOrdinal()
+        {
+            uint highest = 0;
+
+            foreach (uint ordinal in _outOfOrder.Keys)
+            {
+                if (ordinal > highest)
+                {
+                    highest = ordinal;
+                }
+            }
+
+            return highest;
         }
 
         private static void ReleaseAll(List<RRReliableBufferedFrame> frames)

@@ -45,12 +45,17 @@
 | `ProvisionalResponse_IsDroppedAndReleased` | Phase guard | A response for a provisional request is dropped and released | Provisional responses go through the provisional buffer instead. |
 | `BufferedResponses_DrainAfterTheTerminalTransition` | Ordered completion | A response buffered before the terminal frame still drains after the terminal transition | Prevents the state from hiding accepted responses behind the completion. |
 | `ReleaseBufferedResponses_ReleasesEveryOutOfOrderResponse` | Buffer ownership | Out-of-order responses are released on discard | Used on a terminal close. |
+| `HeldTerminal_WaitsForTheMissingExpectedOrdinal` | Held terminal | A terminal frame is held until the missing expected ordinal arrives and then drains the buffered responses | The terminal position is the highest known ordinal at arrival. |
+| `HeldTerminal_CommitsImmediatelyWithoutAResponse` | Zero-response completion | A terminal with no buffered response commits immediately | Zero-response finishes are not delayed. |
+| `AResponseAboveTheHeldTerminalPosition_IsDropped` | Held terminal suppression | A response above the held terminal position is dropped and released | It belongs to a pre-terminal stream position. |
+| `AFirstTerminalCause_OverridesTheHeldTerminal` | Terminal precedence | A later first cause overrides a held terminal that has not committed | Stop and cancel win over a delayed server terminal. |
 | `TrySetTimer_IsRefusedAfterTheTerminalTransition` | Timer ownership | A timer is stored while live, disposed on close, and refused after terminal | The caller disposes a refused handle. |
 | `AddAndGet_ReturnsTheEntryWithoutRemovingIt` | Non-removing lookup | A response lookup keeps the entry live | A reliable request spans many responses and one terminal frame. |
 | `AddDuplicate_ReturnsFalseAndKeepsTheFirstEntry` | Id uniqueness | A duplicate id reports failure and keeps the first entry | The client allocates ids through the retry loop. |
 | `TakeExact_RemovesOnlyTheMatchingState` | Owner removal | Removal succeeds only for the exact state reference | Guards against removing a newer request with a reused id. |
 | `Remove_RemovesTheEntryAndReportsWhetherItExisted` | Removal | Removal reports whether the id was present | Used for silent and terminal removals. |
 | `Clear_InvokesEveryEntryAndEmptiesTheTable` | Stop clearing | Clear visits every entry and empties the table | The callback runs while the table is locked, matching the unreliable table. |
+| `TakeAll_RemovesEveryEntryOutsideTheTableLock` | Stop clearing | TakeAll removes every entry and returns them for processing outside the table lock | The client clears provisional entries without nesting a state transition under the table lock. |
 | `ConcurrentAccess_AddsEveryEntryAndReadsThemSafely` | Lock protection | Parallel adds and reads see a consistent table | No entry is lost or observed with a foreign state. |
 | `Schedule_WithNullCallback_Throws` | Factory guard | A null callback throws | The factory never schedules a null action. |
 | `Schedule_WithNegativeDelay_Throws` | Factory guard | A negative delay throws | TTL delays are positive. |
@@ -68,7 +73,7 @@
 
 | Missing test | Owner layer |
 | --- | --- |
-| Client and server transport use of the state, table, and timer | `RRReliableTransport` suite and its planned client/server layers. |
+| Client and server transport use of the state, table, and timer | `RRReliableTransport` suite, client and server layers. |
 | Real timer fire and callback delivery | Root — deferred by design; the manual factory drives every deterministic TTL test. |
 
 ## Deferred By Design
