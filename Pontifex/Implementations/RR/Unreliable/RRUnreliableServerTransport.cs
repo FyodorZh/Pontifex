@@ -50,6 +50,11 @@ namespace Pontifex.RR.Unreliable
         public TimeSpan ResponseTtl => _responseTtl;
 
         /// <summary>
+        /// Gets the clock used by the response TTL.
+        /// </summary>
+        protected IDateTimeProvider TimeProvider => _timeProvider;
+
+        /// <summary>
         /// Sends one encoded frame to <paramref name="destination"/>.
         /// </summary>
         /// <param name="destination">The route that received the request.</param>
@@ -70,6 +75,18 @@ namespace Pontifex.RR.Unreliable
         /// the request but cannot answer it. A callback dispatcher would close this window.
         /// </remarks>
         protected void OnFrameReceived(IEndPoint source, UnionDataList frame)
+        {
+            OnFrameReceived(source, frame, _timeProvider.Now);
+        }
+
+        /// <summary>
+        /// Handles one inbound datagram whose receipt time is already known.
+        /// </summary>
+        /// <param name="source">The route that sent the datagram.</param>
+        /// <param name="frame">The received frame. The method owns it.</param>
+        /// <param name="receivedAt">The instant the carrier received the frame; the response TTL starts
+        /// here.</param>
+        internal void OnFrameReceived(IEndPoint source, UnionDataList frame, DateTime receivedAt)
         {
             if (frame == null!)
             {
@@ -101,7 +118,7 @@ namespace Pontifex.RR.Unreliable
             var response = new RRUnreliableResponse(
                 this,
                 requestId,
-                _timeProvider.Now + _responseTtl,
+                receivedAt + _responseTtl,
                 source,
                 clientRequestId);
 

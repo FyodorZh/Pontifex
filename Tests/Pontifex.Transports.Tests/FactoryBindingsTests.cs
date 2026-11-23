@@ -12,6 +12,9 @@ using Pontifex.Raw.Reliable.Zip;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.Raw.Unreliable.Udp;
+using Pontifex.RR;
+using Pontifex.RR.Unreliable;
+using Pontifex.RR.Unreliable.Direct;
 using Pontifex.RR.Unreliable.Udp;
 using Pontifex.TransportFormula;
 using Pontifex.Utils;
@@ -28,6 +31,8 @@ public sealed class FactoryBindingsTests
     {
         Case(Registration.TransportRole.Server, "direct(\"node-1\")", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "direct-raw-unreliable(\"node-1\")", TransportType.RawUnreliable),
+        Case(Registration.TransportRole.Server, "direct-rr-unreliable(\"node-1\")", TransportType.RRUnreliable),
+        Case(Registration.TransportRole.Server, "direct-rr-unreliable(\"node-1\", response_ttl = 5)", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Server, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
@@ -39,6 +44,9 @@ public sealed class FactoryBindingsTests
         Case(Registration.TransportRole.Client, "direct(\"node-1\")", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable(\"node-1\")", TransportType.RawUnreliable),
         Case(Registration.TransportRole.Client, "direct-raw-unreliable(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RawUnreliable),
+        Case(Registration.TransportRole.Client, "direct-rr-unreliable(\"node-1\")", TransportType.RRUnreliable),
+        Case(Registration.TransportRole.Client, "direct-rr-unreliable(\"node-1\", request_ttl = 5)", TransportType.RRUnreliable),
+        Case(Registration.TransportRole.Client, "direct-rr-unreliable(\"node-1\", delivery = { type = \"perfect\" })", TransportType.RRUnreliable),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "tcp(\"127.0.0.1\", 9000, disconnection_timeout = 10)", TransportType.RawReliable),
         Case(Registration.TransportRole.Client, "udp(\"127.0.0.1\", 9000)", TransportType.RawUnreliable),
@@ -78,6 +86,12 @@ public sealed class FactoryBindingsTests
         Assert.That(
             factory.Canonicalize("direct-raw-unreliable(\"node-1\", delivery = { type = \"netem\", latencyns = 1000, correlation = { delayrho = 1, lossrho = 2 }, delaydistribution = { values = [1, 2, 3] } })"),
             Is.EqualTo("direct-raw-unreliable(node-1, delivery={type=netem, latencyns=1000, correlation={delayrho=1, lossrho=2}, delaydistribution={values=[1, 2, 3]}})"));
+        Assert.That(
+            factory.Canonicalize("DIRECT-RR-UNRELIABLE( \"node-1\", request_ttl = 5, delivery = { type = \"perfect\" } )"),
+            Is.EqualTo("direct-rr-unreliable(node-1, request_ttl=5, delivery={type=perfect})"));
+        Assert.That(
+            factory.Canonicalize("direct-rr-unreliable(\"node-1\", response_ttl = 5)"),
+            Is.EqualTo("direct-rr-unreliable(node-1, response_ttl=5)"));
         Assert.That(
             factory.Canonicalize("TCP(\"127.0.0.1\", 9000)"),
             Is.EqualTo("tcp(127.0.0.1, 9000)"));
@@ -232,6 +246,157 @@ public sealed class FactoryBindingsTests
         return port;
     }
 
+    [Test]
+    public void Compile_RRUnreliable_ExposesByteLimitAndTtlDefaults()
+    {
+        var factory = BuildFactory();
+
+        var serverTransport = factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
+        var clientTransport = factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
+
+        var server = (IRRUnreliableServerTransport)serverTransport;
+        var client = (IRRUnreliableClientTransport)clientTransport;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(server.MessageMaxByteSize, Is.EqualTo(1024 * 1024));
+            Assert.That(client.MessageMaxByteSize, Is.EqualTo(1024 * 1024));
+            Assert.That(server.ResponseTtl, Is.EqualTo(TimeSpan.FromSeconds(3)));
+            Assert.That(client.RequestTtl, Is.EqualTo(TimeSpan.FromSeconds(3)));
+        });
+    }
+
+    [Test]
+    public void Compile_RRUnreliable_ExposesExplicitTtls()
+    {
+        var factory = BuildFactory();
+
+        var server = (IRRUnreliableServerTransport)factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\", response_ttl = 7)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
+        var client = (IRRUnreliableClientTransport)factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\", request_ttl = 9)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(server.ResponseTtl, Is.EqualTo(TimeSpan.FromSeconds(7)));
+            Assert.That(client.RequestTtl, Is.EqualTo(TimeSpan.FromSeconds(9)));
+        });
+    }
+
+    [Test]
+    public void Compile_RRUnreliableWithWrongRoleTtl_Throws()
+    {
+        var factory = BuildFactory();
+
+        var serverException = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\", request_ttl = 5)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared)));
+        var clientException = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\", response_ttl = 5)",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(serverException.InnerException, Is.TypeOf<ArgumentException>());
+            Assert.That(clientException.InnerException, Is.TypeOf<InvalidOperationException>());
+        });
+    }
+
+    [Test]
+    public void Compile_RRUnreliableServerDelivery_Throws()
+    {
+        var factory = BuildFactory();
+
+        var exception = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\", delivery = { type = \"perfect\" })",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared)));
+
+        Assert.That(exception.InnerException, Is.TypeOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Compile_RRUnreliableFourStateWithoutParameters_Throws()
+    {
+        var factory = BuildFactory();
+
+        var exception = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\", delivery = { type = \"netem\", lossmodel = \"fourState\" })",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared)));
+
+        Assert.That(exception.InnerException, Is.TypeOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Compile_RRUnreliableGilbertElliotWithoutParameters_Throws()
+    {
+        var factory = BuildFactory();
+
+        var exception = Assert.Throws<BuildException>(() => factory.Compile(
+            "direct-rr-unreliable(\"rr-node-1\", delivery = { type = \"netem\", lossmodel = \"gilbertElliot\" })",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared)));
+
+        Assert.That(exception.InnerException, Is.TypeOf<ArgumentException>());
+    }
+
+    [Test]
+    [Category("Integration")]
+    public void DirectRRUnreliableBinding_CompilesAndRoundTrips()
+    {
+        var factory = BuildFactory();
+        var serverId = "rr-bind-" + Guid.NewGuid().ToString("N");
+
+        var serverTransport = factory.Compile(
+            $"direct-rr-unreliable(\"{serverId}\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Server, new Logger([]), MemoryRental.Shared));
+        var clientTransport = factory.Compile(
+            $"direct-rr-unreliable(\"{serverId}\")",
+            factory.CreateCompiler(
+                Registration.TransportRole.Client, new Logger([]), MemoryRental.Shared));
+
+        var server = (IRRUnreliableServerTransport)serverTransport;
+        var client = (IRRUnreliableClientTransport)clientTransport;
+        using var serverHandler = new RecordingRRServerHandler();
+        using var clientHandler = new RecordingRRClientHandler();
+
+        try
+        {
+            Assert.That(server.Init(serverHandler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            Assert.That(client.Start(_ => { }), Is.True);
+
+            var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            request.PutLast(41);
+            Assert.That(client.Request(request, clientHandler), Is.EqualTo(SendResult.Ok));
+
+            Assert.That(serverHandler.Requested.Wait(Timeout), Is.True,
+                "the server must receive the request through the compiled binding");
+            Assert.That(clientHandler.Responded.Wait(Timeout), Is.True,
+                "the client must receive the response through the compiled binding");
+            Assert.That(clientHandler.ResponseValue, Is.EqualTo(42));
+        }
+        finally
+        {
+            client.Stop();
+            server.Stop();
+        }
+    }
+
     private static ITransportFactory BuildFactory()
     {
         var builder = TransportFactoryBootstrap.CreateBuilder();
@@ -244,6 +409,7 @@ public sealed class FactoryBindingsTests
 
         builder.RegisterTransport(RawReliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableDirectBinding.CreateRegistration());
+        builder.RegisterTransport(RRUnreliableDirectBinding.CreateRegistration());
         builder.RegisterTransport(RawReliableTcpBinding.CreateRegistration());
         builder.RegisterTransport(RawUnreliableUdpBinding.CreateRegistration());
         builder.RegisterTransport(RRUnreliableUdpBinding.CreateRegistration());
@@ -349,6 +515,59 @@ public sealed class FactoryBindingsTests
 
         public void OnStopped(StopReason reason)
         {
+        }
+    }
+
+    private sealed class RecordingRRClientHandler : RRRequestHandler, IRRUnreliableRequestHandler,
+        IDisposable
+    {
+        public ManualResetEventSlim Responded { get; } = new(false);
+
+        public int ResponseValue { get; private set; }
+
+        public void Response(UnionDataList response)
+        {
+            try
+            {
+                ResponseValue = response.Elements[0].Alias.IntValue;
+                Responded.Set();
+            }
+            finally
+            {
+                response.Release();
+            }
+        }
+
+        public void Dispose()
+        {
+            Responded.Dispose();
+        }
+    }
+
+    private sealed class RecordingRRServerHandler : IRRUnreliableServerHandler, IDisposable
+    {
+        public ManualResetEventSlim Requested { get; } = new(false);
+
+        public bool OnRequested(IEndPoint client, UnionDataList request, IRRUnreliableResponse response)
+        {
+            try
+            {
+                int value = request.Elements[0].Alias.IntValue;
+                var payload = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+                payload.PutLast(value + 1);
+                Assert.That(response.Response(payload), Is.EqualTo(SendResult.Ok));
+                Requested.Set();
+                return true;
+            }
+            finally
+            {
+                request.Release();
+            }
+        }
+
+        public void Dispose()
+        {
+            Requested.Dispose();
         }
     }
 

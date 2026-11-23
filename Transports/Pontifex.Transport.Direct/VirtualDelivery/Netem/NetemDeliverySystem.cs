@@ -322,7 +322,7 @@ namespace Pontifex.VirtualDelivery.Netem
             }
         }
 
-        private static ILossModel CreateLossModel(NetemConfig config)
+        internal static ILossModel CreateLossModel(NetemConfig config)
         {
             switch (config.LossModel)
             {

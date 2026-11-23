@@ -47,6 +47,12 @@ namespace Pontifex
         }
 
         /// <summary>
+        /// Gets the installed server handler, for carrier tests that must invoke a handler captured before a
+        /// stop.
+        /// </summary>
+        internal Action<IEndPoint, UnionDataList>? ServerHandlerForTests => _serverHandler;
+
+        /// <summary>
         /// It is possible and acceptable for messages that are processed right now to be undelivered.
         /// The most important invariant is to release messages.
         /// </summary>

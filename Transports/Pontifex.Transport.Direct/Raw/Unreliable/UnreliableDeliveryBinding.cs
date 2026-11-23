@@ -56,6 +56,39 @@ namespace Pontifex.Raw.Unreliable.Direct
             }
         }
 
+        /// <summary>
+        /// Validates a delivery value without constructing a threaded delivery system.
+        /// </summary>
+        /// <param name="value">The delivery value to validate.</param>
+        /// <exception cref="ArgumentException">The value is structurally invalid, names an unknown
+        /// type, or selects a loss model without its parameters.</exception>
+        internal static void Validate(ITransportStructValue value)
+        {
+            if (value is null)
+            {
+                throw new ArgumentNullException(nameof(value));
+            }
+
+            if (!value.TryGetString("type", out var type))
+            {
+                throw new ArgumentException(
+                    "The 'delivery' value requires a 'type' field.", nameof(value));
+            }
+
+            switch (type)
+            {
+                case "perfect":
+                    return;
+                case "netem":
+                    var config = ParseNetemConfig(value);
+                    _ = NetemDeliverySystem.CreateLossModel(config);
+                    return;
+                default:
+                    throw new ArgumentException(
+                        $"Unknown delivery type '{type}'.", nameof(value));
+            }
+        }
+
         private static IDeliverySystem BuildNetem(
             ITransportStructValue value,
             IMemoryRental memory)
