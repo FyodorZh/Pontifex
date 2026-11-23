@@ -41,12 +41,13 @@ The repository uses:
 2. No new third-party packages and no new test framework. Use NUnit and the
    existing hand-written harness style. `Tests/RULES.md` HARNESS-09 forbids
    mocking libraries.
-3. No public API removal. Additive optional parameters and internal seams are
-   allowed. The approved changes are: RawReliable Direct binding gains
-   `message_max_size`, `buffer_capacity_bytes`, and `handshake_timeout`;
-   `handshake_max_byte_size` range becomes `1..int.MaxValue`; Direct `id` is
-   protocol-scoped; the RawUnreliable Direct server reports reliable-debug mode
-   as unsupported.
+3. No public API removal. Additive optional parameters, additive protected
+   virtual/protected seams, and internal seams are allowed. The explicitly
+   approved additions are: RawReliable Direct binding gains `message_max_size`,
+   `buffer_capacity_bytes`, and `handshake_timeout`; the public
+   `IRawReliableHandshakeTimerFactory`; `handshake_max_byte_size` range becomes
+   `1..int.MaxValue`; Direct `id` is protocol-scoped; the RawUnreliable Direct
+   server reports reliable-debug mode as unsupported.
 4. Every behavioral change updates the owning implementation specification in
    the same stage. A specification line must not exceed 100 characters outside
    table rows.
@@ -216,8 +217,11 @@ precedence rules.
      internal `OnStopped`. A carrier that raised `Fail` or `Stop` inside
      `TryStart` has already performed its internal teardown once.
    - Invoke the user `_onStopped` callback only when `_startSucceeded` is true.
-     Any `Start` that returns false invalidates the transport and invokes no
-     user callback, whether `TryStart` returned false or a stop won inside it.
+     An **initial** start attempt that returns false invalidates the transport
+     and invokes no user callback, whether `TryStart` returned false or a stop
+     won inside it. A later `Start` that returns false because the transport is
+     already started, already stopped, or invalid does not change validity and
+     invokes no hooks.
    - Hit `BeforeStoppedCallbackGate` only around the user `_onStopped` call,
      never around the internal `OnStopped` teardown.
    - Keep the `FailNextStart` path unchanged: it fails before `_started` is
@@ -292,9 +296,11 @@ precedence rules.
      `Start_WhenTryStartReturnsFalse_InvalidatesTransportWithoutNotifications`
      and `Start_AfterFailedStart_ReturnsFalseWithoutHooks` keep zero terminal
      callbacks; the stop-during-`TryStart` test records one internal teardown,
-     zero user callbacks, and `IsValid == false`. In the `AnyTransport` test
-     double, record internal `OnStopped` and user `_onStopped` separately; do
-     not use one event list that cannot distinguish them.
+     zero user callbacks, and `IsValid == false`. `Start_CalledTwice` and
+     `Start_AfterStop` keep their existing validity and no-hook expectations.
+     In the `AnyTransport` test double, record internal `OnStopped` and user
+     `_onStopped` separately; do not use one event list that cannot distinguish
+     them.
    - Add L-02 combined-condition tests: stopped + oversized returns the state
      result; stopped + full budget returns the state result; stopped + null
      returns the state result; running + null returns `InvalidMessage`;
@@ -322,8 +328,10 @@ precedence rules.
 
 **Definition of done**
 
-A failed initial start is invalid and invokes no user `onStopped`, but its
-internal teardown still runs exactly once; post-start failures invoke
+A failed initial start is invalid and invokes no user `onStopped`. A plain
+`TryStart` false has zero internal teardown; a `Fail`/`Stop` raised inside
+`TryStart` has exactly one internal teardown. A second or post-stop `Start`
+returns false without changing validity. Post-start failures invoke
 `onStopped`; handler exceptions no longer stop endpoints; per-subscriber stop
 notification isolation is proven; and send-result precedence is state-first in
 all four shared paths.
@@ -368,8 +376,12 @@ hit the documented conformance gates.
    - In `FlushInbox`, return before `Handler.OnStarted` when `IsStopRequested`.
    - After `Handler.OnStarted` and `MarkStartCompleted`, return before opening
      the inbox or draining when `IsStopRequested`.
-   - Keep the inbox in `Buffering` in both cases; the `Stopped` subscription
-     releases it.
+   - Re-check `IsStopRequested` for every dequeued message inside the drain;
+     release the remaining buffered messages and stop draining as soon as a
+     stop is latched. A stop can be requested after the second check but before
+     or during the drain, and `Stop` does not take `_inboxLock`.
+   - Keep the inbox in `Buffering` or close it consistently; the `Stopped`
+     subscription releases anything not drained.
    - Move the `BeforeHandlerStoppedGate.Hit()` call out of `BeginStop` and into
      the `HandlerGate.OnStopped` path, after the `_startCompleted` check, so it
      hits only when `OnStopped` is about to be forwarded. Update the remarks.
@@ -386,8 +398,10 @@ hit the documented conformance gates.
      released, and the endpoint/transport stay alive.
    - Add a test that a factory-created handler is notified exactly once when
      endpoint creation returns null and when it throws.
-   - Add a test that `Stop` from `OnStarted` and a stop latched before the flush
-     action cannot deliver buffered messages afterwards.
+   - Add a test that `Stop` from `OnStarted`, a stop latched before the flush
+     action, and a stop requested during the drain cannot deliver buffered
+     messages afterwards. Use a gated handler or a large buffered batch to hit
+     the mid-drain window.
    - Add gate tests for `BeforeHandlerStoppedGate` on hard failure and not on a
      throwing `OnStarted`, and for the client commit gate on a disposed
      channel.
@@ -401,10 +415,11 @@ hit the documented conformance gates.
    behavior, and the corrected `onStopped` scheduling wording.
 6. Update the abstract
    `Pontifex/Abstractions/Transports/Raw/Unreliable/Specification.md` §6.2 and
-   §7.4 (or declare a bounded Direct deviation) to define the
-   factory-created-handler / declined-endpoint terminal notification. Add the
-   corresponding expectation to the UDP conformance adapter so the shared
-   behavior is covered outside Direct.
+   §7.4 to define the factory-created-handler / declined-endpoint terminal
+   notification. Do not declare a Direct-only deviation for this shared rule.
+   Cover it with the controllable Direct test that captures `ServerHandler` and
+   invokes it after channel disposal; do not add a UDP conformance expectation,
+   because the UDP carrier has no deterministic declined-endpoint path.
 
 **Verification**
 
@@ -458,8 +473,14 @@ that `Send` returns, and enforce the declared message-count budget at admission.
    - Expose a protected `WaitForSendReturn()` that the Direct commit workers
      call before delivering.
    - Add an internal `Action? BeforeSendReturnsForTests` hook invoked in the
-     `finally` before the barrier exits. A test can block there to force the
-     “commit worker ready while the sender is still in `Send`” state.
+     `finally` before the barrier exits. A test can block there to keep the
+     sender inside `Send`.
+   - Add an internal `Action? BeforeSendReturnWaitForTests` hook invoked by
+     `WaitForSendReturn()` on the commit worker immediately before it waits.
+     The test waits for this worker-side signal, then asserts no peer callback
+     has begun, releases `BeforeSendReturnsForTests`, and asserts delivery.
+     This makes the test fail if the barrier is missing; a sender-only hook
+     cannot distinguish “worker not scheduled” from “barrier held”.
 3. `Pontifex/Implementations/Endpoints/Raw/Unreliable/RawUnreliableServerEndpoint.cs`:
    - Wrap its `Send` override with the same barrier (the thread-static depth
      makes the nested base call safe).
@@ -496,15 +517,21 @@ that `Send` returns, and enforce the declared message-count budget at admission.
      `Tests/Pontifex.Tests`.
    - Add a Direct test that blocks the commit worker with 100 accepted
      messages, then asserts the 101st `Send` returns `BufferOverflow` and the
-     buffer is released. Use the existing blocking `TrackingDeliverySystem` /
-     `ScriptedDeliverySystem` pattern from
-     `Raw/RawUnreliableDirectDeliverySystemTests.cs`; unblocking the worker
-     must eventually release all 100 reservations.
+     buffer is released. Add a new shared
+     `Tests/Pontifex.Transport.Direct.Tests/Raw/TestSupport/BlockingDeliverySystem.cs`
+     with a `ManualResetEventSlim` gate and `Release()`; no existing double can
+     stall `Deliver`. Unblocking the worker must eventually release all 100
+     reservations.
    - Add an empty-message budget test: empty payloads count toward the same
      100-message admission bound.
-   - Add a send-return test using `BeforeSendReturnsForTests` to hold the
-     sender inside `Send` while the commit worker is ready; assert the peer
-     callback has not started. Release the gate and assert it then starts.
+   - Add a send-return test using both internal hooks: hold the sender inside
+     `Send`, wait for the commit worker at `BeforeSendReturnWaitForTests`,
+     assert the peer callback has not started, release the sender, and assert
+     the callback then starts.
+   - Add the same send-return test for a Direct server endpoint, and an
+     admission test that the server's existing shared `SendBudget` remains the
+     message bound. The new commit-slot hook applies to both endpoints; only
+     the client has the 100-message admission cap.
    - Update `Coverage.md` only where a documented suite exists.
 8. Update `Transports/Pontifex.Transport.Direct/Raw/Unreliable/Specification.md`
    §6 and §8 for the 100-message admission window and the commit-queue budget.
@@ -560,14 +587,16 @@ server reliable-debug answer truthful.
    - Remove the eager `new PerfectDeliverySystem()` field initializers.
      Replace both stored instances with client/server factory delegates that
      return a fresh `PerfectDeliverySystem` for the default configuration.
-     Keep the public `SetDeliverySystem(IDeliverySystem, IDeliverySystem)` API
-     for explicit instances and store them as single-use factories after taking
-     ownership.
+   - Add an internal `SetDeliverySystemFactory(Func<IDeliverySystem>
+     clientFactory, Func<IDeliverySystem> serverFactory)` used by the binding.
+     The public `SetDeliverySystem(IDeliverySystem, IDeliverySystem)` wraps
+     explicit instances in single-use factories after taking ownership.
    - `CreateEndpoint` materializes the two systems during start. A client
      transport creates exactly one endpoint per start and `Start` is one-time,
      so explicit systems are consumed once and no second-endpoint policy is
-     needed. If endpoint construction throws, release the systems and rethrow;
-     do not publish a hand-off flag for a failed endpoint.
+     needed. If endpoint construction throws, release the systems, reset both
+     factories to fresh perfect-system factories, and rethrow so a retry cannot
+     use a released instance and `StopCarrier` cannot release it twice.
    - Remove `_handedOffClientDeliverySystem`/`_handedOffServerDeliverySystem`
      or replace them with exact per-direction hand-off state. `StopCarrier`
      releases only systems that were never handed to an endpoint.
@@ -605,10 +634,12 @@ server reliable-debug answer truthful.
    - Wrap the whole `Connect` sequence (manager connect, handler assignment,
      both installs, subscription, disposed check) in `try`/`catch`.
    - On failure: release each system not taken by the channel exactly once,
-     dispose any obtained channel, log, and return null without failing the
-     endpoint. The current outbound buffer remains owned by `DoSendRaw`, which
-     already releases it when `Connect` returns null; do not release it again
-     inside `Connect`.
+     dispose any obtained channel, reset both directions to fresh
+     perfect-system factories (so the endpoint's next `DoSendRaw` retry does
+     not reinstall a released system), log, and return null without failing
+     the endpoint. The current outbound buffer remains owned by `DoSendRaw`,
+     which already releases it when `Connect` returns null; do not release it
+     again inside `Connect`.
    - A manager callback exception and a delivery-system install exception must
      not call `FailHard`.
    - If one install succeeds and the second throws, the channel owns the first;
@@ -634,13 +665,19 @@ server reliable-debug answer truthful.
      `SerializedCallbackQueue` unbounded path with many items and proves it
      allocates no huge array.
    - Add manager-callback-throw and install-throw tests proving the endpoint
-     survives, the outbound buffer is released exactly once, and the transport
-     does not stop.
+     survives, the outbound buffer is released exactly once, the transport does
+     not stop, and a subsequent send retries with fresh systems rather than a
+     released instance.
+   - Add a normal start -> stop release-count test with construction-counting
+     systems: each direction is released exactly once after a successful start
+     and stop.
    - Add a server reliable-debug test asserting `false`. Add an adapter
-     capability (for example `bool ServerSupportsReliableDebug`), set it false
-     for Direct and true for UDP, and update `EnableReliable` to assert the
-     server only where the adapter declares support. This keeps the UDP
-     server's `true` assertion.
+     capability (for example `bool ServerSupportsReliableDebug`) to
+     `IRawUnreliableConformanceAdapter`, set it false for Direct and true for
+     UDP. Make `EnableReliable` an instance method (or read the capability from
+     the fixture) so it can query `CreateAdapter()`; all 30 call sites keep
+     their `(client, fixture.Server)` shape. This keeps the UDP server's `true`
+     assertion.
    - Update `Coverage.md` only where a documented suite exists.
 8. Update `Transports/Pontifex.Transport.Direct/Raw/Unreliable/Specification.md`
    §5, §6, §7, and §8 for lazy construction, exact ownership, the client-only
@@ -721,6 +758,11 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      the frame is released and logged, and later traffic still flows.
    - Add payload-at-exactly-`MessageMaxByteSize` and one-byte-over tests in both
      directions.
+   - Update `Tests/Pontifex.Tests/Endpoints/RawReliable/Harness/TestRawReliableEndpoint.cs`
+     and any Direct harness that calls `ConnectAndComplete`: the connect-completed
+     latch must be armed by a test-visible completion path (use
+     `ExposedNotifyConnectedCore` or a dedicated `MarkConnectCompletedForTests`),
+     never by `MarkConnectedNotified`.
    - Add a test that injects a payload between the handshake response and the
      completion of `OnConnected`; assert it is not delivered to the handler.
    - Update `Coverage.md` only where a documented suite exists.
@@ -732,6 +774,7 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
 
 - `dotnet build Pontifex.sln`
 - `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj`
+- `dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj`
 - Expected: all pass; boundary payload tests pass; malformed frames do not stop
@@ -815,8 +858,11 @@ make the binding’s parameter ranges match the constructors.
      example `bool ValidateInboundHandshakeFrame(MessageType type, int
      totalSize)`, called by the sealed dispatcher before it pops the type. The
      handshake client overrides it and compares `totalSize` with
-     `_handshakeMaxByteSize`; the default returns true. This passes the exact
-     total without a shared mutable delta field.
+     `_handshakeMaxByteSize` only for `HandshakeResponseMessage` and
+     `HandshakeRejectMessage`; every other frame type returns true. The
+     server-side equivalent applies only to handshake request frames. The
+     default returns true. This passes the exact total without a shared mutable
+     delta field and cannot reject a normal payload above 128 bytes.
    - `RawReliableDirectServerTransport.SendRejection`: build the reject, add
      the type byte, measure the total, and if it is too large send a minimal
      reject with no text or close without sending. Release exactly once.
@@ -847,6 +893,10 @@ make the binding’s parameter ranges match the constructors.
    - Replace the stale `HasHandshakeTimer` assertion in
      `Tests/Pontifex.Transport.Direct.Tests/Raw/Reliable/RawReliable/RawReliableDirectTransportTests.cs`
      with the manual-timer state (the Direct client now creates a timer).
+   - Inject the manual `IRawReliableHandshakeTimerFactory` into every Direct
+     RawReliable client fixture, not only the timeout tests, so removing the
+     `null` override does not introduce a real `System.Threading.Timer` into
+     the default suite.
    - Add binding tests for `int.MaxValue` acceptance with
      `message_max_size = int.MaxValue`, `int.MaxValue + 1` rejection, a
      handshake maximum greater than the default 1 MB message maximum rejection,
@@ -862,6 +912,7 @@ make the binding’s parameter ranges match the constructors.
 
 - `dotnet build Pontifex.sln`
 - `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj`
+- `dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj`
 - Expected: all pass; the manual timeout tests complete without real-time
@@ -931,8 +982,9 @@ repeated release/Dispose correct and deterministically testable.
      `Slot.MaxDelayNs`, `Slot.DistDelayNs`, `Slot.DistJitterNs`,
      `Slot.MaxPackets`, and `Slot.MaxBytes`.
    - Treat cells as enabled exactly when `CellSize > 0`; `CellSize == 0`
-     disables them. Do not reject zero; reject a negative `CellSize` (the type
-     is `uint`, so only the binding parse can produce the equivalent).
+     disables them. Do not attempt a negative `CellSize` check: the type is
+     `uint` and the binding schema already constrains `cellsize` to
+     `0..uint.MaxValue`.
    - Delegate loss-model parameter validation to
      `NetemDeliverySystem.CreateLossModel`: `FourState` requires non-null
      `FourState`, `GilbertElliot` requires non-null `GilbertElliot`, and an
@@ -962,6 +1014,10 @@ repeated release/Dispose correct and deterministically testable.
      dispose-with-queued-messages.
    - Add `NetemConfig` validation tests for each negative field and an unknown
      `lossmodel` with `type = perfect`.
+   - Add `UnreliableDeliveryBindingTests` registration/schema tests: a negative
+     `packetoverhead`, `celloverhead`, `queuelimit`, `slot.maxpackets`, and
+     `slot.maxbytes` is rejected by the declared range, and an unknown
+     `lossmodel` with `type = perfect` is rejected during validation.
    - Add a duplication-at-the-queue-limit test.
    - Add concurrent/repeated `Clear` and `Dispose` tests.
    - Update `Tests/Pontifex.Transport.Direct.Tests/VirtualDelivery/Coverage.md`.
@@ -1035,8 +1091,10 @@ protocol.
      cross-protocol mixing. Update every production and test call site in this
      stage, including all server-stop `UnregisterServer` calls.
    - In `Connect`, if `InvokeOnChannelCreated` throws, remove the client entry,
-     dispose the channel, and rethrow or return null after logging. Do not leave
-     a registered channel.
+     dispose the channel, log nothing (the channel manager has no logger), and
+     return null. Do not rethrow: RawReliable client start must not become a
+     failed start because a server callback threw, and the RawUnreliable/M04
+     rule keeps the endpoint alive. Do not leave a registered channel.
 4. Update every Direct transport that registers/connects:
    - `RawUnreliableDirectClientEndpoint`/`ServerTransport` uses
      `RawUnreliableDirectInfo.TransportName`.
@@ -1075,6 +1133,7 @@ protocol.
 - `dotnet build Pontifex.sln`
 - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory=Direct.ChannelManager"`
 - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj`
+- `dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj`
 - Expected: all pass; teardown tests prove both systems are released and
   `Disposed` is raised; cross-protocol tests prove isolation.
@@ -1139,19 +1198,20 @@ transitions match abstract §6.6.
      return `Error`.
    - Ensure no request remains bound without a TTL after the exception.
 4. Add a deterministic dispatch-queue seam to `RRReliableServerTransport`:
+   - Change the nested `DispatchItem` type from `private` to `internal` so the
+     Direct test harness can name it. Keep the existing `protected` constructor
+     unchanged.
    - Add a separate `internal` constructor overload that takes
      `Func<int, string, Action<DispatchItem>, Action<DispatchItem>,
-     ISerializedCallbackQueue<DispatchItem>> dispatchQueueFactory`. Do not add
-     the parameter to the existing `protected` constructor and do not merely
-     change `DispatchItem` accessibility; an internal nested type in a
-     protected parameter is `CS0051`.
+     ISerializedCallbackQueue<DispatchItem>> dispatchQueueFactory`. The
+     internal constructor plus internal item type keeps the signature legal.
    - Default to `new SerializedCallbackQueue<DispatchItem>(...)`; store the
      field as `ISerializedCallbackQueue<DispatchItem>`.
-   - Add a `ManualCallbackQueue<T>` harness deriving from/implementing the
-     interface; tests keep their own reference to call `RunAll()`.
-   - Add a test-only `ManualCallbackQueue<T>` under the Direct test harness that
-     records posted items and exposes `RunAll()`/`RunOne()`.
-   - Use the manual queue in the state/stress tests; do not poll a worker.
+   - Add `ManualCallbackQueue<T>` in the shared non-suite
+     `Tests/Pontifex.Transport.Direct.Tests/RR/TestSupport/` folder, next to
+     `ManualTimerFactory.cs`; both RR suites reference it. It records posted
+     items and exposes `RunAll()`/`RunOne()`. Tests keep their own reference to
+     call it; do not poll a worker.
 5. Tests:
    - Put the concurrent session-map stress and response/TTL state tests in
      `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/` (that
@@ -1159,7 +1219,9 @@ transitions match abstract §6.6.
      put the Direct carrier wiring test in `RR/RRReliableDirect/Tests/`.
    - Add concurrent session-map stress: new requests on multiple threads,
      completion on manual dispatch/timers, cancel, and session close; assert no
-     exceptions, exactly-once completion, and the 65,536 cap.
+     exceptions, exactly-once completion, and the 65,536 cap. Put this
+     multithreaded fixture in category `Direct.RRReliable.Integration`; the
+     deterministic state tests stay in the default run.
    - Add state tests: `Finish` then `Reject` throws; failed `Finish` can be
      retried; failed `Reject` can be retried; TTL close then `Reject` returns
      `Error`; successful `Reject` then `Response`/`Finish` throw.
@@ -1204,7 +1266,8 @@ configured queue capacity.
 
 **Inputs**
 
-- Stage 1 and Stage 8 complete.
+- Stages 1, 8, and 9 complete. Stage 9 adds the shared
+  `ManualCallbackQueue<T>` in `Tests/Pontifex.Transport.Direct.Tests/RR/TestSupport/`.
 - Read `Pontifex/Implementations/RR/Unreliable/RRUnreliableClientTransport.cs`,
   `RRUnreliableDirectClient.cs`, `RRUnreliableDirectServer.cs`, and
   `Transports/Pontifex.Transport.Direct/RR/Unreliable/Specification.md` §5–§7.
@@ -1229,11 +1292,12 @@ configured queue capacity.
 3. `Transports/Pontifex.Transport.Direct/RR/Unreliable/RRUnreliableDirectServer.cs`:
    - Replace the `RRDirectInfo.DispatchQueueCapacity` comparison in
      `OnInbound` with `_queueCapacity`.
-   - Add an internal `IDispatchQueue<T>` interface that extends
+   - Add an internal `IDispatchQueue<T>` interface in the `Pontifex` assembly
+     next to `SerializedCallbackQueue<T>` (`Pontifex/Utils/`) that extends
      `ISerializedCallbackQueue<T>` and adds
      `event Action<Exception>? ExceptionHandler`. Implement it on
-     `SerializedCallbackQueue<T>` (the event already exists) and on the test
-     harness `ManualCallbackQueue<T>`.
+     `SerializedCallbackQueue<T>` (the event already exists). Do not declare the
+     interface in the Direct assembly: Pontifex cannot reference Direct.
    - Add an optional internal dispatch-queue factory delegate, defaulting to
      `new SerializedCallbackQueue<InboundFrame>(...)`. Store the field as
      `IDispatchQueue<InboundFrame>` so both the exception subscription and the
@@ -1404,7 +1468,9 @@ categories.
      and the guard file itself by full path.
    - Skip a file when its fixtures carry an `*.Integration` category.
    - Fail when a default fixture contains `Thread.Sleep`, `WaitFor`,
-     `SpinWait`, or a `DateTime.UtcNow` deadline.
+     `SpinWait`, a `DateTime.UtcNow` deadline, or a real
+     `System.Threading.Timer`/`new Timer`. Match the polling helper/pattern,
+     not the `WaitForSendReturn` seam or the guard's own literals.
    - The guard is a normal test in the default run; no external script or new
      package.
 6. Update `Tests/Pontifex.Transport.Direct.Tests/VirtualDelivery/README.md`,
@@ -1415,19 +1481,23 @@ categories.
 **Verification**
 
 - `dotnet build Pontifex.sln`
-- `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --settings Tests/Pontifex.Transport.Direct.Tests/default.runsettings`
-- Run the above command three times; all must pass.
-- `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --settings Tests/Pontifex.Transport.Direct.Tests/default.runsettings --list-tests` must list no `*.Integration` fixture.
-- The same `--list-tests` without `--settings` must list the integration fixtures.
-- `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory~Integration"`
-- Run the integration command once; it must pass.
+- `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory!~Integration" --logger "console;verbosity=normal"`
+- Run the above command three times; all must pass, and its output must not
+  contain `RRReliableDirectIntegrationTests` or `RRUnreliableDirectIntegrationTests`.
+- `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory~Integration" --logger "console;verbosity=normal"`
+- Run the integration command once; it must pass, and its output must contain
+  the known integration fixture names. This is the positive control for the
+  default filter.
 - The determinism guard must pass in the default run.
+- `git diff .github/workflows/build-test-deploy.yml` shows both the filtered
+  deterministic command and the separate `TestCategory~Integration` command.
+  A missing workflow edit fails the stage.
 
 **Definition of done**
 
 The default Direct suite has no wall-clock polling or uncontrolled background
-sleeps; integration facets are categorised and documented; repeated runs are
-stable.
+sleeps; integration facets are categorised and documented; the CI workflow runs
+the filtered default and a separate integration pass; repeated runs are stable.
 
 **Risks / notes**
 
@@ -1454,7 +1524,7 @@ with one entry per change and per audit finding.
    - `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj`
    - `dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj`
    - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj`
-   - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --settings Tests/Pontifex.Transport.Direct.Tests/default.runsettings`
+   - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory!~Integration"`
    - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory~Integration"`
    - Record the exact commands and results.
 2. Write `report.md` at the repository root. It must contain:
@@ -1479,9 +1549,10 @@ with one entry per change and per audit finding.
 **Verification**
 
 - `test -f report.md`
-- Extract the finding headings and compare the sorted set with `problems.md`:
-  `diff <(grep '^### [HML]-[0-9][0-9]' report.md | sed 's/^### //' | sort) <(grep '^### [HML]-[0-9][0-9]' problems.md | sed 's/^### //' | sort)`.
-  The diff must be empty.
+- Extract the bare finding IDs and compare the sorted set with `problems.md`:
+  `diff <(grep -o '^### [HML]-[0-9][0-9]' report.md | sed 's/^### //' | sort) <(grep -o '^### [HML]-[0-9][0-9]' problems.md | sed 's/^### //' | sort)`.
+  The diff must be empty. Report headings are the bare IDs (`### H-01`), not the
+  full `problems.md` title text.
 - For every finding subsection, `grep -A20 '^### <ID>' report.md` must contain
   the five labels `Problem:`, `Change:`, `Why:`, `Files:`, and `Verification:`;
   loop over the 46 IDs and fail on a missing label.
