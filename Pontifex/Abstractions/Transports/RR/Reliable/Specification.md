@@ -101,10 +101,20 @@ public enum RRReliableCompletionType
     Rejected,
     Failed
 }
+
+public interface IRRReliableTimerFactory
+{
+    IDisposable Schedule(TimeSpan delay, Action callback);
+}
 ```
 
 `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`, `IRRResponse`,
 `RRRequestHandler`, and `RRResponse` come from the shared contract.
+
+`IRRReliableTimerFactory` is the abstraction the type uses to schedule its TTL
+callbacks. It appears in protected constructors of the public abstract core
+types, so a carrier implementation supplies the clock-free timer seam. The core
+types default to a system timer when no factory is passed.
 
 The client binds no transport-level handler and has no `Init`; it is ready to
 start after construction. The server binds one `IRRReliableServerHandler`
@@ -112,8 +122,10 @@ through `Init`. Neither handler has `Started` or `Stopped` callbacks. Readiness
 is `Start` returning `true`; the stop signals are `onStopped`, the terminal
 completion, and closed response handles.
 
-The type adds no correlation header. `MessageMaxByteSize` excludes transport
-framing only.
+The type requires no correlation header; an implementation **MAY** add an
+implementation-defined header under section 12. `MessageMaxByteSize` is the
+serialized payload only: it excludes transport framing and that
+implementation-defined header.
 
 ## 5. Model
 
@@ -127,7 +139,7 @@ The server decides the outcome only through the response handle.
 | --- | --- | --- | --- |
 | Delivery | Exactly-once presentation per request, ordered responses, one completion per accepted request. | Handle every completion type; treat `Ok` as local acceptance. | Retries, reordering, and duplicate suppression internally. |
 | Sending | `Request` and `Response` return a `SendResult`; `Ok` is local acceptance. | Choose retry and backpressure policy; use a new payload for a retry. | Queue capacity and scheduling. |
-| Handlers | Per-request callbacks are serialized and non-reentrant; different requests may run concurrently. | Decide every response handle exactly once; release payloads. | Callback thread. |
+| Handlers | Callbacks for one request handler are serialized and non-reentrant; different request handlers may run concurrently. | Decide every response handle exactly once; release payloads. | Callback thread. |
 | Routing | Responses are accepted only from `ServerEndPoint`. | Treat the route as unauthenticated. | Addressing. |
 | Failure | A stopped or failed transport finishes pending requests with `Failed`. | Handle `Finish(Failed)` as a terminal outcome. | Failure detection and timing. |
 | Security | No authentication, authorization, confidentiality, integrity, or replay protection. | Protect the response handle and add the required protection. | Protection outside this contract. |
@@ -148,9 +160,10 @@ association and routing). The server binds one `IRRReliableServerHandler`.
 
 ### 6.3 Request acceptance
 
-`OnRequested` is invoked once for every request the transport presents. It may
-run concurrently for different requests; the transport provides no global
-serialization across requests.
+`OnRequested` is invoked once for every request the transport presents. The
+single server handler's callbacks are serialized and non-reentrant, matching
+the shared contract section 11; the transport provides no global serialization
+across transports.
 
 The handler owns the request reference and **MUST** release it exactly once.
 
@@ -175,8 +188,9 @@ nothing and the request keeps its state.
 ### 6.4 Identifiers and correlation
 
 Inherited from [the shared contract](../Specification.md), section 6.4
-(Identifiers and correlation). This type adds no correlation header; the
-client-local id is local bookkeeping and is not required on the wire.
+(Identifiers and correlation). This type requires no correlation header; the
+client-local id is local bookkeeping and is not required on the wire. An
+implementation **MAY** add an implementation-defined header under section 12.
 
 ### 6.5 Pending window and TTLs
 
@@ -294,13 +308,14 @@ before the transport `onStopped` callback begins.
 | Request rejected | one `Finish(Rejected)` or `Finish(Failed)` |
 | Request cancelled | one `Finish(Canceled)` |
 | Request TTL or response TTL expired | one `Finish(Failed)` |
-| Transport stops or fails | one `Finish(Failed)` per pending request, then `onStopped` |
+| Transport stops or fails | one `Finish(Failed)` per pending request, scheduled before `onStopped` begins; it may complete after |
 
 ## 8. Message model and limits
 
 Inherited from [the shared contract](../Specification.md), section 8 (Message
-model and limits). This type excludes transport framing only and adds no
-correlation header.
+model and limits). This type excludes transport framing and any
+implementation-defined header under section 12; it requires no correlation
+header.
 
 ## 9. Send results
 
@@ -353,7 +368,9 @@ boundary it cannot support. Implementations that persist work across restarts
 
 No ordering is guaranteed between different requests. Requests from one client,
 requests from different clients, and responses for different requests may be
-interleaved, delayed, or processed concurrently.
+interleaved, delayed, or handled concurrently by different request handlers. The
+single server handler's `OnRequested` callbacks remain serialized and
+non-reentrant.
 
 `Ok` from `Request`, `Response`, `Finish`, or `Reject` is local acceptance only.
 
@@ -413,10 +430,11 @@ No conformance controls are defined.
       visibility.
 - [ ] Accept responses only from `ServerEndPoint`.
 - [ ] Serialize callbacks per request handler and per response handle.
+- [ ] Serialize the single server handler's callbacks.
 - [ ] Enforce `RequestTtl` from the moment `Request` returns `Ok`.
 - [ ] Enforce `ResponseTtl` from the moment the request is received.
-- [ ] Finish every pending request with `Failed` on stop or failure, before
-      `onStopped` begins.
+- [ ] Finish every pending request with `Failed` on stop or failure, scheduled
+      before `onStopped` begins; it may complete after.
 - [ ] Close a handle after completion or expiry, and throw
       `InvalidOperationException` after `Reject`.
 - [ ] Enforce `MessageMaxByteSize` on sent and received payloads.
