@@ -128,6 +128,19 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <summary>
+        /// Gets whether the endpoint sent the handshake request and is still waiting for the response
+        /// or the reject frame.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: A concrete carrier that handles a rejection
+        /// synchronously uses this to ignore handshake frames that arrive outside the handshake
+        /// phase, matching the inherited scheduled path.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool IsHandshakePending => _stage == State.HandshakeSent;
+
+        /// <summary>
         /// Starts the transport handshake. The inherited keep-alive behavior is deliberately not started here;
         /// it starts only after the handshake response is accepted.
         /// </summary>

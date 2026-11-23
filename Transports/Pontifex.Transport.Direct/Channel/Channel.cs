@@ -11,8 +11,8 @@ namespace Pontifex
         private readonly IEndPoint _serverEp;
         private volatile Action<UnionDataList>? _clientHandler;
         private volatile Action<IEndPoint, UnionDataList>? _serverHandler;
-        private volatile IDeliverySystem _clientDeliverySystem;
-        private volatile IDeliverySystem _serverDeliverySystem;
+        private IDeliverySystem _clientDeliverySystem;
+        private IDeliverySystem _serverDeliverySystem;
         private int _disposed;
 
         /// <summary>
@@ -56,29 +56,81 @@ namespace Pontifex
         /// It is possible and acceptable for messages that are processed right now to be undelivered.
         /// The most important invariant is to release messages.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Ownership</b>: the channel owns the installed system and releases it
+        /// when the channel is disposed. A system installed after disposal, or losing a race with a
+        /// concurrent disposal, is released by this call instead, because the channel can no longer
+        /// own it. The caller therefore never owns an installed system.</description></item>
+        /// </list>
+        /// </remarks>
         public void SetClientDeliverySystem(IDeliverySystem clientDeliverySystem)
         {
-            if (clientDeliverySystem != _clientDeliverySystem)
-            {
-                clientDeliverySystem.Delivered += OnClientDeliveredMessage;
-                var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, clientDeliverySystem);
-                oldClient.Delivered -= OnClientDeliveredMessage;
-                DeliverySystemLifetime.Release(oldClient);
-            }
+            InstallDeliverySystem(ref _clientDeliverySystem, clientDeliverySystem,
+                OnClientDeliveredMessage);
         }
 
         /// <summary>
         /// It is possible and acceptable for messages that are processed right now to be undelivered.
         /// The most important invariant is to release messages.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Ownership</b>: the channel owns the installed system and releases it
+        /// when the channel is disposed. A system installed after disposal, or losing a race with a
+        /// concurrent disposal, is released by this call instead, because the channel can no longer
+        /// own it. The caller therefore never owns an installed system.</description></item>
+        /// </list>
+        /// </remarks>
         public void SetServerDeliverySystem(IDeliverySystem serverDeliverySystem)
         {
-            if (serverDeliverySystem != _serverDeliverySystem)
+            InstallDeliverySystem(ref _serverDeliverySystem, serverDeliverySystem,
+                OnServerDeliveredMessage);
+        }
+
+        /// <summary>
+        /// Installs one delivery system, keeping the ownership rule that a system is released either
+        /// by the channel's disposal or by the install itself, never by both and never by neither.
+        /// </summary>
+        private void InstallDeliverySystem(ref IDeliverySystem field, IDeliverySystem system,
+            Action<UnionDataList> handler)
+        {
+            if (system == null)
             {
-                serverDeliverySystem.Delivered += OnServerDeliveredMessage;
-                var oldServer = Interlocked.Exchange(ref _serverDeliverySystem, serverDeliverySystem);
-                oldServer.Delivered -= OnServerDeliveredMessage;
-                DeliverySystemLifetime.Release(oldServer);
+                throw new ArgumentNullException(nameof(system));
+            }
+
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                DeliverySystemLifetime.Release(system);
+                return;
+            }
+
+            system.Delivered += handler;
+            IDeliverySystem old = Interlocked.Exchange(ref field, system);
+
+            if (ReferenceEquals(old, system))
+            {
+                // Re-installing the current instance keeps a single subscription.
+                system.Delivered -= handler;
+                return;
+            }
+
+            old.Delivered -= handler;
+            DeliverySystemLifetime.Release(old);
+
+            if (Volatile.Read(ref _disposed) == 0)
+            {
+                return;
+            }
+
+            // A disposal raced this install. The disposal exchanges each field and releases what it
+            // finds, so if it exchanged before the install it never saw the new system. The
+            // compare-exchange succeeds only in that case: take the system back and release it.
+            if (ReferenceEquals(Interlocked.CompareExchange(ref field, old, system), system))
+            {
+                system.Delivered -= handler;
+                DeliverySystemLifetime.Release(system);
             }
         }
         
@@ -110,7 +162,7 @@ namespace Pontifex
                 return SendResult.NotConnected;
             }
 
-            _clientDeliverySystem.Deliver(message);
+            Volatile.Read(ref _clientDeliverySystem).Deliver(message);
             return SendResult.Ok;
         }
 
@@ -122,7 +174,7 @@ namespace Pontifex
                 return SendResult.NotConnected;
             }
 
-            _serverDeliverySystem.Deliver(message);
+            Volatile.Read(ref _serverDeliverySystem).Deliver(message);
             return SendResult.Ok;
         }
 

@@ -54,6 +54,7 @@
 | `Rate_one_byte_per_sec_gives_ns_per_byte` | Rate unit conversion | One byte per second yields 500,000,000,000 ns for 500 bytes | Pins the bytes-to-nanoseconds conversion. |
 | `Empty_packet_has_minimal_time` | Empty packet | An empty packet takes less time than a one-byte packet | Pins the minimum packet handling. |
 | `Cell_size_zero_does_not_round` | Disabled cells | Without a cell size, an adjacent one-byte increase changes the time | Proves the rounding branch is bypassed. |
+| `SaturatedLossWithDuplication_DropsThePacket` | Duplication and loss ordering | A packet with both probabilities saturated is released synchronously, not delivered as the surviving duplicate | The base latency is one hour, so a queued packet would stay alive; the assertion distinguishes a drop from a delay without waiting on the dequeue thread. |
 
 ## Planned
 
@@ -61,7 +62,7 @@
 | --- | --- |
 | Uniform jitter fallback without a `DelayDistribution`: the formula lives in `NetemDeliverySystem.CalculateBaseDelay`. | Root |
 | `SlotScheduler`: enabled/disabled slots, packet and byte caps, uniform and distribution spacing, reset. | Root |
-| `NetemDeliverySystem`: duplication, loss, queue limit, reorder, delay, slot gating, drop release, disposal. | Root |
+| `NetemDeliverySystem` pipeline: queue limit, delay and jitter, reorder, slot gating, duplicate delivery, and disposal with queued messages. | Root |
 | `NetemConfig` defaults and the rate-limiter chain behavior under sustained traffic. | Root |
 | `RateLimiter` leaky-bucket sequence, not only per-packet time. | Root |
 

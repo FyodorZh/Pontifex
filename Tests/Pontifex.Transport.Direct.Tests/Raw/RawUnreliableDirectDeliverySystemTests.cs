@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Actuarius.Memory;
+using Pontifex.Endpoints;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.StopReasons;
@@ -53,6 +54,51 @@ public sealed class RawUnreliableDirectDeliverySystemTests
             Assert.That(serverDelivery.DisposeCount, Is.EqualTo(1),
                 "The transport did not release a configured system that was never installed.");
         });
+    }
+
+    [Test]
+    public void ClientSend_ToAServerThatRejectsTheChannel_ReleasesTheConfiguredSystems()
+    {
+        string serverName = "rejects-" + Guid.NewGuid().ToString("N");
+        var serverEndPoint = new StringEndPoint(serverName);
+        Assert.That(ChannelManager.Instance.RegisterServer(serverEndPoint, channel => channel.Dispose()),
+            Is.True);
+
+        try
+        {
+            var client = new RawUnreliableDirectClientTransport(
+                serverName, Logger, MemoryRental.Shared);
+            var clientDelivery = new TrackingDeliverySystem();
+            var serverDelivery = new TrackingDeliverySystem();
+
+            client.SetDeliverySystem(clientDelivery, serverDelivery);
+            Assert.That(client.Init(new NoopHandler()), Is.True);
+
+            using var transportStopped = new ManualResetEventSlim(false);
+            Assert.That(client.Start(_ => transportStopped.Set()), Is.True);
+
+            var endpoint = client.CurrentEndpoint;
+            Assert.That(endpoint, Is.Not.Null);
+
+            var message = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            message.PutLast(1);
+            Assert.That(endpoint!.Send(message), Is.EqualTo(SendResult.Ok));
+
+            Assert.That(transportStopped.Wait(TimeSpan.FromSeconds(5)), Is.True,
+                "The client transport did not stop after the rejected channel.");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(clientDelivery.DisposeCount, Is.EqualTo(1),
+                    "A system installed on a rejected channel was leaked.");
+                Assert.That(serverDelivery.DisposeCount, Is.EqualTo(1),
+                    "A system installed on a rejected channel was leaked.");
+            });
+        }
+        finally
+        {
+            ChannelManager.Instance.UnregisterServer(serverEndPoint);
+        }
     }
 
     [Test]

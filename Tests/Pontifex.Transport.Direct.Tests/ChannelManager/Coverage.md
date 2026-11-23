@@ -27,6 +27,8 @@
 | `ReplacingTheServerDeliverySystem_ReleasesTheOldSystem` | Delivery-system ownership | Replacing the server direction clears and disposes the old system | Companion to the client direction. |
 | `DisposingTheChannel_ReleasesBothDeliverySystems` | Delivery-system ownership | Channel disposal releases both installed systems exactly once | The channel swaps in perfect systems before releasing the old ones. |
 | `SettingTheSameClientDeliverySystem_DoesNotReleaseIt` | Delivery-system idempotence | Re-setting the current instance is a no-op | Guards the identity check that prevents self-disposal. |
+| `SettingAClientDeliverySystemOnADisposedChannel_ReleasesIt` | Delivery-system ownership | Installing on a disposed channel releases the system instead of leaking it | The channel has already released everything it owned, so it cannot own a late install; a carrier may install on a channel the peer rejected synchronously. |
+| `SettingAServerDeliverySystemOnADisposedChannel_ReleasesIt` | Delivery-system ownership | Companion to the client direction | Same ownership rule for the server-bound direction. |
 | `RegisterServer_WithAUniqueEndPoint_ReturnsTrue` | Server registration | A unique server endpoint is accepted | Each test uses a unique name because the registry is process-wide. |
 | `RegisterServer_WithADuplicateEndPoint_ReturnsFalse` | Server registration | A second registration of the same endpoint is rejected | The first registration remains in effect. |
 | `RegisterServer_WithAnEqualEndPoint_ReturnsFalse` | Registration key | Equality, not object identity, rejects an equal endpoint | `StringEndPoint` equality is the registry key. |

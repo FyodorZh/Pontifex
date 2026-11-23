@@ -24,6 +24,7 @@ namespace Pontifex.RR.Direct
         private volatile Channel? _channel;
         private Action? _disposedSubscription;
         private bool _liveSessionReported;
+        private bool _stopped;
 
         public DirectRrChannelClient(
             IEndPoint server,
@@ -80,8 +81,13 @@ namespace Pontifex.RR.Direct
                 if (notifyLive)
                 {
                     _liveSessionReported = true;
-                    _onLiveSession?.Invoke();
                 }
+            }
+
+            if (notifyLive)
+            {
+                // Owner callbacks run outside the carrier lock: the owner may re-enter the carrier.
+                _onLiveSession?.Invoke();
             }
 
             Purge(purgeChannel);
@@ -92,27 +98,39 @@ namespace Pontifex.RR.Direct
         /// <summary>
         /// Stops the carrier, removing its channel from the server registry.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The stopped state is latched under the carrier lock,
+        /// so a send that races the stop can never reconnect, and the registry entry is removed under
+        /// the same lock, so a racing send cannot be refused by a stale entry.</description></item>
+        /// </list>
+        /// </remarks>
         public void Stop()
         {
             Channel? channel;
-            Action? subscription;
 
             lock (_lock)
             {
+                _stopped = true;
                 channel = _channel;
-                subscription = _disposedSubscription;
                 _channel = null;
+
+                if (channel != null && _disposedSubscription != null)
+                {
+                    channel.Disposed -= _disposedSubscription;
+                }
+
                 _disposedSubscription = null;
+
+                if (channel != null)
+                {
+                    ChannelManager.Instance.Disconnect(_server, _client);
+                }
             }
 
             if (channel == null)
             {
                 return;
-            }
-
-            if (subscription != null)
-            {
-                channel.Disposed -= subscription;
             }
 
             Purge(channel);
@@ -123,6 +141,12 @@ namespace Pontifex.RR.Direct
         {
             purgeChannel = null;
             notifyLive = false;
+
+            if (_stopped)
+            {
+                frame.Release();
+                return acceptWithoutPeer ? SendResult.Ok : SendResult.Error;
+            }
 
             Channel? channel = _channel;
             if (channel != null && channel.IsDisposed)
@@ -170,9 +194,10 @@ namespace Pontifex.RR.Direct
 
             if (result == SendResult.NotConnected)
             {
-                // The channel already released the frame. Clearing first makes the reentrant disposal
-                // notification skip the owner callback.
+                // The channel already released the frame. Clearing and removing the registry entry
+                // happens under the lock, so a concurrent send cannot reconnect into a stale entry.
                 ClearChannelUnderLock();
+                ChannelManager.Instance.Disconnect(_server, _client);
                 purgeChannel = channel;
                 return acceptWithoutPeer ? SendResult.Ok : SendResult.Error;
             }
@@ -231,8 +256,8 @@ namespace Pontifex.RR.Direct
                     subscription = null;
                     channel.ClientHandler = null;
                     purgeChannel = channel;
-                    ReleaseCreated(clientToServer, clientToServerInstalled, channel);
-                    ReleaseCreated(serverToClient, serverToClientInstalled, channel);
+                    ReleaseCreated(clientToServer, clientToServerInstalled);
+                    ReleaseCreated(serverToClient, serverToClientInstalled);
                     frame.Release();
                     return acceptWithoutPeer ? SendResult.Ok : SendResult.Error;
                 }
@@ -256,8 +281,8 @@ namespace Pontifex.RR.Direct
                     purgeChannel = channel;
                 }
 
-                ReleaseCreated(clientToServer, clientToServerInstalled, channel);
-                ReleaseCreated(serverToClient, serverToClientInstalled, channel);
+                ReleaseCreated(clientToServer, clientToServerInstalled);
+                ReleaseCreated(serverToClient, serverToClientInstalled);
 
                 frame.Release();
                 return SendResult.Error;
@@ -285,10 +310,11 @@ namespace Pontifex.RR.Direct
                     _disposedSubscription = null;
                 }
 
+                // Remove the registry entry under the lock for the same reason as Stop: a send that
+                // races this notification must not be refused by a stale entry.
+                ChannelManager.Instance.Disconnect(_server, _client);
                 notify = true;
             }
-
-            ChannelManager.Instance.Disconnect(_server, _client);
 
             if (notify)
             {
@@ -324,18 +350,13 @@ namespace Pontifex.RR.Direct
             }
         }
 
-        private static void ReleaseCreated(IDeliverySystem? system, bool installed, Channel? channel)
+        private static void ReleaseCreated(IDeliverySystem? system, bool installed)
         {
-            if (system == null)
+            if (system == null || installed)
             {
-                return;
-            }
-
-            // A live channel owns its installed systems and releases them when it is disposed. Once the
-            // channel is disposed it cannot own a system installed afterwards: the disposal already
-            // exchanged and released both delivery systems, so a late install would leak.
-            if (installed && channel != null && !channel.IsDisposed)
-            {
+                // An installed system is owned by the channel until its disposal, or was released by
+                // the install itself when the channel was already disposed. The carrier must not
+                // release it a second time.
                 return;
             }
 

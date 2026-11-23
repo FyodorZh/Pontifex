@@ -61,6 +61,21 @@ namespace Pontifex.Raw.Unreliable.Direct
         }
 
         /// <inheritdoc/>
+        protected override void BeginStart()
+        {
+            if (_channel.IsDisposed)
+            {
+                // The peer disposed the channel after this endpoint was created but before it could
+                // start, so the subscription above never received the notification. Stop first: the
+                // one-shot stop invalidates the endpoint, releases the trigger with the inbox, and
+                // removes the route through the transport's terminal subscription.
+                ((IRawUnreliableEndpoint)this).Stop(new UnknownRemoteIntention(TransportName));
+            }
+
+            base.BeginStart();
+        }
+
+        /// <inheritdoc/>
         protected override void DoSendRaw(UnionDataList bufferToSend)
         {
             if (_channel.IsDisposed || !_sendQueue.Post(bufferToSend))

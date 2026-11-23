@@ -261,6 +261,40 @@ public sealed class ChannelTests
         });
     }
 
+    [Test]
+    public void SettingAClientDeliverySystemOnADisposedChannel_ReleasesIt()
+    {
+        var channel = NewChannel(out _);
+        channel.Dispose();
+        var system = new TrackingDeliverySystem();
+
+        channel.SetClientDeliverySystem(system);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(system.ClearCount, Is.EqualTo(1),
+                "The install must release a system it cannot own.");
+            Assert.That(system.DisposeCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void SettingAServerDeliverySystemOnADisposedChannel_ReleasesIt()
+    {
+        var channel = NewChannel(out _);
+        channel.Dispose();
+        var system = new TrackingDeliverySystem();
+
+        channel.SetServerDeliverySystem(system);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(system.ClearCount, Is.EqualTo(1),
+                "The install must release a system it cannot own.");
+            Assert.That(system.DisposeCount, Is.EqualTo(1));
+        });
+    }
+
     private static Channel NewChannel(out IEndPoint clientEndPoint)
     {
         clientEndPoint = new StringEndPoint("client-" + Guid.NewGuid().ToString("N"));

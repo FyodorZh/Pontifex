@@ -172,9 +172,15 @@ namespace Pontifex.Raw.Unreliable.Direct
             }
 
             channel.ClientHandler = OnChannelMessage;
+
+            // The channel owns an installed system and releases it when the channel is disposed. A
+            // system installed on a channel that was already rejected is released by the install
+            // itself. Either way the endpoint must never release an installed system again, so the
+            // ownership flag is published before the installs.
+            _deliverySystemsInstalled = true;
             channel.SetClientDeliverySystem(_clientDeliverySystem);
             channel.SetServerDeliverySystem(_serverDeliverySystem);
-            _deliverySystemsInstalled = true;
+
             channel.Disposed += _onChannelDisposed;
             _channel = channel;
 
@@ -231,6 +237,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             if (!_deliverySystemsInstalled)
             {
+                // No channel ever took ownership: release the configured systems here.
                 DeliverySystemLifetime.Release(_clientDeliverySystem);
                 if (!ReferenceEquals(_clientDeliverySystem, _serverDeliverySystem))
                 {

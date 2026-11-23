@@ -10,6 +10,7 @@ namespace Pontifex.VirtualDelivery.Netem
 
         private readonly SlotConfig _config;
         private readonly DistributionTable? _dist;
+        private readonly Random _random = new Random();
 
         private long _slotNext;
         private int _packetsLeft;
@@ -51,7 +52,7 @@ namespace Pontifex.VirtualDelivery.Netem
                     long range = _config.MaxDelayNs - _config.MinDelayNs;
                     long delay = _config.MinDelayNs;
                     if (range > 0)
-                        delay += (long)((ulong)new Random().Next() * (ulong)range >> 32);
+                        delay += (long)(_random.NextDouble() * range);
                     _slotNext = now + delay;
                 }
                 else

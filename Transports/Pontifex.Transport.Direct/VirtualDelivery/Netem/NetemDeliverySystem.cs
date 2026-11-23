@@ -25,6 +25,7 @@ namespace Pontifex.VirtualDelivery.Netem
         private readonly CorrelatedRandom _dupCrng;
         private readonly CorrelatedRandom _reorderCrng;
         private uint _gapCounter;
+        private long _lastTimeToSend;
         private volatile bool _cleared;
         private bool _disposed;
 
@@ -74,10 +75,9 @@ namespace Pontifex.VirtualDelivery.Netem
                 if (_config.DuplicateProbability != 0 && _config.DuplicateProbability >= _dupCrng.Next())
                     count++;
 
+                // Loss drops the packet, not one copy of it: with duplication enabled, a lost
+                // packet must still be lost, and a saturated loss probability must drop everything.
                 if (_lossModel.ShouldDrop())
-                    count--;
-
-                if (count == 0)
                 {
                     message.Release();
                     return;
@@ -164,7 +164,14 @@ namespace Pontifex.VirtualDelivery.Netem
             _cts.Cancel();
             _signal.Set();
 
-            _dequeueThread.Join(TimeSpan.FromSeconds(5));
+            // A delivery callback runs on the dequeue thread, and a transport teardown invoked from
+            // that callback releases this system from it. Joining the current thread would block
+            // forever, so skip the join and let the loop observe the cancellation when the callback
+            // returns.
+            if (!ReferenceEquals(Thread.CurrentThread, _dequeueThread))
+            {
+                _dequeueThread.Join(TimeSpan.FromSeconds(5));
+            }
 
             lock (_lock)
             {
@@ -205,7 +212,7 @@ namespace Pontifex.VirtualDelivery.Netem
             _gapCounter = 0;
 
             return _config.ReorderProbability != 0 &&
-                   _config.ReorderProbability < _reorderCrng.Next();
+                   _config.ReorderProbability >= _reorderCrng.Next();
         }
 
         private long CalculateBaseDelay()
@@ -225,10 +232,9 @@ namespace Pontifex.VirtualDelivery.Netem
 
         private long GetLastTimeToSend()
         {
-            if (_timeQueue.Count > 0)
-                return _timeQueue[_timeQueue.Count - 1].TimeToSend;
-
-            return 0;
+            // Retains the last scheduled send across an empty queue: the pacing bucket must not
+            // forget a packet that was just dequeued, or a burst can exceed the configured rate.
+            return _lastTimeToSend;
         }
 
         private void InsertSorted(QueueEntry entry)
@@ -238,6 +244,11 @@ namespace Pontifex.VirtualDelivery.Netem
                 index = ~index;
 
             _timeQueue.Insert(index, entry);
+
+            if (entry.TimeToSend > _lastTimeToSend)
+            {
+                _lastTimeToSend = entry.TimeToSend;
+            }
         }
 
         private UnionDataList CloneMessage(UnionDataList source)
@@ -317,7 +328,16 @@ namespace Pontifex.VirtualDelivery.Netem
                 }
                 else
                 {
-                    _signal.WaitOne(waitMs);
+                    try
+                    {
+                        _signal.WaitOne(waitMs);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // The system was disposed while the loop was about to wait. The cancellation
+                        // flag is already set, so leaving the loop is the only work left.
+                        break;
+                    }
                 }
             }
         }

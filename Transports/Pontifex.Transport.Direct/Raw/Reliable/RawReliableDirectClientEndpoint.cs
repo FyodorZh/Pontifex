@@ -156,6 +156,14 @@ namespace Pontifex.Raw.Reliable.Direct
                 return base.ProcessInboundMessage(messageType, message);
             }
 
+            if (!IsHandshakePending)
+            {
+                // The inherited engine ignores handshake frames outside the handshake phase. A reject
+                // that arrives after the session is established must not tear the session down.
+                message.Release();
+                return true;
+            }
+
             if (message.GetDataSize() > _handshakeMaxByteSize)
             {
                 message.Release();
