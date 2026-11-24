@@ -116,3 +116,19 @@ or nested groups, and list it in `Directory layout` and `Groups` below.
 ## Rules
 
 This suite follows [`Tests/RULES.md`](../../RULES.md).
+
+## Default and integration runs
+
+The default Direct run excludes every fixture that carries an `*.Integration`
+category. The integration run executes only those fixtures.
+
+```bash
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory!~Integration"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory~Integration"
+```
+
+Integration categories in use: `Direct.RRReliable.Integration`,
+`Direct.RRUnreliable.Integration`, `Direct.RawUnreliable.Integration`, and
+`Direct.Integration`.

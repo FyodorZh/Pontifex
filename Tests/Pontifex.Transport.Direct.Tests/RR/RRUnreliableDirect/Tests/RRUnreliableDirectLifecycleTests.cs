@@ -16,6 +16,7 @@ namespace Pontifex.Tests.RR.RRUnreliableDirect;
 /// unreliable carrier.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 [Category("Direct.RRUnreliable")]
 public sealed class RRUnreliableDirectLifecycleTests
 {

@@ -16,6 +16,7 @@ namespace Pontifex.Tests.Raw;
 /// behind in the server registry.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 public sealed class RawUnreliableDirectChannelOwnershipTests
 {
     private static readonly ILogger Logger = new Logger([]);

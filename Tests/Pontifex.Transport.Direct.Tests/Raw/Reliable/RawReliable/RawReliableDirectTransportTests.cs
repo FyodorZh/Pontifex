@@ -17,6 +17,7 @@ namespace Pontifex.Tests.Raw.Reliable.RawReliable;
 /// handshake, zero reject linger, and the ported Direct carrier lifecycle cases.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 public sealed class RawReliableDirectTransportTests
 {
     private const int MessageMaxByteSize = 1024 * 1024;

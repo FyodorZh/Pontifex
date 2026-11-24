@@ -18,6 +18,7 @@ namespace Pontifex.Tests.RR.RRUnreliableDirect;
 /// accept-without-peer and live-session rules.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 [Category("Direct.RRUnreliable")]
 public sealed class RRUnreliableDirectCarrierTests
 {

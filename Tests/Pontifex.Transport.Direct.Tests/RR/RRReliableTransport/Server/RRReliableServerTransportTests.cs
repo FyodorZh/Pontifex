@@ -13,6 +13,7 @@ using Pontifex.Utils;
 namespace Pontifex.Tests.RR.RRReliableTransport;
 
 [TestFixture]
+[Category("Direct.Integration")]
 [Category("Direct.RRReliableTransport")]
 [Category("Direct.RRReliableTransport.Server")]
 public sealed class RRReliableServerTransportTests

@@ -15,6 +15,7 @@ namespace Pontifex.Tests.Raw;
 /// and logged without reaching the handler and without stopping the transport.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 public sealed class RawUnreliableDirectInboundLimitTests
 {
     private static readonly ILogger Logger = new Logger([]);

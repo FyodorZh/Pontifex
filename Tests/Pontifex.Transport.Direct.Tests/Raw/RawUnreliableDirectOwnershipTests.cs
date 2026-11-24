@@ -22,6 +22,7 @@ namespace Pontifex.Tests.Raw;
 /// debug commit queue.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 public sealed class RawUnreliableDirectOwnershipTests
 {
     private static readonly ILogger Logger = new Logger([]);

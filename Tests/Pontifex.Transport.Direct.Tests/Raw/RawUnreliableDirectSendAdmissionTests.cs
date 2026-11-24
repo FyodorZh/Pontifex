@@ -19,6 +19,7 @@ namespace Pontifex.Tests.Raw;
 /// reservation release on every path, and the send-return barrier that defers peer callbacks.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 public sealed class RawUnreliableDirectSendAdmissionTests
 {
     private static readonly ILogger Logger = new Logger([]);

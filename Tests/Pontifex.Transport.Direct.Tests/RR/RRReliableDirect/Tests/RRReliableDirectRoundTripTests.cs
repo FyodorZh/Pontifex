@@ -17,6 +17,7 @@ namespace Pontifex.Tests.RR.RRReliableDirect;
 /// in-process RR reliable carrier.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 [Category("Direct.RRReliable")]
 public sealed class RRReliableDirectRoundTripTests
 {
