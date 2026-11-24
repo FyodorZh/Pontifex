@@ -212,14 +212,20 @@ precedence rules.
      `TreatWarningsAsErrors`.
    - Set `_startSucceeded` to `true` only after `TryStart()` returns `true`,
      before `OnStarted()`.
-   - Keep the internal `OnStopped(reason)` teardown call whenever `_started` is
-     true, including a stop or failure raised inside `TryStart`. This is the
-     only path that releases carrier resources for failed client starts.
+   - State the internal teardown rule explicitly:
+     - a plain `TryStart()` returning `false` produces zero internal
+       `OnStopped`; a carrier that acquired resources must release them or
+       raise `Fail`/`Stop` before returning false;
+     - a `Fail` or `Stop` raised inside `TryStart` produces exactly one
+       internal `OnStopped` (the path that releases carrier resources);
+     - a successful start followed by `Stop`/`Fail` produces exactly one
+       internal `OnStopped`.
    - In the `TryStart()`-returned-false branch, clear `_started` and
-     `_onStopped` before calling `Fail("Start", ...)`, so a carrier that simply
-     returns false without raising a failure does not receive a spurious
-     internal `OnStopped`. A carrier that raised `Fail` or `Stop` inside
-     `TryStart` has already performed its internal teardown once.
+     `_onStopped` before calling `Fail("Start", ...)`, so a plain false does
+     not receive a spurious internal `OnStopped`.
+   - Update the `OnStopped` XML: it is no longer “called only after a
+     successful TryStart”; it is called for a start attempt that reached
+     `Fail`/`Stop`, and for normal post-start stops.
    - In the branch where `TryStart()` returned true but `_started` became false
      because a stop won inside the attempt, clear `_onStopped` and invalidate
      the transport (call `Fail` or set `_isValid = false`) without invoking the
@@ -289,6 +295,12 @@ precedence rules.
      `Init(null)` throws; a second `Init` and `Init` after stop return false
      with `IsValid` unchanged; failed `Start` paths deliver no `onStopped` but
      still destroy the endpoint/carrier.
+   - Update `Tests/Pontifex.Tests/Endpoints/RawEndpointTests.cs`:
+     `Send_Null_ReturnsInvalidMessage` and
+     `Send_TooBig_ReturnsMessageTooBigAndReleasesBuffer` must start the
+     endpoint before asserting the validity/size result, or assert
+     `NotConnected` for the stopped endpoint. Add the combined-condition
+     cases from action 7 here.
    - Update `Tests/Pontifex.Tests/Endpoints/RawReliable/RawReliableEndpointTests.cs`
      and the server/client handshake endpoint fixtures that assert a throwing
      handler stops with `ExceptionFail`:
@@ -338,11 +350,13 @@ precedence rules.
 
 A failed initial start is invalid and invokes no user `onStopped`. A plain
 `TryStart` false has zero internal teardown; a `Fail`/`Stop` raised inside
-`TryStart` has exactly one internal teardown. A second or post-stop `Start`
-returns false without changing validity. Post-start failures invoke
-`onStopped`; handler exceptions no longer stop endpoints; per-subscriber stop
-notification isolation is proven; and send-result precedence is state-first in
-all four shared paths.
+`TryStart` has exactly one internal teardown. A second or post-stop `Init`
+returns false without changing validity; `Init(null)` throws without changing
+state; a valid `Init` that cannot bind its handler invalidates. A second or
+post-stop `Start` returns false without changing validity. Post-start failures
+invoke `onStopped`; handler exceptions no longer stop endpoints;
+per-subscriber stop notification isolation is proven; and send-result
+precedence is state-first in all four shared paths.
 
 **Risks / notes**
 
@@ -377,9 +391,13 @@ hit the documented conformance gates.
      `BeforeHandlerFactoryGate`, check `trigger.GetDataSize()` against
      `MessageMaxByteSize`; release and log an oversized message and return.
    - When a factory returns a non-null handler but `CreateEndpoint` returns
-     null or throws, call `handler.OnStopped(reason)` exactly once with a
-     `TextFail`/`ExceptionFail` describing the declined route, log any handler
-     exception, then release the trigger. Do not publish a route.
+     null or throws, capture the handler and a
+     `TextFail`/`ExceptionFail` reason in locals inside the admission block,
+     leave `lock (_admissionLock)`, then call `handler.OnStopped(reason)`
+     exactly once, isolate/log any handler exception, and release the trigger.
+     Do not call application code under `_admissionLock`; a handler may call
+     `transport.Stop()`, which takes the transport lock. Do not publish a
+     route.
 2. `Pontifex/Implementations/Endpoints/Raw/Unreliable/RawUnreliableEndpoint.cs`:
    - In `FlushInbox`, return before `Handler.OnStarted` when `IsStopRequested`.
    - After `Handler.OnStarted` and `MarkStartCompleted`, return before opening
@@ -392,7 +410,10 @@ hit the documented conformance gates.
      subscription releases anything not drained.
    - Move the `BeforeHandlerStoppedGate.Hit()` call out of `BeginStop` and into
      the `HandlerGate.OnStopped` path, after the `_startCompleted` check, so it
-     hits only when `OnStopped` is about to be forwarded. Update the remarks.
+     hits only when `OnStopped` is about to be forwarded. `HandlerGate` is
+     constructed before `_conformance`; pass the conformance control (or a
+     callback that hits the gate) into its constructor after creating the
+     control, or assign it immediately after construction. Update the remarks.
 3. `Transports/Pontifex.Transport.Direct/Raw/Unreliable/RawUnreliableDirectClientEndpoint.cs`:
    - In `CommitSend`, check `_channel == null || channel.IsDisposed` and release
      before `BeforeSendCommitGate.Hit()`, matching the server endpoint. Do not
@@ -405,7 +426,10 @@ hit the documented conformance gates.
      the factory is not called, the handler is not called, the message is
      released, and the endpoint/transport stay alive.
    - Add a test that a factory-created handler is notified exactly once when
-     endpoint creation returns null and when it throws.
+     endpoint creation returns null and when it throws. The declined handler
+     calls `transport.Stop()` and the test asserts the call returns without
+     deadlocking. Add an internal server endpoint-factory hook so the throw
+     case is deterministic.
    - Add a test that `Stop` from `OnStarted`, a stop latched before the flush
      action, and a stop requested during the drain cannot deliver buffered
      messages afterwards. Use a gated handler or a large buffered batch to hit
@@ -422,9 +446,11 @@ hit the documented conformance gates.
    §6, §7, and §8 for the corrected stop ordering, inbound size check, gate
    behavior, and the corrected `onStopped` scheduling wording.
 6. Update the abstract
-   `Pontifex/Abstractions/Transports/Raw/Unreliable/Specification.md` §6.2 and
-   §7.4 to define the factory-created-handler / declined-endpoint terminal
-   notification. Do not declare a Direct-only deviation for this shared rule.
+   `Pontifex/Abstractions/Transports/Raw/Unreliable/Specification.md` §6.2,
+   §7.4, and §7.6 to define the factory-created-handler / declined-endpoint
+   terminal notification, including the callback-matrix row “factory returns a
+   handler but endpoint creation fails”. Do not declare a Direct-only deviation
+   for this shared rule.
    Cover it with the controllable Direct test that captures `ServerHandler` and
    invokes it after channel disposal; do not add a UDP conformance expectation,
    because the UDP carrier has no deterministic declined-endpoint path.
@@ -442,8 +468,10 @@ hit the documented conformance gates.
 **Definition of done**
 
 Active server handlers observe the supplied stop reason; oversized server
-inbound data never reaches a factory or handler; post-stop flush delivery is
-impossible; the gate table matches the implementation.
+inbound data never reaches a factory or handler; a factory-created handler
+whose endpoint is declined receives exactly one `OnStopped` outside the
+admission lock; post-stop flush delivery is impossible; the gate table matches
+the implementation.
 
 **Risks / notes**
 
@@ -493,29 +521,36 @@ that `Send` returns, and enforce the declared message-count budget at admission.
    - Wrap its `Send` override with the same barrier (the thread-static depth
      makes the nested base call safe).
 4. `Pontifex/Implementations/Endpoints/Raw/RawEndpoint.cs`:
-   - Add `protected virtual bool TryReserveSendSlot()` returning `true` by
-     default and `protected virtual void ReleaseSendSlot()` with an empty
-     default. These are hooks only; the existing `_pendingSendMessages`
-     accounting remains the base action-queue counter.
+   - Add an internal `SendSlotReservation` token with an idempotent
+     `ReleaseOnce()` (`Interlocked.Exchange` on a released flag) and a shared
+     no-op token for the default path.
+   - Add `protected virtual SendSlotReservation? TryReserveSendSlot()`. The
+     default returns the no-op token; null means the budget is exhausted.
    - In `ScheduleToSend`, after the state/validity/size checks and before the
-     byte reservation, call `TryReserveSendSlot()`. If it returns false,
-     release the buffer and return `BufferOverflow`.
-   - Call `ReleaseSendSlot()` on every path after a successful reservation that
-     does not reach the carrier: byte-budget rollback, schedule failure, the
-     `_sendAction` pre-start drop, and an exception escaping `DoSendRaw`.
-     The hook is idempotent per reservation in the Direct override.
+     byte reservation, call `TryReserveSendSlot()`. If it returns null, release
+     the buffer and return `BufferOverflow`.
+   - Change the internal `_sendAction` argument from `UnionDataList` to a
+     `SendWorkItem` carrying the message and its reservation token. On byte
+     rollback, schedule failure, or the pre-start drop, call
+     `reservation.ReleaseOnce()` exactly once.
+   - Add `protected virtual void DoSendRaw(UnionDataList message,
+     SendSlotReservation reservation)`; the default calls the existing
+     `DoSendRaw(message)` and releases the reservation in `finally`. Existing
+     carriers keep their current abstract override.
 5. `Transports/Pontifex.Transport.Direct/Raw/Unreliable/RawUnreliableDirectClientEndpoint.cs`
    and `RawUnreliableDirectServerEndpoint.cs`:
-   - Add an `int _outstandingCommitMessages` counter and implement
-     `TryReserveSendSlot`/`ReleaseSendSlot` with `Interlocked` operations and
-     the endpoint's `queueCapacity`.
-   - `TryReserveSendSlot` increments and rejects when the new value exceeds
-     `queueCapacity`; it rolls the increment back before returning false.
-   - `ReleaseSendSlot` decrements and asserts it never goes negative in debug
-     builds.
-   - Call `ReleaseSendSlot()` in `CommitSend`'s `finally`, in the commit
-     queue's disposer/drop path, and in `DoSendRaw` when the post is rejected or
-     the channel is gone. Never release twice for one reservation.
+   - Add an `int _outstandingCommitMessages` counter and override
+     `TryReserveSendSlot` with `Interlocked` operations and the endpoint's
+     `queueCapacity`. It increments and returns a token; it rolls back and
+     returns null when the new value exceeds `queueCapacity`.
+   - Override the token-taking `DoSendRaw`: post a `CommitItem` holding the
+     message and token to the commit queue. If the post is rejected or the
+     channel is gone, release the token and the buffer.
+   - `CommitSend` and the queue disposer both call `token.ReleaseOnce()`; the
+     idempotent token makes the race safe.
+   - Expose an internal `OutstandingCommitMessagesForTests` getter so the
+     server test can observe the counter instead of being shadowed by the
+     shared `SendBudget`.
 6. `Transports/Pontifex.Transport.Direct/Raw/Unreliable/RawUnreliableDirectClientEndpoint.cs`
    and `RawUnreliableDirectServerEndpoint.cs`:
    - In `CommitSend`, call `WaitForSendReturn()` immediately before
@@ -532,6 +567,9 @@ that `Send` returns, and enforce the declared message-count budget at admission.
      reservations.
    - Add an empty-message budget test: empty payloads count toward the same
      100-message admission bound.
+   - Add a post-then-throw test: the Direct `DoSendRaw` posts successfully and
+     then throws; assert the token is released exactly once (the commit queue
+     or the exception path, not both) and the counter never goes negative.
    - Add a send-return test using both internal hooks: hold the sender inside
      `Send`, wait for the commit worker at `BeforeSendReturnWaitForTests`,
      assert the peer callback has not started, release the sender, and assert
@@ -592,7 +630,12 @@ server reliable-debug answer truthful.
    - Ensure a second factory call constructs a second independent system.
 2. `Transports/Pontifex.Transport.Direct/Raw/Unreliable/RawUnreliableDirectBinding.cs`:
    - Stop calling `Build` twice during construction. Call `CreateFactory`
-     twice and pass the factories to the transport.
+     twice and pass the factories to the transport through
+     `SetDeliverySystemFactory`.
+   - Split `Create` into an internal overload that accepts a factory-builder
+     delegate (`Func<ITransportStructValue, IMemoryRental, Func<IDeliverySystem>>`),
+     with the public `Create` passing the real `CreateFactory`. The internal
+     overload lets a binding-level test count or fail factory construction.
 3. `Transports/Pontifex.Transport.Direct/Raw/Unreliable/RawUnreliableDirectClientTransport.cs`:
    - Remove the eager `new PerfectDeliverySystem()` field initializers.
      Replace both stored instances with client/server factory delegates that
@@ -634,6 +677,11 @@ server reliable-debug answer truthful.
      and resets both fields to fresh perfect-system factories, so a later
      `Start` is still legal and never installs a released system. A second
      `Stop` after a normal start/stop must not release anything again.
+   - Add `protected virtual void OnStartFailed()` called by `AnyTransport` when
+     the initial `Start` returns false or is invalidated, including “Start
+     before Init”. `RawUnreliableDirectClientTransport` overrides it to release
+     owned explicit systems and reset to perfect factories. A failed start must
+     not leak systems that were configured before `Init`.
    - In `TryMakeReliableForDebug`, hold `_locker` for the entire transition:
      the `HasStartBeenAttempted` check, the release/reset of any explicit
      systems, and the flag write. `SetDeliverySystem` and its
@@ -654,8 +702,11 @@ server reliable-debug answer truthful.
      default and netem configurations.
    - Add an internal `BeforeStartLockForTests` hook in `AnyTransport.Start`,
      invoked before the lifecycle lock. The L-03 race test pauses there, calls
-     `TryMakeReliableForDebug`, then releases `Start`; the result is either a
-     rejected start or a start that uses perfect systems, never a torn state.
+     `TryMakeReliableForDebug`, then releases `Start`; debug mode succeeds and
+     every endpoint uses perfect systems. A second sequential test calls
+     `Start` first and then `TryMakeReliableForDebug`, which must return false.
+     Because `Start` holds `_locker` for the whole transition, there is no
+     interleaving that can produce a torn state.
 4. `Pontifex/Utils/SerializedCallbackQueue.cs`:
    - Add a second constructor that does not pre-size a `LimitedConcurrentQueue`.
      Use `SystemConcurrentQueue<T>` (the existing Actuarius type used by
@@ -688,18 +739,23 @@ server reliable-debug answer truthful.
    - Add a separate `SetDeliverySystem(netem, netem)` -> `Stop` -> `Start` test
      proving the explicit systems were released, both fields were replaced with
      fresh perfect systems, and the later start works.
-   - Add a factory-call test proving two independent systems are created. This
-     is the L-08 evidence: the double-build leak is removed because neither
-     factory runs during construction.
-   - Add an L-03 debug-race test: arm a start gate or conformance hook, call
-     `TryMakeReliableForDebug` concurrently with `Start`, and assert either the
-     flag is set and every future endpoint uses perfect systems, or the call
-     returns false; never a torn state.
+   - Add a binding-level test through the internal `Create` overload with a
+     counting factory builder: construct a client with `delivery = netem`,
+     `Stop` before `Start`, and assert zero systems were constructed. Make the
+     builder throw on its first and second call in separate cases and assert
+     no construction happened before start. This is the M-10/L-08 evidence:
+     the double-build path is removed, not merely moved.
+   - Add the L-03 tests: (a) pause at `BeforeStartLockForTests`, enable debug,
+     release Start, and assert every endpoint uses perfect systems; (b) start
+     first, then call `TryMakeReliableForDebug` and assert `false`. Do not claim
+     an interleaving that `_locker` makes impossible.
    - Add endpoint-construction-throw tests via `EndpointFactoryForTests`
      proving both systems are released exactly once.
    - Add an unbounded-queue test that constructs the new
-     `SerializedCallbackQueue` unbounded path with many items and proves it
-     allocates no huge array.
+     `SerializedCallbackQueue` unbounded path and posts many items (for example
+     10,000) without rejection; assert the bounded constructor rejects at its
+     capacity. Do not assert allocation internals; the behavioural property is
+     “unbounded path accepts beyond any fixed capacity”.
    - Add manager-callback-throw and install-throw tests proving the endpoint
      survives, the outbound buffer is released exactly once, the transport does
      not stop, and a subsequent send retries with fresh systems rather than a
@@ -707,6 +763,8 @@ server reliable-debug answer truthful.
    - Add a normal start -> stop release-count test with construction-counting
      systems: each direction is released exactly once after a successful start
      and stop.
+   - Add a `SetDeliverySystem(netem, netem)` then `Start` before `Init` test:
+     the start fails and both explicit systems are released exactly once.
    - Add a double `SetDeliverySystem` test: the first pair is released once,
      including the same-instance-in-both-directions case, and the second pair is
      the one used.
@@ -740,9 +798,10 @@ server reliable-debug answer truthful.
 
 **Definition of done**
 
-No delivery system is constructed by the transport before start; each system
-has one owner and is released once on every path, including an explicit
-pre-start stop; connect/install exceptions do not stop the endpoint; the
+No delivery system is constructed during transport construction or before
+start, including through the binding; each system has one owner and is
+released once on every path, including an explicit pre-start stop; connect or
+install exceptions do not stop the endpoint and retry with fresh systems; the
 server reports reliable-debug as unsupported; the conformance adapter still
 runs reliable-mode tests through the client.
 
@@ -781,8 +840,13 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      the latch is set is buffered in arrival order and drained immediately
      after `OnConnected` returns, not dropped: abstract §10 requires every
      accepted payload to be delivered exactly once in order unless the session
-     terminates. Bound the pre-connect buffer by the existing endpoint budget
-     and terminate the session on overflow rather than dropping silently.
+     terminates. Add a dedicated pre-connect inbox guarded by one lock that
+     covers the latch, append, and drain. Add a protected virtual limit
+     (64 messages and `64 * MessageMaxByteSize` bytes, overridable for tests).
+     On overflow, release the buffered messages and stop the session with
+     `TextFail(TransportName, "Pre-connect payload buffer exceeded")`; never
+     drop silently. Add an overflow test and a concurrent-arrival test to the
+     stage.
    - Change `Send` so it checks state, null/alive, and payload size before
      prepending the type byte. Measure `int payloadSize =
      buffer.GetDataSize()` before `PutFirst`, then call a new
@@ -803,19 +867,32 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      constant in the repository, and `RRReliableFrame.MaxOverheadBytes` belongs
      to a different protocol. Keep the handshake-specific limits to Stage 6.
 3. Tests:
+   - Update `Tests/Pontifex.Tests/Endpoints/RawReliable/RawReliableEndpointTests.cs`:
+     invert `Send_FramingCountsTowardMessageMaxByteSize` to accept exactly
+     `MessageMaxByteSize`; replace the unhandled/empty-frame stop assertions
+     with “released/logged, session stays connected, later traffic flows”.
    - Add malformed-frame and unknown-frame tests: the session stays connected,
      the frame is released and logged, and later traffic still flows.
    - Add payload-at-exactly-`MessageMaxByteSize` and one-byte-over tests in both
      directions.
-   - Update `Tests/Pontifex.Tests/Endpoints/RawReliable/Harness/TestRawReliableEndpoint.cs`
-     and any Direct harness that calls `ConnectAndComplete`: the connect-completed
-     latch must be armed by a test-visible completion path (use
-     `ExposedNotifyConnectedCore` or a dedicated `MarkConnectCompletedForTests`),
-     never by `MarkConnectedNotified`.
+   - Update every harness that calls `ConnectAndComplete`:
+     `Endpoints/RawReliable/Harness/TestRawReliableEndpoint.cs`,
+     `Endpoints/RawReliable/Server/Harness/TestRawReliableServerEndpoint.cs`,
+     `Endpoints/RawReliable/Client/Harness/TestRawReliableClientEndpoint.cs`,
+     and any Direct harness. The connect-completed latch must be armed by a
+     test-visible completion path (use `ExposedNotifyConnectedCore` or a
+     dedicated `MarkConnectCompletedForTests`), never by
+     `MarkConnectedNotified`.
    - Add a test that injects a payload between the handshake response and the
      completion of `OnConnected`; assert it is not exposed before
      `OnConnected` returns and is delivered exactly once, in order, after it
      returns. Add a second payload to prove FIFO drain.
+   - Add a pre-connect buffer overflow test using the overridable limit: the
+     session stops with the `TextFail` reason, every buffered message is
+     released exactly once, and no payload is delivered.
+   - Add a concurrent-arrival test: a payload arrives while the latch is being
+     set and the drain runs; assert exactly-once, ordered delivery with no loss
+     or duplication. Force the interleaving with a gated handler, not a sleep.
    - Update `Coverage.md` only where a documented suite exists.
 4. Update `Transports/Pontifex.Transport.Direct/Raw/Reliable/Specification.md`
    §6 and §8 for malformed-frame dropping, framing exclusion, and the
@@ -886,9 +963,10 @@ make the binding’s parameter ranges match the constructors.
      compatible.
 4. `RawReliableDirectServerTransport`:
    - Add a `handshakeTimeout` constructor parameter with a `null` default that
-     resolves to 10 seconds. `Timeout.InfiniteTimeSpan` is accepted only by an
-     explicit internal/test constructor; the public constructor never defaults
-     to infinite, and the binding advertises positive seconds only.
+     resolves to 10 seconds. The public constructor rejects
+     `Timeout.InfiniteTimeSpan` and non-positive values; only an explicit
+     internal/test constructor may disable the deadline. The binding advertises
+     positive seconds only.
    - Add an internal test constructor overload that accepts
      `IRawReliableHandshakeTimerFactory`.
    - Start one timer per `HandshakeEntry` when the entry is registered, unless
@@ -922,9 +1000,11 @@ make the binding’s parameter ranges match the constructors.
      a server-session hook for the handshake request: the Direct server
      consumes that request in `RawReliableDirectServerTransport.OnHandshakeMessage`
      before any session endpoint exists, and the existing check there is the
-     server-side check. The default returns true. This passes the exact total
-     without a shared mutable delta field and cannot reject a normal payload
-     above 128 bytes.
+     server-side check. The default returns true. A `false` result for a
+     handshake frame stops the endpoint with the existing mapped
+     `TextFail`/`ProtocolMismatch`; do not silently drop an oversized
+     handshake. This passes the exact total without a shared mutable delta
+     field and cannot reject a normal payload above 128 bytes.
    - `RawReliableDirectServerTransport.SendRejection`: build the reject, add
      the type byte, measure the total, and if it is too large send a minimal
      reject with no text or close without sending. Release exactly once.
@@ -1061,6 +1141,10 @@ repeated release/Dispose correct and deterministically testable.
    - `Validate` must validate a `lossmodel` value even when `type = perfect`
      (parse it when present) and must call `NetemConfig.Validate` for netem.
    - Keep `CreateFactory` behavior from Stage 4.
+   - Call `UnreliableDeliveryBinding.Validate` from
+     `RawUnreliableDirectBinding.Create` before `CreateFactory`, so the
+     RawUnreliable registration rejects `perfect` + bogus `lossmodel`. Add a
+     RawUnreliable registration test for that case.
 6. Queue duplication:
    - In `Deliver`, compute available room `QueueLimit - totalQueued`; if there
      is no room, release and return. Clamp the duplicate count to the available
@@ -1144,6 +1228,11 @@ protocol.
    - In an install, do not release the old system if it is still referenced by
      the other direction; detach the handler and leave it to the other field or
      disposal.
+   - Make `InstallDeliverySystem` no-throw after the `Interlocked.Exchange`.
+     Once the exchange succeeds, the channel owns the new system; a later
+     release/subscription failure must be caught, and the endpoint must not
+     release the system again. Define this ownership boundary in the XML
+     remarks and cover it with the install-throw test.
    - Raise `Disposed` after both releases, and never let a throwing subscriber
      skip another subscriber.
 3. `ChannelManager.cs`:
@@ -1183,7 +1272,8 @@ protocol.
 6. Tests:
    - Add Channel tests for throwing delivery system, concurrent send/dispose
      release, shared system in both directions, and throwing server callback
-     cleanup.
+     cleanup. Force the send/dispose interleaving with a blocking
+     `IDeliverySystem` rather than a bare thread race.
    - Add a protocol-scope test: two servers with the same `id` under different
      schemes both start, and a client of each scheme reaches the correct
      server.
@@ -1247,11 +1337,15 @@ transitions match abstract §6.6.
      is distinguishable from a generic `Closed` caused by TTL/session close.
    - `Finish` closes with `Finished` only when the carrier send returns `Ok`;
      on a non-`Ok` result, leave the handle usable for a retry.
-   - Apply abstract §6.6 state precedence to all three methods: transport
-     stopping/stopped first → `Error`; then `Rejected` → throw for
-     `Response`/`Finish`, or `Ok` for a repeated `Reject`; then
-     `Finished`/TTL/session/disposal close → `Error`; then invalid message,
-     too big, carrier result.
+   - Apply abstract §6.6 state precedence per method:
+     - `Response`/`Finish`: transport stopping/stopped → `Error`; then
+       `Rejected` → throw; then `Finished`/TTL/session/disposal close →
+       `Error`; then invalid message, too big, carrier result.
+     - `Reject`: transport stopping/stopped → `Error`; then `Rejected` →
+       `Ok`; then `Finished` or `Accepted` → throw; then TTL/session/disposal
+       close → `Error`; then send.
+     - `Accepted` + live is not terminal; `Reject` throws, `Response`/`Finish`
+       proceed.
    - `Reject`:
      - if the transport is stopping/stopped, return `Error` even when the
        handle is already `Rejected`;
@@ -1295,15 +1389,20 @@ transitions match abstract §6.6.
      forwards the dispatch-queue factory, so the Direct wiring test can inject
      `ManualCallbackQueue<T>`.
 5. Tests:
-   - Put the concurrent session-map stress and response/TTL state tests in
-     `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/` (that
-     suite already owns `RRReliableResponse` and `RRReliableServerTransport`);
-     put the Direct carrier wiring test in `RR/RRReliableDirect/Tests/`.
+   - Put the concurrent session-map stress and response/TTL state tests in the
+     `RR/RRReliableTransport/Server/` layer (the suite owns
+     `RRReliableServerTransport` and `RRReliableResponse`); carry the suite
+     root category. Put the Direct carrier wiring test in
+     `RR/RRReliableDirect/Tests/`.
    - Add concurrent session-map stress: new requests on multiple threads,
      completion on manual dispatch/timers, cancel, and session close; assert no
      exceptions, exactly-once completion, and the 65,536 cap. Put this
      multithreaded fixture in category `Direct.RRReliable.Integration`; the
      deterministic state tests stay in the default run.
+   - Update `RRReliableTransport/Server/RRReliableServerTransportTests.cs`
+     `ResponseHandle_MatrixOfFinishRejectAndClosedCalls` and its Coverage row:
+     `Finish` then `Reject` now throws `InvalidOperationException` while live;
+     post-stop calls remain `Error`.
    - Add state tests: `Finish` then `Reject` throws; failed `Finish` can be
      retried; failed `Reject` can be retried; TTL close then `Reject` returns
      `Error`; successful `Reject` then `Response`/`Finish` throw while live;
@@ -1313,9 +1412,10 @@ transitions match abstract §6.6.
      handler is unbound and the table is empty.
    - Update `Coverage.md`.
 6. Update `Transports/Pontifex.Transport.Direct/RR/Reliable/Specification.md`
-   §6.6 in this stage for the corrected `Finish`/`Reject`/TTL state machine.
-   Stage 11 may refine the completion-transport wording but must not be the
-   only place the behavior change is documented.
+   §6 (Lifecycle and teardown) and §8 (Completion transport row) in this stage
+   for the corrected `Finish`/`Reject`/TTL state machine. The Direct spec has
+   no `§6.6`; do not reference that section number. Stage 11 may refine the
+   wording but must not be the only place the behavior change is documented.
 
 **Verification**
 
@@ -1378,6 +1478,8 @@ configured queue capacity.
      `OnInbound` with `_queueCapacity`.
    - Use the `IDispatchQueue<T>` interface added in Stage 9 (Pontifex/Utils).
      Do not redeclare it in the Direct assembly.
+   - Add an internal `PendingCountForTests` accessor (or test driver) so the
+     configured pre-start bound can be observed without reflection.
    - Add an optional internal dispatch-queue factory delegate, defaulting to
      `new SerializedCallbackQueue<InboundFrame>(...)`. Store the field as
      `IDispatchQueue<InboundFrame>` so both the exception subscription and the
@@ -1442,9 +1544,10 @@ specifications with the behavior established in Stages 1–10.
      by content rather than fixed line numbers; earlier stages may shift the
      file.
 2. `Transports/Pontifex.Transport.Direct/RR/Reliable/Specification.md`:
-   - Correct the completion-transport row: the response TTL sends
+   - Correct the completion-transport row in §8: the response TTL sends
      `Finish(Failed)`; only session close sends nothing.
-   - Align §6.6 wording with the Stage 9 state machine.
+   - Align the §6 lifecycle text and the §8 completion row with the Stage 9
+     state machine. The Direct spec has no `§6.6`; do not reference it.
 3. `Transports/Pontifex.Transport.Direct/Raw/Unreliable/Specification.md`:
    - Re-audit every §7/§8 claim after Stages 2–4 and 8.
    - Ensure the “no deviation” statement is true, or declare any residual
@@ -1514,12 +1617,18 @@ categories.
    `Raw/Reliable/RawReliable/RawReliableDirectTransportTests.cs`,
    `RR/RRUnreliableDirect/Tests/RRUnreliableDirectCarrierTests.cs`,
    `RR/RRUnreliableDirect/Tests/RRUnreliableDirectLifecycleTests.cs`,
-   `RR/RRReliableDirect/Tests/RRReliableDirectRoundTripTests.cs`, and the
-   `RRReliableTransport` client/server fixtures.
+   `RR/RRReliableDirect/Tests/RRReliableDirectRoundTripTests.cs`, the
+   `RRReliableTransport` client/server fixtures, and
+   `ChannelManager/Tests/ChannelTests.cs` (gate the concurrent send/dispose
+   test with a blocking delivery system).
 2. Use the seams introduced earlier:
    - Netem manual clock/pump for VirtualDelivery tests.
    - Manual handshake timer for RawReliable Direct timeout tests.
    - `ManualCallbackQueue<T>` for RR server and RRUnreliable Direct tests.
+     Add the dispatch-queue factory parameter to
+     `TestReliableServerTransport`; add a manual-run/post-unbind hook to
+     `TestReliableClientTransport` or its callback pump so client tests do not
+     need `SpinWait`.
    - Existing `ManualTimerFactory` for RR TTL tests.
    - Explicit `TaskCompletionSource`/callback hooks where a callback is the
      only completion signal.
@@ -1539,10 +1648,12 @@ categories.
      plus any `*.Integration` category added by this stage. The `!~` filter
      excludes all of them.
    - Update `.github/workflows/build-test-deploy.yml` with explicit per-project
-     commands: a deterministic pass for every test project using the filter,
-     then an integration pass for the Direct, Net, and Transports projects
-     using `TestCategory~Integration`. Do not replace the solution-wide test
-     step with Direct-only commands.
+     commands: a filtered default pass for every test project using
+     `TestCategory!~Integration` (label it “filtered”, not “fully
+     deterministic”, because Net/Transports have real-I/O tests without that
+     category), then an integration pass for the Direct, Net, and Transports
+     projects using `TestCategory~Integration`. Do not replace the
+     solution-wide test step with Direct-only commands.
    - Document the two commands in the Direct suite READMEs.
 5. Add a static test-suite guard as an NUnit fixture, for example
    `Tests/Pontifex.Transport.Direct.Tests/DirectTestDeterminismTests.cs`:
