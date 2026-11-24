@@ -321,10 +321,13 @@ precedence rules.
      In the `AnyTransport` test double, record internal `OnStopped` and user
      `_onStopped` separately; do not use one event list that cannot distinguish
      them.
-   - Add L-02 combined-condition tests: stopped + oversized returns the state
-     result; stopped + full budget returns the state result; stopped + null
-     returns the state result; running + null returns `InvalidMessage`;
-     running + oversized returns `MessageTooBig`.
+   - Add L-02 combined-condition tests in every changed path:
+     `RawEndpointTests` for `TestRawEndpoint`; `RawReliableEndpointTests` for
+     `RawReliableEndpoint.Send`; `RawUnreliableServerEndpointTests` for
+     stopped + full shared budget and stopped + null; and an RRUnreliable
+     client test or harness case for `TryValidatePayload`. Each asserts the
+     state result for stopped + null/oversized/full-budget, `InvalidMessage`
+     for running + null, and `MessageTooBig` for running + oversized.
    - Add tests for: failed initial `Start` with no user `onStopped`; a failure
      after a successful start still calls `onStopped`; `Init(null)` throws and
      does not invalidate; a second `Init` and `Init` after stop return false
@@ -398,6 +401,10 @@ hit the documented conformance gates.
      Do not call application code under `_admissionLock`; a handler may call
      `transport.Stop()`, which takes the transport lock. Do not publish a
      route.
+   - Add an internal `AdmissionLockHeldForTests` flag set only around the
+     `lock (_admissionLock)` block. The declined-handler test asserts it is
+     false inside `OnStopped`. A same-thread `transport.Stop()` cannot prove
+     this because the lock is reentrant.
 2. `Pontifex/Implementations/Endpoints/Raw/Unreliable/RawUnreliableEndpoint.cs`:
    - In `FlushInbox`, return before `Handler.OnStarted` when `IsStopRequested`.
    - After `Handler.OnStarted` and `MarkStartCompleted`, return before opening
@@ -427,9 +434,9 @@ hit the documented conformance gates.
      released, and the endpoint/transport stay alive.
    - Add a test that a factory-created handler is notified exactly once when
      endpoint creation returns null and when it throws. The declined handler
-     calls `transport.Stop()` and the test asserts the call returns without
-     deadlocking. Add an internal server endpoint-factory hook so the throw
-     case is deterministic.
+     asserts `AdmissionLockHeldForTests` is false and calls `transport.Stop()`;
+     the test asserts both complete. Add an internal server endpoint-factory
+     hook so the throw case is deterministic.
    - Add a test that `Stop` from `OnStarted`, a stop latched before the flush
      action, and a stop requested during the drain cannot deliver buffered
      messages afterwards. Use a gated handler or a large buffered batch to hit
@@ -521,9 +528,11 @@ that `Send` returns, and enforce the declared message-count budget at admission.
    - Wrap its `Send` override with the same barrier (the thread-static depth
      makes the nested base call safe).
 4. `Pontifex/Implementations/Endpoints/Raw/RawEndpoint.cs`:
-   - Add an internal `SendSlotReservation` token with an idempotent
-     `ReleaseOnce()` (`Interlocked.Exchange` on a released flag) and a shared
-     no-op token for the default path.
+   - Add a protected nested `SendSlotReservation` token on `RawEndpoint` with
+     an idempotent `ReleaseOnce()` (`Interlocked.Exchange` on a released flag)
+     and a shared no-op token for the default path. A protected nested type is
+     usable from the protected `TryReserveSendSlot`/token-taking `DoSendRaw`
+     signatures; an internal top-level type would be CS0050/CS0051.
    - Add `protected virtual SendSlotReservation? TryReserveSendSlot()`. The
      default returns the no-op token; null means the budget is exhausted.
    - In `ScheduleToSend`, after the state/validity/size checks and before the
@@ -589,6 +598,7 @@ that `Send` returns, and enforce the declared message-count budget at admission.
 - `dotnet build Pontifex.sln`
 - `dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj`
+- `dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj`
 - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj`
 - Expected: all pass; the new barrier and budget tests pass.
@@ -842,7 +852,9 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      accepted payload to be delivered exactly once in order unless the session
      terminates. Add a dedicated pre-connect inbox guarded by one lock that
      covers the latch, append, and drain. Add a protected virtual limit
-     (64 messages and `64 * MessageMaxByteSize` bytes, overridable for tests).
+     (64 messages and a `long` byte cap computed with saturating arithmetic
+     from `MessageMaxByteSize`, overridable for tests). Do not use an `int`
+     multiplication, which overflows at `message_max_size = int.MaxValue`.
      On overflow, release the buffered messages and stop the session with
      `TextFail(TransportName, "Pre-connect payload buffer exceeded")`; never
      drop silently. Add an overflow test and a concurrent-arrival test to the
@@ -893,6 +905,9 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
    - Add a concurrent-arrival test: a payload arrives while the latch is being
      set and the drain runs; assert exactly-once, ordered delivery with no loss
      or duplication. Force the interleaving with a gated handler, not a sleep.
+   - Add a max-size pre-connect test with `message_max_size = int.MaxValue`
+     and one payload before `OnConnected`; assert the saturating byte cap
+     accepts it and the drain delivers it once.
    - Update `Coverage.md` only where a documented suite exists.
 4. Update `Transports/Pontifex.Transport.Direct/Raw/Reliable/Specification.md`
    §6 and §8 for malformed-frame dropping, framing exclusion, and the
@@ -1397,8 +1412,10 @@ transitions match abstract §6.6.
    - Add concurrent session-map stress: new requests on multiple threads,
      completion on manual dispatch/timers, cancel, and session close; assert no
      exceptions, exactly-once completion, and the 65,536 cap. Put this
-     multithreaded fixture in category `Direct.RRReliable.Integration`; the
-     deterministic state tests stay in the default run.
+     multithreaded fixture in the `RR/RRReliableTransport/Server/` layer with
+     both the suite root category `Direct.RRReliableTransport` and
+     `Direct.RRReliable.Integration`; the deterministic state tests stay in
+     the default run.
    - Update `RRReliableTransport/Server/RRReliableServerTransportTests.cs`
      `ResponseHandle_MatrixOfFinishRejectAndClosedCalls` and its Coverage row:
      `Finish` then `Reject` now throws `InvalidOperationException` while live;
@@ -1409,7 +1426,9 @@ transitions match abstract §6.6.
      after the transport stops, all three return `Error`, including a repeated
      `Reject`.
    - Add a client TTL-factory throw test and a null-timer test; assert the
-     handler is unbound and the table is empty.
+     handler is unbound. Add an internal `PendingCountForTests` to
+     `RRReliableClientTransport` so the test can also assert the table is
+     empty without reflection.
    - Update `Coverage.md`.
 6. Update `Transports/Pontifex.Transport.Direct/RR/Reliable/Specification.md`
    §6 (Lifecycle and teardown) and §8 (Completion transport row) in this stage
@@ -1473,6 +1492,9 @@ configured queue capacity.
      `Error` (or `NotConnected`) is returned.
    - Ensure `IsStarted` remains the state result for a request that starts
      after the transport stopped.
+   - Add an internal `PendingCountForTests` on `RRUnreliableClientTransport`
+     (or an equivalent internal accessor) so the stop-race test can assert the
+     pending table is empty without reflection.
 3. `Transports/Pontifex.Transport.Direct/RR/Unreliable/RRUnreliableDirectServer.cs`:
    - Replace the `RRDirectInfo.DispatchQueueCapacity` comparison in
      `OnInbound` with `_queueCapacity`.
@@ -1578,6 +1600,10 @@ specifications with the behavior established in Stages 1–10.
 - The line-length command above returns no non-table violations.
 - `dotnet build Pontifex.sln`
 - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory=Direct.VirtualDelivery"`
+- Per-finding checklist: L-12 (three deviation items), L-13 (RawUnreliable
+  claims), L-14 (RawReliable claims), L-15 (completion row), L-16 (line
+  length), L-23 (`help.md` using), L-24 (README subject/scope). Each is marked
+  done only after reading the changed section and its links.
 - Expected: build/tests pass; no broken links; no specification claim
   contradicts the code.
 
@@ -1665,8 +1691,10 @@ categories.
    - Skip a file when its fixtures carry an `*.Integration` category.
    - Fail when a default fixture contains polling forms: `Thread.Sleep`,
      `WaitFor`, `SpinWait`, a `DateTime.UtcNow` deadline, `Task.Delay`,
-     `SemaphoreSlim.Wait(...timeout...)`, `Monitor.Wait(..., timeout)`, or a
-     real `System.Threading.Timer`/`new Timer`. Do not flag a one-shot
+     `SemaphoreSlim.Wait(...timeout...)`, `Monitor.Wait(..., timeout)`,
+     `Task.Run`/`new Thread` in a default fixture without a declared
+     integration category, or a real `System.Threading.Timer`/`new Timer`. Do
+     not flag a one-shot
      `Stopwatch` duration assertion (the Direct reject latency check); only a
      repeated `Stopwatch` polling loop is forbidden. Match polling call
      patterns, not the `WaitForSendReturn` seam or the guard's own literals.
@@ -1690,8 +1718,10 @@ categories.
   from Action 4, which must report no matching tests.
 - The determinism guard must pass in the default run.
 - `git diff .github/workflows/build-test-deploy.yml` shows both the filtered
-  deterministic command and the separate `TestCategory~Integration` command.
-  A missing workflow edit fails the stage.
+  pass and the separate `TestCategory~Integration` command.
+- Extract and run each new workflow test command locally (or execute the
+  workflow with `act`); a malformed path or filter fails the stage. A missing
+  workflow edit also fails.
 
 **Definition of done**
 
@@ -1730,7 +1760,8 @@ with one entry per change and per audit finding.
 2. Write `report.md` at the repository root. It must contain:
    - a short title and the final verification result;
    - a table of contents;
-   - one section per stage with its objective and commit message;
+   - one section per stage with its objective and the exact commit message
+     recovered from `git log --format=%s` for that stage commit;
    - one `###` subsection per audit finding ID, in the order H-01…L-26, with
      the exact headings `### H-01` through `### L-26`. Each subsection must
      contain the labels `Problem:`, `Change:`, `Why:`, `Files:`, and
@@ -1762,7 +1793,9 @@ with one entry per change and per audit finding.
 - Require a `## Tests and specifications` section and a
   `## Residual deviations` section (with `none` when empty).
 - Re-run the full verification commands from Action 1; all pass.
-- `git status --porcelain` is clean after the report commit.
+- `git status --porcelain` is clean after the report commit, before `plan.md`
+  is deleted. The plan-executor completion step then deletes and commits the
+  deletion separately; the tree is clean again afterwards.
 
 **Definition of done**
 
