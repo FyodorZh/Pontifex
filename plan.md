@@ -913,13 +913,26 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      dispatching a payload, compare the remaining body's `GetDataSize()` with
      `MessageMaxByteSize`; release and log an oversized body. This measures
      the true payload and avoids subtracting a guessed frame overhead.
-2. `Transports/Pontifex.Transport.Direct/Raw/Reliable/RawReliableDirectClientEndpoint.cs`
-   and `RawReliableDirectServerEndpoint.cs`:
-   - Remove the exact `MessageMaxByteSize` pre-check on the framed message. The
-     authoritative exact check is the post-pop check in the base. Do not
-     introduce a coarse upper bound; there is no RawReliable frame-overhead
-     constant in the repository, and `RRReliableFrame.MaxOverheadBytes` belongs
-     to a different protocol. Keep the handshake-specific limits to Stage 6.
+2. Framed-carrier receive caps:
+   - `Transports/Pontifex.Transport.Direct/Raw/Reliable/RawReliableDirectClientEndpoint.cs`
+     and `RawReliableDirectServerEndpoint.cs`: remove the exact
+     `MessageMaxByteSize` pre-check on the framed message. The authoritative
+     exact check is the post-pop check in the base. Keep the handshake-specific
+     limits to Stage 6.
+   - Add a RawReliable framing-overhead helper/constant (type element plus the
+     maximum list-count varint growth) and a saturating
+     `FramedMaxByteSize = Math.Min(int.MaxValue, MessageMaxByteSize +
+     MaxFrameOverheadBytes)`.
+   - `Transports/Pontifex.Transport.Net/Tcp/Raw/Reliable/RawReliableTcpClientEndpoint.cs`
+     and `RawReliableTcpServerEndpoint.cs`: construct the compositor with
+     `FramedMaxByteSize`, not `MessageMaxByteSize`. A payload exactly at
+     `MessageMaxByteSize` then frames within the receive cap, and the shared
+     post-pop body check enforces the exact payload limit.
+   - Handle the compositor null (undecodable frame) path as log + drop +
+     continue receiving. A corrupt or oversized length prefix that cannot be
+     resynchronized may still stop the stream; declare that as an explicit,
+     bounded TCP protection deviation in the TCP spec rather than claiming
+     unconditional drop.
 3. Tests:
    - Update `Tests/Pontifex.Tests/Endpoints/RawReliable/RawReliableEndpointTests.cs`:
      invert `Send_FramingCountsTowardMessageMaxByteSize` to accept exactly
@@ -928,7 +941,10 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
    - Add malformed-frame and unknown-frame tests: the session stays connected,
      the frame is released and logged, and later traffic still flows.
    - Add payload-at-exactly-`MessageMaxByteSize` and one-byte-over tests in both
-     directions.
+     directions for Direct and TCP Direct. Add a TCP malformed-frame test that
+     feeds a bad body through the compositor/null path and asserts the session
+     survives; add an oversized length-prefix test that asserts the declared
+     stop deviation.
    - Update every harness that calls `ConnectAndComplete`:
      `Endpoints/RawReliable/Harness/TestRawReliableEndpoint.cs`,
      `Endpoints/RawReliable/Server/Harness/TestRawReliableServerEndpoint.cs`,
@@ -957,9 +973,10 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      pre-`OnConnected` payload buffering/drain rule (not dropping).
    - `Transports/Pontifex.Transport.Net/Tcp/Raw/Reliable/Specification.md`
      §7/§8: the current “dropped packets are not logged” claim must become
-     “malformed frames are logged and dropped”, and the implementation-defined
-     choices table must record the pre-connect buffer cap and overflow
-     termination. Update its checklist where applicable.
+     “undecodable frames are logged and dropped”; document the framing-aware
+     receive cap, the pre-connect buffer cap and overflow termination, and the
+     bounded protection deviation for an unrecoverable length-prefix error.
+     Update its checklist where applicable.
 
 **Verification**
 
