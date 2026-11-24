@@ -127,6 +127,23 @@ the affected operation returns `Error`. A request whose response TTL expired whi
 the dispatch queue is not presented: the worker releases it and records the client-local id
 terminal.
 
+### 6.1 Response-handle states
+
+A response handle is `Undecided`, `Accepted`, `Rejected`, `Finished`, or `Closed`. `Accepted` and a
+live transport are not terminal: later `Response` and `Finish` calls proceed, while `Reject` throws
+`InvalidOperationException`.
+
+| Call | Transport stopping or stopped | Rejected | Finished | TTL/session/disposal close | Otherwise |
+| --- | --- | --- | --- | --- | --- |
+| `Response`/`Finish` | `Error` | throw | `Error` | `Error` | validate and send |
+| `Reject` | `Error` | `Ok` | throw | `Error` | send |
+
+`Finish` becomes `Finished` only when the carrier send returns `Ok`; a non-`Ok` send leaves the
+handle retryable. `Reject` becomes `Rejected` only on a successful send and can be retried after a
+failed one. A completed `Finish` followed by `Reject` while the transport is live throws; once the
+transport stops, every call returns `Error`. The response TTL sends `Finish(Failed)`; a session
+close and a disposal close send nothing.
+
 This implementation declares three bounded deviations from the abstract type.
 
 1. **Callback after stop.** Shared §7.4 orders terminal notifications before `onStopped`. Dispatch
@@ -153,7 +170,7 @@ confidentiality, or integrity protection.
 | --- | --- |
 | Wire correlation | The client-local `ushort` request id is the first frame element. A response adds a `uint` ordinal starting at one; a finish adds a completion byte; a cancel carries only the id. The server-global id stays local. |
 | Duplicate-suppression scope | Per session, keyed by the client-local id, with a full 65,536-bit bitmap. The window is not shared between clients and does not survive a session. |
-| Completion transport | A `Finish` frame carries the id and an `RRReliableCompletionType` byte; `Reject` sends `Rejected`, `Finish` sends `Normal`, the response TTL and session close send nothing, and the client's own stop or failure supplies `Failed`. |
+| Completion transport | A `Finish` frame carries the id and an `RRReliableCompletionType` byte; `Reject` sends `Rejected`, `Finish` sends `Normal`, the response TTL sends `Failed`, a session close and a disposal close send nothing, and the client's own stop or failure supplies `Failed`. |
 | Timer factory | `IRRReliableTimerFactory`; the concrete transports accept an optional factory and default to the system timer. The binding exposes no timer parameter. |
 | Capacity | The server dispatch queue and its pre-start pending list default to `1024` items; a full list releases the request and closes its handle. |
 | Persistence | None. Pending requests, sessions, and the duplicate window do not survive a restart. |

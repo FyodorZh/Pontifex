@@ -16,7 +16,7 @@ namespace Pontifex.Utils
     }
 
     /// <inheritdoc />
-    public sealed class SerializedCallbackQueue<T> : ISerializedCallbackQueue<T>
+    public sealed class SerializedCallbackQueue<T> : IDispatchQueue<T>
     {
         private readonly ConcurrentQueueValve<T> _queue;
         

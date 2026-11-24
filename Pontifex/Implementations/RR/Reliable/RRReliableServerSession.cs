@@ -31,19 +31,42 @@ namespace Pontifex.RR.Reliable
         /// <summary>
         /// Gets whether the session is closed. A closed session never presents another request.
         /// </summary>
-        public bool IsClosed { get; private set; }
+        public bool IsClosed
+        {
+            get
+            {
+                lock (SyncRoot)
+                {
+                    return IsClosedCore;
+                }
+            }
+        }
+
+        private bool IsClosedCore { get; set; }
 
         /// <summary>
         /// Gets whether the completed window already covers every client-local id.
         /// </summary>
-        public bool IsFull => _completedCount >= IdCount;
+        public bool IsFull
+        {
+            get
+            {
+                lock (SyncRoot)
+                {
+                    return _completedCount >= IdCount;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets whether a response handle is live for <paramref name="clientLocalId"/>.
         /// </summary>
         public bool IsLive(ushort clientLocalId)
         {
-            return _live.ContainsKey(clientLocalId);
+            lock (SyncRoot)
+            {
+                return _live.ContainsKey(clientLocalId);
+            }
         }
 
         /// <summary>
@@ -51,9 +74,12 @@ namespace Pontifex.RR.Reliable
         /// </summary>
         public bool IsCompleted(ushort clientLocalId)
         {
-            int index = clientLocalId >> 3;
-            int mask = 1 << (clientLocalId & 7);
-            return (_completed[index] & mask) != 0;
+            lock (SyncRoot)
+            {
+                int index = clientLocalId >> 3;
+                int mask = 1 << (clientLocalId & 7);
+                return (_completed[index] & mask) != 0;
+            }
         }
 
         /// <summary>
@@ -61,7 +87,10 @@ namespace Pontifex.RR.Reliable
         /// </summary>
         public void AddLive(ushort clientLocalId, RRReliableResponse response)
         {
-            _live.Add(clientLocalId, response);
+            lock (SyncRoot)
+            {
+                _live.Add(clientLocalId, response);
+            }
         }
 
         /// <summary>
@@ -69,14 +98,17 @@ namespace Pontifex.RR.Reliable
         /// </summary>
         public bool TryTakeLive(ushort clientLocalId, out RRReliableResponse response)
         {
-            if (_live.Remove(clientLocalId, out RRReliableResponse? stored))
+            lock (SyncRoot)
             {
-                response = stored;
-                return true;
-            }
+                if (_live.Remove(clientLocalId, out RRReliableResponse? stored))
+                {
+                    response = stored;
+                    return true;
+                }
 
-            response = null!;
-            return false;
+                response = null!;
+                return false;
+            }
         }
 
         /// <summary>
@@ -84,14 +116,17 @@ namespace Pontifex.RR.Reliable
         /// </summary>
         public bool TryTakeLive(ushort clientLocalId, RRReliableResponse expected)
         {
-            if (_live.TryGetValue(clientLocalId, out RRReliableResponse? stored) &&
-                ReferenceEquals(stored, expected))
+            lock (SyncRoot)
             {
-                _live.Remove(clientLocalId);
-                return true;
-            }
+                if (_live.TryGetValue(clientLocalId, out RRReliableResponse? stored) &&
+                    ReferenceEquals(stored, expected))
+                {
+                    _live.Remove(clientLocalId);
+                    return true;
+                }
 
-            return false;
+                return false;
+            }
         }
 
         /// <summary>
@@ -102,25 +137,28 @@ namespace Pontifex.RR.Reliable
         /// when no live handle is expected.</param>
         public void MarkCompleted(ushort clientLocalId, RRReliableResponse? expected)
         {
-            if (expected == null)
+            lock (SyncRoot)
             {
-                _live.Remove(clientLocalId);
-            }
-            else
-            {
-                TryTakeLive(clientLocalId, expected);
-            }
-
-            int index = clientLocalId >> 3;
-            int mask = 1 << (clientLocalId & 7);
-
-            if ((_completed[index] & mask) == 0)
-            {
-                _completed[index] = (byte)(_completed[index] | mask);
-
-                if (_completedCount < IdCount)
+                if (expected == null)
                 {
-                    _completedCount++;
+                    _live.Remove(clientLocalId);
+                }
+                else
+                {
+                    TryTakeLive(clientLocalId, expected);
+                }
+
+                int index = clientLocalId >> 3;
+                int mask = 1 << (clientLocalId & 7);
+
+                if ((_completed[index] & mask) == 0)
+                {
+                    _completed[index] = (byte)(_completed[index] | mask);
+
+                    if (_completedCount < IdCount)
+                    {
+                        _completedCount++;
+                    }
                 }
             }
         }
@@ -131,16 +169,19 @@ namespace Pontifex.RR.Reliable
         /// </summary>
         public RRReliableResponse[] Close()
         {
-            if (IsClosed)
+            lock (SyncRoot)
             {
-                return Array.Empty<RRReliableResponse>();
-            }
+                if (IsClosedCore)
+                {
+                    return Array.Empty<RRReliableResponse>();
+                }
 
-            IsClosed = true;
-            var handles = new RRReliableResponse[_live.Count];
-            _live.Values.CopyTo(handles, 0);
-            _live.Clear();
-            return handles;
+                IsClosedCore = true;
+                var handles = new RRReliableResponse[_live.Count];
+                _live.Values.CopyTo(handles, 0);
+                _live.Clear();
+                return handles;
+            }
         }
     }
 }

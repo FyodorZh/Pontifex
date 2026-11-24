@@ -109,13 +109,83 @@ public sealed class RRReliableServerTransportTests
         Assert.That(handle.Finish(), Is.EqualTo(SendResult.Ok));
         Assert.That(handle.Finish(), Is.EqualTo(SendResult.Error));
         Assert.That(handle.Response(Payload(11)), Is.EqualTo(SendResult.Error));
-        Assert.That(handle.Reject(), Is.EqualTo(SendResult.Error));
+        Assert.Throws<InvalidOperationException>(() => handle.Reject());
 
         server.Stop();
 
         Assert.That(handle.Response(Payload(12)), Is.EqualTo(SendResult.Error));
         Assert.That(handle.Finish(), Is.EqualTo(SendResult.Error));
         Assert.That(handle.Reject(), Is.EqualTo(SendResult.Error));
+    }
+
+    [Test]
+    public void Finish_WhenTheSendFails_LeavesTheHandleRetryable()
+    {
+        using var carrier = new ScriptedReliableCarrier();
+        var factory = new ManualTimerFactory();
+        var handler = new RecordingReliableServerHandler();
+        TestReliableServerTransport server = StartServer(carrier, factory, handler);
+        server.ReceiveFromClient(carrier.ClientEndPoint, RequestFrame(1, 5));
+        Assert.That(WaitForRequestCount(handler, 1), Is.True);
+        IRRReliableResponse handle = handler.LastHandle!;
+        carrier.ServerSendOverride = (_, frame) =>
+        {
+            frame.Release();
+            return SendResult.Error;
+        };
+
+        Assert.That(handle.Finish(), Is.EqualTo(SendResult.Error));
+        carrier.ServerSendOverride = null;
+
+        Assert.That(handle.Finish(), Is.EqualTo(SendResult.Ok));
+        Assert.That(handle.Finish(), Is.EqualTo(SendResult.Error));
+        server.Stop();
+    }
+
+    [Test]
+    public void Reject_WhenTheSendFails_LeavesTheHandleRetryable()
+    {
+        using var carrier = new ScriptedReliableCarrier();
+        var factory = new ManualTimerFactory();
+        var handler = new RecordingReliableServerHandler();
+        TestReliableServerTransport server = StartServer(carrier, factory, handler);
+        server.ReceiveFromClient(carrier.ClientEndPoint, RequestFrame(1, 5));
+        Assert.That(WaitForRequestCount(handler, 1), Is.True);
+        IRRReliableResponse handle = handler.LastHandle!;
+        carrier.ServerSendOverride = (_, frame) =>
+        {
+            frame.Release();
+            return SendResult.Error;
+        };
+
+        Assert.That(handle.Reject(), Is.EqualTo(SendResult.Error));
+        carrier.ServerSendOverride = null;
+
+        Assert.That(handle.Reject(), Is.EqualTo(SendResult.Ok));
+        Assert.That(handle.Reject(), Is.EqualTo(SendResult.Ok));
+        server.Stop();
+    }
+
+    [Test]
+    public void Reject_AfterTheResponseTtlClosedTheHandle_ReturnsError()
+    {
+        using var carrier = new ScriptedReliableCarrier();
+        var factory = new ManualTimerFactory();
+        var handler = new RecordingReliableServerHandler();
+        TestReliableServerTransport server = StartServer(carrier, factory, handler);
+        server.ReceiveFromClient(carrier.ClientEndPoint, RequestFrame(1, 5));
+        Assert.That(WaitForRequestCount(handler, 1), Is.True);
+        IRRReliableResponse handle = handler.LastHandle!;
+
+        Assert.That(factory.FireAll(), Is.GreaterThan(0));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handle.Reject(), Is.EqualTo(SendResult.Error));
+            Assert.That(handle.Response(Payload(1)), Is.EqualTo(SendResult.Error));
+            Assert.That(handle.Finish(), Is.EqualTo(SendResult.Error));
+        });
+        server.Stop();
     }
 
     [Test]

@@ -603,6 +603,34 @@ public sealed class RRReliableClientTransportTests
         Assert.That(second.Responded.Wait(Timeout), Is.True);
     }
 
+    [Test]
+    public void Request_WhenTheTimerFactoryThrows_ReturnsErrorAndUnbindsTheHandler()
+    {
+        using var carrier = new ScriptedReliableCarrier();
+        var client = new TestReliableClientTransport(carrier, TimeSpan.FromSeconds(30),
+            new ThrowingTimerFactory());
+        _clients.Add(client);
+        Assert.That(client.Start(_ => { }), Is.True);
+        var handler = new RecordingReliableClientHandler();
+
+        Assert.That(client.Request(Payload(1), handler), Is.EqualTo(SendResult.Error));
+        Assert.Multiple(() =>
+        {
+            Assert.That(client.PendingCountForTests, Is.Zero);
+            Assert.That(handler.IsBound, Is.False);
+            Assert.That(handler.ResponseCount, Is.Zero);
+            Assert.That(handler.FinishCount, Is.Zero);
+        });
+    }
+
+    private sealed class ThrowingTimerFactory : IRRReliableTimerFactory
+    {
+        public IDisposable Schedule(TimeSpan delay, Action callback)
+        {
+            throw new InvalidOperationException("Expected timer-factory failure.");
+        }
+    }
+
     private TestReliableClientTransport StartClient(ScriptedReliableCarrier carrier,
         ManualTimerFactory factory, ushort randomSeed = 1, int messageMaxByteSize = 64,
         TimeSpan? requestTtl = null)

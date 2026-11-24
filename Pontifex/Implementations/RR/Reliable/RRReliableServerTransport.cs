@@ -27,7 +27,9 @@ namespace Pontifex.RR.Reliable
         private readonly object _dispatchLocker = new object();
         private readonly List<DispatchItem> _pendingFrames = new List<DispatchItem>();
 
-        private SerializedCallbackQueue<DispatchItem>? _dispatchQueue;
+        private readonly Func<int, string, Action<DispatchItem>, Action<DispatchItem>,
+            ISerializedCallbackQueue<DispatchItem>> _dispatchQueueFactory;
+        private ISerializedCallbackQueue<DispatchItem>? _dispatchQueue;
         private bool _dispatchReady;
         private bool _serverStopping;
 
@@ -46,6 +48,25 @@ namespace Pontifex.RR.Reliable
         protected RRReliableServerTransport(string typeName, TimeSpan responseTtl, ILogger logger,
             IMemoryRental memory, IRRReliableTimerFactory? timerFactory = null,
             int dispatchCapacity = 1024)
+            : this(typeName, responseTtl, logger, memory, timerFactory, dispatchCapacity,
+                (capacity, name, handler, disposer) =>
+                    new SerializedCallbackQueue<DispatchItem>(capacity, name, handler, disposer))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new RR reliable server transport with an injectable dispatch queue.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal seam for the Direct wiring test, which injects a
+        /// manual queue. The protected constructor keeps the production serialized queue.</description></item>
+        /// </list>
+        /// </remarks>
+        internal RRReliableServerTransport(string typeName, TimeSpan responseTtl, ILogger logger,
+            IMemoryRental memory, IRRReliableTimerFactory? timerFactory, int dispatchCapacity,
+            Func<int, string, Action<DispatchItem>, Action<DispatchItem>,
+                ISerializedCallbackQueue<DispatchItem>> dispatchQueueFactory)
             : base(typeName, logger, memory, timerFactory)
         {
             if (responseTtl <= TimeSpan.Zero)
@@ -61,6 +82,8 @@ namespace Pontifex.RR.Reliable
 
             _responseTtl = responseTtl;
             _dispatchCapacity = dispatchCapacity;
+            _dispatchQueueFactory = dispatchQueueFactory ??
+                throw new ArgumentNullException(nameof(dispatchQueueFactory));
         }
 
         /// <inheritdoc/>
@@ -80,7 +103,7 @@ namespace Pontifex.RR.Reliable
                     return true;
                 }
 
-                _dispatchQueue = new SerializedCallbackQueue<DispatchItem>(
+                _dispatchQueue = _dispatchQueueFactory(
                     _dispatchCapacity, Name + "-dispatch", Dispatch, DisposeItem);
                 return true;
             }
@@ -92,7 +115,7 @@ namespace Pontifex.RR.Reliable
         /// </summary>
         protected void StopDispatch()
         {
-            SerializedCallbackQueue<DispatchItem>? queue;
+            ISerializedCallbackQueue<DispatchItem>? queue;
             var pending = new List<DispatchItem>();
 
             lock (_dispatchLocker)
@@ -388,7 +411,7 @@ namespace Pontifex.RR.Reliable
 
         private void PostOrDisposeLocked(DispatchItem item)
         {
-            SerializedCallbackQueue<DispatchItem>? queue = _dispatchQueue;
+            ISerializedCallbackQueue<DispatchItem>? queue = _dispatchQueue;
 
             if (queue == null || !queue.Post(item))
             {
@@ -466,7 +489,7 @@ namespace Pontifex.RR.Reliable
             }
         }
 
-        private sealed class DispatchItem
+        internal sealed class DispatchItem
         {
             public DispatchItem(IEndPoint source, UnionDataList request, DateTime receivedAt,
                 ushort clientLocalId, RRReliableResponse response,

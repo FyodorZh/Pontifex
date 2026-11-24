@@ -21,6 +21,7 @@ namespace Pontifex.RR.Reliable
             Undecided,
             Accepted,
             Rejected,
+            Finished,
             Closed
         }
 
@@ -123,6 +124,7 @@ namespace Pontifex.RR.Reliable
 
                 if (IsClosed)
                 {
+                    // A Finished handle, a TTL close, a session close, or a disposal close is terminal.
                     ReleaseQuietly(response);
                     return SendResult.Error;
                 }
@@ -195,6 +197,7 @@ namespace Pontifex.RR.Reliable
 
                 if (IsClosed)
                 {
+                    // A Finished handle, a TTL close, a session close, or a disposal close is terminal.
                     return SendResult.Error;
                 }
 
@@ -213,7 +216,12 @@ namespace Pontifex.RR.Reliable
                     result = SendResult.Error;
                 }
 
-                CloseCore(ResponseState.Closed);
+                if (result == SendResult.Ok)
+                {
+                    // Only a committed completion closes the handle; a failed send stays retryable.
+                    CloseCore(ResponseState.Finished);
+                }
+
                 return result;
             }
         }
@@ -235,13 +243,14 @@ namespace Pontifex.RR.Reliable
                     return SendResult.Ok;
                 }
 
-                if (state == ResponseState.Accepted)
+                if (state == ResponseState.Accepted || state == ResponseState.Finished)
                 {
-                    throw new InvalidOperationException("The request was already accepted.");
+                    throw new InvalidOperationException("The request was already accepted or finished.");
                 }
 
                 if (IsClosed)
                 {
+                    // A TTL, session, or disposal close is terminal, not a protocol violation.
                     return SendResult.Error;
                 }
 
@@ -261,7 +270,11 @@ namespace Pontifex.RR.Reliable
                     result = SendResult.Error;
                 }
 
-                CloseCore(ResponseState.Rejected);
+                if (result == SendResult.Ok)
+                {
+                    CloseCore(ResponseState.Rejected);
+                }
+
                 return result;
             }
         }

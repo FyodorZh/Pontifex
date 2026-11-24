@@ -87,6 +87,11 @@ namespace Pontifex.RR.Reliable
         internal RRReliableRequestTable RequestsForTests => _requests;
 
         /// <summary>
+        /// Gets the number of pending requests, so a test can assert an aborted request left none.
+        /// </summary>
+        internal int PendingCountForTests => _requests.Count;
+
+        /// <summary>
         /// Creates the random 16-bit base of this client's request ids. A test may override it to
         /// make the sequence deterministic.
         /// </summary>
@@ -267,15 +272,24 @@ namespace Pontifex.RR.Reliable
 
                         if (accepted)
                         {
-                            IDisposable timer = TimerFactory.Schedule(_requestTtl,
-                                () => OnRequestTtl(requestId, state));
-
-                            if (!state.TrySetTimer(timer))
+                            try
                             {
-                                timer.Dispose();
-                            }
+                                IDisposable timer = TimerFactory.Schedule(_requestTtl,
+                                    () => OnRequestTtl(requestId, state));
 
-                            DrainProvisionalLocked(state);
+                                if (!state.TrySetTimer(timer))
+                                {
+                                    timer.Dispose();
+                                }
+
+                                DrainProvisionalLocked(state);
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.wtf(ex);
+                                _requests.TryTakeExact(requestId, state, out _);
+                                accepted = false;
+                            }
                         }
                     }
                 }
