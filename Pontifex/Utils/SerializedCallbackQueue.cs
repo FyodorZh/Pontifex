@@ -42,6 +42,34 @@ namespace Pontifex.Utils
         }
 
         /// <summary>
+        /// Initializes an unbounded serialized callback queue.
+        /// </summary>
+        /// <param name="threadName">The name of the worker thread.</param>
+        /// <param name="handler">The callback invoked for each queued item.</param>
+        /// <param name="disposer">The callback invoked for an item that is still queued when the queue is
+        /// disposed.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: This overload uses a genuinely unbounded concurrent queue
+        /// instead of a very large pre-sized array. It is intended for a mode that promises not to drop an
+        /// accepted message, for example reliable debug mode.</description></item>
+        /// </list>
+        /// </remarks>
+        public SerializedCallbackQueue(string threadName, Action<T> handler, Action<T> disposer)
+        {
+            _queue = new (
+                new SystemConcurrentQueue<T>(), disposer, _ => { });
+
+            _handler = handler;
+            var thread = new Thread(Loop)
+            {
+                IsBackground = true,
+                Name = threadName
+            };
+            thread.Start();
+        }
+
+        /// <summary>
         /// Queues <paramref name="state"/> for serialized execution on the worker thread.
         /// Safe to call concurrently from any thread.
         /// </summary>

@@ -239,11 +239,11 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <inheritdoc/>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: Direct delivery is perfect once the client endpoint
-        /// requests the debug pair on its channel, so the server side needs no per-route
-        /// state.</description></item>
+        /// <item><description><b>Other notes</b>: The Direct server has no delivery systems of its own and
+        /// cannot enforce reliable delivery for server replies, so the request is declined. Reliable debug mode
+        /// is client-only for this carrier.</description></item>
         /// </list>
         /// </remarks>
-        public bool TryMakeReliableForDebug() => true;
+        public bool TryMakeReliableForDebug() => false;
     }
 }

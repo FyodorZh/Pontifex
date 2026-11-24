@@ -19,6 +19,16 @@ public sealed class DirectRawUnreliableConformanceAdapter
         _logger = logger ?? new Logger([]);
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><b>Other notes</b>: The Direct server has no delivery systems and cannot enforce
+    /// reliable delivery for server replies; reliable debug mode is client-only for this
+    /// carrier.</description></item>
+    /// </list>
+    /// </remarks>
+    public bool ServerSupportsReliableDebug => false;
+
     public IRawUnreliableConformanceFixture<IRawUnreliableServer> CreateFixture(
         RawUnreliableConformanceFixtureOptions? options = null)
     {

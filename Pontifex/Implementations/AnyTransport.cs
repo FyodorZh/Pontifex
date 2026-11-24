@@ -21,6 +21,17 @@ namespace Pontifex
         private bool _startSucceeded;
 
         private Action<StopReason>? _onStopped;
+
+        /// <summary>
+        /// Gets or sets a test hook invoked before <see cref="Start"/> takes the lifecycle lock.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It lets a test interleave a
+        /// concurrent option selection with a start that has not yet entered the lifecycle lock.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Action? BeforeStartLockForTests { get; set; }
         
         public abstract TransportType Type { get; }
 
@@ -69,6 +80,39 @@ namespace Pontifex
         /// </remarks>
         protected abstract void OnStopped(StopReason reason);
 
+        /// <summary>
+        /// Releases configuration owned by the transport when an explicit <see cref="Stop"/> is called before
+        /// any start attempt.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Called only for a true pre-start stop: the transport is
+        /// valid, not started, and has never attempted a start. A second <see cref="Stop"/> after a successful
+        /// start, a stop of a failed transport, and a stop while running do not call it. The base
+        /// implementation does nothing. A start remains legal after this call.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual void OnStopBeforeStart()
+        {
+        }
+
+        /// <summary>
+        /// Releases configuration owned by the transport when the initial start attempt fails or is
+        /// invalidated.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Called after a failed <see cref="TryStart"/>, after a
+        /// conformance-forced start failure, after a stop that won inside the start attempt, and for a start
+        /// before a successful initialization. A later <see cref="Start"/> call that simply returns
+        /// <see langword="false"/> because the transport already started or stopped does not call it. The base
+        /// implementation does nothing.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual void OnStartFailed()
+        {
+        }
+
         public string Name { get; }
 
         public bool IsValid
@@ -111,6 +155,8 @@ namespace Pontifex
                 throw new ArgumentNullException(nameof(onStopped));
             }
 
+            BeforeStartLockForTests?.Invoke();
+
             lock (_locker)
             {
                 if (_isValid && !_hasStarted)
@@ -119,6 +165,7 @@ namespace Pontifex
                     if (Conformance.ShouldFailNextStart_AnyTransportLevel())
                     {
                         Fail("Start", "Conformance control forced failure");
+                        OnStartFailed();
                         return false;
                     }
 
@@ -133,6 +180,7 @@ namespace Pontifex
                             // is never invoked for this attempt.
                             _onStopped = null;
                             Fail("Start", "Stop was requested during the start attempt");
+                            OnStartFailed();
                             return false;
                         }
 
@@ -143,6 +191,7 @@ namespace Pontifex
                     _started = false;
                     _onStopped = null;
                     Fail("Start", "Failed to start");
+                    OnStartFailed();
                     return false;
                 }
                 return false;
@@ -155,6 +204,11 @@ namespace Pontifex
             {
                 if (_isValid)
                 {
+                    if (!_started && !_hasStarted)
+                    {
+                        OnStopBeforeStart();
+                    }
+
                     if (_started)
                     {
                         Conformance.BeforeStopStateTransitionGate.Hit();

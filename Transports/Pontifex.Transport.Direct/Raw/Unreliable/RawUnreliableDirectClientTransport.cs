@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.Raw.Unreliable;
@@ -17,9 +18,10 @@ namespace Pontifex.Raw.Unreliable.Direct
     /// <item><description><b>Ownership</b>: the transport is configuration only. It creates one client
     /// endpoint in <see cref="RawUnreliableClientTransport.CreateEndpoint"/> and the endpoint acquires the
     /// in-process channel lazily on the first send.</description></item>
-    /// <item><description><b>Delivery systems</b>: <see cref="SetDeliverySystem"/> stores the default pair.
-    /// Reliable debug mode replaces both with a perfect pair for every route created
-    /// afterwards.</description></item>
+    /// <item><description><b>Delivery systems</b>: no delivery system is constructed before the start
+    /// materializes it. A configured explicit pair, a netem factory, and the default perfect pair are all
+    /// represented by per-direction factories; the transport releases only instances that were never handed
+    /// to an endpoint.</description></item>
     /// </list>
     /// </remarks>
     public sealed class RawUnreliableDirectClientTransport : RawUnreliableClientTransport,
@@ -28,13 +30,21 @@ namespace Pontifex.Raw.Unreliable.Direct
         private readonly IEndPoint _serverEp;
         private readonly IEndPoint _clientEp;
 
-        private volatile IDeliverySystem _clientDeliverySystem = new PerfectDeliverySystem();
-        private volatile IDeliverySystem _serverDeliverySystem = new PerfectDeliverySystem();
-
-        private IDeliverySystem? _handedOffClientDeliverySystem;
-        private IDeliverySystem? _handedOffServerDeliverySystem;
+        private readonly DeliveryDirection _clientDirection;
+        private readonly DeliveryDirection _serverDirection;
 
         private bool _askedForReliableDelivery;
+
+        /// <summary>
+        /// Gets or sets a test-only endpoint factory used by <see cref="CreateEndpoint"/>.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It defaults to <see langword="null"/>
+        /// and never changes production behavior when unset.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Func<IRawUnreliableHandler, RawUnreliableEndpoint>? EndpointFactoryForTests { get; set; }
 
         public override TransportType Type => TransportType.RawUnreliable;
 
@@ -60,8 +70,7 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; it exposes the same value the
-        /// endpoint receives as its local outbound cap.</description></item>
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only.</description></item>
         /// </list>
         /// </remarks>
         internal long ExposedSendBudgetBytes => SendBudgetBytes;
@@ -89,6 +98,11 @@ namespace Pontifex.Raw.Unreliable.Direct
         internal int ExposedSendBudgetMessages => SendBudgetMessages;
 
         /// <summary>
+        /// Gets a value indicating whether reliable debug mode was selected.
+        /// </summary>
+        internal bool IsReliableForDebugForTests => _askedForReliableDelivery;
+
+        /// <summary>
         /// Initializes the in-process unreliable client transport.
         /// </summary>
         /// <param name="serverName">The name of the server to connect to.</param>
@@ -100,20 +114,23 @@ namespace Pontifex.Raw.Unreliable.Direct
         {
             _serverEp = new StringEndPoint(serverName);
             _clientEp = new GuidEndPoint(Guid.NewGuid());
+            _clientDirection = new DeliveryDirection(CreatePerfectDeliverySystem);
+            _serverDirection = new DeliveryDirection(CreatePerfectDeliverySystem);
         }
 
         /// <summary>
-        /// Stores the delivery systems used by the channel created for this transport's client endpoint.
+        /// Stores explicit delivery systems used by the channel created for this transport's client endpoint.
         /// </summary>
         /// <param name="clientDeliverySystem">The server-to-client delivery system.</param>
         /// <param name="serverDeliverySystem">The client-to-server delivery system.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: Must be called before the transport
-        /// starts. Reliable debug mode overrides both systems for endpoints created after
-        /// it.</description></item>
+        /// starts and before reliable debug mode is selected. A second call releases the previous explicit
+        /// systems exactly once.</description></item>
         /// <item><description><b>Ownership</b>: The transport takes ownership of both systems and releases
-        /// them when the channel is disposed or when the transport stops without installing them.</description></item>
+        /// them when the channel is disposed, when the transport stops before they are installed, or when
+        /// reliable debug mode replaces them.</description></item>
         /// </list>
         /// </remarks>
         public void SetDeliverySystem(IDeliverySystem clientDeliverySystem,
@@ -129,28 +146,86 @@ namespace Pontifex.Raw.Unreliable.Direct
                 throw new ArgumentNullException(nameof(serverDeliverySystem));
             }
 
-            if (HasStartBeenAttempted)
+            lock (_locker)
             {
-                throw new InvalidOperationException(
-                    "Delivery systems must be configured before the transport starts.");
+                if (HasStartBeenAttempted)
+                {
+                    throw new InvalidOperationException(
+                        "Delivery systems must be configured before the transport starts.");
+                }
+
+                if (_askedForReliableDelivery)
+                {
+                    throw new InvalidOperationException(
+                        "Reliable debug mode already selected the perfect delivery systems.");
+                }
+
+                IDeliverySystem? oldClient = _clientDirection.Configured;
+                IDeliverySystem? oldServer = _serverDirection.Configured;
+
+                _clientDirection.SetConfigured(clientDeliverySystem,
+                    CreateSingleUseFactory(clientDeliverySystem));
+                _serverDirection.SetConfigured(serverDeliverySystem,
+                    CreateSingleUseFactory(serverDeliverySystem));
+
+                if (oldClient != null
+                    && !ReferenceEquals(oldClient, clientDeliverySystem)
+                    && !ReferenceEquals(oldClient, serverDeliverySystem))
+                {
+                    DeliverySystemLifetime.Release(oldClient);
+                }
+
+                if (oldServer != null
+                    && !ReferenceEquals(oldServer, oldClient)
+                    && !ReferenceEquals(oldServer, clientDeliverySystem)
+                    && !ReferenceEquals(oldServer, serverDeliverySystem))
+                {
+                    DeliverySystemLifetime.Release(oldServer);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Stores the per-direction delivery-system factories used when the endpoint is created.
+        /// </summary>
+        /// <param name="clientFactory">The factory for the server-to-client direction.</param>
+        /// <param name="serverFactory">The factory for the client-to-server direction.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal binding seam. It releases any previously configured
+        /// explicit systems and never constructs a system itself.</description></item>
+        /// </list>
+        /// </remarks>
+        internal void SetDeliverySystemFactory(Func<IDeliverySystem> clientFactory,
+            Func<IDeliverySystem> serverFactory)
+        {
+            if (clientFactory == null)
+            {
+                throw new ArgumentNullException(nameof(clientFactory));
             }
 
-            var oldClient = _clientDeliverySystem;
-            var oldServer = _serverDeliverySystem;
-            _clientDeliverySystem = clientDeliverySystem;
-            _serverDeliverySystem = serverDeliverySystem;
-
-            if (!ReferenceEquals(oldClient, clientDeliverySystem)
-                && !ReferenceEquals(oldClient, serverDeliverySystem))
+            if (serverFactory == null)
             {
-                DeliverySystemLifetime.Release(oldClient);
+                throw new ArgumentNullException(nameof(serverFactory));
             }
 
-            if (!ReferenceEquals(oldServer, clientDeliverySystem)
-                && !ReferenceEquals(oldServer, serverDeliverySystem)
-                && !ReferenceEquals(oldServer, oldClient))
+            lock (_locker)
             {
-                DeliverySystemLifetime.Release(oldServer);
+                if (HasStartBeenAttempted)
+                {
+                    throw new InvalidOperationException(
+                        "Delivery systems must be configured before the transport starts.");
+                }
+
+                if (_askedForReliableDelivery)
+                {
+                    throw new InvalidOperationException(
+                        "Reliable debug mode already selected the perfect delivery systems.");
+                }
+
+                ReleaseConfiguredPair();
+                _clientDirection.SetFactory(clientFactory);
+                _serverDirection.SetFactory(serverFactory);
             }
         }
 
@@ -164,55 +239,101 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <inheritdoc/>
         protected override void StopCarrier(StopReason reason)
         {
-            // The endpoint owns the systems it was constructed with; it releases them even when it never
-            // installed them on a channel. The transport releases only systems that were never handed over,
-            // for example when reliable debug mode replaced them.
-            var client = _clientDeliverySystem;
-            var server = _serverDeliverySystem;
-            _clientDeliverySystem = new PerfectDeliverySystem();
-            _serverDeliverySystem = new PerfectDeliverySystem();
-
-            if (!ReferenceEquals(client, _handedOffClientDeliverySystem))
-            {
-                DeliverySystemLifetime.Release(client);
-            }
-
-            if (!ReferenceEquals(server, _handedOffServerDeliverySystem)
-                && !ReferenceEquals(server, client))
-            {
-                DeliverySystemLifetime.Release(server);
-            }
+            ReleaseUnhandedPair();
         }
 
         /// <inheritdoc/>
         protected override RawUnreliableEndpoint CreateEndpoint(IRawUnreliableHandler handler)
         {
-            IDeliverySystem clientDeliverySystem = _askedForReliableDelivery
-                ? new PerfectDeliverySystem()
-                : _clientDeliverySystem;
-            IDeliverySystem serverDeliverySystem = _askedForReliableDelivery
-                ? new PerfectDeliverySystem()
-                : _serverDeliverySystem;
-
-            if (!_askedForReliableDelivery)
+            if (_askedForReliableDelivery)
             {
-                _handedOffClientDeliverySystem = clientDeliverySystem;
-                _handedOffServerDeliverySystem = serverDeliverySystem;
+                var perfectClient = new PerfectDeliverySystem();
+                var perfectServer = new PerfectDeliverySystem();
+                try
+                {
+                    return new RawUnreliableDirectClientEndpoint(
+                        Name,
+                        _serverEp,
+                        _clientEp,
+                        handler,
+                        MessageMaxByteSize,
+                        SendBudgetBytes,
+                        SendBudgetMessages,
+                        SendBudgetBytes,
+                        perfectClient,
+                        perfectServer,
+                        _clientDirection,
+                        _serverDirection,
+                        unboundedCommitQueue: true,
+                        Memory,
+                        Log);
+                }
+                catch
+                {
+                    ReleasePair(perfectClient, perfectServer);
+                    throw;
+                }
             }
 
-            return new RawUnreliableDirectClientEndpoint(
-                Name,
-                _serverEp,
-                _clientEp,
-                handler,
-                MessageMaxByteSize,
-                SendBudgetBytes,
-                SendBudgetMessages,
-                SendBudgetBytes,
-                clientDeliverySystem,
-                serverDeliverySystem,
-                Memory,
-                Log);
+            try
+            {
+                IDeliverySystem clientDeliverySystem = _clientDirection.Materialize();
+                IDeliverySystem serverDeliverySystem = _serverDirection.Materialize();
+
+                RawUnreliableEndpoint endpoint;
+                Func<IRawUnreliableHandler, RawUnreliableEndpoint>? endpointFactory = EndpointFactoryForTests;
+                if (endpointFactory != null)
+                {
+                    endpoint = endpointFactory(handler);
+                }
+                else
+                {
+                    endpoint = new RawUnreliableDirectClientEndpoint(
+                        Name,
+                        _serverEp,
+                        _clientEp,
+                        handler,
+                        MessageMaxByteSize,
+                        SendBudgetBytes,
+                        SendBudgetMessages,
+                        SendBudgetBytes,
+                        clientDeliverySystem,
+                        serverDeliverySystem,
+                        _clientDirection,
+                        _serverDirection,
+                        unboundedCommitQueue: false,
+                        Memory,
+                        Log);
+                }
+
+                _clientDirection.MarkHandedOff();
+                _serverDirection.MarkHandedOff();
+                return endpoint;
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                ReleaseUnhandedPair();
+                throw;
+            }
+        }
+
+        /// <inheritdoc/>
+        protected override void OnStopBeforeStart()
+        {
+            lock (_locker)
+            {
+                ReleaseUnhandedPair();
+            }
+        }
+
+        /// <inheritdoc/>
+        protected override void OnStartFailed()
+        {
+            lock (_locker)
+            {
+                ReleaseUnhandedPair();
+            }
         }
 
         public override string ToString()
@@ -226,18 +347,213 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <list type="bullet">
         /// <item><description><b>Preconditions/Postconditions</b>: Requests reliable delivery for every
         /// endpoint created afterwards and reports whether the request was accepted. The request is accepted
-        /// only before the transport starts.</description></item>
+        /// only before the transport starts. The transition holds the lifecycle lock for the whole
+        /// check-release-write sequence, so no start can materialize a system between the release and the flag
+        /// write.</description></item>
+        /// <item><description><b>Ownership</b>: Any explicit systems configured through
+        /// <see cref="SetDeliverySystem"/> are released exactly once here, because reliable debug mode never
+        /// materializes them.</description></item>
         /// </list>
         /// </remarks>
         public bool TryMakeReliableForDebug()
         {
-            if (HasStartBeenAttempted)
+            lock (_locker)
             {
-                return false;
+                if (HasStartBeenAttempted)
+                {
+                    return false;
+                }
+
+                _askedForReliableDelivery = true;
+                ReleaseUnhandedPair();
+                return true;
+            }
+        }
+
+        private void ReleaseConfiguredPair()
+        {
+            IDeliverySystem? client = _clientDirection.Configured;
+            IDeliverySystem? server = _serverDirection.Configured;
+            _clientDirection.ResetAfterRelease(CreatePerfectDeliverySystem);
+            _serverDirection.ResetAfterRelease(CreatePerfectDeliverySystem);
+
+            if (client != null)
+            {
+                DeliverySystemLifetime.Release(client);
             }
 
-            _askedForReliableDelivery = true;
-            return true;
+            if (server != null && !ReferenceEquals(server, client))
+            {
+                DeliverySystemLifetime.Release(server);
+            }
+        }
+
+        private void ReleaseUnhandedPair()
+        {
+            IDeliverySystem? client = _clientDirection.DetachUnhanded();
+            IDeliverySystem? server = _serverDirection.DetachUnhanded();
+            _clientDirection.ResetAfterRelease(CreatePerfectDeliverySystem);
+            _serverDirection.ResetAfterRelease(CreatePerfectDeliverySystem);
+
+            if (client != null)
+            {
+                DeliverySystemLifetime.Release(client);
+            }
+
+            if (server != null && !ReferenceEquals(server, client))
+            {
+                DeliverySystemLifetime.Release(server);
+            }
+        }
+
+        private static void ReleasePair(IDeliverySystem? first, IDeliverySystem? second)
+        {
+            if (first != null)
+            {
+                DeliverySystemLifetime.Release(first);
+            }
+
+            if (second != null && !ReferenceEquals(second, first))
+            {
+                DeliverySystemLifetime.Release(second);
+            }
+        }
+
+        private static IDeliverySystem CreatePerfectDeliverySystem()
+        {
+            return new PerfectDeliverySystem();
+        }
+
+        private static Func<IDeliverySystem> CreateSingleUseFactory(IDeliverySystem system)
+        {
+            int used = 0;
+            return () =>
+            {
+                if (Interlocked.Exchange(ref used, 1) != 0)
+                {
+                    throw new InvalidOperationException(
+                        "The configured delivery system was already materialized.");
+                }
+
+                return system;
+            };
+        }
+
+        /// <summary>
+        /// One channel direction's delivery-system factory and its ownership state.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: A configured explicit instance is owned by the transport
+        /// until it is materialized for an endpoint. Once handed off, the endpoint or its channel releases
+        /// it.</description></item>
+        /// </list>
+        /// </remarks>
+        internal sealed class DeliveryDirection
+        {
+            private readonly object _gate = new object();
+            private Func<IDeliverySystem> _factory;
+            private IDeliverySystem? _configured;
+            private IDeliverySystem? _materialized;
+            private bool _handedOff;
+
+            public DeliveryDirection(Func<IDeliverySystem> factory)
+            {
+                _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+            }
+
+            public IDeliverySystem? Configured
+            {
+                get
+                {
+                    lock (_gate)
+                    {
+                        return _configured;
+                    }
+                }
+            }
+
+            public IDeliverySystem Materialize()
+            {
+                lock (_gate)
+                {
+                    if (_materialized != null)
+                    {
+                        return _materialized;
+                    }
+
+                    _materialized = _configured ?? _factory();
+                    return _materialized;
+                }
+            }
+
+            public void SetFactory(Func<IDeliverySystem> factory)
+            {
+                lock (_gate)
+                {
+                    _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+                    _configured = null;
+                }
+            }
+
+            public void SetConfigured(IDeliverySystem system, Func<IDeliverySystem> factory)
+            {
+                lock (_gate)
+                {
+                    _configured = system;
+                    _factory = factory;
+                    _materialized = null;
+                    _handedOff = false;
+                }
+            }
+
+            public void MarkHandedOff()
+            {
+                lock (_gate)
+                {
+                    _handedOff = true;
+                }
+            }
+
+            public IDeliverySystem? DetachUnhanded()
+            {
+                lock (_gate)
+                {
+                    if (_handedOff)
+                    {
+                        _configured = null;
+                        _materialized = null;
+                        return null;
+                    }
+
+                    IDeliverySystem? result = _materialized ?? _configured;
+                    _configured = null;
+                    _materialized = null;
+                    return result;
+                }
+            }
+
+            public void ResetAfterRelease(Func<IDeliverySystem> factory)
+            {
+                lock (_gate)
+                {
+                    _configured = null;
+                    _materialized = null;
+                    _handedOff = false;
+                    _factory = factory;
+                }
+            }
+
+            public void AskResetToPerfect()
+            {
+                lock (_gate)
+                {
+                    _configured = null;
+                    _materialized = null;
+                    _handedOff = false;
+                    _factory = () => new PerfectDeliverySystem();
+                }
+            }
         }
     }
 }

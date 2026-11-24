@@ -17,6 +17,9 @@ public sealed class UdpRawUnreliableConformanceAdapter
         _logger = logger ?? new Logger([]);
     }
 
+    /// <inheritdoc/>
+    public bool ServerSupportsReliableDebug => true;
+
     public IRawUnreliableConformanceFixture<IRawUnreliableServer> CreateFixture(
         RawUnreliableConformanceFixtureOptions? options = null)
     {

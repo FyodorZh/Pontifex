@@ -90,6 +90,12 @@ preserves order, content, and delivery. The `netem` type installs a
 `NetemDeliverySystem` per direction with the same configuration; it may drop,
 duplicate, reorder, delay, and rate-limit messages according to the fields above.
 
+The binding stores delivery factories, not delivery systems. No delivery system
+is constructed during transport construction, binding creation, or before the
+client start; the client endpoint materializes one system per direction when it
+is created. A configured `perfect` or `netem` value is therefore inert until the
+first start materializes it, and a pre-start stop constructs nothing.
+
 The binding **MUST** reject an unknown `type`, an unparsable field, an
 incomplete loss-model parameter set, and a `delivery` value supplied for the
 server role.
@@ -113,8 +119,35 @@ disposed channel stops both endpoint halves.
 
 The delivery systems installed on a channel are owned by that channel and are
 disposed with it. A delivery system that the client never installed on a channel
-is disposed when the client transport stops. Delivery configuration is accepted
-only before the client transport starts.
+is released exactly once by the client endpoint or the client transport.
+Delivery configuration is accepted only before the client transport starts, and
+reliable debug mode must be selected before any explicit configuration.
+
+Ownership is exact per direction:
+
+- A configured explicit pair is owned by the transport until the endpoint
+  materializes it. A pre-start stop, a start failure, or reliable debug mode
+  releases it exactly once and replaces the direction with a fresh perfect
+  factory.
+- If endpoint construction throws, both materialized systems are released once
+  and both directions are reset to fresh perfect factories, so a retry cannot
+  reuse a released instance.
+- If the channel takes a system, the channel releases it. The client endpoint
+  releases only the direction the channel never took. A channel is removed from
+  the server registry before it is disposed on a failed connect.
+- A manager callback exception or a delivery-system install exception is logged
+  and isolated: the endpoint stays alive, the outbound buffer is released once,
+  both directions are reset to fresh perfect factories, and the next send
+  retries.
+- A successful start followed by `Stop` releases each direction exactly once.
+
+The client endpoint's commit queue is bounded by `100` messages. Reliable debug
+mode is client-only: the Direct server has no delivery systems, so
+`TryMakeReliableForDebug()` returns `false`. In client debug mode the client
+endpoint uses perfect systems and an unbounded commit queue, so the client
+direction cannot drop an accepted message on queue saturation. Server replies
+remain on the bounded commit queue; client debug mode does not make
+server-to-client FIFO unconditional under queue saturation.
 
 The carrier enforces these limits:
 
@@ -156,9 +189,19 @@ The endpoint control hits `BeforeHandlerStoppedGate` immediately before a
 forwarded handler `OnStopped` call. It is not hit for a handler whose start
 notification threw, and it is not hit on the raw endpoint teardown itself.
 
-This implementation declares no deviation from the abstract type. It adds no
-authentication, confidentiality, or integrity protection; the process boundary is
-the isolation boundary.
+### 7.1 Residual limitations
+
+- Reliable debug mode is client-only. `RawUnreliableDirectServerTransport`
+  reports it as unsupported because the server owns no delivery systems and
+  cannot make its reply queue reliable. Conformance reliable-mode tests run
+  through the client capability.
+- Under client debug mode, server replies stay on the bounded commit queue. A
+  saturated reply queue can still drop a queued reply, so mandated FIFO is not
+  unconditional for server-to-client traffic.
+
+Apart from these two documented limitations, this implementation declares no
+deviation from the abstract type. It adds no authentication, confidentiality, or
+integrity protection; the process boundary is the isolation boundary.
 
 ## 8. Implementation-defined choices
 
@@ -166,11 +209,11 @@ the isolation boundary.
 | --- | --- |
 | Carrier and wire encoding | In-process `Channel`; each message is one complete `UnionDataList`, with no byte serialization. |
 | Addressing | The server is a `StringEndPoint` holding `id`; each client transport owns a unique `GuidEndPoint`, which the server uses as the source route. |
-| Delivery virtualization | `PerfectDeliverySystem` by default; the `delivery` parameter optionally installs `NetemDeliverySystem` for both channel directions. |
-| Callback scheduler | Each endpoint owns a serial action queue; each sender owns a bounded commit queue so a peer callback does not begin on the caller's thread. |
+| Delivery virtualization | `PerfectDeliverySystem` by default; the `delivery` parameter configures a per-direction factory that constructs `PerfectDeliverySystem` or `NetemDeliverySystem`. Nothing is constructed before the client start materializes the endpoint. |
+| Callback scheduler | Each endpoint owns a serial action queue; each sender owns a commit queue so a peer callback does not begin on the caller's thread. The client debug commit queue is unbounded; the normal and server reply queues are bounded. |
 | Queue capacity and drain rate | `100` messages and `104857600` bytes; a full queue releases the message and may yield `BufferOverflow`. |
-| Dispatch timing | A committed message reaches the channel after `Send` returns; a server notifies active handlers with the supplied stop reason before it stops the carrier, and `onStopped` is dispatched after endpoint teardown. |
-| Failure detection | Channel disposal is the only disconnection signal; a missing server is detected during the first send. |
+| Dispatch timing | A commit worker defers the peer callback until `Send` returns; a server notifies active handlers with the supplied stop reason before it stops the carrier, and `onStopped` is dispatched after endpoint teardown. |
+| Failure detection | Channel disposal is the only disconnection signal; a missing server is detected during the first send. A connect or install failure is isolated and retried with fresh perfect systems. |
 | Logging | Oversized inbound messages and delivery-system exceptions are logged; a message dropped for a missing server is not logged. |
 | Protection | None beyond the process boundary. |
 
@@ -194,8 +237,11 @@ the isolation boundary.
 - [ ] Remove a channel from the server registry, and dispose it, when the client
       endpoint stops or the channel is otherwise disposed.
 - [ ] Dispose every registered channel when the server stops.
-- [ ] Dispose a channel's delivery systems with the channel, and dispose an
-      uninstalled delivery system when the client transport stops.
+- [ ] Dispose a channel's delivery systems with the channel; release an
+      uninstalled system exactly once; construct no system before start.
+- [ ] Isolate connect and install exceptions and retry with fresh systems.
 - [ ] Support the `perfect` and `netem` delivery types and reject an invalid
       `delivery` value, including one supplied for the server role.
+- [ ] Report reliable debug mode as client-only and keep server replies on the
+      bounded commit queue.
 - [ ] Add no protection beyond the process boundary.

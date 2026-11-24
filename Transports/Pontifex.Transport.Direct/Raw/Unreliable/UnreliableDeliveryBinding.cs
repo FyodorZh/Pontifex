@@ -28,6 +28,31 @@ namespace Pontifex.Raw.Unreliable.Direct
             ITransportStructValue value,
             IMemoryRental memory)
         {
+            return CreateFactory(value, memory)();
+        }
+
+        /// <summary>
+        /// Validates a delivery value and returns a factory that constructs a fresh delivery system on each
+        /// call.
+        /// </summary>
+        /// <param name="value">The delivery value to validate and parse.</param>
+        /// <param name="memory">The memory rental used by a netem system.</param>
+        /// <returns>A factory that constructs a new, independent delivery system per invocation.</returns>
+        /// <exception cref="ArgumentNullException">A required argument is <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="ArgumentException">The value is structurally invalid, names an unknown type, or
+        /// selects an incomplete loss model.</exception>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Validation and parsing run eagerly here; the returned
+        /// factory captures only the immutable parsed configuration and the memory rental, never the mutable
+        /// <see cref="ITransportStructValue"/>.</description></item>
+        /// </list>
+        /// </remarks>
+        public static Func<IDeliverySystem> CreateFactory(
+            ITransportStructValue value,
+            IMemoryRental memory)
+        {
             if (value is null)
             {
                 throw new ArgumentNullException(nameof(value));
@@ -47,9 +72,14 @@ namespace Pontifex.Raw.Unreliable.Direct
             switch (type)
             {
                 case "perfect":
-                    return new PerfectDeliverySystem();
+                    return () => new PerfectDeliverySystem();
                 case "netem":
-                    return BuildNetem(value, memory);
+                    var config = ParseNetemConfig(value);
+                    _ = NetemDeliverySystem.CreateLossModel(config);
+                    return () => new NetemDeliverySystem(
+                        config,
+                        memory.CollectablePool,
+                        memory.ByteArraysPool);
                 default:
                     throw new ArgumentException(
                         $"Unknown delivery type '{type}'.", nameof(value));

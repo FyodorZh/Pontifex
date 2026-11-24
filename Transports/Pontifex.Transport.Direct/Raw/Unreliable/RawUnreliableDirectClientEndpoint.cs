@@ -33,14 +33,17 @@ namespace Pontifex.Raw.Unreliable.Direct
     {
         private readonly IEndPoint _serverEndPoint;
         private readonly IEndPoint _clientEndPoint;
-        private readonly IDeliverySystem _clientDeliverySystem;
-        private readonly IDeliverySystem _serverDeliverySystem;
+        private IDeliverySystem _clientDeliverySystem;
+        private IDeliverySystem _serverDeliverySystem;
+        private readonly RawUnreliableDirectClientTransport.DeliveryDirection _clientDirection;
+        private readonly RawUnreliableDirectClientTransport.DeliveryDirection _serverDirection;
         private readonly Action _onChannelDisposed;
         private readonly SerializedCallbackQueue<CommitItem> _sendQueue;
         private readonly int _queueCapacity;
 
         private Channel? _channel;
-        private bool _deliverySystemsInstalled;
+        private bool _clientSystemInstalled;
+        private bool _serverSystemInstalled;
         private int _outstandingCommitMessages;
 
         /// <summary>
@@ -119,29 +122,46 @@ namespace Pontifex.Raw.Unreliable.Direct
             long inboxCapacityBytes,
             IDeliverySystem clientDeliverySystem,
             IDeliverySystem serverDeliverySystem,
+            RawUnreliableDirectClientTransport.DeliveryDirection clientDirection,
+            RawUnreliableDirectClientTransport.DeliveryDirection serverDirection,
+            bool unboundedCommitQueue,
             IMemoryRental memory,
             ILogger log)
             : base(transportName, serverEndPoint, handler, messageMaxByteSize, bufferCapacityBytes,
                 queueCapacity, inboxCapacityBytes, memory, log)
         {
+            if (queueCapacity <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(queueCapacity));
+            }
+
             _serverEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
             _clientEndPoint = clientEndPoint ?? throw new ArgumentNullException(nameof(clientEndPoint));
             _clientDeliverySystem = clientDeliverySystem ??
                 throw new ArgumentNullException(nameof(clientDeliverySystem));
             _serverDeliverySystem = serverDeliverySystem ??
                 throw new ArgumentNullException(nameof(serverDeliverySystem));
+            _clientDirection = clientDirection ?? throw new ArgumentNullException(nameof(clientDirection));
+            _serverDirection = serverDirection ?? throw new ArgumentNullException(nameof(serverDirection));
             _onChannelDisposed = OnChannelDisposed;
             _queueCapacity = queueCapacity;
 
-            _sendQueue = new SerializedCallbackQueue<CommitItem>(
-                queueCapacity,
-                $"unreliable-direct-client-{transportName}",
-                CommitSend,
-                item =>
-                {
-                    item.Message.Release();
-                    item.Token.ReleaseOnce();
-                });
+            if (unboundedCommitQueue)
+            {
+                _sendQueue = new SerializedCallbackQueue<CommitItem>(
+                    $"unreliable-direct-client-unbounded-{transportName}",
+                    CommitSend,
+                    DisposeItem);
+            }
+            else
+            {
+                _sendQueue = new SerializedCallbackQueue<CommitItem>(
+                    queueCapacity,
+                    $"unreliable-direct-client-{transportName}",
+                    CommitSend,
+                    DisposeItem);
+            }
+
             _sendQueue.ExceptionHandler += ex => Log.wtf(ex);
 
             // Releases the channel and the commit queue after the inbox release installed by the base
@@ -272,33 +292,76 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </remarks>
         private Channel? Connect()
         {
-            Channel? channel = ChannelManager.Instance.Connect(_serverEndPoint, _clientEndPoint);
-            if (channel == null)
+            Channel? channel = null;
+            bool clientInstalled = false;
+            bool serverInstalled = false;
+
+            try
             {
+                channel = ChannelManager.Instance.Connect(_serverEndPoint, _clientEndPoint);
+                if (channel == null)
+                {
+                    return null;
+                }
+
+                channel.ClientHandler = OnChannelMessage;
+
+                channel.SetClientDeliverySystem(_clientDeliverySystem);
+                clientInstalled = true;
+                _clientSystemInstalled = true;
+
+                channel.SetServerDeliverySystem(_serverDeliverySystem);
+                serverInstalled = true;
+                _serverSystemInstalled = true;
+
+                channel.Disposed += _onChannelDisposed;
+                _channel = channel;
+
+                // The server may have rejected the channel synchronously, before the subscription above.
+                if (channel.IsDisposed)
+                {
+                    ((IRawUnreliableEndpoint)this).Stop(new UnknownRemoteIntention(TransportName));
+                    return null;
+                }
+
+                return channel;
+            }
+            catch (Exception ex)
+            {
+                // Manager and install failures are transient carrier failures: the endpoint stays alive and
+                // the next send retries with fresh systems. No application callback runs here.
+                Log.wtf(ex);
+
+                if (channel != null)
+                {
+                    channel.ClientHandler = null;
+
+                    // Remove the failed channel from the server registry and dispose it. The registry, not
+                    // the endpoint, owns a channel created by the manager.
+                    if (!ChannelManager.Instance.Disconnect(_serverEndPoint, _clientEndPoint))
+                    {
+                        channel.Dispose();
+                    }
+                }
+
+                if (!clientInstalled)
+                {
+                    ReleaseOnce(_clientDeliverySystem);
+                }
+
+                if (!serverInstalled && !ReferenceEquals(_serverDeliverySystem, _clientDeliverySystem))
+                {
+                    ReleaseOnce(_serverDeliverySystem);
+                }
+
+                _clientDirection.AskResetToPerfect();
+                _serverDirection.AskResetToPerfect();
+                _clientDeliverySystem = _clientDirection.Materialize();
+                _serverDeliverySystem = _serverDirection.Materialize();
+                _clientSystemInstalled = false;
+                _serverSystemInstalled = false;
                 return null;
             }
-
-            channel.ClientHandler = OnChannelMessage;
-
-            // The channel owns an installed system and releases it when the channel is disposed. A
-            // system installed on a channel that was already rejected is released by the install
-            // itself. Either way the endpoint must never release an installed system again, so the
-            // ownership flag is published before the installs.
-            _deliverySystemsInstalled = true;
-            channel.SetClientDeliverySystem(_clientDeliverySystem);
-            channel.SetServerDeliverySystem(_serverDeliverySystem);
-
-            channel.Disposed += _onChannelDisposed;
-            _channel = channel;
-
-            // The server may have rejected the channel synchronously, before the subscription above.
-            if (channel.IsDisposed)
-            {
-                ((IRawUnreliableEndpoint)this).Stop(new UnknownRemoteIntention(TransportName));
-                return null;
-            }
-
-            return channel;
         }
 
         /// <summary>
@@ -342,15 +405,32 @@ namespace Pontifex.Raw.Unreliable.Direct
             _sendQueue.Dispose();
             CleanupChannel();
 
-            if (!_deliverySystemsInstalled)
+            if (!_clientSystemInstalled)
             {
-                // No channel ever took ownership: release the configured systems here.
-                DeliverySystemLifetime.Release(_clientDeliverySystem);
-                if (!ReferenceEquals(_clientDeliverySystem, _serverDeliverySystem))
-                {
-                    DeliverySystemLifetime.Release(_serverDeliverySystem);
-                }
+                ReleaseOnce(_clientDeliverySystem);
             }
+
+            if (!_serverSystemInstalled && !ReferenceEquals(_serverDeliverySystem, _clientDeliverySystem))
+            {
+                ReleaseOnce(_serverDeliverySystem);
+            }
+        }
+
+        private static void ReleaseOnce(IDeliverySystem system)
+        {
+            try
+            {
+                DeliverySystemLifetime.Release(system);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        private static void DisposeItem(CommitItem item)
+        {
+            item.Message.Release();
+            item.Token.ReleaseOnce();
         }
 
         /// <summary>

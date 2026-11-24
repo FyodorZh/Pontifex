@@ -1,5 +1,7 @@
 using System;
+using Actuarius.Memory;
 using Pontifex.Factory.Registration;
+using Pontifex.VirtualDelivery;
 
 namespace Pontifex.Raw.Unreliable.Direct
 {
@@ -20,10 +22,23 @@ namespace Pontifex.Raw.Unreliable.Direct
                     new StringParameter("id", required: true, positional: true),
                     UnreliableDeliveryBinding.CreateParameter()
                 },
-                Create);
+                context => Create(context, UnreliableDeliveryBinding.CreateFactory));
         }
 
         private static ITransport Create(ITransportBuildContext context)
+        {
+            return Create(context, UnreliableDeliveryBinding.CreateFactory);
+        }
+
+        /// <summary>
+        /// Creates the transport with an injectable delivery-factory builder.
+        /// </summary>
+        /// <param name="context">The build context.</param>
+        /// <param name="factoryBuilder">A builder that validates the delivery value and returns a per-direction
+        /// factory. Tests supply a counting or failing builder.</param>
+        /// <returns>The constructed transport.</returns>
+        internal static ITransport Create(ITransportBuildContext context,
+            Func<ITransportStructValue, IMemoryRental, Func<IDeliverySystem>> factoryBuilder)
         {
             if (!context.TryGetString("id", out var id))
             {
@@ -46,9 +61,9 @@ namespace Pontifex.Raw.Unreliable.Direct
             var transport = new RawUnreliableDirectClientTransport(id, context.Logger, context.Memory);
             if (context.TryGetStruct("delivery", out var delivery))
             {
-                transport.SetDeliverySystem(
-                    UnreliableDeliveryBinding.Build(delivery, context.Memory),
-                    UnreliableDeliveryBinding.Build(delivery, context.Memory));
+                transport.SetDeliverySystemFactory(
+                    factoryBuilder(delivery, context.Memory),
+                    factoryBuilder(delivery, context.Memory));
             }
 
             return transport;
