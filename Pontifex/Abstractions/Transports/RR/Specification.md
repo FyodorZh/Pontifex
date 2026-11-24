@@ -123,6 +123,12 @@ public interface IRRResponse
   operation. Response handles are created by the transport; applications **MUST
   NOT** implement them.
 
+The public abstract bases `RRReliableTransport` and `RRUnreliableTransport`
+derive from the shared abstract base `RRTransport`, which supplies carrier start
+and stop, payload validation, and server-global id allocation to both families.
+A carrier derives from the family base; `RRTransport` adds no requirement to this
+contract.
+
 A type specification adds its own client transport, server transport,
 request-handler, and response-handle interfaces, each deriving from the
 corresponding shared interface. The application implements the server handler and

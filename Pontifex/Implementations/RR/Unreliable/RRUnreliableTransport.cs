@@ -1,20 +1,20 @@
 using System;
-using System.Threading;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
-using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.RR.Unreliable
 {
     /// <summary>
-    /// Common lifecycle of the RR unreliable transports: carrier start and stop, payload validation, and
-    /// request-id allocation.
+    /// Common lifecycle of the RR unreliable transports: the shared RR lifecycle.
     /// </summary>
-    public abstract class RRUnreliableTransport : AnyTransport, IRRUnreliableTransport
+    /// <remarks>
+    /// Carrier start and stop, payload validation, and request-id allocation are inherited from
+    /// <see cref="RRTransport"/>. The family adds the unreliable transport type and the request-id
+    /// header size.
+    /// </remarks>
+    public abstract class RRUnreliableTransport : RRTransport, IRRUnreliableTransport
     {
-        private long _lastServerRequestId;
-
         /// <summary>
         /// Initializes a new RR unreliable transport.
         /// </summary>
@@ -27,157 +27,12 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <inheritdoc/>
-        public abstract int MessageMaxByteSize { get; }
-
-        /// <inheritdoc/>
         public override TransportType Type => TransportType.RRUnreliable;
 
         /// <summary>
-        /// Gets the inclusive carrier-frame size that fits <see cref="MessageMaxByteSize"/> plus the
-        /// request-id header. One extra byte covers the serialized element-count prefix growing when
-        /// the header element is prepended (for example 63 elements becoming 64).
+        /// Gets the request-id header that a carrier frame adds to a payload.
         /// </summary>
-        protected int FrameMaxByteSize => MessageMaxByteSize + RRUnreliableFrame.OverheadBytes + 1;
-
-        /// <summary>
-        /// Validates an outbound payload and releases it on failure.
-        /// </summary>
-        /// <param name="message">The payload to validate.</param>
-        /// <param name="notStartedResult">The result to return when the transport is not
-        /// started.</param>
-        /// <param name="failure">The failure result, or <see cref="SendResult.Ok"/> on
-        /// success.</param>
-        /// <returns><see langword="true"/> when the payload may be sent; otherwise
-        /// <see langword="false"/>.</returns>
-        /// <remarks>
-        /// The transport state is checked before the payload, so a stopped transport reports
-        /// <paramref name="notStartedResult"/> even for a null payload. A null payload is only
-        /// reported as <see cref="SendResult.InvalidMessage"/> while the transport is started, and
-        /// it is never released. Serializability and size are checked after the state.
-        /// </remarks>
-        protected bool TryValidatePayload(UnionDataList message, SendResult notStartedResult,
-            out SendResult failure)
-        {
-            failure = SendResult.Ok;
-
-            if (!IsStarted)
-            {
-                if (message != null!)
-                {
-                    message.Release();
-                }
-                failure = notStartedResult;
-                return false;
-            }
-
-            if (message == null!)
-            {
-                failure = SendResult.InvalidMessage;
-                return false;
-            }
-
-            int size;
-            try
-            {
-                size = message.GetDataSize();
-            }
-            catch (Exception)
-            {
-                failure = SendResult.InvalidMessage;
-                return false;
-            }
-
-            if (size > MessageMaxByteSize)
-            {
-                message.Release();
-                failure = SendResult.MessageTooBig;
-                return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Returns the next request id of this transport.
-        /// </summary>
-        protected long NextServerRequestId()
-        {
-            return Interlocked.Increment(ref _lastServerRequestId);
-        }
-
-        /// <summary>
-        /// Starts the concrete carrier.
-        /// </summary>
-        /// <returns><see langword="true"/> when the carrier started; otherwise
-        /// <see langword="false"/>.</returns>
-        protected abstract bool StartCarrier();
-
-        /// <summary>
-        /// Stops and releases the concrete carrier. Must tolerate a carrier that never fully started.
-        /// </summary>
-        protected abstract void StopCarrier(StopReason reason);
-
-        /// <summary>
-        /// Clears the role-specific pending state. Called once while the transport stops.
-        /// </summary>
-        protected virtual void ClearPendingRequests()
-        {
-        }
-
-        /// <inheritdoc/>
-        protected override bool TryStart()
-        {
-            try
-            {
-                return StartCarrier();
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-                AbortCarrier(new ExceptionFail(Name, ex, "StartCarrier"));
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Stops a carrier whose start failed. No handler callback, <c>onStopped</c> notification, or
-        /// terminal request notification is delivered.
-        /// </summary>
-        /// <param name="reason">The failure reason passed to the carrier.</param>
-        protected void AbortCarrier(StopReason reason)
-        {
-            ClearPendingRequests();
-
-            try
-            {
-                StopCarrier(reason);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-            }
-        }
-
-        /// <inheritdoc/>
-        protected override void OnStarted()
-        {
-            // DO NOTHING
-        }
-
-        /// <inheritdoc/>
-        protected override void OnStopped(StopReason reason)
-        {
-            ClearPendingRequests();
-
-            try
-            {
-                StopCarrier(reason);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-            }
-        }
+        protected override int FrameOverheadBytes => RRUnreliableFrame.OverheadBytes;
     }
 
     /// <summary>

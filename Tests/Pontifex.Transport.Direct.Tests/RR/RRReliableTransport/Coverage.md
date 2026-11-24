@@ -5,8 +5,8 @@
 | Layer | Root |
 | Subject | `Pontifex.RR.Reliable.RRReliableTransport` |
 | Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/` |
-| Inheritance parent | none |
-| Dependency | The transport base is public; the frame constants are internal, so the suite relies on the Direct assembly's `InternalsVisibleTo` entry. |
+| Inheritance parent | none (suite root); derives from `Pontifex.RR.RRTransport`, shared with the unreliable family and outside this suite, like `AnyTransport` |
+| Dependency | The transport bases are public; the frame constants are internal, so the suite relies on the Direct assembly's `InternalsVisibleTo` entry. |
 | Contract | [RRReliable specification](../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md), [shared RR specification](../../../../Pontifex/Abstractions/Transports/RR/Specification.md) |
 
 ## Covered
@@ -29,6 +29,11 @@
 | `ValidatePayload_AboveTheLimit_ReturnsMessageTooBigAndReleases` | Section 8 payload limit | An oversized payload returns `MessageTooBig` and is released | The check is on the serialized payload only, before the header. |
 | `NextServerRequestId_StartsAtOneAndIncrements` | Server-global ids | The first id is one and ids increment | Ids are local to one server transport. |
 
+The lifecycle, payload-validation, frame-size, and id-allocation members live in
+the shared `Pontifex.RR.RRTransport` base. The root layer exercises them through
+the concrete reliable subject; the base stays outside the selected tree, so its
+coverage is shared with the unreliable family's layers.
+
 ## Planned
 
 | Missing test | Owner layer |
@@ -43,5 +48,6 @@ transport layers exercise it.
 
 | Requirement | Reason |
 | --- | --- |
+| An `RRTransport` layer | The shared base is outside the selected tree and shared with the unreliable family; both family layers exercise it through concrete subjects. |
 | Real timer firing for TTLs | The suite is deterministic; the manual factory drives scheduling, and the transport layers fire explicitly. |
 | Carrier framing behaviour | Direct is in-process and does not consume `FrameMaxByteSize`; the later carrier specification owns framing. |

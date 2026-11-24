@@ -120,7 +120,8 @@ New harness types belong in `Harness/`; groups must not contain harness.
 
 ## Out of scope
 
-- The reusable RR unreliable core: it is covered by the core suites.
+- The reusable RR unreliable core and the shared `Pontifex.RR.RRTransport` base:
+  they are exercised through the family and carrier suites.
 - The VirtualDelivery algorithms and netem statistics: they belong to the
   VirtualDelivery suite.
 - The RRReliable core and the RRReliable Direct carrier: they have their own

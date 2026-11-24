@@ -38,6 +38,9 @@
 - [x] Extract common RR transport abstractions (`IRRTransport`, `IRRReliableTransport`,
   `IRRUnreliableTransport`, `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`,
   `IRRResponse`, `RRRequestHandler`, `RRResponse`)
+- [x] Extract the shared RR lifecycle base `RRTransport` (carrier start and stop, payload
+  validation, server-global ids, frame-size formula) and derive `RRReliableTransport` and
+  `RRUnreliableTransport` from it
 - [x] Write `RR/Specification.md` (common base) and reduce both family specifications to
   deltas over it
 - [x] Unify the RR per-request model: per-request client handlers with `RequestId`/`Cancel` and a

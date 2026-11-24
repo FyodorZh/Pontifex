@@ -13,8 +13,8 @@ namespace Pontifex.RR.Unreliable
     /// The class owns the server request mechanics: server-global request ids, response handles, and the
     /// request dispatch. The lifecycle is inherited from
     /// <see cref="RRUnreliableTransport{THandler}"/>; a carrier supplies the datagram transport through
-    /// <see cref="RRUnreliableTransport.StartCarrier"/>,
-    /// <see cref="RRUnreliableTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
+    /// <see cref="RRTransport.StartCarrier"/>,
+    /// <see cref="RRTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
     public abstract class RRUnreliableServerTransport

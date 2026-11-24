@@ -15,8 +15,8 @@ namespace Pontifex.RR.Unreliable
     /// The class owns the client request mechanics: the fixed server route, client-local request ids,
     /// the per-request handler binding, the pending-request window, and the response dispatch. The
     /// lifecycle is inherited from <see cref="RRUnreliableTransport"/>; a carrier supplies the datagram
-    /// transport through <see cref="RRUnreliableTransport.StartCarrier"/>,
-    /// <see cref="RRUnreliableTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
+    /// transport through <see cref="RRTransport.StartCarrier"/>,
+    /// <see cref="RRTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
     public abstract class RRUnreliableClientTransport : RRUnreliableTransport, IRRUnreliableClientTransport

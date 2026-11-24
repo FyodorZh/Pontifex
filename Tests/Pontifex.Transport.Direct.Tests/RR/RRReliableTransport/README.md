@@ -2,9 +2,11 @@
 
 ## Rationale
 
-`RRReliableTransport` is the reusable lifecycle base of the RR reliable family:
-carrier start and stop, payload validation, server-global id allocation, the
-frame-size ceiling, and the injectable TTL timer seam.
+`Pontifex.RR.RRTransport` is the shared lifecycle base of both RR families:
+carrier start and stop, payload validation, server-global id allocation, and the
+frame-size formula.
+`RRReliableTransport` adds the reliable transport type, the largest reliable
+header, and the injectable TTL timer seam.
 `RRReliableTransport<THandler>` adds one-time `Init` and the dispatch gate that
 hides the server handler until `Start` succeeds.
 `RRReliableClientTransport` adds the request lifecycle, ordered responses,
@@ -24,11 +26,17 @@ abstract type.
 Selected inheritance tree:
 
 ```text
-RRReliableTransport
-├── RRReliableClientTransport         (client layer)
-└── RRReliableTransport<THandler>
-    └── RRReliableServerTransport     (server layer)
+RRTransport  (shared with the unreliable family, outside the suite)
+└── RRReliableTransport
+    ├── RRReliableClientTransport         (client layer)
+    └── RRReliableTransport<THandler>
+        └── RRReliableServerTransport     (server layer)
 ```
+
+`RRTransport` belongs to `Pontifex.RR` and is shared with the unreliable family,
+so it lies outside the selected tree, like `AnyTransport`. The root layer keeps
+the inherited lifecycle behaviour in scope and exercises it through its concrete
+reliable subject.
 
 The client layer declares the root as its inheritance parent; the server layer
 declares the generic layer as its inheritance parent. The server layer is placed
@@ -40,6 +48,7 @@ beside the generic layer; directory nesting does not imply inheritance.
   — sections 5, 6.3, 7, and 15.
 - [Shared RR specification](../../../../Pontifex/Abstractions/Transports/RR/Specification.md)
   — sections 7 and 11.
+- [RRTransport.cs](../../../../Pontifex/Implementations/RR/RRTransport.cs)
 - [RRReliableTransport.cs](../../../../Pontifex/Implementations/RR/Reliable/RRReliableTransport.cs)
 - [RRReliableClientTransport.cs](../../../../Pontifex/Implementations/RR/Reliable/RRReliableClientTransport.cs)
 - [RRReliableServerTransport.cs](../../../../Pontifex/Implementations/RR/Reliable/RRReliableServerTransport.cs)
@@ -54,7 +63,7 @@ directory, inheritance parent, and coverage file.
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 | --- | --- | --- | --- | --- |
-| `RRReliableTransport` | `Pontifex.RR.Reliable.RRReliableTransport` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport` | none (root) | [`Coverage.md`](Coverage.md) |
+| `RRReliableTransport` | `Pontifex.RR.Reliable.RRReliableTransport` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport` | none (suite root); derives from `RRTransport` (outside the suite) | [`Coverage.md`](Coverage.md) |
 | `RRReliableTransportGeneric` | `Pontifex.RR.Reliable.RRReliableTransport<THandler>` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Generic` | `RRReliableTransport` | [`Generic/Coverage.md`](Generic/Coverage.md) |
 | `RRReliableClientTransport` | `Pontifex.RR.Reliable.RRReliableClientTransport` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Client` | `RRReliableTransport` | [`Client/Coverage.md`](Client/Coverage.md) |
 | `RRReliableServerTransport` | `Pontifex.RR.Reliable.RRReliableServerTransport` | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Server` | `RRReliableTransport<THandler>` | [`Server/Coverage.md`](Server/Coverage.md) |
@@ -112,8 +121,8 @@ All harness types are hand-written and test-only:
 
 - `Harness/TestRRReliableTransport.cs` is a concrete carrier-free root subject
   that records carrier start/stop/clear calls, can fail or throw on start, and
-  exposes the protected frame-size ceiling, payload validation, id allocation,
-  and timer factory for assertions.
+  exposes the inherited frame-size ceiling, payload validation, and id
+  allocation plus the timer factory for assertions.
 - `Generic/Harness/TestRRReliableTransportGeneric.cs` is a concrete
   carrier-free generic subject that exposes `DispatchHandler` and records carrier
   calls; it also holds the empty `TestReliableHandler`.
