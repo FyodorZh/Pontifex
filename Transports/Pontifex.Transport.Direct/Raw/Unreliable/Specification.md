@@ -105,8 +105,11 @@ through the abstract routing rules. The client creates one endpoint at start and
 acquires its channel on the first send.
 
 `Stop` on the server unregisters `id` and disposes every channel that is still
-registered. `Stop` on the client disposes its channel and removes it from the
-server registry. A disposed channel stops both endpoint halves.
+registered. Before it stops the carrier, it stops every active session endpoint
+with the supplied `StopReason` instance, so each active handler observes exactly
+that instance. The later channel-disposal notification is a one-shot no-op. `Stop`
+on the client disposes its channel and removes it from the server registry. A
+disposed channel stops both endpoint halves.
 
 The delivery systems installed on a channel are owned by that channel and are
 disposed with it. A delivery system that the client never installed on a channel
@@ -122,8 +125,13 @@ The carrier enforces these limits:
 | Send budget | Client endpoint | `104857600` bytes |
 | Send budget | Server transport, shared by all sessions | `104857600` bytes |
 
-An inbound message above the message maximum is released and logged; it does not
-stop the endpoint or the transport.
+An inbound message above the message maximum is released and logged before any
+route lookup; it does not invoke the handler factory, reach a handler, or stop
+the endpoint or the transport.
+
+A factory-created handler whose endpoint cannot be created receives exactly one
+`OnStopped` outside the admission lock, as required by the abstract
+specification. The triggering message is released and no route is published.
 
 ## 7. Failure, deviations, and protection
 
@@ -132,6 +140,10 @@ client transport. A send with no registered server releases the message without
 logging and without a transport failure. An exception thrown by a delivery
 system is caught, logged, and releases that message; it does not stop the
 endpoint or the transport.
+
+The endpoint control hits `BeforeHandlerStoppedGate` immediately before a
+forwarded handler `OnStopped` call. It is not hit for a handler whose start
+notification threw, and it is not hit on the raw endpoint teardown itself.
 
 This implementation declares no deviation from the abstract type. It adds no
 authentication, confidentiality, or integrity protection; the process boundary is
@@ -146,7 +158,7 @@ the isolation boundary.
 | Delivery virtualization | `PerfectDeliverySystem` by default; the `delivery` parameter optionally installs `NetemDeliverySystem` for both channel directions. |
 | Callback scheduler | Each endpoint owns a serial action queue; each sender owns a bounded commit queue so a peer callback does not begin on the caller's thread. |
 | Queue capacity and drain rate | `100` messages and `104857600` bytes; a full queue releases the message and may yield `BufferOverflow`. |
-| Dispatch timing | A committed message reaches the channel after `Send` returns; `onStopped` is dispatched after endpoint teardown. |
+| Dispatch timing | A committed message reaches the channel after `Send` returns; a server notifies active handlers with the supplied stop reason before it stops the carrier, and `onStopped` is dispatched after endpoint teardown. |
 | Failure detection | Channel disposal is the only disconnection signal; a missing server is detected during the first send. |
 | Logging | Oversized inbound messages and delivery-system exceptions are logged; a message dropped for a missing server is not logged. |
 | Protection | None beyond the process boundary. |

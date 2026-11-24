@@ -61,6 +61,18 @@ namespace Pontifex.Raw.Unreliable
         private SendBudget? _sharedSendBudget;
 
         /// <summary>
+        /// Reports whether the admission lock is currently held by <see cref="OnCarrierInbound"/>.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam. A declined factory-created handler runs
+        /// outside the admission lock, so a test can assert the value is false while the handler receives its
+        /// terminal notification.</description></item>
+        /// </list>
+        /// </remarks>
+        internal bool AdmissionLockHeldForTests { get; private set; }
+
+        /// <summary>
         /// Initializes a new unreliable server transport.
         /// </summary>
         /// <param name="typeName">The name of the concrete transport.</param>
@@ -348,67 +360,91 @@ namespace Pontifex.Raw.Unreliable
             RouteEntry? existing = null;
             RouteEntry? created = null;
             bool releaseTrigger = false;
+            IRawUnreliableHandler? declinedHandler = null;
+            StopReason? declinedReason = null;
+
+            if (trigger.GetDataSize() > MessageMaxByteSize)
+            {
+                // Oversized inbound data is not eligible for routing: it must not invoke the factory or a
+                // handler, and it must not publish or refresh a route.
+                trigger.Release();
+                Log.e("Inbound message exceeds MessageMaxByteSize and was discarded");
+                return;
+            }
 
             lock (_admissionLock)
             {
-                if (_routes.TryGetValue(source, out existing))
+                AdmissionLockHeldForTests = true;
+                try
                 {
-                    // Delivery runs outside the lock.
-                }
-                else if (_stopping)
-                {
-                    releaseTrigger = true;
-                }
-                else
-                {
-                    Conformance.BeforeHandlerFactoryGate.Hit();
-
-                    IRawUnreliableHandler? handler = null;
-                    TFactory? factory = _factory;
-
-                    if (factory != null)
+                    if (_routes.TryGetValue(source, out existing))
                     {
-                        try
-                        {
-                            handler = InvokeFactory(factory, source, trigger);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.wtf(ex);
-                            handler = null;
-                        }
+                        // Delivery runs outside the lock.
                     }
-
-                    if (handler == null)
+                    else if (_stopping)
                     {
                         releaseTrigger = true;
                     }
                     else
                     {
-                        try
+                        Conformance.BeforeHandlerFactoryGate.Hit();
+
+                        IRawUnreliableHandler? handler = null;
+                        TFactory? factory = _factory;
+
+                        if (factory != null)
                         {
-                            RawUnreliableServerEndpoint? endpoint = CreateEndpoint(handler, source, trigger);
-                            if (endpoint == null)
+                            try
                             {
-                                // The carrier declined the route, for example because its transport-level
-                                // carrier state disappeared between admission and creation. No route is
-                                // published and the trigger is released below.
-                                releaseTrigger = true;
+                                handler = InvokeFactory(factory, source, trigger);
                             }
-                            else
+                            catch (Exception ex)
                             {
-                                var entry = new RouteEntry(this, source, endpoint);
-                                _routes[source] = entry;
-                                endpoint.Stopped += entry.OnStopped;
-                                created = entry;
+                                Log.wtf(ex);
+                                handler = null;
                             }
                         }
-                        catch (Exception ex)
+
+                        if (handler == null)
                         {
-                            Log.wtf(ex);
                             releaseTrigger = true;
                         }
+                        else
+                        {
+                            try
+                            {
+                                RawUnreliableServerEndpoint? endpoint = CreateEndpoint(handler, source, trigger);
+                                if (endpoint == null)
+                                {
+                                    // The carrier declined the route, for example because its transport-level
+                                    // carrier state disappeared between admission and creation. No route is
+                                    // published and the trigger is released below, but the handler that the
+                                    // factory created still observes its terminal notification.
+                                    declinedHandler = handler;
+                                    declinedReason = new TextFail(Name, "Route was declined by the carrier");
+                                    releaseTrigger = true;
+                                }
+                                else
+                                {
+                                    var entry = new RouteEntry(this, source, endpoint);
+                                    _routes[source] = entry;
+                                    endpoint.Stopped += entry.OnStopped;
+                                    created = entry;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.wtf(ex);
+                                declinedHandler = handler;
+                                declinedReason = new ExceptionFail(Name, ex, "Server endpoint creation failed");
+                                releaseTrigger = true;
+                            }
+                        }
                     }
+                }
+                finally
+                {
+                    AdmissionLockHeldForTests = false;
                 }
             }
 
@@ -416,6 +452,20 @@ namespace Pontifex.Raw.Unreliable
             {
                 existing.Endpoint.Deliver(trigger);
                 return;
+            }
+
+            if (declinedHandler != null)
+            {
+                // Application code runs outside the admission lock: a handler may call transport.Stop(),
+                // which takes the transport lock that sits above _admissionLock in the lock order.
+                try
+                {
+                    declinedHandler.OnStopped(declinedReason!);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
             }
 
             if (releaseTrigger)
@@ -455,9 +505,10 @@ namespace Pontifex.Raw.Unreliable
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Ordering</b>: the admission is closed and the routes are removed under the
-        /// admission lock before the carrier stops. The carrier is stopped first, then every removed route
-        /// is asked to stop through the one-shot unreliable entry, releasing its inbox and its
-        /// trigger.</description></item>
+        /// admission lock. The removed session endpoints are then stopped with the supplied reason before the
+        /// carrier stops, so every active handler observes the exact reason instance synchronously. The carrier
+        /// is stopped afterwards; its channel-disposal notifications are one-shot no-ops because the endpoints
+        /// are already invalidated.</description></item>
         /// </list>
         /// </remarks>
         protected override void OnStopped(StopReason reason)
@@ -480,6 +531,13 @@ namespace Pontifex.Raw.Unreliable
                 }
             }
 
+            for (int i = 0; i < snapshot.Length; i++)
+            {
+                RouteEntry entry = snapshot[i];
+                entry.Endpoint.Stopped -= entry.OnStopped;
+                StopRouteEndpoint(entry.Endpoint, reason);
+            }
+
             try
             {
                 StopCarrier(reason);
@@ -487,13 +545,6 @@ namespace Pontifex.Raw.Unreliable
             catch (Exception ex)
             {
                 Log.wtf(ex);
-            }
-
-            for (int i = 0; i < snapshot.Length; i++)
-            {
-                RouteEntry entry = snapshot[i];
-                entry.Endpoint.Stopped -= entry.OnStopped;
-                StopRouteEndpoint(entry.Endpoint, reason);
             }
         }
 

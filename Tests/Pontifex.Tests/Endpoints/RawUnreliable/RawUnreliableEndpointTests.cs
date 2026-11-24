@@ -363,9 +363,10 @@ public sealed class RawUnreliableEndpointTests
             Assert.That(ep.StoppedReasons[0], Is.Not.TypeOf<ExceptionFail>());
             Assert.That(ep.IsRunning, Is.False);
 
-            // BeginStop is hit once per stop transition and the gate is only hit there, so a single hit
-            // proves the promoted stop ran exactly one BeginStop (a second one would fail hard on FinishStop).
-            Assert.That(gate.HitCount, Is.EqualTo(98));
+            // The handler start notification never completed, so the handler stop notification is
+            // suppressed and the handler-stop gate is not hit: the gate now sits in the forwarding path
+            // rather than in BeginStop.
+            Assert.That(gate.HitCount, Is.EqualTo(99));
         }
         finally
         {
@@ -526,6 +527,136 @@ public sealed class RawUnreliableEndpointTests
 
         Assert.That(rejected, Is.Empty);
         Assert.That(accepted, Has.Count.EqualTo(1));
+    }
+
+    #endregion
+
+    #region Stop notification gate
+
+    [Test]
+    public void FailHard_AfterSuccessfulStart_HitsBeforeHandlerStoppedGateAndNotifiesOnce()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        var reason = Reason();
+        var gate = Control(ep).BeforeHandlerStoppedGate;
+        gate.Arm(requiredHits: 2);
+
+        try
+        {
+            ep.ExposedFailHard(reason);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.StoppedCount, Is.EqualTo(1));
+                Assert.That(handler.StoppedReason, Is.SameAs(reason));
+                Assert.That(gate.HitCount, Is.EqualTo(0),
+                    "the handler-stop gate must be hit once before the forwarded notification");
+            });
+        }
+        finally
+        {
+            gate.Reset();
+        }
+    }
+
+    [Test]
+    public void Start_WhenOnStartedThrows_DoesNotHitBeforeHandlerStoppedGate()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory) { ThrowOnStarted = true };
+        using var ep = Create(handler);
+        var gate = Control(ep).BeforeHandlerStoppedGate;
+        gate.Arm(requiredHits: 2);
+
+        try
+        {
+            ep.StartAndComplete();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.StoppedCount, Is.Zero);
+                Assert.That(gate.HitCount, Is.EqualTo(1),
+                    "the gate must not be hit for a handler whose start notification threw");
+            });
+        }
+        finally
+        {
+            gate.Reset();
+        }
+    }
+
+    #endregion
+
+    #region Post-stop delivery suppression
+
+    [Test]
+    public void Start_WithStopFromOnStarted_DoesNotDeliverBufferedMessages()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        using var ep = Create(handler);
+        var reason = Reason();
+        UnionDataList buffered = TestBuffers.WithByte(Memory, 1);
+        ep.Deliver(buffered);
+
+        handler.OnStartedProbe = () =>
+            ((IRawUnreliableEndpoint)handler.StartedEndpoint!).Stop(reason);
+
+        ep.StartAndComplete();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.StartedCount, Is.EqualTo(1));
+            Assert.That(handler.ReceivedCount, Is.Zero,
+                "a stop requested from OnStarted must suppress the buffered delivery");
+            Assert.That(handler.StoppedCount, Is.EqualTo(1),
+                "the start notification returned, so the terminal notification is still forwarded");
+            Assert.That(buffered.IsAlive, Is.False);
+        });
+    }
+
+    [Test]
+    public void Stop_LatchedBeforeFlush_DoesNotDeliverBufferedMessages()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        using var ep = Create(handler);
+        UnionDataList buffered = TestBuffers.WithByte(Memory, 1);
+        ep.Deliver(buffered);
+
+        ep.Start();
+        ep.DrainOne();
+
+        Assert.That(ep.StopOneShot(Reason()), Is.True);
+        ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.StartedCount, Is.Zero);
+            Assert.That(handler.ReceivedCount, Is.Zero);
+            Assert.That(buffered.IsAlive, Is.False);
+        });
+    }
+
+    [Test]
+    public void Deliver_WhileOpen_ScheduledReceiveJob_ReleasesAfterStop()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        UnionDataList message = TestBuffers.WithByte(Memory, 1);
+
+        ep.Deliver(message);
+        Assert.That(ep.PendingActions, Is.GreaterThanOrEqualTo(1));
+
+        Assert.That(ep.StopOneShot(Reason()), Is.True);
+        ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.Zero,
+                "a receive job scheduled before the stop latch must not deliver after Stop returns");
+            Assert.That(message.IsAlive, Is.False);
+        });
     }
 
     #endregion

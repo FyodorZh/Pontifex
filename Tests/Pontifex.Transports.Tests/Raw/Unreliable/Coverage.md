@@ -38,8 +38,8 @@ the adapter, so no test in this suite can skip when the mode is missing.
 | Requirement | Reason |
 | --- | --- |
 | Sent and received reference ownership, no-handler release, retained delivery references, and duplicate-reference independence | Requires the planned custom `IMemoryRental` test implementation. |
-| Malformed and oversized carrier input, and spoofing | Requires future implementation-specific hostile-carrier controls. The UDP client's source filter is covered separately by the real-loopback test in `Pontifex.Transport.Net.Tests`. |
+| Malformed and oversized carrier input, and spoofing | Requires future implementation-specific hostile-carrier controls. The Direct server's oversized-inbound discard is covered by the loose `RawUnreliableDirectServerContractTests` in `Pontifex.Transport.Direct.Tests`; the UDP client's source filter is covered separately by the real-loopback test in `Pontifex.Transport.Net.Tests`. |
 | BufferOverflow | The generic control deliberately does not force unknown carrier queue capacity. |
 | Endpoint equality and hash consistency | The suite asserts only a one-directional identity check (`RemoteEndPoint.Equals(factory source)`); mutual equality and hash consistency are not exercised. |
-| Supplied-stop-reason causal preservation and generic stop-cause inspection | Exact-once `OnStopped` notification is covered; that the supplied `StopReason` reaches `OnStopped` unchanged is not asserted. |
+| Supplied-stop-reason causal preservation and generic stop-cause inspection | Exact-once `OnStopped` notification is covered; that the supplied `StopReason` reaches `OnStopped` unchanged is not asserted by this carrier-independent suite. The Direct carrier asserts it in `RawUnreliableDirectServerContractTests`; the base transport asserts it in `RawUnreliableServerTransportTests.Stop_WhenRoutesExist_StopsEveryLiveEndpointWithTransportReason`. |
 | Loss, duplication, reordering, carrier submission timing, callback scheduler affinity, and security guarantees | The contract either permits the behavior or defines it as implementation-specific. |

@@ -30,6 +30,19 @@ namespace Pontifex.Raw.Unreliable.Direct
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels =
             new ConcurrentDictionary<IEndPoint, Channel>();
 
+        /// <summary>
+        /// Gets or sets a test-only endpoint factory that replaces the real endpoint construction.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam. It defaults to <see langword="null"/>, in
+        /// which case <see cref="CreateEndpoint"/> constructs the real endpoint. A test can force a declined or
+        /// throwing construction deterministically.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Func<IRawUnreliableHandler, IEndPoint, UnionDataList, RawUnreliableServerEndpoint?>?
+            EndpointFactoryForTests { get; set; }
+
         public override TransportType Type => TransportType.RawUnreliable;
 
         public override int MessageMaxByteSize => RawUnreliableDirectInfo.MessageMaxByteSize;
@@ -156,6 +169,13 @@ namespace Pontifex.Raw.Unreliable.Direct
             if (budget == null)
             {
                 return null;
+            }
+
+            Func<IRawUnreliableHandler, IEndPoint, UnionDataList, RawUnreliableServerEndpoint?>?
+                endpointFactory = EndpointFactoryForTests;
+            if (endpointFactory != null)
+            {
+                return endpointFactory(handler, source, trigger);
             }
 
             return new RawUnreliableDirectServerEndpoint(

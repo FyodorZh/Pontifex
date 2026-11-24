@@ -188,6 +188,7 @@ namespace Pontifex.Raw.Unreliable
             Handler = handler;
             _inboxCapacityMessages = inboxCapacityMessages;
             _inboxCapacityBytes = inboxCapacityBytes;
+            _handlerGate.AttachConformance(_conformance);
 
             Stopped += OnEndpointStopped;
         }
@@ -221,34 +222,71 @@ namespace Pontifex.Raw.Unreliable
         /// escapes so the queue error path logs it and fails the endpoint hard; the stop notification is
         /// suppressed and the inbox is released by the stop subscription.</description></item>
         /// <item><description><b>Other notes</b>: The start notification is raised before the transition to open
-        /// and before the drain; a handler that delivers a message from inside the notification has it buffered
-        /// and delivered after the already buffered messages. Every drained message, including a server trigger,
-        /// hits <c>AfterReceivedGate</c> once immediately before it begins delivery, exactly like a message
-        /// delivered through the open inbox.</description></item>
+        /// and before the drain. A stop requested before the flush action runs, from inside the start
+        /// notification, or during the drain suppresses every delivery that has not begun: the buffered messages
+        /// are released by the stop subscription and never reach the handler. Every drained message, including a
+        /// server trigger, hits <c>AfterReceivedGate</c> once immediately before it begins delivery, exactly like
+        /// a message delivered through the open inbox.</description></item>
         /// </list>
         /// </remarks>
         private void FlushInbox()
         {
+            List<UnionDataList>? suppressed = null;
+
             lock (_inboxLock)
             {
-                if (_inboxState != InboxState.Buffering || _invalidated)
+                if (_inboxState != InboxState.Buffering || _invalidated || IsStopRequested)
                 {
                     return;
                 }
 
                 Handler.OnStarted(this);
                 _handlerGate.MarkStartCompleted();
+
+                if (IsStopRequested)
+                {
+                    // The start notification requested a stop. The inbox stays buffering; the stop
+                    // subscription releases every buffered message, including the server trigger.
+                    return;
+                }
+
                 _inboxState = InboxState.Open;
 
                 while (_inbox.Count > 0)
                 {
+                    if (IsStopRequested)
+                    {
+                        // A stop can be latched after the second check but before or during the drain.
+                        // Release the remaining buffered messages instead of delivering them.
+                        suppressed = new List<UnionDataList>(_inbox.Count);
+                        while (_inbox.Count > 0)
+                        {
+                            suppressed.Add(_inbox.Dequeue());
+                        }
+
+                        _inboxBytes = 0;
+                        _inboxState = InboxState.Closed;
+                        break;
+                    }
+
                     UnionDataList message = _inbox.Dequeue();
                     _inboxBytes -= message.GetDataSize();
                     Conformance.AfterReceivedGate.Hit();
                     base.ProcessInboundMessage(message);
                 }
 
-                _inboxBytes = 0;
+                if (suppressed == null)
+                {
+                    _inboxBytes = 0;
+                }
+            }
+
+            if (suppressed != null)
+            {
+                foreach (UnionDataList message in suppressed)
+                {
+                    message.Release();
+                }
             }
         }
 
@@ -480,7 +518,6 @@ namespace Pontifex.Raw.Unreliable
         {
             _invalidated = true;
             Conformance.BeforeEndpointStopStateTransitionGate.Hit();
-            Conformance.BeforeHandlerStoppedGate.Hit();
             FinishStop();
         }
 
@@ -585,7 +622,9 @@ namespace Pontifex.Raw.Unreliable
         /// base only delivers when the endpoint is started, which already implies a successful start
         /// notification. <c>OnStopped</c> is forwarded only after the unreliable start notification returned
         /// successfully, which preserves the handler contract for a throwing start and for a stop raised while
-        /// starting. <see cref="RawEndpoint.RaiseStopped"/> is unaffected by the gate, so route removal and
+        /// starting. The <c>BeforeHandlerStoppedGate</c> is hit immediately before the forwarded notification,
+        /// so it is not hit for a handler whose start notification threw or never completed.
+        /// <see cref="RawEndpoint.RaiseStopped"/> is unaffected by the gate, so route removal and
         /// transport teardown still observe every terminal path.</description></item>
         /// </list>
         /// </remarks>
@@ -594,6 +633,7 @@ namespace Pontifex.Raw.Unreliable
             private readonly IRawUnreliableHandler _handler;
             private readonly ILogger _log;
             private int _startCompleted;
+            private RawUnreliableEndpointConformanceControl? _conformance;
 
             /// <summary>
             /// Initializes a new gate that forwards to the given handler.
@@ -606,6 +646,21 @@ namespace Pontifex.Raw.Unreliable
             {
                 _handler = handler ?? throw new ArgumentNullException(nameof(handler));
                 _log = log;
+            }
+
+            /// <summary>
+            /// Attaches the endpoint conformance control that owns the handler-stop gate.
+            /// </summary>
+            /// <param name="conformance">The endpoint conformance control.</param>
+            /// <remarks>
+            /// <list type="bullet">
+            /// <item><description><b>Other notes</b>: Called once from the endpoint constructor, after the gate
+            /// was created by the caller of the base constructor.</description></item>
+            /// </list>
+            /// </remarks>
+            public void AttachConformance(RawUnreliableEndpointConformanceControl conformance)
+            {
+                _conformance = conformance;
             }
 
             /// <summary>
@@ -644,6 +699,13 @@ namespace Pontifex.Raw.Unreliable
             }
 
             /// <inheritdoc/>
+            /// <remarks>
+            /// <list type="bullet">
+            /// <item><description><b>Other notes</b>: The terminal notification is forwarded only when the start
+            /// notification completed, and the handler-stop gate is hit immediately before the forwarding. A
+            /// throwing handler is isolated by the base endpoint, which catches and logs the exception.</description></item>
+            /// </list>
+            /// </remarks>
             public void OnStopped(StopReason reason)
             {
                 if (Volatile.Read(ref _startCompleted) == 0)
@@ -651,6 +713,7 @@ namespace Pontifex.Raw.Unreliable
                     return;
                 }
 
+                _conformance?.BeforeHandlerStoppedGate.Hit();
                 _handler.OnStopped(reason);
             }
         }

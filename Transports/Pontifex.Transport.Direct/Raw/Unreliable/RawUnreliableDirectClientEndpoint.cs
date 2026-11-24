@@ -52,6 +52,37 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </remarks>
         internal Channel? ChannelForTests => _channel;
 
+        /// <summary>
+        /// Invokes the commit path directly for carrier tests.
+        /// </summary>
+        /// <param name="bufferToSend">The buffer to commit. Ownership transfers to this method.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It runs the same commit logic as the
+        /// queue worker so a test can arrange a disposed channel deterministically.</description></item>
+        /// </list>
+        /// </remarks>
+        internal void CommitForTests(UnionDataList bufferToSend)
+        {
+            CommitSend(bufferToSend);
+        }
+
+        /// <summary>
+        /// Replaces the channel reference for carrier tests.
+        /// </summary>
+        /// <param name="channel">The channel to expose to the commit path, or <see langword="null"/>.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It does not subscribe to the channel,
+        /// so a test can observe the discarded-message path without triggering the endpoint's terminal
+        /// stop.</description></item>
+        /// </list>
+        /// </remarks>
+        internal void SetChannelForTests(Channel? channel)
+        {
+            _channel = channel;
+        }
+
         internal RawUnreliableDirectClientEndpoint(
             string transportName,
             IEndPoint serverEndPoint,
@@ -125,7 +156,7 @@ namespace Pontifex.Raw.Unreliable.Direct
         private void CommitSend(UnionDataList bufferToSend)
         {
             Channel? channel = _channel;
-            if (channel == null)
+            if (channel == null || channel.IsDisposed)
             {
                 bufferToSend.Release();
                 return;

@@ -353,6 +353,9 @@ public sealed class RawUnreliableServerTransportTests
         Assert.That(transport.CreateEndpointCalls, Is.EqualTo(1));
         Assert.That(transport.ExposedRouteCount, Is.Zero);
         Assert.That(trigger.IsAlive, Is.False);
+        Assert.That(handler.StoppedCount, Is.EqualTo(1),
+            "the factory-created handler must be notified when endpoint creation throws");
+        Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
         Assert.That(logConsumer.Messages, Has.Some.Contains("endpoint creation failed"));
     }
 
@@ -379,6 +382,9 @@ public sealed class RawUnreliableServerTransportTests
             Assert.That(transport.ExposedRouteCount, Is.Zero);
             Assert.That(first.IsAlive, Is.False);
             Assert.That(second.IsAlive, Is.False);
+            Assert.That(handler.StoppedCount, Is.EqualTo(2),
+                "each declined endpoint must notify the factory-created handler exactly once");
+            Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
             Assert.That(logConsumer.Messages, Is.Empty);
         });
     }

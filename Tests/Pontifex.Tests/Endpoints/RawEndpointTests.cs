@@ -579,7 +579,7 @@ public sealed class RawEndpointTests
     }
 
     [Test]
-    public void ProcessInbound_IsDeliveredBeforeStopNotification()
+    public void ProcessInbound_ScheduledBeforeStopLatch_IsReleasedInsteadOfDelivered()
     {
         using var handler = new RecordingRawHandler(Memory);
         using var ep = Create(handler);
@@ -591,7 +591,13 @@ public sealed class RawEndpointTests
         ep.DrainAll();
         ep.CompleteStop();
 
-        Assert.That(handler.Events, Is.EqualTo(new[] { "received", "stopped" }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.Zero,
+                "a receive job scheduled before the stop latch must not deliver after Stop returns");
+            Assert.That(buffer.IsAlive, Is.False);
+            Assert.That(handler.Events, Is.EqualTo(new[] { "stopped" }));
+        });
     }
 
     [Test]

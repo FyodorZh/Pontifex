@@ -182,7 +182,7 @@ namespace Pontifex.Raw
 
             _receiveAction = msg =>
             {
-                if (_currentStage == State.Started)
+                if (IsRunning)
                 {
                     try
                     {
