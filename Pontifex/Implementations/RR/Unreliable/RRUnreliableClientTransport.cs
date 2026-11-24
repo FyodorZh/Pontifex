@@ -162,12 +162,13 @@ namespace Pontifex.RR.Unreliable
             for (int attempt = 0; attempt <= ushort.MaxValue; attempt++)
             {
                 requestId = NextRequestId();
-                bindable.Bind(requestId, CancelRequest);
                 var candidate = new RRUnreliableRequestState(handler);
 
                 bool sweep = attempt == 0;
-                if (_pendingResponses.TryAdd(requestId, candidate, sweep ? TerminateExpired : null, sweep))
+                if (_pendingResponses.TryAdd(requestId, candidate, sweep ? TerminateExpired : null,
+                        sweep))
                 {
+                    bindable.Bind(requestId, CancelRequest);
                     state = candidate;
                     added = true;
                     break;
@@ -306,7 +307,13 @@ namespace Pontifex.RR.Unreliable
 
         private static void TerminateExpired(RRUnreliableRequestState state)
         {
-            state.TryTerminate();
+            // Wait for a delivery that is already running, so the handler stays bound for the whole
+            // callback and cannot be rebound to a new request while that callback still runs.
+            lock (state.SyncRoot)
+            {
+                state.TryTerminate();
+            }
+
             ((RRRequestHandler)state.Handler).Unbind();
         }
 
@@ -410,6 +417,8 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
+            bool started = IsStarted;
+
             lock (state.SyncRoot)
             {
                 if (state.IsTerminal)
@@ -440,7 +449,7 @@ namespace Pontifex.RR.Unreliable
                     _pendingResponses.TryTakeExact(requestId, state, out _, out _);
                 }
 
-                if (!IsStarted)
+                if (!started)
                 {
                     state.TryTerminate();
                     _pendingResponses.TryTakeExact(requestId, state, out _, out _);

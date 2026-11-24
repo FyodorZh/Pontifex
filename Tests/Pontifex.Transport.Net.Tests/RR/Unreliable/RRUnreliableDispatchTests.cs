@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using Actuarius.Memory;
 using NUnit.Framework;
+using Operarius;
 using Pontifex.NetSockets;
 using Pontifex.RR;
 using Pontifex.RR.Unreliable;
@@ -34,7 +35,7 @@ public sealed class RRUnreliableDispatchTests
             Assert.That(client.Start(_ => { }), Is.True);
             ushort requestId = SendRequest(client, handler);
 
-            client.Receive(foreign, Response(requestId, 0, 1, 2));
+            client.Receive(foreign, Response(requestId, 0, 2, 2));
 
             Assert.That(handler.Responded, Is.False);
 
@@ -42,6 +43,7 @@ public sealed class RRUnreliableDispatchTests
 
             Assert.That(handler.Responded, Is.True);
             Assert.That(handler.ResponseValue, Is.EqualTo(3));
+            Assert.That(handler.MessageCounts, Is.EqualTo(new[] { 1 }));
         }
         finally
         {
@@ -61,7 +63,7 @@ public sealed class RRUnreliableDispatchTests
             Assert.That(client.Start(_ => { }), Is.True);
             ushort requestId = SendRequest(client, handler);
 
-            client.Receive(server, Response(requestId, 0, 1, 1, 2, 3));
+            client.Receive(server, Response(requestId, 0, 2, 1, 2, 3));
 
             Assert.That(handler.Responded, Is.False);
 
@@ -69,6 +71,7 @@ public sealed class RRUnreliableDispatchTests
 
             Assert.That(handler.Responded, Is.True);
             Assert.That(handler.ResponseValue, Is.EqualTo(4));
+            Assert.That(handler.MessageCounts, Is.EqualTo(new[] { 1 }));
         }
         finally
         {
@@ -193,9 +196,10 @@ public sealed class RRUnreliableDispatchTests
             ushort requestId = SendRequest(client, handler);
 
             client.Receive(server, RawResponse(requestId, 2, 1, 20));
-            client.Receive(server, Response(requestId, 0, 2, 10));
+            client.Receive(server, Response(requestId, 0, 1, 10));
 
             Assert.That(handler.Values, Is.EqualTo(new[] { 10 }));
+            Assert.That(handler.MessageCounts, Is.EqualTo(new[] { 1 }));
         }
         finally
         {
@@ -289,7 +293,10 @@ public sealed class RRUnreliableDispatchTests
             Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Ok));
             Assert.That(response.Response(Payload(11)), Is.EqualTo(SendResult.Ok));
             Assert.That(response.Response(Payload(12)), Is.EqualTo(SendResult.Ok));
-            Assert.That(response.Response(Payload(13)), Is.EqualTo(SendResult.Error));
+
+            var fourth = Payload(13);
+            Assert.That(response.Response(fourth), Is.EqualTo(SendResult.Error));
+            Assert.That(fourth.IsAlive, Is.False);
 
             Assert.That(server.SentResponses, Is.EqualTo(new[]
             {
@@ -384,21 +391,141 @@ public sealed class RRUnreliableDispatchTests
     }
 
     [Test]
-    public void SetMessageCount_AcceptsTwoHundredFiftySix()
+    public void ResponseSequence_SendsTwoHundredFiftySixMessages()
     {
         var response = StartRequest(out TestServerTransport server);
 
         try
         {
             response.SetMessageCount(256);
-            Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Ok));
 
-            Assert.That(server.SentResponses, Is.EqualTo(new[] { (0, 256) }));
+            for (int id = 0; id < 256; id++)
+            {
+                Assert.That(response.Response(Payload(id)), Is.EqualTo(SendResult.Ok));
+            }
+
+            Assert.That(server.SentResponses, Has.Count.EqualTo(256));
+            Assert.That(server.SentResponses[0], Is.EqualTo((0, 256)));
+            Assert.That(server.SentResponses[255], Is.EqualTo((255, 256)));
+
+            var extra = Payload(256);
+            Assert.That(response.Response(extra), Is.EqualTo(SendResult.Error));
+            Assert.That(extra.IsAlive, Is.False);
         }
         finally
         {
             server.Stop();
         }
+    }
+
+    [Test]
+    public void Response_InvalidPayloadDoesNotAdvanceTheId()
+    {
+        var response = StartRequest(out TestServerTransport server);
+
+        try
+        {
+            response.SetMessageCount(2);
+
+            Assert.That(response.Response(null!), Is.EqualTo(SendResult.InvalidMessage));
+            Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Ok));
+            Assert.That(server.SentResponses, Is.EqualTo(new[] { (0, 2) }));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void Response_TooBigPayloadDoesNotAdvanceTheId()
+    {
+        var handler = new RecordingServerHandler();
+        var server = new TestServerTransport(10);
+
+        try
+        {
+            Assert.That(server.Init(handler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            server.Receive(Endpoint(6000), Request(1));
+
+            IRRUnreliableResponse response = handler.LastResponse!;
+            response.SetMessageCount(2);
+
+            var tooBig = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            tooBig.PutLast(1);
+            tooBig.PutLast(2);
+            tooBig.PutLast(3);
+
+            Assert.That(response.Response(tooBig), Is.EqualTo(SendResult.MessageTooBig));
+            Assert.That(tooBig.IsAlive, Is.False);
+            Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Ok));
+            Assert.That(server.SentResponses, Is.EqualTo(new[] { (0, 2) }));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void ConcurrentResponses_AssignEachIdOnce()
+    {
+        var response = StartRequest(out TestServerTransport server);
+
+        try
+        {
+            response.SetMessageCount(2);
+
+            Task<SendResult> first = Task.Run(() => response.Response(Payload(10)));
+            Task<SendResult> second = Task.Run(() => response.Response(Payload(11)));
+            Task.WaitAll(first, second);
+
+            Assert.That(new[] { first.Result, second.Result }, Is.All.EqualTo(SendResult.Ok));
+            Assert.That(server.SentResponses.Select(entry => entry.MessageId),
+                Is.EquivalentTo(new[] { 0, 1 }));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void SetMessageCount_AfterTheResponseTtlThrows()
+    {
+        var clock = new MutableClock { Now = DateTime.UtcNow };
+        var handler = new RecordingServerHandler();
+        var server = new TestServerTransport(100, clock);
+
+        try
+        {
+            Assert.That(server.Init(handler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            server.Receive(Endpoint(6000), Request(1));
+
+            IRRUnreliableResponse response = handler.LastResponse!;
+            clock.Now += Ttl + TimeSpan.FromSeconds(1);
+
+            Assert.Throws<InvalidOperationException>(() => response.SetMessageCount(2));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void SetMessageCount_AfterStopThrowsAndResponseReturnsError()
+    {
+        var response = StartRequest(out TestServerTransport server);
+        server.Stop();
+
+        Assert.Throws<InvalidOperationException>(() => response.SetMessageCount(2));
+
+        var payload = Payload(10);
+        Assert.That(response.Response(payload), Is.EqualTo(SendResult.Error));
+        Assert.That(payload.IsAlive, Is.False);
     }
 
     private static IRRUnreliableResponse StartRequest(out TestServerTransport server)
@@ -516,8 +643,8 @@ public sealed class RRUnreliableDispatchTests
     {
         private readonly int _maxByteSize;
 
-        public TestServerTransport(int maxByteSize)
-            : base("test-rr-server", Ttl, new Logger([]), MemoryRental.Shared)
+        public TestServerTransport(int maxByteSize, IDateTimeProvider? timeProvider = null)
+            : base("test-rr-server", Ttl, new Logger([]), MemoryRental.Shared, timeProvider)
         {
             _maxByteSize = maxByteSize;
         }
@@ -554,6 +681,11 @@ public sealed class RRUnreliableDispatchTests
         {
             OnFrameReceived(source, frame);
         }
+    }
+
+    private sealed class MutableClock : IDateTimeProvider
+    {
+        public DateTime Now { get; set; }
     }
 
     private sealed class RecordingHandler : RRRequestHandler, IRRUnreliableRequestHandler

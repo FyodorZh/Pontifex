@@ -140,14 +140,27 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
+        /// Gets whether the handle can still answer: the transport is running and the response TTL
+        /// has not expired. Read outside the handle gate so a stop that holds the lifecycle lock
+        /// cannot deadlock against it.
+        /// </summary>
+        internal bool CanAnswer(RRUnreliableResponse response)
+        {
+            return IsStarted && _timeProvider.Now <= response.ExpiresAt;
+        }
+
+        /// <summary>
         /// Sends the next message held by <paramref name="response"/>.
         /// </summary>
         /// <param name="response">The response handle that owns the route and the sequence state.</param>
         /// <param name="payload">The response payload. The method owns it.</param>
+        /// <param name="canAnswer">The answerability snapshot taken before the handle gate was
+        /// acquired.</param>
         /// <returns>The result of the send attempt.</returns>
-        internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload)
+        internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload,
+            bool canAnswer)
         {
-            if (response.IsClosed || !IsStarted || _timeProvider.Now > response.ExpiresAt)
+            if (!canAnswer || response.IsClosed)
             {
                 if (!response.IsClosed)
                 {

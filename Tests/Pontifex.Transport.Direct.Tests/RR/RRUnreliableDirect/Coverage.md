@@ -18,6 +18,7 @@
 | `RejectedRequest_ProducesNoCallbackAndExpiresSilently` | Silent rejection | A rejected request provides no callback and is swept by a later request | The sweep runs while the later request is added to the pending table. |
 | `CancelledRequest_ProducesNoCallback` | Local cancellation | `Cancel` removes the pending entry without a callback | The clock does not advance; the later request only proves the old entry is gone. |
 | `ExpiredRequest_ProducesNoCallback` | Request TTL | An expired pending entry is swept without a callback | Uses the manual clock and a later request as the sweep trigger. |
+| `ExpiredRequest_AllowsTheSameHandlerToBeReused` | Handler reuse after expiry | The same handler is rebound after its request expired | The rebind path reaps the expired entry before reserving the handler. |
 | `ResponseAfterTheRequestTtl_IsDropped` | Request TTL | A response that arrives after the client request TTL is dropped without a callback | The server response TTL is longer, so the frame is still sent. |
 | `InvalidPayload_ReturnsInvalidMessage` | Send-result precedence | A null payload returns `InvalidMessage` and leaves the handler reusable | The core releases no null buffer. |
 | `OversizedPayload_ReturnsMessageTooBigAndReleasesTheFrame` | Payload limit | A payload above `1048576` bytes returns `MessageTooBig` and is released | The limit is checked on the payload before the request-id header is added. |

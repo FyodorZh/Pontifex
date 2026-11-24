@@ -157,6 +157,24 @@ public sealed class RRUnreliableDirectRoundTripTests
     }
 
     [Test]
+    public void ExpiredRequest_AllowsTheSameHandlerToBeReused()
+    {
+        var clock = NewClock();
+        using var serverHandler = new RecordingServerHandler(
+            MemoryRental.Shared, ServerResponseMode.AcceptSilently);
+        StartServer(clock, serverHandler, out string name);
+        var client = StartClient(clock, name);
+        using var handler = new RecordingClientHandler();
+
+        Assert.That(client.Request(TestMessages.Int(1), handler), Is.EqualTo(SendResult.Ok));
+        Assert.That(serverHandler.Requested.Wait(Timeout), Is.True);
+
+        clock.Now += TimeSpan.FromSeconds(4);
+
+        Assert.That(client.Request(TestMessages.Int(2), handler), Is.EqualTo(SendResult.Ok));
+    }
+
+    [Test]
     public void ResponseAfterTheRequestTtl_IsDropped()
     {
         var clock = NewClock();

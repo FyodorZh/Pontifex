@@ -78,10 +78,10 @@ request cannot arrive before the queue exists. A failed registration disposes th
 owns one fixed `GuidEndPoint` for its lifetime and the channel it creates lazily.
 
 The server dispatch queue is opened by `OnStarted`. A frame that arrives before the gate opens is
-held in a pending list bounded by `100` frames; the `101`st frame is released. Stop releases every
-held frame and disposes the queue without waiting for a running `OnRequested`. A frame delivered
-after the stop snapshot finds no queue and is released by the inbound path, because no other owner
-remains for it.
+held in a pending list bounded by the configured dispatch capacity; a frame beyond it is released.
+Stop releases every held frame and disposes the queue without waiting for a running
+`OnRequested`. A frame delivered after the stop snapshot finds no queue and is released by the
+inbound path, because no other owner remains for it.
 
 The client's `Stop` and a channel disposal unsubscribe the disposal notification, remove the
 channel from the server registry, and dispose the channel. A disposed channel is a loss, not a
@@ -94,7 +94,7 @@ The carrier enforces these limits:
 | Limit | Scope | Value |
 | --- | --- | --- |
 | Message maximum | Both directions | `1048576` bytes, excluding the request and response headers |
-| Pending pre-start frames | Server | `100` frames |
+| Pending pre-start frames | Server | Configured dispatch capacity, default `100` frames |
 | Dispatch queue | Server | Configured capacity, default `100` items |
 
 ## 7. Failure, deviations, and protection
@@ -165,7 +165,8 @@ confidentiality, or integrity protection.
 - [ ] Validate `delivery` eagerly, including incomplete loss-model parameters.
 - [ ] Build fresh delivery systems per direction for every connect.
 - [ ] Create the dispatch queue before carrier registration and dispose it on failure.
-- [ ] Hold frames received before `OnStarted` in a `100`-frame pending list and release the rest.
+- [ ] Hold frames received before `OnStarted` in a configured-capacity pending list, default
+      `100`, and release the rest.
 - [ ] Open the dispatch gate in `OnStarted` while holding the list lock.
 - [ ] Start the response TTL at frame receipt.
 - [ ] Carry the message id and message count in response frames.

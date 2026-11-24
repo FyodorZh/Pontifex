@@ -1,8 +1,8 @@
 namespace Pontifex.RR.Unreliable
 {
     /// <summary>
-    /// Server half of the RR unreliable contract: receives requests from clients and sends the matched
-    /// response back to its source.
+    /// Server half of the RR unreliable contract: receives requests from clients and sends matched
+    /// response messages back to their source.
     /// </summary>
     public interface IRRUnreliableServerTransport : IRRServerTransport
     {

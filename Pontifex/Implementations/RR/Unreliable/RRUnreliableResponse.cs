@@ -67,12 +67,15 @@ namespace Pontifex.RR.Unreliable
                     "The message count must be in the range 1..256.");
             }
 
+            bool canAnswer = _transport.CanAnswer(this);
+
             lock (_gate)
             {
-                if (_declarationLocked || IsClosed)
+                if (_declarationLocked || IsClosed || !canAnswer)
                 {
                     throw new InvalidOperationException(
-                        "The message count must be set once, before the first response is sent.");
+                        "The message count must be set once, before the first response is sent, " +
+                        "while the handle can answer.");
                 }
 
                 _messageCount = messageCount;
@@ -83,10 +86,12 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         public override SendResult Response(UnionDataList response)
         {
+            bool canAnswer = _transport.CanAnswer(this);
+
             lock (_gate)
             {
                 _declarationLocked = true;
-                return _transport.SendResponse(this, response);
+                return _transport.SendResponse(this, response, canAnswer);
             }
         }
 

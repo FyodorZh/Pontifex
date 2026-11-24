@@ -68,7 +68,7 @@ Terms of the shared contract apply as defined there. This specification adds:
 | **message id** | The zero-based index of a response message, from `0` to `messageCount` minus one. |
 | **message count** | The number of messages a response consists of, from `1` to `256`. |
 | **last message** | The response message whose id is `messageCount` minus one. |
-| **bounded handle** | A response handle that accepts at most `messageCount` accepted sends and closes after the last message. |
+| **bounded handle** | A response handle that accepts at most `messageCount` accepted sends and stops answering after the last message, the response TTL, a rejection, or a stop. |
 | **silent rejection** | A server decision not to answer a request, delivered to the client only as pending-window expiry. |
 
 ## 4. Public contract
@@ -123,7 +123,8 @@ implement `IRRUnreliableResponse`.
 **MUST** be callable once before the first `Response` call, and **MUST** throw
 `ArgumentOutOfRangeException` outside that range and
 `InvalidOperationException` on a repeated call, after the first `Response` call,
-or after the handle is closed.
+after the handle is closed, after the response TTL expires, or after the transport
+stops. The range check **MUST** precede the state checks.
 
 A message id is zero-based and is less than the message count. The last message
 id is the message count minus one.
@@ -231,7 +232,8 @@ several pending-window causes race, the first cause that removes the request
 wins; every later cause produces no additional callback.
 
 The response TTL bounds the whole response sequence. When it expires, the handle
-is closed and a later `Response` returns `Error`; no callback is raised. If the
+stops answering: a later `Response` returns `Error` and closes it, and a later
+`SetMessageCount` throws `InvalidOperationException`; no callback is raised. If the
 server sends fewer messages than declared, the client pending request eventually
 expires independently. Neither side receives a timeout callback.
 
@@ -308,6 +310,11 @@ the pending-window rule.
 
 A stopped or failed transport **MUST** clear the pending window without raising a
 completion callback. A request removed this way is not replayed.
+
+A stop or failure that races a callback already in progress **MAY** let that
+callback complete after `onStopped` begins. No new callback begins after the
+stop. An application that reuses a handler after a stop or failure **MUST**
+tolerate that in-flight callback.
 
 The transport-level `onStopped` callback **MUST** be invoked exactly once after
 the terminal transition.
@@ -452,6 +459,7 @@ No conformance controls are defined.
 - [ ] Keep server callbacks serialized and non-reentrant.
 - [ ] Keep each request handler's callbacks serialized and non-reentrant across
       every message.
+- [ ] Default `MessageCount` to `1` when the application does not set it.
 - [ ] Assign server-global ids unique for the transport lifetime, starting at
       `1`.
 - [ ] Start client-local ids from a fresh random value on every start and
@@ -462,6 +470,9 @@ No conformance controls are defined.
       consuming the payload.
 - [ ] Bind the handler before submitting the request frame and publish its
       `RequestId`.
+- [ ] Select the `Request` result in the order of section 9.
+- [ ] Do not deliver a response message that was accepted before the request
+      bound the handler.
 - [ ] Deliver each message id at most once per request.
 - [ ] Drop unknown, expired, duplicate, cancelled, foreign-route, out-of-range,
       and count-mismatched response frames.
@@ -471,7 +482,10 @@ No conformance controls are defined.
       request is cancelled, expires, or is abandoned.
 - [ ] Throw `ArgumentOutOfRangeException` for a message count outside `1..256`.
 - [ ] Throw `InvalidOperationException` for a second `SetMessageCount` call,
-      after the first `Response` call, or after close.
+      after the first `Response` call, after close, after expiry, or after stop.
+- [ ] Keep every synchronous non-`Ok` result non-fatal.
+- [ ] Clear the pending window on stop or failure without raising a completion
+      callback.
 - [ ] Assign message ids from zero in accepted-send order and advance the id only
       on `Ok`.
 - [ ] Close the response handle after the declared number of accepted sends, on
@@ -490,7 +504,11 @@ No conformance controls are defined.
 - [ ] Call server `Init` exactly once before `Start`.
 - [ ] Derive every request handler from `RRRequestHandler`.
 - [ ] Use a distinct handler for each concurrently pending request; reuse only
-      after the request completed, was cancelled, or expired.
+      after the request completed, was cancelled, or expired and no callback for
+      the old request is still running.
+- [ ] Do not implement `IRRUnreliableResponse`.
+- [ ] After a stop or failure, do not reuse a handler until any in-flight
+      callback has returned.
 - [ ] Treat every accepted request and every response message as potentially
       lost.
 - [ ] Never expect more than the `messageCount` argument's `Response` calls per
