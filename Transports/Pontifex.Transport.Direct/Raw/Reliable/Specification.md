@@ -107,6 +107,22 @@ The reject linger of this carrier is `TimeSpan.Zero`: the reject frame is
 delivered synchronously before the channel closes, so no waiting is required.
 The carrier creates no `System.Threading.Timer` for the handshake.
 
+An inbound frame with no frame type, an unknown frame type, or a body above
+`MessageMaxByteSize` is logged, released, and dropped. It does not stop the
+session; later traffic still flows. Transport framing never counts toward
+`MessageMaxByteSize`: the carrier measures the application payload before the
+frame type is prepended, and the shared endpoint measures the true body after
+the frame type is popped.
+
+A payload that arrives after the handshake but before the handler's
+`OnConnected` callback returns is buffered in arrival order and drained
+immediately after the callback. It is delivered exactly once and in order, not
+dropped. The pre-connect buffer is capped at 64 messages and at
+`64 * MessageMaxByteSize` bytes; exceeding either cap releases every buffered
+payload and the triggering payload, then stops the session with a `TextFail`
+reason. A stop before or during the callback releases the buffer without
+delivering it.
+
 ## 7. Failure, deviations, and protection
 
 A channel-level failure terminates the session or the transport according to the
@@ -125,10 +141,12 @@ the isolation boundary.
 | Addressing | The server is a `StringEndPoint` holding `id`; each client transport owns a unique `GuidEndPoint`. |
 | Callback scheduler | Each endpoint owns a serial action queue; channel delivery may run on the sending thread. |
 | Queue capacity and drain rate | Bounded by the endpoint buffer capacity, which defaults to `104857600` bytes; a full queue yields `BufferOverflow`. |
+| Framing | The frame type is prepended on send and popped on receive; the payload limit excludes it, and the framed receive body is measured again against the limit. |
+| Pre-connect payloads | Buffered in arrival order (64 messages, 64 payload maxima) and drained after `OnConnected`; an overflow stops the session. |
 | Reject linger | Zero; the reject frame is delivered synchronously before the channel closes. |
 | Handshake path | Synchronous validation on the channel with no handshake timer. |
 | Failure detection | Channel disposal is the only disconnection signal; a missing server is detected during endpoint start. |
-| Logging | Channel and handshake failures are logged through `Log`. |
+| Logging | Channel and handshake failures, malformed frames, and oversized bodies are logged through `Log`. |
 | Protection | None beyond the process boundary. |
 
 ## 9. Implementer checklist
@@ -153,4 +171,8 @@ the isolation boundary.
 - [ ] Close the channel and release the endpoint wiring and buffers on stop.
 - [ ] Report a missing or rejecting server as an ordinary client stop, not a
       failed `Start`.
+- [ ] Drop and log a malformed or unknown frame without stopping the session.
+- [ ] Exclude transport framing from `MessageMaxByteSize` in both directions.
+- [ ] Buffer a pre-`OnConnected` payload and drain it after the callback, or
+      release it on stop or overflow.
 - [ ] Add no protection beyond the process boundary.

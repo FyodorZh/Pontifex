@@ -497,6 +497,31 @@ namespace Pontifex.Raw
         /// </remarks>
         protected SendResult ScheduleToSend(UnionDataList bufferToSend)
         {
+            int declaredPayloadSize = bufferToSend == null || !bufferToSend.IsAlive
+                ? 0
+                : bufferToSend.GetDataSize();
+            return ScheduleToSend(bufferToSend!, declaredPayloadSize);
+        }
+
+        /// <summary>
+        /// Validates and admits one outbound buffer using a caller-supplied payload size.
+        /// </summary>
+        /// <param name="bufferToSend">The buffer to send, including any transport framing that was already
+        /// prepended.</param>
+        /// <param name="payloadSize">The serialized application-payload size, measured before the transport
+        /// framing was prepended. It is compared with <see cref="MessageMaxByteSize"/>; the real
+        /// <c>GetDataSize()</c> of the buffer is used for the outbound byte budget.</param>
+        /// <returns>A SendResult describing the admission.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: A framed transport calls this overload so transport framing
+        /// never counts toward the payload limit, while the real framed cost still counts toward the byte
+        /// budget. The payload size must be measured before <c>PutFirst</c>; a fixed framing constant is not
+        /// accurate because the element header and the list-count varint can grow.</description></item>
+        /// </list>
+        /// </remarks>
+        protected SendResult ScheduleToSend(UnionDataList bufferToSend, int payloadSize)
+        {
             if (!CanSendNow(out var errorCode))
             {
                 // State is checked before the buffer, so a stopped endpoint reports the state result
@@ -515,13 +540,13 @@ namespace Pontifex.Raw
                 return SendResult.InvalidMessage;
             }
 
-            int bufferSize = bufferToSend.GetDataSize();
-            if (bufferSize > MessageMaxByteSize)
+            if (payloadSize > MessageMaxByteSize)
             {
                 bufferToSend.Release();
                 return SendResult.MessageTooBig;
             }
 
+            int bufferSize = bufferToSend.GetDataSize();
             SendSlotReservation? reservation = TryReserveSendSlot();
             if (reservation == null)
             {

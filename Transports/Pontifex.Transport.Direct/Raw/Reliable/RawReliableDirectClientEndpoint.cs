@@ -227,13 +227,8 @@ namespace Pontifex.Raw.Reliable.Direct
 
         private void OnChannelMessage(UnionDataList message)
         {
-            if (message.GetDataSize() > MessageMaxByteSize)
-            {
-                message.Release();
-                Log.e("Inbound message exceeds MessageMaxByteSize and was discarded");
-                return;
-            }
-
+            // The authoritative payload limit is the post-pop body check in RawReliableEndpoint: the framed
+            // message includes the transport frame type, which must not count toward MessageMaxByteSize.
             ProcessInboundMessage(message);
         }
 

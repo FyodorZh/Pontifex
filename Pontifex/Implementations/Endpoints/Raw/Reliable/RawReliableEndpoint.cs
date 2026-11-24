@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
@@ -89,11 +90,19 @@ namespace Pontifex.Raw.Reliable
 
         private readonly IRawReliableHandler _handler;
 
+        private readonly object _connectGate = new object();
+        private readonly System.Collections.Generic.Queue<UnionDataList> _preConnectInbox =
+            new System.Collections.Generic.Queue<UnionDataList>();
+
         private volatile State _currentStage;
 
         private int _connectedNotified;
 
         private int _disconnectedNotified;
+
+        private bool _connectCompleted;
+        private bool _preConnectReleased;
+        private long _preConnectBytes;
 
         /// <inheritdoc/>
         public bool IsLowLevelConnected => _currentStage == State.Connected;
@@ -144,7 +153,35 @@ namespace Pontifex.Raw.Reliable
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log)
         {
             _handler = handler;
+            Stopped += OnEndpointStopped;
         }
+
+        /// <summary>
+        /// Gets the maximum number of payloads buffered between the handshake and the completion of the
+        /// handler's <c>OnConnected</c> callback.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Overridable for tests. Reaching the limit terminates the
+        /// session with a <see cref="TextFail"/> reason instead of dropping a payload
+        /// silently.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual int PreConnectBufferMaxMessages => 64;
+
+        /// <summary>
+        /// Gets the maximum total payload bytes buffered between the handshake and the completion of the
+        /// handler's <c>OnConnected</c> callback.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Computed with saturating 64-bit arithmetic from
+        /// <see cref="RawEndpoint.MessageMaxByteSize"/>, so a maximum of <see cref="int.MaxValue"/> does not
+        /// overflow. Overridable for tests.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual long PreConnectBufferMaxBytes =>
+            (long)MessageMaxByteSize * PreConnectBufferMaxMessages;
 
         /// <summary>
         /// Gets the handler that receives inbound messages and connection lifecycle notifications.
@@ -202,8 +239,76 @@ namespace Pontifex.Raw.Reliable
             {
                 Log.wtf(ex);
             }
+            finally
+            {
+                CompleteConnectAndDrainPreConnectInbox();
+            }
 
             return true;
+        }
+
+        private void CompleteConnectAndDrainPreConnectInbox()
+        {
+            lock (_connectGate)
+            {
+                _connectCompleted = true;
+
+                if (_preConnectReleased || IsStopRequested)
+                {
+                    // A stop requested before or during the start notification releases every buffered
+                    // payload without delivering it.
+                    while (_preConnectInbox.Count > 0)
+                    {
+                        _preConnectInbox.Dequeue().Release();
+                    }
+
+                    _preConnectBytes = 0;
+                    return;
+                }
+
+                while (_preConnectInbox.Count > 0)
+                {
+                    UnionDataList message = _preConnectInbox.Dequeue();
+                    _preConnectBytes -= message.GetDataSize();
+                    base.ProcessInboundMessage(message);
+                }
+
+                _preConnectBytes = 0;
+            }
+        }
+
+        private void ReleasePreConnectInbox()
+        {
+            List<UnionDataList>? released = null;
+
+            lock (_connectGate)
+            {
+                _preConnectReleased = true;
+
+                if (_preConnectInbox.Count > 0)
+                {
+                    released = new List<UnionDataList>(_preConnectInbox.Count);
+                    while (_preConnectInbox.Count > 0)
+                    {
+                        released.Add(_preConnectInbox.Dequeue());
+                    }
+                }
+
+                _preConnectBytes = 0;
+            }
+
+            if (released != null)
+            {
+                foreach (UnionDataList message in released)
+                {
+                    message.Release();
+                }
+            }
+        }
+
+        private void OnEndpointStopped(StopReason reason)
+        {
+            ReleasePreConnectInbox();
         }
 
         /// <summary>
@@ -484,12 +589,20 @@ namespace Pontifex.Raw.Reliable
                 return errorCode;
             }
 
-            if (bufferToSend != null! && bufferToSend.IsAlive)
+            if (bufferToSend == null! || !bufferToSend.IsAlive)
             {
-                bufferToSend.PutFirst((byte)MessageType.PayloadMessage);
-                return ScheduleToSend(bufferToSend);
+                return SendResult.InvalidMessage;
             }
-            return SendResult.InvalidMessage;
+
+            int payloadSize = bufferToSend.GetDataSize();
+            if (payloadSize > MessageMaxByteSize)
+            {
+                bufferToSend.Release();
+                return SendResult.MessageTooBig;
+            }
+
+            bufferToSend.PutFirst((byte)MessageType.PayloadMessage);
+            return ScheduleToSend(bufferToSend, payloadSize);
         }
 
         /// <summary>
@@ -531,8 +644,7 @@ namespace Pontifex.Raw.Reliable
             switch (messageType)
             {
                 case MessageType.PayloadMessage:
-                    base.ProcessInboundMessage(message);
-                    return true;
+                    return DeliverPayload(message);
                 case MessageType.DisconnectMessage:
                     message.Release();
                     Stop(new GracefulRemoteIntention(TransportName), false);
@@ -540,6 +652,68 @@ namespace Pontifex.Raw.Reliable
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// Delivers or buffers one inbound payload according to the connect-completed latch.
+        /// </summary>
+        /// <param name="message">The payload body. Ownership transfers to this method.</param>
+        /// <returns>Always <see langword="true"/>; the payload is either delivered, buffered, or released by
+        /// this method.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: A payload that arrives before the handler's
+        /// <c>OnConnected</c> completed is buffered in arrival order and drained immediately after the
+        /// callback, so it is delivered exactly once and in order rather than dropped. A payload that cannot
+        /// fit the pre-connect caps releases every buffered payload and the triggering payload, then stops
+        /// the session with a <see cref="TextFail"/> reason; it is never dropped silently.</description></item>
+        /// </list>
+        /// </remarks>
+        private bool DeliverPayload(UnionDataList message)
+        {
+            bool overflow = false;
+
+            lock (_connectGate)
+            {
+                if (_connectCompleted)
+                {
+                    base.ProcessInboundMessage(message);
+                    return true;
+                }
+
+                if (_preConnectReleased || IsStopRequested)
+                {
+                    message.Release();
+                    return true;
+                }
+
+                int size = message.GetDataSize();
+                if (_preConnectInbox.Count >= PreConnectBufferMaxMessages ||
+                    _preConnectBytes + size > PreConnectBufferMaxBytes)
+                {
+                    overflow = true;
+                    while (_preConnectInbox.Count > 0)
+                    {
+                        _preConnectInbox.Dequeue().Release();
+                    }
+
+                    _preConnectBytes = 0;
+                    message.Release();
+                }
+                else
+                {
+                    _preConnectInbox.Enqueue(message);
+                    _preConnectBytes += size;
+                }
+            }
+
+            if (overflow)
+            {
+                Log.e("Pre-connect payload buffer exceeded; the session is stopping");
+                Stop(new TextFail(TransportName, "Pre-connect payload buffer exceeded"), false);
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -558,12 +732,31 @@ namespace Pontifex.Raw.Reliable
         /// </remarks>
         protected sealed override void ProcessInboundMessage(UnionDataList message)
         {
-            if (!IsLowLevelConnected ||
-                !message.TryPopFirst(out byte msgType) ||
-                !ProcessInboundMessage((MessageType)msgType, message))
+            if (!IsLowLevelConnected)
+            {
+                // A frame delivered after the connection ended is not malformed; it is simply late.
+                message.Release();
+                return;
+            }
+
+            if (!message.TryPopFirst(out byte msgType))
             {
                 message.Release();
-                Stop(new TextFail(TransportName, "Failed to parse incoming message"), false);
+                Log.e("Inbound reliable frame had no frame type and was discarded");
+                return;
+            }
+
+            if (message.GetDataSize() > MessageMaxByteSize)
+            {
+                message.Release();
+                Log.e("Inbound reliable payload exceeds MessageMaxByteSize and was discarded");
+                return;
+            }
+
+            if (!ProcessInboundMessage((MessageType)msgType, message))
+            {
+                message.Release();
+                Log.e("Inbound reliable frame type '{0}' is not handled and was discarded", msgType);
             }
         }
     }

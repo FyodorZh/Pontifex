@@ -75,8 +75,25 @@ A socket error during a session terminates that session and raises
 `OnDisconnected` followed by `OnStopped`. A listener failure is an unrecoverable
 transport failure.
 
-This implementation declares no deviation from the abstract type. It adds no
-authentication, confidentiality, or integrity protection; TCP provides none.
+An undecodable frame whose length prefix is valid is logged and dropped; the
+receive stream continues, so a later frame still flows. The receive compositor
+is sized with the framed payload cap (`MessageMaxByteSize` plus the maximum
+frame overhead), so an application payload exactly at `MessageMaxByteSize`
+frames within the receive cap and is accepted; the shared endpoint then enforces
+the exact payload limit after popping the frame type.
+
+A length prefix above the framed cap cannot be resynchronized because the
+stream has consumed the prefix and the body boundary is unknown. The socket is
+then torn down as an unrecoverable carrier failure. This is an explicit, bounded
+deviation from the abstract rule that malformed data never invalidates the
+transport; it applies only to an unrecoverable length-prefix error.
+
+A pre-`OnConnected` payload is buffered and drained after the callback, or
+released on stop or pre-connect buffer overflow, exactly as the shared
+`RawReliableEndpoint` defines.
+
+This implementation declares no other deviation from the abstract type. It adds
+no authentication, confidentiality, or integrity protection; TCP provides none.
 
 ## 8. Implementation-defined choices
 
@@ -86,8 +103,9 @@ authentication, confidentiality, or integrity protection; TCP provides none.
 | Concurrency | Dedicated receiver and sender per socket; accept loop on the server. |
 | Socket options | Keep-alive, buffer sizes, and no-delay follow the platform defaults used by the carrier. |
 | `disconnection_timeout` semantics | The carrier treats it as a grace period before tearing down a socket. |
-| Logging | Carrier failures are logged through `Log`; dropped packets are not logged. |
+| Logging | Carrier failures and undecodable frames are logged through `Log`. |
 | Capacity | Bounded by the socket send queue; a full queue yields `BufferOverflow`. |
+| Receive cap | The framed payload limit plus the maximum frame overhead; the shared endpoint enforces the exact payload limit. |
 
 ## 9. Implementer checklist
 
@@ -102,4 +120,8 @@ authentication, confidentiality, or integrity protection; TCP provides none.
       `onStopped`.
 - [ ] Map a session socket error to `OnDisconnected` then `OnStopped`.
 - [ ] Release socket, buffer, and timer resources on teardown.
+- [ ] Size the receive compositor for the framed payload cap, not the payload
+      cap alone.
+- [ ] Log and drop an undecodable frame without stopping the session; document
+      the unrecoverable length-prefix deviation.
 - [ ] Add no authentication or protection beyond the abstract contract.

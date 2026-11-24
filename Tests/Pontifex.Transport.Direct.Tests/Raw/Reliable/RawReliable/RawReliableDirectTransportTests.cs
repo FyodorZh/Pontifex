@@ -526,6 +526,75 @@ public sealed class RawReliableDirectTransportTests
         return factory.LastHandler!.Endpoint!;
     }
 
+    [Test]
+    public void Payload_at_exact_message_max_is_accepted_in_both_directions()
+    {
+        const int limit = 256;
+        var factory = new RecordingFactory(_ => new RecordingServerHandler());
+        var server = StartServer(factory, out var serverName, messageMaxSize: limit);
+
+        var clientHandler = new RecordingClientHandler();
+        var client = StartClient(serverName, clientHandler, waitForConnect: true,
+            messageMaxSize: limit);
+        var serverEndpoint = WaitForServerEndpoint(factory);
+        WaitFor(() => factory.LastHandler!.ConnectedCount == 1, "The server session did not connect");
+
+        UnionDataList fromClient = CreateExactSizeMessage(client, limit);
+        Assert.That(fromClient.GetDataSize(), Is.EqualTo(limit));
+        Assert.That(clientHandler.Endpoint!.Send(fromClient), Is.EqualTo(SendResult.Ok));
+
+        UnionDataList fromServer = CreateExactSizeMessage(server, limit);
+        Assert.That(fromServer.GetDataSize(), Is.EqualTo(limit));
+        Assert.That(serverEndpoint.Send(fromServer), Is.EqualTo(SendResult.Ok));
+
+        Assert.That(clientHandler.Endpoint.Send(CreateMessage(client, 7)), Is.EqualTo(SendResult.Ok));
+        WaitFor(() => factory.LastHandler!.ReceivedCount == 1,
+            "The connection did not survive the exact-limit payload");
+
+        UnionDataList overClient = CreateExactSizeMessage(client, limit);
+        overClient.PutLast((byte)1);
+        UnionDataList overServer = CreateExactSizeMessage(server, limit);
+        overServer.PutLast((byte)1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(clientHandler.Endpoint.Send(overClient), Is.EqualTo(SendResult.MessageTooBig));
+            Assert.That(serverEndpoint.Send(overServer), Is.EqualTo(SendResult.MessageTooBig));
+        });
+    }
+
+    private static UnionDataList CreateExactSizeMessage(IRawTransport transport, int limit)
+    {
+        var empty = transport.Memory.CollectablePool.Acquire<UnionDataList>();
+        if (empty.GetDataSize() == limit)
+        {
+            return empty;
+        }
+
+        empty.Release();
+
+        for (int overhead = 1; overhead <= 8; overhead++)
+        {
+            int byteCount = limit - overhead;
+            if (byteCount <= 0)
+            {
+                continue;
+            }
+
+            var message = transport.Memory.CollectablePool.Acquire<UnionDataList>();
+            var bytes = transport.Memory.ByteArraysPool.Acquire(byteCount);
+            message.PutLast(new UnionData(bytes));
+            if (message.GetDataSize() == limit)
+            {
+                return message;
+            }
+
+            message.Release();
+        }
+
+        throw new InvalidOperationException($"Unable to construct a UnionDataList of exactly {limit} bytes.");
+    }
+
     private static UnionDataList CreateMessage(IRawTransport transport, int value)
     {
         var message = transport.Memory.CollectablePool.Acquire<UnionDataList>();
