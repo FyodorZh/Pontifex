@@ -56,7 +56,7 @@ namespace Pontifex.Raw
 
         private int _handlerStopped;
 
-        private readonly Action<UnionDataList> _sendAction;
+        private readonly Action<SendWorkItem> _sendWorkItemAction;
         private readonly Action<UnionDataList> _receiveAction;
 
         /// <inheritdoc/>
@@ -151,18 +151,21 @@ namespace Pontifex.Raw
                 FailHard(_stopReason);
             });
 
-            _sendAction = msg =>
+            _sendWorkItemAction = workItem =>
             {
+                UnionDataList msg = workItem.Message;
+                SendSlotReservation reservation = workItem.Reservation;
                 int size = msg.GetDataSize();
                 try
                 {
                     if (_currentStage == State.Started)
                     {
-                        DoSendRaw(msg);
+                        DoSendRaw(msg, reservation);
                     }
                     else
                     {
                         msg.Release();
+                        reservation.ReleaseOnce();
                     }
                 }
                 finally
@@ -519,6 +522,13 @@ namespace Pontifex.Raw
                 return SendResult.MessageTooBig;
             }
 
+            SendSlotReservation? reservation = TryReserveSendSlot();
+            if (reservation == null)
+            {
+                bufferToSend.Release();
+                return SendResult.BufferOverflow;
+            }
+
             Interlocked.Add(ref _totalBuffersSize, bufferSize);
             Interlocked.Add(ref _pendingSendMessages, 1);
             try
@@ -543,12 +553,14 @@ namespace Pontifex.Raw
                     Log.wtf(ex);
                 }
                 bufferToSend.Release();
+                reservation.ReleaseOnce();
                 return SendResult.BufferOverflow;
             }
 
-            if (!_actionQueue.Schedule(bufferToSend, _sendAction, msg =>
+            var workItem = new SendWorkItem(bufferToSend, reservation);
+            if (!_actionQueue.Schedule(workItem, _sendWorkItemAction, item =>
                 {
-                    int droppedSize = msg.GetDataSize();
+                    int droppedSize = item.Message.GetDataSize();
                     Interlocked.Add(ref _totalBuffersSize, -droppedSize);
                     Interlocked.Add(ref _pendingSendMessages, -1);
                     try
@@ -559,7 +571,8 @@ namespace Pontifex.Raw
                     {
                         Log.wtf(ex);
                     }
-                    msg.Release();
+                    item.Message.Release();
+                    item.Reservation.ReleaseOnce();
                 }))
             {
                 Interlocked.Add(ref _totalBuffersSize, -bufferSize);
@@ -573,6 +586,7 @@ namespace Pontifex.Raw
                     Log.wtf(ex);
                 }
                 bufferToSend.Release();
+                reservation.ReleaseOnce();
                 return SendResult.Error;
             }
 
@@ -769,6 +783,72 @@ namespace Pontifex.Raw
         #endregion
 
         /// <summary>
+        /// Reserves one outbound admission slot for a message that passed the state, validity, and size
+        /// checks.
+        /// </summary>
+        /// <returns>A reservation token that must be released exactly once, or <see langword="null"/> when the
+        /// transport-specific admission budget is exhausted.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe for concurrent calls from any thread; an override must
+        /// be safe for concurrent use.</description></item>
+        /// <item><description><b>Other notes</b>: The base implementation returns a shared no-op token, so the
+        /// default path reserves nothing. An override that bounds the number of accepted messages returns a
+        /// token whose <see cref="SendSlotReservation.ReleaseOnce"/> returns the slot. A null return is reported
+        /// as <see cref="SendResult.BufferOverflow"/> and the buffer is released by the caller.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual SendSlotReservation? TryReserveSendSlot()
+        {
+            return SendSlotReservation.NoOpReservation;
+        }
+
+        /// <summary>
+        /// Creates a send-slot reservation that invokes the given release action once.
+        /// </summary>
+        /// <param name="onRelease">The action that returns the reserved slot; must not be
+        /// <see langword="null"/>.</param>
+        /// <returns>The reservation token.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The factory keeps the token constructor out of the carrier
+        /// surface while derived transports in other assemblies can still create
+        /// reservations.</description></item>
+        /// </list>
+        /// </remarks>
+        protected static SendSlotReservation CreateSendSlotReservation(Action onRelease)
+        {
+            return new SendSlotReservation(onRelease);
+        }
+
+        /// <summary>
+        /// Transmits one outbound buffer together with its send-slot reservation.
+        /// </summary>
+        /// <param name="bufferToSend">The buffer to transmit. Ownership transfers to the implementation.</param>
+        /// <param name="reservation">The reservation returned by <see cref="TryReserveSendSlot"/>. It must be
+        /// released exactly once; the default implementation releases it after the abstract
+        /// <see cref="DoSendRaw(UnionDataList)"/> returns or throws.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Carriers that keep their existing abstract override need no
+        /// change. A carrier that must hand the buffer and the reservation to a worker overrides this overload;
+        /// the worker then owns the token and releases it when it commits or discards the
+        /// message.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual void DoSendRaw(UnionDataList bufferToSend, SendSlotReservation reservation)
+        {
+            try
+            {
+                DoSendRaw(bufferToSend);
+            }
+            finally
+            {
+                reservation.ReleaseOnce();
+            }
+        }
+
+        /// <summary>
         /// Transmits a single outbound buffer through the concrete carrier.
         /// </summary>
         /// <param name="bufferToSend">The buffer to transmit. Ownership transfers to the implementation.</param>
@@ -784,6 +864,69 @@ namespace Pontifex.Raw
         /// </list>
         /// </remarks>
         protected abstract void DoSendRaw(UnionDataList bufferToSend);
+
+        /// <summary>
+        /// One accepted outbound message and its send-slot reservation.
+        /// </summary>
+        private sealed class SendWorkItem
+        {
+            public SendWorkItem(UnionDataList message, SendSlotReservation reservation)
+            {
+                Message = message;
+                Reservation = reservation;
+            }
+
+            public UnionDataList Message { get; }
+
+            public SendSlotReservation Reservation { get; }
+        }
+
+        /// <summary>
+        /// One outbound admission slot.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The token is released exactly once; a second release is a
+        /// no-op. The base path uses a shared no-op instance because it reserves nothing.</description></item>
+        /// </list>
+        /// </remarks>
+        protected class SendSlotReservation
+        {
+            private static readonly SendSlotReservation NoOpInstance = new SendSlotReservation(NoOpRelease);
+
+            private readonly Action _onRelease;
+            private int _released;
+
+            /// <summary>
+            /// Initializes a new reservation that invokes the given release action once.
+            /// </summary>
+            /// <param name="onRelease">The action that returns the reserved slot; must not be
+            /// <see langword="null"/>.</param>
+            internal SendSlotReservation(Action onRelease)
+            {
+                _onRelease = onRelease ?? throw new ArgumentNullException(nameof(onRelease));
+            }
+
+            /// <summary>
+            /// Gets the shared no-op reservation.
+            /// </summary>
+            internal static SendSlotReservation NoOpReservation => NoOpInstance;
+
+            /// <summary>
+            /// Releases the reservation exactly once.
+            /// </summary>
+            public void ReleaseOnce()
+            {
+                if (Interlocked.Exchange(ref _released, 1) == 0)
+                {
+                    _onRelease();
+                }
+            }
+
+            private static void NoOpRelease()
+            {
+            }
+        }
 
         /// <inheritdoc/>
         /// <remarks>

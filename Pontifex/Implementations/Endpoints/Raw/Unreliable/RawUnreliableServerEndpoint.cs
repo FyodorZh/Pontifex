@@ -103,6 +103,19 @@ namespace Pontifex.Raw.Unreliable
         /// </remarks>
         public override SendResult Send(UnionDataList bufferToSend)
         {
+            EnterSendReturnBarrier();
+            try
+            {
+                return SendCore(bufferToSend);
+            }
+            finally
+            {
+                ExitSendReturnBarrier();
+            }
+        }
+
+        private SendResult SendCore(UnionDataList bufferToSend)
+        {
             if (!CanSendNow(out var stateResult))
             {
                 if (bufferToSend != null! && bufferToSend.IsAlive)

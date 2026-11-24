@@ -125,6 +125,17 @@ The carrier enforces these limits:
 | Send budget | Client endpoint | `104857600` bytes |
 | Send budget | Server transport, shared by all sessions | `104857600` bytes |
 
+The client endpoint and each server session endpoint admit at most `100`
+accepted messages whose commit has not completed. A send that would exceed the
+window is rejected synchronously with `BufferOverflow` and its message is
+released; an empty message counts toward the same bound. The commit worker
+releases its slot when it commits or discards the message, including after a
+throwing commit or a queue disposal.
+
+A commit worker defers the peer callback until the sending `Send` call has
+returned. A handler that sends synchronously from a callback is reentrant on its
+own endpoint and cannot deadlock against that barrier.
+
 An inbound message above the message maximum is released and logged before any
 route lookup; it does not invoke the handler factory, reach a handler, or stop
 the endpoint or the transport.

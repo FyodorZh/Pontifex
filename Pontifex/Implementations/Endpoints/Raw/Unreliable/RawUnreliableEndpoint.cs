@@ -62,6 +62,7 @@ namespace Pontifex.Raw.Unreliable
 
         private readonly object _inboxLock = new object();
         private readonly Queue<UnionDataList> _inbox = new Queue<UnionDataList>();
+        private readonly SendReturnBarrier _sendReturnBarrier = new SendReturnBarrier();
         private readonly int _inboxCapacityMessages;
         private readonly long _inboxCapacityBytes;
         private readonly HandlerGate _handlerGate;
@@ -95,6 +96,32 @@ namespace Pontifex.Raw.Unreliable
         /// </list>
         /// </remarks>
         protected RawUnreliableEndpointConformanceControl Conformance => _conformance;
+
+        /// <summary>
+        /// Gets or sets a test hook invoked in the <c>Send</c> return path before the send-return barrier is
+        /// exited.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. A test blocks here to keep the
+        /// sender inside <c>Send</c> while it observes the commit worker.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Action? BeforeSendReturnsForTests { get; set; }
+
+        /// <summary>
+        /// Gets or sets a test hook invoked by <see cref="WaitForSendReturn"/> immediately before it waits.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It proves the commit worker reached
+        /// the barrier wait, so a missing barrier cannot be mistaken for an unscheduled
+        /// worker.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Action? BeforeSendReturnWaitForTests { get; set; }
+
+        internal int SendReturnBarrierInFlightForTests => _sendReturnBarrier.InFlightForTests;
 
         /// <inheritdoc/>
         /// <remarks>
@@ -572,16 +599,77 @@ namespace Pontifex.Raw.Unreliable
         /// <inheritdoc/>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread; delivery is serialized with
-        /// the stop notification by the base endpoint.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: The message must not be
+        /// <item><description><b>Other notes</b>: The call is bracketed by the send-return barrier. A delivery
+        /// worker that must not start a peer callback before <c>Send</c> returns calls
+        /// <see cref="WaitForSendReturn"/>. The barrier is reentrant per endpoint and per thread, so a handler
+        /// that sends synchronously from a callback cannot deadlock.</description></item>
+        /// </list>
+        /// </remarks>
+        public override SendResult Send(UnionDataList bufferToSend)
+        {
+            EnterSendReturnBarrier();
+            try
+            {
+                return base.Send(bufferToSend);
+            }
+            finally
+            {
+                try
+                {
+                    BeforeSendReturnsForTests?.Invoke();
+                }
+                finally
+                {
+                    ExitSendReturnBarrier();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Registers the start of one send call on the calling thread.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: A derived <c>Send</c> override calls this before its own
+        /// admission work and exits in <c>finally</c>. Nested calls on the same endpoint and thread are
+        /// counted by depth.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void EnterSendReturnBarrier()
+        {
+            _sendReturnBarrier.Enter();
+        }
+
+        /// <summary>
+        /// Registers the return of one send call on the calling thread.
+        /// </summary>
+        protected void ExitSendReturnBarrier()
+        {
+            _sendReturnBarrier.Exit();
+        }
+
+        /// <summary>
+        /// Blocks a delivery worker until no send is in flight on this endpoint.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Called by the carrier commit path immediately before it hands
+        /// an accepted message to the peer. It is a no-op when no send is in flight and excludes the calling
+        /// thread's own reentrant sends.</description></item>
+        /// </list>
+        /// </remarks>
+        protected void WaitForSendReturn()
+        {
+            BeforeSendReturnWaitForTests?.Invoke();
+            _sendReturnBarrier.Wait();
+        }
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The message must not be
         /// <see langword="null"/>. It is released exactly once when the endpoint is not running or the message
         /// cannot be scheduled.</description></item>
-        /// <item><description><b>Other notes</b>: The relocated <c>AfterReceivedGate</c> is hit once per
-        /// impending handler delivery. Every delivery path hits it exactly once: this override for a direct
-        /// inbound message, <see cref="Deliver"/> for a message delivered through an open inbox, and the flush
-        /// action for each buffered message, immediately before that message begins delivery. No message is
-        /// counted twice.</description></item>
         /// </list>
         /// </remarks>
         protected override void ProcessInboundMessage(UnionDataList message)
