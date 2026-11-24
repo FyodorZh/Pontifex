@@ -890,9 +890,12 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      (64 messages and a `long` byte cap computed with saturating arithmetic
      from `MessageMaxByteSize`, overridable for tests). Do not use an `int`
      multiplication, which overflows at `message_max_size = int.MaxValue`.
-     On overflow, release the buffered messages and stop the session with
+     On overflow, release every buffered message **and the triggering message
+     that failed the cap** exactly once, log it, and stop the session with
      `TextFail(TransportName, "Pre-connect payload buffer exceeded")`; never
-     drop silently. If `OnConnected` throws, the latch is still set but the
+     drop silently. The `ProcessInboundMessage(MessageType, ...)` contract says
+     a `true` return means the override already released the message, so the
+     overflow branch must release the trigger before returning true. If `OnConnected` throws, the latch is still set but the
      handler is live; drain the buffer in the same `finally` after the callback
      (or release it and stop the session if the endpoint is no longer live).
      Add a one-shot terminal release: subscribe to the endpoint `Stopped`
@@ -958,8 +961,9 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      `OnConnected` returns and is delivered exactly once, in order, after it
      returns. Add a second payload to prove FIFO drain.
    - Add a pre-connect buffer overflow test using the overridable limit: the
-     session stops with the `TextFail` reason, every buffered message is
-     released exactly once, and no payload is delivered.
+     session stops with the `TextFail` reason, every buffered message and the
+     triggering over-cap message is released exactly once, and no payload is
+     delivered.
    - Add a concurrent-arrival test: a payload arrives while the latch is being
      set and the drain runs; assert exactly-once, ordered delivery with no loss
      or duplication. Force the interleaving with a gated handler, not a sleep.
@@ -1779,10 +1783,11 @@ categories.
    - Fail when a default fixture contains polling forms: `Thread.Sleep`,
      `WaitFor`, `SpinWait`, a `DateTime.UtcNow` deadline, `Task.Delay`,
      `SemaphoreSlim.Wait(...timeout...)`, `Monitor.Wait(..., timeout)`,
-     `Task.Run`/`new Thread`, `Parallel.For`/`Parallel.Invoke`, or
-     `ThreadPool.QueueUserWorkItem` in a default fixture without a declared
-     integration category, or a real `System.Threading.Timer`/`new Timer`. Do
-     not flag a one-shot
+     `Task.Run`/`new Thread` in a default fixture without a declared
+     integration category, or a real `System.Threading.Timer`/`new Timer`.
+     Do not flag bounded/joined `Parallel.For`/`Parallel.Invoke` or
+     `ThreadPool.QueueUserWorkItem`; they cannot outlive the assertion. Do not
+     flag a one-shot
      `Stopwatch` duration assertion (the Direct reject latency check); only a
      repeated `Stopwatch` polling loop is forbidden. Match polling call
      patterns, not the `WaitForSendReturn` seam or the guard's own literals.
