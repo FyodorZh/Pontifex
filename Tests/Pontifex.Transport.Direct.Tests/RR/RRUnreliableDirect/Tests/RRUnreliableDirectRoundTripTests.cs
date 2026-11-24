@@ -66,23 +66,26 @@ public sealed class RRUnreliableDirectRoundTripTests
     }
 
     [Test]
-    public void ResponseHandle_IsSingleUse()
+    public void ResponseHandle_SendsDeclaredSequenceAndCloses()
     {
         var clock = NewClock();
-        using var serverHandler = new SingleUseHandler();
+        using var serverHandler = new SequenceHandler();
         var server = StartServer(clock, serverHandler, out string name);
         var client = StartClient(clock, name);
         using var clientHandler = new RecordingClientHandler();
 
         Assert.That(client.Request(TestMessages.Int(1), clientHandler), Is.EqualTo(SendResult.Ok));
         Assert.That(serverHandler.Requested.Wait(Timeout), Is.True);
-        Assert.That(clientHandler.Responded.Wait(Timeout), Is.True);
+        Assert.That(clientHandler.LastResponded.Wait(Timeout), Is.True);
 
         Assert.Multiple(() =>
         {
             Assert.That(serverHandler.FirstResult, Is.EqualTo(SendResult.Ok));
-            Assert.That(serverHandler.SecondResult, Is.EqualTo(SendResult.Error));
-            Assert.That(clientHandler.ResponseCount, Is.EqualTo(1));
+            Assert.That(serverHandler.SecondResult, Is.EqualTo(SendResult.Ok));
+            Assert.That(serverHandler.ThirdResult, Is.EqualTo(SendResult.Error));
+            Assert.That(clientHandler.ResponseCount, Is.EqualTo(2));
+            Assert.That(clientHandler.MessageIds, Is.EquivalentTo(new[] { 0, 1 }));
+            Assert.That(clientHandler.MessageCounts, Is.All.EqualTo(2));
         });
     }
 
@@ -154,6 +157,25 @@ public sealed class RRUnreliableDirectRoundTripTests
     }
 
     [Test]
+    public void ResponseAfterTheRequestTtl_IsDropped()
+    {
+        var clock = NewClock();
+        using var serverHandler = new DeferredResponseHandler();
+        StartServer(clock, serverHandler, out string name, responseTtl: TimeSpan.FromSeconds(30));
+        var client = StartClient(clock, name);
+        using var clientHandler = new RecordingClientHandler();
+
+        Assert.That(client.Request(TestMessages.Int(1), clientHandler), Is.EqualTo(SendResult.Ok));
+        Assert.That(serverHandler.Requested.Wait(Timeout), Is.True);
+
+        clock.Now += TimeSpan.FromSeconds(4);
+
+        Assert.That(serverHandler.Send(2), Is.EqualTo(SendResult.Ok));
+        Assert.That(clientHandler.Responded.Wait(TimeSpan.FromMilliseconds(200)), Is.False);
+        Assert.That(clientHandler.ResponseCount, Is.Zero);
+    }
+
+    [Test]
     public void InvalidPayload_ReturnsInvalidMessage()
     {
         var clock = NewClock();
@@ -215,12 +237,13 @@ public sealed class RRUnreliableDirectRoundTripTests
         ManualClock clock,
         IRRUnreliableServerHandler handler,
         out string name,
-        int queueCapacity = RRDirectInfo.DispatchQueueCapacity)
+        int queueCapacity = RRDirectInfo.DispatchQueueCapacity,
+        TimeSpan? responseTtl = null)
     {
         name = "rr-unreliable-" + Guid.NewGuid().ToString("N");
         var server = new RRUnreliableDirectServer(
             name,
-            TimeSpan.FromSeconds(3),
+            responseTtl ?? TimeSpan.FromSeconds(3),
             Logger,
             MemoryRental.Shared,
             clock,
@@ -244,7 +267,35 @@ public sealed class RRUnreliableDirectRoundTripTests
         return client;
     }
 
-    private sealed class SingleUseHandler : IRRUnreliableServerHandler, IDisposable
+    private sealed class DeferredResponseHandler : IRRUnreliableServerHandler, IDisposable
+    {
+        public ManualResetEventSlim Requested { get; } = new(false);
+
+        public IRRUnreliableResponse? LastResponse { get; private set; }
+
+        public bool OnRequested(IEndPoint client, UnionDataList request,
+            IRRUnreliableResponse response)
+        {
+            LastResponse = response;
+            request.Release();
+            Requested.Set();
+            return true;
+        }
+
+        public SendResult Send(int value)
+        {
+            var payload = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            payload.PutLast(value);
+            return LastResponse!.Response(payload);
+        }
+
+        public void Dispose()
+        {
+            Requested.Dispose();
+        }
+    }
+
+    private sealed class SequenceHandler : IRRUnreliableServerHandler, IDisposable
     {
         public ManualResetEventSlim Requested { get; } = new(false);
 
@@ -252,11 +303,15 @@ public sealed class RRUnreliableDirectRoundTripTests
 
         public SendResult SecondResult { get; private set; }
 
+        public SendResult ThirdResult { get; private set; }
+
         public bool OnRequested(IEndPoint client, UnionDataList request,
             IRRUnreliableResponse response)
         {
             try
             {
+                response.SetMessageCount(2);
+
                 var first = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
                 first.PutLast(1);
                 FirstResult = response.Response(first);
@@ -264,6 +319,10 @@ public sealed class RRUnreliableDirectRoundTripTests
                 var second = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
                 second.PutLast(2);
                 SecondResult = response.Response(second);
+
+                var third = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+                third.PutLast(3);
+                ThirdResult = response.Response(third);
                 return true;
             }
             finally

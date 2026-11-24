@@ -666,7 +666,7 @@ public sealed class FactoryBindingsTests
 
         public int ResponseValue { get; private set; }
 
-        public void Response(UnionDataList response)
+        public void Response(UnionDataList response, int messageId, int messageCount)
         {
             try
             {

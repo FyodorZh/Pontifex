@@ -98,6 +98,31 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
+        /// Gets the entry with the given id without removing it.
+        /// </summary>
+        /// <param name="requestId">The id of the entry.</param>
+        /// <param name="value">The value of the entry, or the default when it is absent.</param>
+        /// <param name="expired">Whether the entry had already expired.</param>
+        /// <returns><see langword="true"/> when the entry is present; otherwise
+        /// <see langword="false"/>.</returns>
+        public bool TryGet(ushort requestId, out TValue value, out bool expired)
+        {
+            lock (_locker)
+            {
+                if (_entries.TryGetValue(requestId, out Entry entry))
+                {
+                    value = entry.Value;
+                    expired = entry.ExpiresAt <= _timeProvider.Now;
+                    return true;
+                }
+
+                value = default!;
+                expired = false;
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Removes the entry with the given id.
         /// </summary>
         /// <param name="requestId">The id of the entry.</param>

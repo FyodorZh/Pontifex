@@ -24,6 +24,15 @@ public sealed class RRUnreliableUdpRoundTripTests
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
     [Test]
+    public void MessageMaxByteSize_UsesTheMinimumIpv4DatagramBudget()
+    {
+        Assert.That(RRUnreliableFrame.OverheadBytes, Is.EqualTo(7));
+        Assert.That(RRUdpInfo.MessageMaxByteSize, Is.EqualTo(540));
+        Assert.That(RRUdpInfo.MessageMaxByteSize + RRUnreliableFrame.OverheadBytes + 1,
+            Is.EqualTo(548));
+    }
+
+    [Test]
     public void RequestAndResponse_RoundTripThroughUdp()
     {
         int port = GetFreeLoopbackUdpPort();
@@ -75,7 +84,7 @@ public sealed class RRUnreliableUdpRoundTripTests
     }
 
     [Test]
-    public void ResponseHandle_IsSingleUse()
+    public void ResponseHandle_SendsDeclaredSequenceAndCloses()
     {
         int port = GetFreeLoopbackUdpPort();
         ILogger logger = new Logger([]);
@@ -101,6 +110,7 @@ public sealed class RRUnreliableUdpRoundTripTests
 
             Assert.That(serverHandler.RequestedSignal.Wait(Timeout), Is.True);
             IRRUnreliableResponse response = serverHandler.LastResponse!;
+            response.SetMessageCount(2);
 
             var first = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
             first.PutLast(2);
@@ -108,7 +118,16 @@ public sealed class RRUnreliableUdpRoundTripTests
 
             var second = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
             second.PutLast(3);
-            Assert.That(response.Response(second), Is.EqualTo(SendResult.Error));
+            Assert.That(response.Response(second), Is.EqualTo(SendResult.Ok));
+
+            var third = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            third.PutLast(4);
+            Assert.That(response.Response(third), Is.EqualTo(SendResult.Error));
+
+            Assert.That(clientHandler.LastRespondedSignal.Wait(Timeout), Is.True);
+            Assert.That(clientHandler.ResponseCount, Is.EqualTo(2));
+            Assert.That(clientHandler.MessageIds, Is.EquivalentTo(new[] { 0, 1 }));
+            Assert.That(clientHandler.MessageCounts, Is.All.EqualTo(2));
         }
         finally
         {
@@ -266,13 +285,32 @@ public sealed class RRUnreliableUdpRoundTripTests
     {
         public ManualResetEventSlim RespondedSignal { get; } = new(false);
 
+        private int _responseCount;
+
+        public ManualResetEventSlim LastRespondedSignal { get; } = new(false);
+
+        public int ResponseCount => Volatile.Read(ref _responseCount);
+
         public int ResponseValue { get; private set; }
 
-        public void Response(UnionDataList response)
+        public List<int> MessageIds { get; } = new List<int>();
+
+        public List<int> MessageCounts { get; } = new List<int>();
+
+        public void Response(UnionDataList response, int messageId, int messageCount)
         {
             try
             {
                 ResponseValue = response.Elements[0].Alias.IntValue;
+                Interlocked.Increment(ref _responseCount);
+                MessageIds.Add(messageId);
+                MessageCounts.Add(messageCount);
+
+                if (messageId == messageCount - 1)
+                {
+                    LastRespondedSignal.Set();
+                }
+
                 RespondedSignal.Set();
             }
             finally
@@ -284,6 +322,7 @@ public sealed class RRUnreliableUdpRoundTripTests
         public void Dispose()
         {
             RespondedSignal.Dispose();
+            LastRespondedSignal.Dispose();
         }
     }
 }

@@ -8,7 +8,7 @@ over the in-process `Channel`.
 
 This implementation adds the lazy channel connection, the bounded server dispatch queue, the
 optional virtual delivery configuration, and the process-wide `id` registry. It does not change the
-pending window, the single-use response handle, the correlation rules, or the buffer ownership of
+pending window, the response message sequence, the correlation rules, or the buffer ownership of
 the abstract type.
 
 ### 1.1 References
@@ -44,7 +44,8 @@ TTL, a logger, a memory rental, an optional clock, and a dispatch capacity. The 
 
 The client acquires its channel on the first request and reconnects with a new channel after a
 loss. There is no admission exchange, session, or peer lifecycle callback. A request frame carries
-the client-local request id; a response frame carries the id the server received.
+the client-local request id; a response frame carries the id the server received, the zero-based
+message id, and the message count.
 
 ## 5. Parameters
 
@@ -92,7 +93,7 @@ The carrier enforces these limits:
 
 | Limit | Scope | Value |
 | --- | --- | --- |
-| Message maximum | Both directions | `1048576` bytes, excluding the request-id header |
+| Message maximum | Both directions | `1048576` bytes, excluding the request and response headers |
 | Pending pre-start frames | Server | `100` frames |
 | Dispatch queue | Server | Configured capacity, default `100` items |
 
@@ -125,8 +126,8 @@ This implementation declares four bounded deviations from the abstract type.
    sent. The handler **MUST** tolerate that result and release the request.
 2. **Callback after stop.** Shared §7.4 orders terminal notifications before `onStopped`. Queue
    disposal is non-blocking, so an `OnRequested` already running at stop may complete after
-   `onStopped` begins. Its response handle is not literally pre-closed; the first `Response` or
-   `Finish` after the stop is closed lazily and returns `Error`. No other server callback overlaps
+   `onStopped` begins. Its response handle is not literally pre-closed; the first `Response`
+   after the stop is closed lazily and returns `Error`. No other server callback overlaps
    it. The handler **MUST** tolerate one late request and release its payload.
 3. **Callback during start.** Shared §7.2 says no handler callback begins before `Start` returns.
    `OnStarted` opens the gate during the final phase of `Start`, so a queued request may be
@@ -145,12 +146,12 @@ confidentiality, or integrity protection.
 
 | Area | Choice |
 | --- | --- |
-| Wire correlation | The client-local `ushort` request id is the first frame element; the response carries the received id. The server-global id stays local. |
+| Wire correlation | The client-local `ushort` request id is the first frame element; the response carries the received id, the zero-based message id, and the message count. The server-global id stays local. |
 | TTL values | `request_ttl` and `response_ttl` default to three seconds and are configured in whole seconds. |
 | Pending storage | The client uses `RRUnreliableRequestTable`; the server holds no pending request table, only the dispatch queue. |
 | Reconnect policy | The first request connects lazily. A channel disposal is a loss; the next request reconnects with fresh delivery systems. There is no background retry. |
 | Capacity | The server dispatch queue is bounded by the configured capacity, default `100`; a full queue releases the frame. The pre-start pending list uses the same configured capacity. |
-| Payload limit | `1048576` bytes, excluding the request-id header and channel framing. |
+| Payload limit | `1048576` bytes, excluding the request and response headers and channel framing. |
 | Server id uniqueness | `id` is unique within the `direct-rr-unreliable` scheme; a duplicate registration in that scheme fails `Start`. Another Direct scheme may use the same `id`. |
 | Callback scheduler | One server dispatch queue serializes `OnRequested`; client responses are delivered on the channel's callback path. |
 | Failure detection | Channel disposal is the only session-loss signal; a missing server is detected during `ChannelManager.Connect`. |
@@ -167,6 +168,7 @@ confidentiality, or integrity protection.
 - [ ] Hold frames received before `OnStarted` in a `100`-frame pending list and release the rest.
 - [ ] Open the dispatch gate in `OnStarted` while holding the list lock.
 - [ ] Start the response TTL at frame receipt.
+- [ ] Carry the message id and message count in response frames.
 - [ ] Serialize `OnRequested` through one dispatch queue.
 - [ ] Release the frame on every failing connect, install, send, and dispatch path.
 - [ ] Clear the channel under the lock before disconnecting on a loss.

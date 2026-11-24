@@ -10,8 +10,8 @@ namespace Pontifex.RR.Unreliable
     /// Base class for RR unreliable server transports.
     /// </summary>
     /// <remarks>
-    /// The class owns the server request mechanics: server-global request ids, response handles, and the
-    /// request dispatch. The lifecycle is inherited from
+    /// The class owns the server request mechanics: server-global request ids, response handles, the
+    /// per-handle message sequence, and the request dispatch. The lifecycle is inherited from
     /// <see cref="RRUnreliableTransport{THandler}"/>; a carrier supplies the datagram transport through
     /// <see cref="RRTransport.StartCarrier"/>,
     /// <see cref="RRTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
@@ -93,7 +93,7 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            if (!RRUnreliableFrame.TryDecode(frame, out ushort clientRequestId))
+            if (!RRUnreliableFrame.TryDecodeRequest(frame, out ushort clientRequestId))
             {
                 Log.w("{0} received a malformed request frame from {1}", Name, source);
                 frame.Release();
@@ -140,9 +140,9 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
-        /// Sends the single response held by <paramref name="response"/>.
+        /// Sends the next message held by <paramref name="response"/>.
         /// </summary>
-        /// <param name="response">The response handle that owns the route.</param>
+        /// <param name="response">The response handle that owns the route and the sequence state.</param>
         /// <param name="payload">The response payload. The method owns it.</param>
         /// <returns>The result of the send attempt.</returns>
         internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload)
@@ -179,17 +179,19 @@ namespace Pontifex.RR.Unreliable
                 return SendResult.MessageTooBig;
             }
 
-            if (!response.TryClose())
-            {
-                payload.Release();
-                return SendResult.Error;
-            }
-
-            RRUnreliableFrame.Encode(payload, response.ClientRequestId);
+            RRUnreliableFrame.EncodeResponse(payload, response.ClientRequestId,
+                response.NextMessageId, response.MessageCount);
 
             try
             {
-                return SendFrame(response.Client, payload);
+                SendResult result = SendFrame(response.Client, payload);
+
+                if (result == SendResult.Ok)
+                {
+                    response.CommitMessage();
+                }
+
+                return result;
             }
             catch (Exception ex)
             {

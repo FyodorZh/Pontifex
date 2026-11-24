@@ -10,8 +10,8 @@ namespace Pontifex.RR.Unreliable
     /// </summary>
     /// <remarks>
     /// Carrier start and stop, payload validation, and request-id allocation are inherited from
-    /// <see cref="RRTransport"/>. The family adds the unreliable transport type and the request-id
-    /// header size.
+    /// <see cref="RRTransport"/>. The family adds the unreliable transport type and the largest
+    /// frame header size.
     /// </remarks>
     public abstract class RRUnreliableTransport : RRTransport, IRRUnreliableTransport
     {
@@ -30,7 +30,7 @@ namespace Pontifex.RR.Unreliable
         public override TransportType Type => TransportType.RRUnreliable;
 
         /// <summary>
-        /// Gets the request-id header that a carrier frame adds to a payload.
+        /// Gets the largest response header that a carrier frame adds to a payload.
         /// </summary>
         protected override int FrameOverheadBytes => RRUnreliableFrame.OverheadBytes;
     }

@@ -14,10 +14,11 @@
 | Test | Contract clause or behaviour | What the test proves | Non-extractable notes |
 | --- | --- | --- | --- |
 | `RequestAndResponse_RoundTripInProcess` | Request/response correlation | A request reaches the serialized server handler and its response reaches the bound client handler | The channel and the dispatch queue deliver asynchronously, so the test waits on signals. |
-| `ResponseHandle_IsSingleUse` | Single-use response handle | The first response closes the handle; the second returns `Error` | The handle closes before the carrier send. |
+| `ResponseHandle_SendsDeclaredSequenceAndCloses` | Bounded response handle | A declared two-message response sends ids `0` and `1`; the third send returns `Error` | The handle closes after the last accepted message. |
 | `RejectedRequest_ProducesNoCallbackAndExpiresSilently` | Silent rejection | A rejected request provides no callback and is swept by a later request | The sweep runs while the later request is added to the pending table. |
 | `CancelledRequest_ProducesNoCallback` | Local cancellation | `Cancel` removes the pending entry without a callback | The clock does not advance; the later request only proves the old entry is gone. |
 | `ExpiredRequest_ProducesNoCallback` | Request TTL | An expired pending entry is swept without a callback | Uses the manual clock and a later request as the sweep trigger. |
+| `ResponseAfterTheRequestTtl_IsDropped` | Request TTL | A response that arrives after the client request TTL is dropped without a callback | The server response TTL is longer, so the frame is still sent. |
 | `InvalidPayload_ReturnsInvalidMessage` | Send-result precedence | A null payload returns `InvalidMessage` and leaves the handler reusable | The core releases no null buffer. |
 | `OversizedPayload_ReturnsMessageTooBigAndReleasesTheFrame` | Payload limit | A payload above `1048576` bytes returns `MessageTooBig` and is released | The limit is checked on the payload before the request-id header is added. |
 | `ExactlyMaximumPayload_RoundTripsInBothDirections` | Inclusive payload limit | An exactly-`1048576`-byte request and response round-trip | Confirms the inbound check is payload-only after the header is removed. |

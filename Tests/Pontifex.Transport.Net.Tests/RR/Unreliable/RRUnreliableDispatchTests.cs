@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using Actuarius.Memory;
 using NUnit.Framework;
@@ -12,7 +13,8 @@ namespace Pontifex.Tests.RR.Unreliable;
 
 /// <summary>
 /// Deterministic checks of the RR unreliable client and server dispatch rules that do not need a
-/// carrier: server-route filtering and inbound payload limits.
+/// carrier: route filtering, inbound payload limits, the response message sequence, and the handle
+/// contract.
 /// </summary>
 [TestFixture]
 public sealed class RRUnreliableDispatchTests
@@ -32,11 +34,11 @@ public sealed class RRUnreliableDispatchTests
             Assert.That(client.Start(_ => { }), Is.True);
             ushort requestId = SendRequest(client, handler);
 
-            client.Receive(foreign, Response(requestId, 2));
+            client.Receive(foreign, Response(requestId, 0, 1, 2));
 
             Assert.That(handler.Responded, Is.False);
 
-            client.Receive(server, Response(requestId, 3));
+            client.Receive(server, Response(requestId, 0, 1, 3));
 
             Assert.That(handler.Responded, Is.True);
             Assert.That(handler.ResponseValue, Is.EqualTo(3));
@@ -59,11 +61,11 @@ public sealed class RRUnreliableDispatchTests
             Assert.That(client.Start(_ => { }), Is.True);
             ushort requestId = SendRequest(client, handler);
 
-            client.Receive(server, Response(requestId, 1, 2, 3));
+            client.Receive(server, Response(requestId, 0, 1, 1, 2, 3));
 
             Assert.That(handler.Responded, Is.False);
 
-            client.Receive(server, Response(requestId, 4));
+            client.Receive(server, Response(requestId, 0, 1, 4));
 
             Assert.That(handler.Responded, Is.True);
             Assert.That(handler.ResponseValue, Is.EqualTo(4));
@@ -100,6 +102,317 @@ public sealed class RRUnreliableDispatchTests
         }
     }
 
+    [Test]
+    public void ResponseSequence_IsDeliveredWithIdsAndCount()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+
+            client.Receive(server, Response(requestId, 1, 3, 11));
+            client.Receive(server, Response(requestId, 0, 3, 10));
+            client.Receive(server, Response(requestId, 2, 3, 12));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.Values, Is.EqualTo(new[] { 11, 10, 12 }));
+                Assert.That(handler.MessageIds, Is.EqualTo(new[] { 1, 0, 2 }));
+                Assert.That(handler.MessageCounts, Is.EqualTo(new[] { 3, 3, 3 }));
+            });
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void DuplicateMessageId_IsDeliveredOnce()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+
+            client.Receive(server, Response(requestId, 0, 2, 10));
+            client.Receive(server, Response(requestId, 0, 2, 10));
+            client.Receive(server, Response(requestId, 1, 2, 11));
+
+            Assert.That(handler.Values, Is.EqualTo(new[] { 10, 11 }));
+            Assert.That(handler.ResponseCount, Is.EqualTo(2));
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void MismatchedMessageCount_IsDropped()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+
+            client.Receive(server, Response(requestId, 0, 3, 10));
+            client.Receive(server, Response(requestId, 1, 2, 20));
+            client.Receive(server, Response(requestId, 1, 3, 11));
+
+            Assert.That(handler.Values, Is.EqualTo(new[] { 10, 11 }));
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void MessageIdBeyondTheDeclaredCount_IsDropped()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+
+            client.Receive(server, RawResponse(requestId, 2, 1, 20));
+            client.Receive(server, Response(requestId, 0, 2, 10));
+
+            Assert.That(handler.Values, Is.EqualTo(new[] { 10 }));
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void LastMessage_UnbindsTheHandler()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+
+            client.Receive(server, Response(requestId, 0, 1, 10));
+
+            var next = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            next.PutLast(2);
+
+            Assert.That(client.Request(next, handler), Is.EqualTo(SendResult.Ok));
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void ResponseAfterTheLastMessage_IsDropped()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+
+            client.Receive(server, Response(requestId, 0, 1, 10));
+            client.Receive(server, Response(requestId, 0, 1, 10));
+
+            Assert.That(handler.ResponseCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void MessageCount_DefaultsToOne()
+    {
+        var server = new TestServerTransport(100);
+        var handler = new RecordingServerHandler();
+
+        try
+        {
+            Assert.That(server.Init(handler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            server.Receive(Endpoint(6000), Request(1));
+
+            Assert.That(handler.LastResponse!.MessageCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void ResponseSequence_AssignsZeroBasedIdsAndClosesAfterTheLast()
+    {
+        var server = new TestServerTransport(100);
+        var handler = new RecordingServerHandler();
+
+        try
+        {
+            Assert.That(server.Init(handler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            server.Receive(Endpoint(6000), Request(1));
+
+            IRRUnreliableResponse response = handler.LastResponse!;
+            response.SetMessageCount(3);
+
+            Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Ok));
+            Assert.That(response.Response(Payload(11)), Is.EqualTo(SendResult.Ok));
+            Assert.That(response.Response(Payload(12)), Is.EqualTo(SendResult.Ok));
+            Assert.That(response.Response(Payload(13)), Is.EqualTo(SendResult.Error));
+
+            Assert.That(server.SentResponses, Is.EqualTo(new[]
+            {
+                (0, 3), (1, 3), (2, 3)
+            }));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void ResponseSequence_SendFailureDoesNotAdvanceTheId()
+    {
+        var server = new TestServerTransport(100);
+        var handler = new RecordingServerHandler();
+
+        try
+        {
+            Assert.That(server.Init(handler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            server.Receive(Endpoint(6000), Request(1));
+
+            IRRUnreliableResponse response = handler.LastResponse!;
+            response.SetMessageCount(2);
+            server.SendResults.Enqueue(SendResult.Error);
+
+            Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Error));
+            Assert.That(response.Response(Payload(11)), Is.EqualTo(SendResult.Ok));
+            Assert.That(response.Response(Payload(12)), Is.EqualTo(SendResult.Ok));
+
+            Assert.That(server.SentResponses, Is.EqualTo(new[]
+            {
+                (0, 2), (0, 2), (1, 2)
+            }));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void SetMessageCount_SecondCallThrows()
+    {
+        var response = StartRequest(out TestServerTransport server);
+
+        try
+        {
+            response.SetMessageCount(2);
+
+            Assert.Throws<InvalidOperationException>(() => response.SetMessageCount(2));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void SetMessageCount_AfterTheFirstResponseThrows()
+    {
+        var response = StartRequest(out TestServerTransport server);
+
+        try
+        {
+            Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Ok));
+
+            Assert.Throws<InvalidOperationException>(() => response.SetMessageCount(2));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void SetMessageCount_OutsideTheByteRangeThrows()
+    {
+        var response = StartRequest(out TestServerTransport server);
+
+        try
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => response.SetMessageCount(0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => response.SetMessageCount(257));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void SetMessageCount_AcceptsTwoHundredFiftySix()
+    {
+        var response = StartRequest(out TestServerTransport server);
+
+        try
+        {
+            response.SetMessageCount(256);
+            Assert.That(response.Response(Payload(10)), Is.EqualTo(SendResult.Ok));
+
+            Assert.That(server.SentResponses, Is.EqualTo(new[] { (0, 256) }));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    private static IRRUnreliableResponse StartRequest(out TestServerTransport server)
+    {
+        var handler = new RecordingServerHandler();
+        server = new TestServerTransport(100);
+
+        Assert.That(server.Init(handler), Is.True);
+        Assert.That(server.Start(_ => { }), Is.True);
+        server.Receive(Endpoint(6000), Request(1));
+
+        return handler.LastResponse!;
+    }
+
     private static ushort SendRequest(TestClientTransport client, RecordingHandler handler)
     {
         var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
@@ -111,6 +424,13 @@ public sealed class RRUnreliableDispatchTests
         return handler.RequestId!.Value;
     }
 
+    private static UnionDataList Payload(int value)
+    {
+        var payload = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+        payload.PutLast(value);
+        return payload;
+    }
+
     private static UnionDataList Request(params int[] values)
     {
         var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
@@ -120,11 +440,12 @@ public sealed class RRUnreliableDispatchTests
             request.PutLast(value);
         }
 
-        RRUnreliableFrame.Encode(request, 1);
+        RRUnreliableFrame.EncodeRequest(request, 1);
         return request;
     }
 
-    private static UnionDataList Response(ushort requestId, params int[] values)
+    private static UnionDataList Response(ushort requestId, int messageId, int messageCount,
+        params int[] values)
     {
         var response = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
 
@@ -133,7 +454,23 @@ public sealed class RRUnreliableDispatchTests
             response.PutLast(value);
         }
 
-        RRUnreliableFrame.Encode(response, requestId);
+        RRUnreliableFrame.EncodeResponse(response, requestId, messageId, messageCount);
+        return response;
+    }
+
+    private static UnionDataList RawResponse(ushort requestId, int messageId, int lastMessageId,
+        params int[] values)
+    {
+        var response = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+
+        foreach (int value in values)
+        {
+            response.PutLast(value);
+        }
+
+        response.PutFirst(new UnionData((byte)lastMessageId));
+        response.PutFirst(new UnionData((byte)messageId));
+        response.PutFirst(new UnionData(requestId));
         return response;
     }
 
@@ -187,6 +524,11 @@ public sealed class RRUnreliableDispatchTests
 
         public override int MessageMaxByteSize => _maxByteSize;
 
+        public Queue<SendResult> SendResults { get; } = new Queue<SendResult>();
+
+        public List<(int MessageId, int MessageCount)> SentResponses { get; } =
+            new List<(int MessageId, int MessageCount)>();
+
         protected override bool StartCarrier()
         {
             return true;
@@ -198,8 +540,14 @@ public sealed class RRUnreliableDispatchTests
 
         protected override SendResult SendFrame(IEndPoint destination, UnionDataList frame)
         {
+            if (RRUnreliableFrame.TryDecodeResponse(frame, out _, out int messageId,
+                    out int messageCount))
+            {
+                SentResponses.Add((messageId, messageCount));
+            }
+
             frame.Release();
-            return SendResult.Ok;
+            return SendResults.Count > 0 ? SendResults.Dequeue() : SendResult.Ok;
         }
 
         public void Receive(IEndPoint source, UnionDataList frame)
@@ -210,16 +558,28 @@ public sealed class RRUnreliableDispatchTests
 
     private sealed class RecordingHandler : RRRequestHandler, IRRUnreliableRequestHandler
     {
-        public bool Responded { get; private set; }
+        public int ResponseCount { get; private set; }
+
+        public bool Responded => ResponseCount > 0;
 
         public int ResponseValue { get; private set; }
 
-        public void Response(UnionDataList response)
+        public List<int> Values { get; } = new List<int>();
+
+        public List<int> MessageIds { get; } = new List<int>();
+
+        public List<int> MessageCounts { get; } = new List<int>();
+
+        public void Response(UnionDataList response, int messageId, int messageCount)
         {
             try
             {
-                ResponseValue = response.Elements[0].Alias.IntValue;
-                Responded = true;
+                int value = response.Elements[0].Alias.IntValue;
+                ResponseCount++;
+                ResponseValue = value;
+                Values.Add(value);
+                MessageIds.Add(messageId);
+                MessageCounts.Add(messageCount);
             }
             finally
             {
@@ -234,12 +594,15 @@ public sealed class RRUnreliableDispatchTests
 
         public int LastValue { get; private set; }
 
+        public IRRUnreliableResponse? LastResponse { get; private set; }
+
         public bool OnRequested(IEndPoint client, UnionDataList request, IRRUnreliableResponse response)
         {
             try
             {
                 RequestCount++;
                 LastValue = request.Elements[0].Alias.IntValue;
+                LastResponse = response;
                 return true;
             }
             finally

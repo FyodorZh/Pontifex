@@ -14,18 +14,26 @@ internal sealed class RecordingClientHandler : RRRequestHandler, IRRUnreliableRe
 
     public ManualResetEventSlim Responded { get; } = new(false);
 
+    public ManualResetEventSlim LastResponded { get; } = new(false);
+
     public int ResponseCount => Volatile.Read(ref _responseCount);
 
     public int LastResponseValue { get; private set; }
 
     public int LastResponseSize { get; private set; }
 
-    public void Response(UnionDataList response)
+    public List<int> MessageIds { get; } = new List<int>();
+
+    public List<int> MessageCounts { get; } = new List<int>();
+
+    public void Response(UnionDataList response, int messageId, int messageCount)
     {
         try
         {
             Interlocked.Increment(ref _responseCount);
             LastResponseSize = response.GetDataSize();
+            MessageIds.Add(messageId);
+            MessageCounts.Add(messageCount);
 
             if (response.Elements.Count > 0)
             {
@@ -33,6 +41,11 @@ internal sealed class RecordingClientHandler : RRRequestHandler, IRRUnreliableRe
             }
 
             Responded.Set();
+
+            if (messageId == messageCount - 1)
+            {
+                LastResponded.Set();
+            }
         }
         finally
         {
@@ -43,6 +56,7 @@ internal sealed class RecordingClientHandler : RRRequestHandler, IRRUnreliableRe
     public void Dispose()
     {
         Responded.Dispose();
+        LastResponded.Dispose();
     }
 }
 

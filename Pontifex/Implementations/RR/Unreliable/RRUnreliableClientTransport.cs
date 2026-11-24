@@ -13,9 +13,9 @@ namespace Pontifex.RR.Unreliable
     /// </summary>
     /// <remarks>
     /// The class owns the client request mechanics: the fixed server route, client-local request ids,
-    /// the per-request handler binding, the pending-request window, and the response dispatch. The
-    /// lifecycle is inherited from <see cref="RRUnreliableTransport"/>; a carrier supplies the datagram
-    /// transport through <see cref="RRTransport.StartCarrier"/>,
+    /// the per-request handler binding, the pending-request window, message deduplication, and the
+    /// response dispatch. The lifecycle is inherited from <see cref="RRUnreliableTransport"/>; a carrier
+    /// supplies the datagram transport through <see cref="RRTransport.StartCarrier"/>,
     /// <see cref="RRTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
@@ -23,7 +23,7 @@ namespace Pontifex.RR.Unreliable
     {
         private readonly IEndPoint _serverEndPoint;
         private readonly TimeSpan _requestTtl;
-        private readonly RRUnreliableRequestTable<IRRUnreliableRequestHandler> _pendingResponses;
+        private readonly RRUnreliableRequestTable<RRUnreliableRequestState> _pendingResponses;
         private long _nextRequestId;
         private volatile bool _stopping;
 
@@ -45,7 +45,7 @@ namespace Pontifex.RR.Unreliable
         {
             _serverEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
             _requestTtl = requestTtl;
-            _pendingResponses = new RRUnreliableRequestTable<IRRUnreliableRequestHandler>(
+            _pendingResponses = new RRUnreliableRequestTable<RRUnreliableRequestState>(
                 timeProvider ?? UtcNowDateTimeProvider.Instance,
                 requestTtl);
         }
@@ -126,10 +126,18 @@ namespace Pontifex.RR.Unreliable
             if (bindable.IsBound)
             {
                 if (bindable.RequestId is not ushort boundId ||
-                    !_pendingResponses.TryReapExpired(boundId, handler))
+                    !_pendingResponses.TryGet(boundId, out RRUnreliableRequestState? previous,
+                        out _) ||
+                    !ReferenceEquals(previous.Handler, handler) ||
+                    !_pendingResponses.TryReapExpired(boundId, previous))
                 {
                     throw new InvalidOperationException(
                         "The handler is already bound to a pending request.");
+                }
+
+                lock (previous.SyncRoot)
+                {
+                    previous.TryTerminate();
                 }
 
                 bindable.Unbind();
@@ -148,16 +156,19 @@ namespace Pontifex.RR.Unreliable
             }
 
             ushort requestId = 0;
+            RRUnreliableRequestState state = null!;
             bool added = false;
 
             for (int attempt = 0; attempt <= ushort.MaxValue; attempt++)
             {
                 requestId = NextRequestId();
                 bindable.Bind(requestId, CancelRequest);
+                var candidate = new RRUnreliableRequestState(handler);
 
                 bool sweep = attempt == 0;
-                if (_pendingResponses.TryAdd(requestId, handler, sweep ? UnbindExpired : null, sweep))
+                if (_pendingResponses.TryAdd(requestId, candidate, sweep ? TerminateExpired : null, sweep))
                 {
+                    state = candidate;
                     added = true;
                     break;
                 }
@@ -172,7 +183,7 @@ namespace Pontifex.RR.Unreliable
 
             if (_stopping)
             {
-                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
                     bindable.Unbind();
                 }
@@ -183,7 +194,7 @@ namespace Pontifex.RR.Unreliable
 
             if (!bindable.IsBound || bindable.ConsumeCancelRequested())
             {
-                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
                     bindable.Unbind();
                 }
@@ -194,7 +205,7 @@ namespace Pontifex.RR.Unreliable
 
             if (!IsStarted)
             {
-                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
                     bindable.Unbind();
                 }
@@ -203,7 +214,7 @@ namespace Pontifex.RR.Unreliable
                 return SendResult.NotConnected;
             }
 
-            RRUnreliableFrame.Encode(request, requestId);
+            RRUnreliableFrame.EncodeRequest(request, requestId);
 
             BeforeSendForTests?.Invoke();
 
@@ -215,7 +226,7 @@ namespace Pontifex.RR.Unreliable
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
                     bindable.Unbind();
                 }
@@ -225,7 +236,7 @@ namespace Pontifex.RR.Unreliable
 
             if (result != SendResult.Ok)
             {
-                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
                     bindable.Unbind();
                 }
@@ -235,7 +246,7 @@ namespace Pontifex.RR.Unreliable
 
             if (_stopping)
             {
-                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
                     bindable.Unbind();
                 }
@@ -263,7 +274,26 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+            if (!_pendingResponses.TryGet(requestId, out RRUnreliableRequestState? state,
+                    out _) ||
+                !ReferenceEquals(state.Handler, handler))
+            {
+                return;
+            }
+
+            bool removed;
+
+            lock (state.SyncRoot)
+            {
+                removed = state.TryTerminate();
+
+                if (removed)
+                {
+                    _pendingResponses.TryTakeExact(requestId, state, out _, out _);
+                }
+            }
+
+            if (removed)
             {
                 bindable.Unbind();
             }
@@ -274,9 +304,10 @@ namespace Pontifex.RR.Unreliable
             request?.Release();
         }
 
-        private static void UnbindExpired(IRRUnreliableRequestHandler handler)
+        private static void TerminateExpired(RRUnreliableRequestState state)
         {
-            ((RRRequestHandler)handler).Unbind();
+            state.TryTerminate();
+            ((RRRequestHandler)state.Handler).Unbind();
         }
 
         /// <summary>
@@ -297,7 +328,11 @@ namespace Pontifex.RR.Unreliable
             // The one-way latch is set before the table is cleared, so a request that races the stop sees
             // it and removes itself instead of being silently accepted.
             _stopping = true;
-            _pendingResponses.Clear(handler => ((RRRequestHandler)handler).Unbind());
+            _pendingResponses.Clear(state =>
+            {
+                state.TryTerminate();
+                ((RRRequestHandler)state.Handler).Unbind();
+            });
         }
 
         /// <summary>
@@ -311,10 +346,10 @@ namespace Pontifex.RR.Unreliable
         /// <param name="source">The source route of the datagram.</param>
         /// <param name="frame">The received frame. The method owns it.</param>
         /// <remarks>
-        /// The stop check and the callback are not synchronized: a response taken from the pending
-        /// window can reach <see cref="IRRUnreliableRequestHandler.Response"/> while stopping, possibly
-        /// after <c>onStopped</c> has run. The response is released when that is detected, but the
-        /// check-then-act window remains until a callback dispatcher exists.
+        /// Each response message is delivered once per request. The first frame fixes the message count;
+        /// a later frame with a different count, an id beyond the count, a duplicate id, or a foreign
+        /// route is released and dropped. The message whose id is the last one removes the request and
+        /// unbinds the handler after its callback returns.
         /// </remarks>
         protected void OnFrameReceived(IEndPoint source, UnionDataList frame)
         {
@@ -330,7 +365,8 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            if (!RRUnreliableFrame.TryDecode(frame, out ushort requestId))
+            if (!RRUnreliableFrame.TryDecodeResponse(frame, out ushort requestId, out int messageId,
+                    out int messageCount))
             {
                 Log.w("{0} received a malformed response frame from {1}", Name, source);
                 frame.Release();
@@ -344,14 +380,8 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            if (!_pendingResponses.TryTake(requestId, out IRRUnreliableRequestHandler handler,
+            if (!_pendingResponses.TryGet(requestId, out RRUnreliableRequestState? state,
                     out bool expired))
-            {
-                frame.Release();
-                return;
-            }
-
-            if (!(handler is RRRequestHandler bindable))
             {
                 frame.Release();
                 return;
@@ -359,29 +389,81 @@ namespace Pontifex.RR.Unreliable
 
             if (expired)
             {
-                bindable.Unbind();
+                bool removed;
+
+                lock (state.SyncRoot)
+                {
+                    removed = state.TryTerminate();
+
+                    if (removed)
+                    {
+                        _pendingResponses.TryTakeExact(requestId, state, out _, out _);
+                    }
+                }
+
+                if (removed)
+                {
+                    ((RRRequestHandler)state.Handler).Unbind();
+                }
+
                 frame.Release();
                 return;
             }
 
-            if (!IsStarted)
+            lock (state.SyncRoot)
             {
-                bindable.Unbind();
-                frame.Release();
-                return;
-            }
+                if (state.IsTerminal)
+                {
+                    frame.Release();
+                    return;
+                }
 
-            try
-            {
-                handler.Response(frame);
-            }
-            catch (Exception ex)
-            {
-                Log.wtf(ex);
-            }
-            finally
-            {
-                bindable.Unbind();
+                if (messageId >= messageCount || !state.TryFixMessageCount(messageCount))
+                {
+                    Log.w("{0} dropped a response with an inconsistent message header from {1}",
+                        Name, source);
+                    frame.Release();
+                    return;
+                }
+
+                if (!state.TryMarkSeen(messageId))
+                {
+                    frame.Release();
+                    return;
+                }
+
+                bool last = messageId == messageCount - 1;
+
+                if (last)
+                {
+                    state.TryTerminate();
+                    _pendingResponses.TryTakeExact(requestId, state, out _, out _);
+                }
+
+                if (!IsStarted)
+                {
+                    state.TryTerminate();
+                    _pendingResponses.TryTakeExact(requestId, state, out _, out _);
+                    ((RRRequestHandler)state.Handler).Unbind();
+                    frame.Release();
+                    return;
+                }
+
+                try
+                {
+                    state.Handler.Response(frame, messageId, messageCount);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
+                finally
+                {
+                    if (last)
+                    {
+                        ((RRRequestHandler)state.Handler).Unbind();
+                    }
+                }
             }
         }
     }

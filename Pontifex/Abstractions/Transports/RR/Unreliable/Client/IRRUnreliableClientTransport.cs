@@ -3,8 +3,8 @@ using Pontifex.Utils;
 namespace Pontifex.RR.Unreliable
 {
     /// <summary>
-    /// Client half of the RR unreliable contract: sends requests to a fixed server and receives at most
-    /// one response per request through the request's own handler.
+    /// Client half of the RR unreliable contract: sends requests to a fixed server and receives zero
+    /// or more response messages per request through the request's own handler.
     /// </summary>
     /// <remarks>
     /// The client binds no transport-level handler and has no initialization step; it is ready for
