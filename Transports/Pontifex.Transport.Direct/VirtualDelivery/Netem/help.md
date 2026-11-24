@@ -17,7 +17,7 @@ using Pontifex.VirtualDelivery.Netem;
 ```csharp
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Transports.Direct.Delivery;
+using Pontifex.VirtualDelivery;
 using Pontifex.VirtualDelivery.Netem;
 
 // 50ms delay, 10ms jitter, 5% random loss

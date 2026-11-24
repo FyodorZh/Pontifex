@@ -102,8 +102,9 @@ for the server `id`.
 
 `Start` on the server registers `id` with `ChannelManager` under the `direct`
 scheme; a duplicate `id` within that scheme fails `Start`. The same `id` may
-exist under another Direct scheme, and a client sees only its own scheme. `Start` on the client creates its single endpoint, which connects
-to the registered server as part of its start transition. A missing or rejecting
+exist under another Direct scheme, and a client sees only its own scheme.
+`Start` on the client creates its single endpoint, which connects to the
+registered server as part of its start transition. A missing or rejecting
 server stops the client endpoint; it is not a failed `Start`.
 
 The server tracks channels that have not yet completed a handshake. An admitted

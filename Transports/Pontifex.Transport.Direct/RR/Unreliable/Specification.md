@@ -101,11 +101,12 @@ The carrier enforces these limits:
 A disposed channel ends the current client session and removes the registry entry. The next request
 reconnects with fresh delivery systems. A throwing delivery factory or install releases the frame,
 the created systems, and the new channel, and returns `Error` without invoking the owner callback
-under the carrier lock. A channel disposed during connect or install cannot own the systems installed
-afterwards — its disposal already released the previous pair — so the carrier releases every created
-system itself and releases the frame once. A delivery-system exception is caught, logs, releases that
-frame, and returns `Error`. An inbound frame that is malformed, has a foreign source, or exceeds
-`MessageMaxByteSize` is released and logged without stopping the transport.
+under the carrier lock. A channel disposed during connect or install cannot own the systems
+installed afterwards — its disposal already released the previous pair — so the carrier releases
+every created system itself and releases the frame once. A delivery-system exception is caught,
+logs, releases that frame, and returns `Error`. An inbound frame that is
+malformed, has a foreign source, or exceeds `MessageMaxByteSize` is released and
+logged without stopping the transport.
 
 A request that races a client stop is never silently accepted. The client sets a one-way stop latch
 before it clears the pending table; a racing request sees the latch before binding, before sending,
@@ -118,21 +119,24 @@ This implementation declares four bounded deviations from the abstract type.
 
 1. **Already-expired request presented.** Shared §6.5 says a request whose response TTL expired
    before presentation **SHOULD NOT** reach the application. The dispatch queue is opened only on
-   start, so a frame can wait behind `OnStarted`. The request is presented with an already-closed
-   handle, and `Response` returns `Error`; no response frame is sent. The handler **MUST** tolerate
-   an already-closed handle and release the request.
+   start, so a frame can wait behind `OnStarted` or behind a running `OnRequested`; the response TTL
+   starts at frame receipt. The request is presented with a handle that was never opened and is
+   closed lazily on the next `Response` call. The observable result is `Error`; no response frame is
+   sent. The handler **MUST** tolerate that result and release the request.
 2. **Callback after stop.** Shared §7.4 orders terminal notifications before `onStopped`. Queue
    disposal is non-blocking, so an `OnRequested` already running at stop may complete after
-   `onStopped` begins. Its response handle is closed, and no other server callback overlaps it. The
-   handler **MUST** tolerate one late request and release its payload.
+   `onStopped` begins. Its response handle is not literally pre-closed; the first `Response` or
+   `Finish` after the stop is closed lazily and returns `Error`. No other server callback overlaps
+   it. The handler **MUST** tolerate one late request and release its payload.
 3. **Callback during start.** Shared §7.2 says no handler callback begins before `Start` returns.
    `OnStarted` opens the gate during the final phase of `Start`, so a queued request may be
    presented after `OnStarted` but before the caller observes the return. The handler **MUST**
    tolerate a callback before it has observed `Start` returning.
-4. **Bounded netem teardown.** Shared §7.3 asks for prompt carrier teardown. Stopping a client with
-   `delivery = netem` may wait up to five seconds while `NetemDeliverySystem` joins its dequeue
-   thread. The terminal-notification rule does not promise prompt carrier teardown under netem; the
-   caller **MUST** tolerate a bounded stop delay.
+4. **Bounded netem teardown.** Shared §7.3 asks for prompt carrier teardown. A client channel has
+   two netem systems and disposes them sequentially, so stopping a client with `delivery = netem`
+   may wait closer to ten seconds while both dequeue threads join. The terminal-notification rule
+   does not promise prompt carrier teardown under netem; the caller **MUST** tolerate a bounded stop
+   delay.
 
 The process boundary is the isolation boundary. The carrier adds no authentication,
 confidentiality, or integrity protection.

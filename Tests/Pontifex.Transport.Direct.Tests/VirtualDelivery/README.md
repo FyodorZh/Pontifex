@@ -16,8 +16,9 @@ types.
 
 ## Root subject
 
-- `CorrelatedRandom`, `DistributionTable`, `RateLimiter`;
-- `RandomLossModel`, `FourStateLossModel`, `GilbertElliotLossModel`.
+- `CorrelatedRandom`, `DistributionTable`, `RateLimiter`, `MonotonicTime`;
+- `RandomLossModel`, `FourStateLossModel`, `GilbertElliotLossModel`;
+- `NetemDeliverySystem` and `SlotScheduler`, including their deterministic manual clock and pump.
 
 ## Contract references
 
@@ -52,6 +53,7 @@ VirtualDelivery/
       FourStateLossModelTests.cs
       GilbertElliotLossModelTests.cs
       NetemDeliverySystemTests.cs
+      NetemDeterministicTests.cs
       RandomLossModelTests.cs
       RateLimiterTests.cs
 ```
@@ -88,6 +90,10 @@ Add a new test file under `Tests/` or, for algorithm-specific additions, under
 `Pontifex.Tests.VirtualDelivery` namespace. Record the test in `Coverage.md` in
 the same change.
 
+The latency, jitter, rate, slot, duplication, queue-limit, and dispose pipeline
+tests in `NetemDeterministicTests` use the internal manual clock and pump, so no
+test waits on real netem timing.
+
 A Test Suit has exactly one root layer. Do not add a nested layer; if a test
 needs a different subject, create a separate suite.
 
@@ -102,9 +108,8 @@ or nested groups, and list it in `Directory layout` and `Groups` below.
 
 ## Out of scope
 
-- The asynchronous `NetemDeliverySystem` pipeline: it uses a background thread
-  and real time, so it is not part of the deterministic default run.
-- `SlotScheduler` and `NetemConfig` parsing: see `Coverage.md` for their status.
+- Wall-clock delivery through the `NetemDeliverySystem` background thread: the
+  default run uses the internal manual clock and pump instead.
 - Carrier framing, message limits, and delivery-system ownership: those belong
   to the Raw test suites.
 
