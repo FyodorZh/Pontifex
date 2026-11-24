@@ -13,8 +13,10 @@ namespace Pontifex.RR
     /// </remarks>
     public abstract class RRRequestHandler : IRRRequestHandler
     {
+        private readonly object _bindingLock = new object();
         private Action<IRRRequestHandler>? _cancel;
         private int _requestId = -1;
+        private int _activeRequestId = -1;
         private int _bound;
         private int _cancelRequested;
 
@@ -57,13 +59,18 @@ namespace Pontifex.RR
         /// </summary>
         internal bool TryReserve()
         {
-            if (Interlocked.CompareExchange(ref _bound, 1, 0) != 0)
+            lock (_bindingLock)
             {
-                return false;
-            }
+                if (Volatile.Read(ref _bound) != 0)
+                {
+                    return false;
+                }
 
-            Volatile.Write(ref _cancelRequested, 0);
-            return true;
+                Volatile.Write(ref _bound, 1);
+                Volatile.Write(ref _activeRequestId, -1);
+                Volatile.Write(ref _cancelRequested, 0);
+                return true;
+            }
         }
 
         /// <summary>
@@ -80,8 +87,32 @@ namespace Pontifex.RR
         /// </summary>
         internal void Bind(ushort requestId, Action<IRRRequestHandler> cancel)
         {
-            Volatile.Write(ref _requestId, requestId);
-            Volatile.Write(ref _cancel, cancel);
+            lock (_bindingLock)
+            {
+                Volatile.Write(ref _requestId, requestId);
+                Volatile.Write(ref _activeRequestId, requestId);
+                Volatile.Write(ref _cancel, cancel);
+            }
+        }
+
+        /// <summary>
+        /// Releases the binding only when the handler still owns <paramref name="requestId"/>.
+        /// </summary>
+        /// <returns><see langword="true"/> when the binding was released; otherwise
+        /// <see langword="false"/> because the handler is free or bound to a newer request.</returns>
+        internal bool TryUnbind(ushort requestId)
+        {
+            lock (_bindingLock)
+            {
+                if (Volatile.Read(ref _bound) == 0 ||
+                    Volatile.Read(ref _activeRequestId) != requestId)
+                {
+                    return false;
+                }
+
+                UnbindLocked();
+                return true;
+            }
         }
 
         /// <summary>
@@ -89,8 +120,17 @@ namespace Pontifex.RR
         /// </summary>
         internal void Unbind()
         {
+            lock (_bindingLock)
+            {
+                UnbindLocked();
+            }
+        }
+
+        private void UnbindLocked()
+        {
             Volatile.Write(ref _cancel, null);
             Volatile.Write(ref _bound, 0);
+            Volatile.Write(ref _activeRequestId, -1);
             Volatile.Write(ref _cancelRequested, 0);
         }
     }

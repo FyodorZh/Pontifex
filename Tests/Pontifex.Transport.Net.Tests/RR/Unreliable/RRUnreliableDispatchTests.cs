@@ -528,6 +528,40 @@ public sealed class RRUnreliableDispatchTests
         Assert.That(payload.IsAlive, Is.False);
     }
 
+    [Test]
+    public void TryUnbind_DoesNotClearANewerBinding()
+    {
+        var handler = new RecordingHandler();
+        Assert.That(handler.TryReserve(), Is.True);
+        handler.Bind(1, _ => { });
+        Assert.That(handler.TryUnbind(1), Is.True);
+        Assert.That(handler.IsBound, Is.False);
+
+        Assert.That(handler.TryReserve(), Is.True);
+        handler.Bind(2, _ => { });
+        Assert.That(handler.TryUnbind(1), Is.False);
+        Assert.That(handler.IsBound, Is.True);
+
+        Assert.That(handler.TryUnbind(2), Is.True);
+        Assert.That(handler.IsBound, Is.False);
+    }
+
+    [Test]
+    public void TryUnbind_DuringANewReservation_DoesNotClearIt()
+    {
+        var handler = new RecordingHandler();
+        Assert.That(handler.TryReserve(), Is.True);
+        handler.Bind(1, _ => { });
+        Assert.That(handler.TryUnbind(1), Is.True);
+
+        Assert.That(handler.TryReserve(), Is.True);
+        Assert.That(handler.TryUnbind(1), Is.False);
+        Assert.That(handler.IsBound, Is.True);
+
+        handler.Bind(2, _ => { });
+        Assert.That(handler.TryUnbind(2), Is.True);
+    }
+
     private static IRRUnreliableResponse StartRequest(out TestServerTransport server)
     {
         var handler = new RecordingServerHandler();

@@ -15,10 +15,16 @@ namespace Pontifex.RR.Unreliable
         private int _terminal;
         private int _callbackActive;
 
-        public RRUnreliableRequestState(IRRUnreliableRequestHandler handler)
+        public RRUnreliableRequestState(ushort requestId, IRRUnreliableRequestHandler handler)
         {
+            RequestId = requestId;
             Handler = handler ?? throw new ArgumentNullException(nameof(handler));
         }
+
+        /// <summary>
+        /// Gets the client-local id of the request.
+        /// </summary>
+        public ushort RequestId { get; }
 
         /// <summary>
         /// Gets the handler bound to the request.

@@ -139,7 +139,7 @@ namespace Pontifex.RR.Unreliable
 
                 if (!previous.IsCallbackActive)
                 {
-                    bindable.Unbind();
+                    bindable.TryUnbind(previous.RequestId);
                 }
             }
 
@@ -162,7 +162,7 @@ namespace Pontifex.RR.Unreliable
             for (int attempt = 0; attempt <= ushort.MaxValue; attempt++)
             {
                 requestId = NextRequestId();
-                var candidate = new RRUnreliableRequestState(handler);
+                var candidate = new RRUnreliableRequestState(requestId, handler);
 
                 bool sweep = attempt == 0;
                 if (_pendingResponses.TryAdd(requestId, candidate, sweep ? TerminateExpired : null,
@@ -186,7 +186,7 @@ namespace Pontifex.RR.Unreliable
             {
                 if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
-                    bindable.Unbind();
+                    bindable.TryUnbind(requestId);
                 }
 
                 request.Release();
@@ -197,7 +197,7 @@ namespace Pontifex.RR.Unreliable
             {
                 if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
-                    bindable.Unbind();
+                    bindable.TryUnbind(requestId);
                 }
 
                 request.Release();
@@ -208,7 +208,7 @@ namespace Pontifex.RR.Unreliable
             {
                 if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
-                    bindable.Unbind();
+                    bindable.TryUnbind(requestId);
                 }
 
                 request.Release();
@@ -229,7 +229,7 @@ namespace Pontifex.RR.Unreliable
                 Log.wtf(ex);
                 if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
-                    bindable.Unbind();
+                    bindable.TryUnbind(requestId);
                 }
 
                 return SendResult.Error;
@@ -239,7 +239,7 @@ namespace Pontifex.RR.Unreliable
             {
                 if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
-                    bindable.Unbind();
+                    bindable.TryUnbind(requestId);
                 }
 
                 return result;
@@ -249,7 +249,7 @@ namespace Pontifex.RR.Unreliable
             {
                 if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
                 {
-                    bindable.Unbind();
+                    bindable.TryUnbind(requestId);
                 }
 
                 return SendResult.Error;
@@ -291,7 +291,7 @@ namespace Pontifex.RR.Unreliable
 
             if (!state.IsCallbackActive)
             {
-                bindable.Unbind();
+                bindable.TryUnbind(state.RequestId);
             }
         }
 
@@ -308,7 +308,7 @@ namespace Pontifex.RR.Unreliable
             // exits. Waiting here would let two in-flight callbacks deadlock on each other's state.
             if (!state.IsCallbackActive)
             {
-                ((RRRequestHandler)state.Handler).Unbind();
+                ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
             }
         }
 
@@ -336,7 +336,7 @@ namespace Pontifex.RR.Unreliable
 
                 if (!state.IsCallbackActive)
                 {
-                    ((RRRequestHandler)state.Handler).Unbind();
+                    ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
                 }
             });
         }
@@ -400,7 +400,7 @@ namespace Pontifex.RR.Unreliable
 
                 if (!state.IsCallbackActive)
                 {
-                    ((RRRequestHandler)state.Handler).Unbind();
+                    ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
                 }
 
                 frame.Release();
@@ -445,7 +445,7 @@ namespace Pontifex.RR.Unreliable
 
                     if (!state.IsCallbackActive)
                     {
-                        ((RRRequestHandler)state.Handler).Unbind();
+                        ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
                     }
 
                     frame.Release();
@@ -456,7 +456,7 @@ namespace Pontifex.RR.Unreliable
                 {
                     if (!state.IsCallbackActive)
                     {
-                        ((RRRequestHandler)state.Handler).Unbind();
+                        ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
                     }
 
                     frame.Release();
@@ -480,7 +480,7 @@ namespace Pontifex.RR.Unreliable
 
                     if (state.ExitCallback())
                     {
-                        ((RRRequestHandler)state.Handler).Unbind();
+                        ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
                     }
                 }
             }

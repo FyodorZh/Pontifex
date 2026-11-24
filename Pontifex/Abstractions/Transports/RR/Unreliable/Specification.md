@@ -221,8 +221,8 @@ following wins:
 3. the request TTL expires;
 4. the transport stops or fails, which clears the pending window.
 
-Expiry is silent: no callback is raised, the handler is unbound, and the pending
-id is no longer eligible. A frame for an id that is unknown, expired, already
+Expiry is silent: no callback is raised, the pending id is no longer eligible,
+and the handler is unbound once any in-flight callback returns. A frame for an id that is unknown, expired, already
 completed, cancelled, or sent by another route **MUST** be released and dropped.
 A duplicate message id **MUST** be released and dropped.
 
@@ -313,8 +313,8 @@ completion callback. A request removed this way is not replayed.
 
 A stop or failure that races a callback accepted before the stop **MAY** let
 that callback begin or complete after `onStopped` begins. No callback begins for
-a request that the stop removed. The handler remains bound until the in-flight
-callback returns.
+a request that the stop removes before the callback is accepted. The handler
+remains bound until the in-flight callback returns.
 
 The transport-level `onStopped` callback **MUST** be invoked exactly once after
 the terminal transition.
@@ -509,6 +509,8 @@ No conformance controls are defined.
 - [ ] Do not implement `IRRUnreliableResponse`.
 - [ ] After a stop or failure, reuse a handler only after any in-flight callback
       has returned.
+- [ ] Reuse an expired handler only after any late callback has returned; a reuse
+      attempt while it runs throws `InvalidOperationException`.
 - [ ] Treat every accepted request and every response message as potentially
       lost.
 - [ ] Never expect more than the `messageCount` argument's `Response` calls per
