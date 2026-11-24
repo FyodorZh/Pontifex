@@ -97,14 +97,13 @@ public sealed class AnyTransportTests
     {
         var transport = Create();
         transport.TryStartBehavior = static () => false;
-        bool callbackCalled = false;
 
-        Assert.That(transport.Start(_ => callbackCalled = true), Is.False);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.False);
 
         Assert.That(transport.TryStartCalls, Is.EqualTo(1));
         Assert.That(transport.OnStartedCalls, Is.Zero);
         Assert.That(transport.OnStoppedCalls, Is.Zero);
-        Assert.That(callbackCalled, Is.False);
+        Assert.That(transport.UserStoppedCalls, Is.Zero);
         Assert.That(transport.IsStarted, Is.False);
         Assert.That(transport.IsValid, Is.False);
         Assert.That(transport.ExposedHasStartBeenAttempted, Is.True);
@@ -115,28 +114,32 @@ public sealed class AnyTransportTests
     public void Start_CalledTwice_SecondReturnsFalseWithoutHooks()
     {
         var transport = Create();
-        Assert.That(transport.Start(_ => { }), Is.True);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.True);
 
-        Assert.That(transport.Start(_ => { }), Is.False);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.False);
 
         Assert.That(transport.TryStartCalls, Is.EqualTo(1));
         Assert.That(transport.OnStartedCalls, Is.EqualTo(1));
         Assert.That(transport.OnStoppedCalls, Is.Zero);
+        Assert.That(transport.UserStoppedCalls, Is.Zero);
+        Assert.That(transport.IsValid, Is.True);
     }
 
     [Test]
     public void Start_AfterStop_ReturnsFalseWithoutHooks()
     {
         var transport = Create();
-        Assert.That(transport.Start(_ => { }), Is.True);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.True);
         Assert.That(transport.Stop(), Is.True);
 
-        Assert.That(transport.Start(_ => { }), Is.False);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.False);
 
         Assert.That(transport.TryStartCalls, Is.EqualTo(1));
         Assert.That(transport.OnStartedCalls, Is.EqualTo(1));
         Assert.That(transport.OnStoppedCalls, Is.EqualTo(1));
+        Assert.That(transport.UserStoppedCalls, Is.EqualTo(1));
         Assert.That(transport.IsStarted, Is.False);
+        Assert.That(transport.IsValid, Is.True);
     }
 
     [Test]
@@ -174,36 +177,63 @@ public sealed class AnyTransportTests
     {
         var transport = Create();
         transport.TryStartBehavior = static () => false;
-        Assert.That(transport.Start(_ => { }), Is.False);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.False);
 
-        Assert.That(transport.Start(_ => { }), Is.False);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.False);
 
         Assert.That(transport.TryStartCalls, Is.EqualTo(1));
         Assert.That(transport.OnStartedCalls, Is.Zero);
         Assert.That(transport.OnStoppedCalls, Is.Zero);
+        Assert.That(transport.UserStoppedCalls, Is.Zero);
+        Assert.That(transport.IsValid, Is.False);
     }
 
     [Test]
     public void Start_WhenTryStartStopsTransport_ReturnsFalseWithoutOnStarted()
     {
         var transport = Create();
-        int callbackCount = 0;
         transport.TryStartBehavior = () =>
         {
             transport.Stop();
             return true;
         };
 
-        Assert.That(transport.Start(_ => callbackCount++), Is.False);
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.False);
 
         Assert.That(transport.TryStartCalls, Is.EqualTo(1));
         Assert.That(transport.OnStartedCalls, Is.Zero);
-        Assert.That(transport.OnStoppedCalls, Is.EqualTo(1));
+        Assert.That(transport.OnStoppedCalls, Is.EqualTo(1),
+            "the internal teardown for the stop raised inside TryStart must run");
         Assert.That(transport.LastOnStoppedReason, Is.TypeOf<Unknown>());
-        Assert.That(callbackCount, Is.EqualTo(1));
-        Assert.That(transport.IsStarted, Is.False);
-        Assert.That(transport.IsValid, Is.True);
+        Assert.That(transport.UserStoppedCalls, Is.Zero,
+            "an initial start attempt that completes as a failure must not invoke the user callback");
         Assert.That(transport.Events, Is.EqualTo(new[] { "tryStart", "stopped" }));
+        Assert.That(transport.Events, Has.No.Member("userStopped"));
+        Assert.That(transport.IsStarted, Is.False);
+        Assert.That(transport.IsValid, Is.False,
+            "the initial start attempt that never completed must invalidate the transport");
+    }
+
+    [Test]
+    public void Start_WhenTryStartFailsAndReturnsFalse_KeepsOneInternalStopWithoutUserCallback()
+    {
+        var transport = Create();
+        transport.TryStartBehavior = () =>
+        {
+            transport.Fail(Failure("start failure"));
+            return false;
+        };
+
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.False);
+
+        Assert.That(transport.TryStartCalls, Is.EqualTo(1));
+        Assert.That(transport.OnStartedCalls, Is.Zero);
+        Assert.That(transport.OnStoppedCalls, Is.EqualTo(1),
+            "a Fail raised inside TryStart is the teardown path and must run exactly once");
+        Assert.That(transport.UserStoppedCalls, Is.Zero);
+        Assert.That(transport.Events, Is.EqualTo(new[] { "tryStart", "stopped" }));
+        Assert.That(transport.IsStarted, Is.False);
+        Assert.That(transport.IsValid, Is.False);
     }
 
     #endregion
@@ -351,6 +381,22 @@ public sealed class AnyTransportTests
         Assert.That(transport.IsValidDuringOnStopped, Is.False);
         Assert.That(transport.Events, Is.EqualTo(new[] { "tryStart", "started", "stopped" }));
         Assert.That(transport.Stop(), Is.False);
+    }
+
+    [Test]
+    public void Fail_AfterSuccessfulStart_InvokesUserStoppedCallback()
+    {
+        var transport = Create();
+        var reason = Failure("post-start failure");
+        Assert.That(transport.Start(transport.TrackUserStopped), Is.True);
+
+        transport.Fail(reason);
+
+        Assert.That(transport.OnStoppedCalls, Is.EqualTo(1));
+        Assert.That(transport.UserStoppedCalls, Is.EqualTo(1),
+            "a failure after a successful start is a post-start stop and must reach the user callback");
+        Assert.That(transport.Events, Is.EqualTo(new[] { "tryStart", "started", "stopped", "userStopped" }));
+        Assert.That(transport.IsValid, Is.False);
     }
 
     [Test]

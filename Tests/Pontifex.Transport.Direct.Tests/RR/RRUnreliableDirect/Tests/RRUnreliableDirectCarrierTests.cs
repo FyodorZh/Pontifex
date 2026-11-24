@@ -600,6 +600,30 @@ public sealed class RRUnreliableDirectCarrierTests
         }
     }
 
+    [Test]
+    public void RequestValidation_ChecksTheStateBeforeTheNullPayload()
+    {
+        var clock = NewClock();
+        using var serverHandler = new RecordingServerHandler(MemoryRental.Shared);
+        StartServer(clock, serverHandler, out string name);
+        var client = new RRUnreliableDirectClient(
+            new StringEndPoint(name),
+            TimeSpan.FromSeconds(3),
+            Logger,
+            MemoryRental.Shared,
+            timeProvider: clock);
+        using var clientHandler = new RecordingClientHandler();
+
+        Assert.That(client.Request(null!, clientHandler), Is.EqualTo(SendResult.NotConnected),
+            "a stopped client reports its state before the payload validity");
+
+        Assert.That(client.Start(_ => { }), Is.True);
+        _transports.Add(client);
+
+        Assert.That(client.Request(null!, clientHandler), Is.EqualTo(SendResult.InvalidMessage),
+            "a running client reports a null payload as invalid");
+    }
+
     private static ManualClock NewClock()
     {
         return new ManualClock { Now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) };

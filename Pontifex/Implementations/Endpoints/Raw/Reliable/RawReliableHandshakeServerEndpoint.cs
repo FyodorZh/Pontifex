@@ -92,8 +92,8 @@ namespace Pontifex.Raw.Reliable
         /// <item><description><b>Thread safety</b>: Called on the serial action queue.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: A missing response or a response that cannot
         /// be admitted for outbound delivery stops the endpoint without notifying the handler of a connection.
-        /// A handler exception during the connection notification returns without starting the
-        /// watchdog.</description></item>
+        /// A handler exception during the connection notification is logged and isolated, and the watchdog is
+        /// still started.</description></item>
         /// </list>
         /// </remarks>
         protected override void OnConnected()

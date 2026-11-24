@@ -2,6 +2,7 @@ using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Tests.Endpoints;
 
@@ -137,6 +138,51 @@ public sealed class RawReliableEndpointTests
         // The raw payload fits the limit exactly, but the prepended PayloadMessage byte pushes the
         // framed message over MessageMaxByteSize.
         Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.MessageTooBig));
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithNullBuffer_ReturnsNotConnected()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+
+        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.NotConnected));
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithOversizedBuffer_ReturnsNotConnectedAndReleases()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler, max: 3);
+        UnionDataList buffer = TestBuffers.WithPayload(Memory, 32);
+        Assert.That(buffer.GetDataSize(), Is.GreaterThan(3));
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.NotConnected));
+        Assert.That(buffer.IsAlive, Is.False);
+        Assert.That(buffer.RefCount.RefCount, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithFullBudget_ReturnsNotConnectedAndReleases()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler, max: 1024, capacity: 1);
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        Assert.That(buffer.GetDataSize(), Is.GreaterThan(1));
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.NotConnected));
+        Assert.That(buffer.IsAlive, Is.False);
+        Assert.That(buffer.RefCount.RefCount, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenConnectedWithNullBuffer_ReturnsInvalidMessage()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.ConnectAndComplete();
+
+        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.InvalidMessage));
     }
 
     #endregion
@@ -465,22 +511,31 @@ public sealed class RawReliableEndpointTests
     }
 
     [Test]
-    public void NotifyConnectedCore_WhenCallbackThrows_StopsWithExceptionFail()
+    public void NotifyConnectedCore_WhenCallbackThrows_LogsAndKeepsEndpointUsable()
     {
+        var logConsumer = new RecordingLogConsumer();
         using var handler = new RecordingRawReliableHandler(Memory);
-        using var ep = Create(handler);
+        using var ep = new TestRawReliableEndpoint(handler, log: new Logger([logConsumer]));
         ep.ConnectAndComplete();
         var exception = new InvalidOperationException("OnConnected failed");
+        bool result = false;
 
-        bool result = ep.ExposedNotifyConnectedCore(() => throw exception);
+        Assert.DoesNotThrow(() => result = ep.ExposedNotifyConnectedCore(() => throw exception));
+
+        Assert.That(result, Is.True);
+        Assert.That(ep.IsRunning, Is.True, "a throwing connection callback must not stop the endpoint");
+        Assert.That(ep.IsConnected, Is.True);
+        Assert.That(ep.BeginDisconnectCalls, Is.Zero);
+        Assert.That(ep.LastDisconnectReason, Is.Null);
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(logConsumer.Messages, Has.Some.Contains("OnConnected failed"));
+
+        UnionDataList framed = TestRawReliableEndpoint.Frame(Memory, TestRawReliableEndpoint.PayloadFrame, 5);
+        ep.ExposedProcessInbound(framed);
         ep.DrainAll();
 
-        Assert.That(result, Is.False);
-        Assert.That(ep.LastDisconnectReason, Is.TypeOf<ExceptionFail>());
-        var fail = (ExceptionFail)ep.LastDisconnectReason!;
-        Assert.That(fail.Source, Is.EqualTo(ep.ExposedTransportName));
-        Assert.That(fail.Exception, Is.SameAs(exception));
-        Assert.That(handler.DisconnectedCount, Is.Zero);
+        Assert.That(handler.ReceivedCount, Is.EqualTo(1), "the endpoint must keep delivering messages");
     }
 
     #endregion

@@ -75,16 +75,13 @@ namespace Pontifex.Raw.Reliable
         /// <summary>
         /// Notifies the server handler of the logical connection and arms the shared connected latch.
         /// </summary>
-        /// <returns><see langword="true"/> when the handler returned normally; <see langword="false"/> when it
-        /// threw and the endpoint was stopped with an <see cref="ExceptionFail"/>.</returns>
+        /// <returns>Always <see langword="true"/>; a throwing handler is logged and isolated.</returns>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the endpoint stop is
-        /// serialized on the serial action queue.</description></item>
-        /// <item><description><b>Other notes</b>: When this method returns <see langword="true"/> the handler has
-        /// observed the connection and a later <see cref="NotifyDisconnectedCore"/> call delivers the logical
-        /// disconnect notification. When it returns <see langword="false"/> the endpoint is already
-        /// stopping.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread.</description></item>
+        /// <item><description><b>Other notes</b>: The latch is armed before the handler callback, so a later
+        /// <see cref="NotifyDisconnectedCore"/> call delivers the logical disconnect notification even when
+        /// the connection callback threw. A handler exception never stops the endpoint.</description></item>
         /// </list>
         /// </remarks>
         protected bool NotifyConnected()

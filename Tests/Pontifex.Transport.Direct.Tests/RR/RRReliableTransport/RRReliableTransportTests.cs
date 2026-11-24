@@ -131,9 +131,34 @@ public sealed class RRReliableTransportTests
     }
 
     [Test]
-    public void ValidatePayload_WithNull_ReturnsInvalidMessage()
+    public void ValidatePayload_WhenNotStartedWithNull_ReturnsTheStateResult()
     {
         var transport = new TestRRReliableTransport();
+
+        Assert.That(transport.Validate(null!, SendResult.Error, out SendResult failure), Is.False);
+        Assert.That(failure, Is.EqualTo(SendResult.Error),
+            "the transport state is checked before the payload");
+    }
+
+    [Test]
+    public void ValidatePayload_WhenNotStartedWithOversizedPayload_ReturnsTheStateResultAndReleases()
+    {
+        var transport = new TestRRReliableTransport(10);
+        UnionDataList payload = Payload(1, 2, 3);
+
+        Assert.That(transport.Validate(payload, SendResult.NotConnected, out SendResult failure),
+            Is.False);
+        Assert.That(failure, Is.EqualTo(SendResult.NotConnected),
+            "the transport state is checked before the payload size");
+        Assert.That(payload.IsAlive, Is.False);
+        Assert.That(payload.RefCount.RefCount, Is.Zero);
+    }
+
+    [Test]
+    public void ValidatePayload_WhenStartedWithNull_ReturnsInvalidMessage()
+    {
+        var transport = new TestRRReliableTransport(64);
+        Assert.That(transport.Start(_ => { }), Is.True);
 
         Assert.That(transport.Validate(null!, SendResult.Error, out SendResult failure), Is.False);
         Assert.That(failure, Is.EqualTo(SendResult.InvalidMessage));

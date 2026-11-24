@@ -12,10 +12,15 @@ namespace Pontifex.Raw
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Other notes</b>: State transitions and handler dispatch are serialized by an
-    /// internal action queue. An exception that escapes a queued action fails the endpoint hard: it is logged,
-    /// the stop reason is set to an ExceptionFail, and FailHard is invoked. The base implementation of FailHard
-    /// delivers the handler's stop notification at most once when a start was attempted, then transitions the
-    /// stage to Stopped; derived classes override it to release resources.</description></item>
+    /// internal action queue. An exception that escapes a queued transition fails the endpoint hard: it is
+    /// logged, the stop reason is set to an ExceptionFail, and FailHard is invoked. A throwing
+    /// <c>OnReceived</c> is not such a transition failure: it is logged and isolated, and the endpoint keeps
+    /// running. The base implementation of FailHard delivers the handler's stop notification at most once
+    /// when a start was attempted, then transitions the stage to Stopped; derived classes override it to
+    /// release resources.</description></item>
+    /// <item><description><b>Other notes</b>: <see cref="RaiseStopped"/> invokes each subscriber of the public
+    /// <see cref="Stopped"/> event inside its own exception boundary, so one throwing subscriber cannot skip
+    /// the others.</description></item>
     /// </list>
     /// </remarks>
     public abstract class RawEndpoint : IRawEndpointImp
@@ -77,6 +82,20 @@ namespace Pontifex.Raw
 
         /// <inheritdoc/>
         public bool IsRunning => _currentStage == State.Started && _stopReason == null;
+
+        /// <summary>
+        /// Gets a value indicating whether a stop has already been requested for this endpoint.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to read concurrently; the observed value is a
+        /// best-effort snapshot.</description></item>
+        /// <item><description><b>Other notes</b>: The flag latches synchronously in <see cref="Stop"/>,
+        /// before the serialized stop transition runs. A derived class uses it to suppress work that was
+        /// scheduled before the stop was requested.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool IsStopRequested => _stopReason != null;
 
         /// <inheritdoc/>
         public event Action<StopReason>? Stopped;
@@ -171,10 +190,12 @@ namespace Pontifex.Raw
                     }
                     catch (Exception ex)
                     {
+                        // Handler failures are isolated: the delivery was consumed by the handler
+                        // call, so only that delivery stops. The endpoint keeps running and the
+                        // message ownership stays with the handler. A handler that throws without
+                        // releasing its reference violates its contract; the endpoint must not
+                        // release the reference on its behalf.
                         Log.wtf(ex);
-                        var reason = new ExceptionFail(TransportName, ex, "Handler OnReceived failed");
-                        _stopReason = reason;
-                        FailHard(reason);
                     }
                 }
                 else
@@ -276,8 +297,17 @@ namespace Pontifex.Raw
         }
 
         /// <summary>
-        /// Raises <see cref="Stopped"/> at most once, isolating subscriber failures.
+        /// Raises <see cref="Stopped"/> at most once, isolating the failure of each subscriber.
         /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the one-shot latch is
+        /// atomic.</description></item>
+        /// <item><description><b>Other notes</b>: Every subscriber of the captured invocation list is invoked
+        /// inside its own try/catch, so a throwing subscriber is logged and does not prevent later
+        /// subscribers from running.</description></item>
+        /// </list>
+        /// </remarks>
         private void RaiseStopped(StopReason reason)
         {
             if (Interlocked.Exchange(ref _stoppedRaised, 1) != 0)
@@ -285,13 +315,22 @@ namespace Pontifex.Raw
                 return;
             }
 
-            try
+            Action<StopReason>? subscribers = Stopped;
+            if (subscribers == null)
             {
-                Stopped?.Invoke(reason);
+                return;
             }
-            catch (Exception ex)
+
+            foreach (Action<StopReason> subscriber in subscribers.GetInvocationList())
             {
-                Log.wtf(ex);
+                try
+                {
+                    subscriber(reason);
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
             }
         }
 
@@ -448,12 +487,26 @@ namespace Pontifex.Raw
         /// endpoint consumes and releases the buffer. On Ok the endpoint owns the buffer and releases it after
         /// transmission or when it is dropped by a stop. The byte budget is a best-effort bound under
         /// concurrent senders.</description></item>
-        /// <item><description><b>Other notes</b>: A successful admission requests processing of the internal
+        /// <item><description><b>Other notes</b>: Endpoint state is checked first, then message validity,
+        /// then the message size, then capacity. A successful admission requests processing of the internal
         /// action queue.</description></item>
         /// </list>
         /// </remarks>
         protected SendResult ScheduleToSend(UnionDataList bufferToSend)
         {
+            if (!CanSendNow(out var errorCode))
+            {
+                // State is checked before the buffer, so a stopped endpoint reports the state result
+                // even for a null buffer. A non-null buffer still belongs to the endpoint on every
+                // non-InvalidMessage result, so it is released here; a dead buffer stays with the
+                // caller, as the caller owns it on InvalidMessage.
+                if (bufferToSend != null! && bufferToSend.IsAlive)
+                {
+                    bufferToSend.Release();
+                }
+                return errorCode;
+            }
+
             if (bufferToSend == null! || !bufferToSend.IsAlive)
             {
                 return SendResult.InvalidMessage;
@@ -464,12 +517,6 @@ namespace Pontifex.Raw
             {
                 bufferToSend.Release();
                 return SendResult.MessageTooBig;
-            }
-
-            if (!CanSendNow(out var errorCode))
-            {
-                bufferToSend.Release();
-                return errorCode;
             }
 
             Interlocked.Add(ref _totalBuffersSize, bufferSize);

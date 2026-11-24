@@ -24,10 +24,13 @@
 | `Start_StopWhileStarting_IsDeferredUntilFinishStart` | A stop requested while starting waits for `FinishStart`. | The stop is latched, then forwarded to `BeginStop` with `tryBeGentle: false` after the start completes. | The deferred path deliberately downgrades gentleness. |
 | `FinishStart_WhenNotStarting_InvokesOnFailAndFailsHard` | `FinishStart` is legal only while starting. | The failure callback runs and the endpoint becomes terminal. | No handler stop notification because the endpoint never started. |
 | `FinishStart_WhenAlreadyStarted_InvokesOnFailAndNotifiesStopped` | `FinishStart` after start is an invalid transition. | The failure callback runs and the started endpoint notifies `OnStopped(ExceptionFail)`. | Exercises the queue `onError` → `FailHard` path. |
-| `Send_Null_ReturnsInvalidMessage` | `Send(null)` is rejected as `InvalidMessage`. | Null is rejected without affecting lifecycle. | Buffer ownership does not transfer for `InvalidMessage`. |
+| `Send_Null_ReturnsInvalidMessage` | `Send(null)` on a running endpoint is rejected as `InvalidMessage`. | Null is rejected without affecting lifecycle. | The endpoint is started first, because a stopped endpoint reports the state result. Buffer ownership does not transfer for `InvalidMessage`. |
 | `Send_ReleasedBuffer_ReturnsInvalidMessageAndKeepsCallerOwnership` | `Send` rejects a non-null buffer that is no longer alive as `InvalidMessage`. | A released buffer is rejected and is not released a second time. | The caller retains ownership on `InvalidMessage`; the buffer is already dead, so a double release would corrupt the pool. |
 | `Send_WhenNotStarted_ReturnsNotConnectedAndReleasesBuffer` | `Send` rejects with `NotConnected` before start and consumes the buffer. | Rejection releases the buffer exactly once. | Ownership transfers for every non-`InvalidMessage` result. |
-| `Send_TooBig_ReturnsMessageTooBigAndReleasesBuffer` | `Send` rejects payloads above `MessageMaxByteSize`. | The size guard rejects and releases the buffer. | Buffer size is verified to exceed the limit before the call. |
+| `Send_TooBig_ReturnsMessageTooBigAndReleasesBuffer` | `Send` rejects payloads above `MessageMaxByteSize` while running. | The size guard rejects and releases the buffer. | The endpoint is started first, because a stopped endpoint reports the state result. Buffer size is verified to exceed the limit before the call. |
+| `Send_WhenStoppedWithNullBuffer_ReturnsNotConnected` | Result precedence: endpoint state before message validity. | A stopped endpoint reports `NotConnected` for a null buffer, not `InvalidMessage`. | The state check does not dereference the buffer. |
+| `Send_WhenStoppedWithOversizedBuffer_ReturnsNotConnectedAndReleasesBuffer` | Result precedence: endpoint state before message size. | A stopped endpoint reports `NotConnected` for an oversized buffer, which is released exactly once. | `RefCount` reaches zero after the release. |
+| `Send_WhenStoppedWithPendingBudget_ReturnsNotConnectedAndReleasesBuffer` | Result precedence: endpoint state before outbound capacity. | A stopped endpoint reports `NotConnected` while a previous admitted send still holds the whole byte budget, and the rejected buffer is released once. | The admitted action is drained afterwards to release its reservation. |
 | `Send_WhenRunning_ReturnsOkAndTransmitsOnDrain` | A valid send is admitted and transmitted on the serial queue. | The admitted payload reaches `DoSendRaw` after drain. | The double captures a clone for inspection and releases the original. |
 | `Send_MultipleBuffers_PreservesAdmissionOrder` | Concurrently admitted sends are transmitted in admission order. | Two accepted buffers reach `DoSendRaw` in call order. | Deterministic single-threaded queue; no real concurrency. |
 | `Send_ExceedingCapacity_ReturnsBufferOverflow` | The outbound byte budget is bounded by `bufferCapacityBytes`. | An over-capacity send is rejected and its buffer released. | Budget accounting uses the serialized data size. |
@@ -46,10 +49,12 @@
 | `ProcessInbound_WhenRunning_DeliversToHandler` | A running endpoint delivers inbound messages. | The handler receives the payload content. | The recording handler clones and releases the original. |
 | `ProcessInbound_IsDeliveredBeforeStopNotification` | Delivery is serialized before the stop notification. | The handler observes `received` before `stopped`. | Ordering is asserted through the handler event sequence. |
 | `ProcessInbound_AfterStopped_IsDropped` | A stopped endpoint accepts no further inbound messages. | No delivery and the buffer is released. | — |
+| `ProcessInbound_WhenHandlerThrows_LogsAndLeavesEndpointUsable` | A throwing `OnReceived` is isolated. | The exception is logged, the endpoint keeps running, and later deliveries still reach the handler. | The handler records and releases the delivery before throwing, so ownership is respected. |
 | `Stop_BeforeStart_TransitionsWithoutHandlerCallback` | `Stop` before start is terminal but does not notify the handler. | No `BeginStop` and no `OnStopped`; the endpoint is not running. | The public `Stopped` event is raised on this path but is not asserted here. |
 | `Stop_WhenRunning_NotifiesHandlerWithReason` | A running stop calls `BeginStop` and notifies `OnStopped` with the same reason. | Reason identity and one-shot notification. | — |
 | `Stop_ForwardsTryBeGentleToBeginStop` | `tryBeGentle` is forwarded to the transport hook. | The hook observes the caller's hint. | — |
 | `Stop_CalledTwice_FirstReasonWins` | Repeated stops are idempotent. | Only the first reason and gentleness reach `BeginStop` and the handler. | — |
+| `Stop_WhenFirstStoppedSubscriberThrows_StillInvokesLaterSubscribers` | `Stopped` subscriber failures are isolated per subscriber. | The throwing first subscriber is logged and the second subscriber still runs once. | The handler stop notification is unaffected. |
 | `Stop_LatchedWhileStartingAndPromotedByFinishStart_QueuedStopActionIsNoOp` | The queued stop action is a no-op when teardown has already started. | `FinishStart` promotes a stop latched while starting to `BeginStop`; the queued stop action then does nothing, so there is no hard failure and exactly one `OnStopped`. | Needs the single-step drain so the start-completion action runs before the queued stop action. `FinishStart`/`FinishStop` out of order still fail hard (covered below). |
 | `FinishStop_WhenNotStopping_FailsHard` | `FinishStop` is legal only while stopping. | An invalid completion fails hard with `ExceptionFail`. | Exercises the queue `onError` → `FailHard` path. |
 | `FailHard_WhenRunning_NotifiesHandlerAndStops` | A fatal failure from the started stage notifies the handler and stops. | Reason identity and terminal `IsRunning == false`. | The direct protected hook is invoked; the queue error path is covered by the start/stop guard tests. |
@@ -64,11 +69,10 @@
 
 | Missing test | Owner | Reason |
 |---|---|---|
-| `Stopped` event raised once on every terminal path and subscriber exceptions isolated. | This layer | The public event is part of the endpoint contract but is not currently asserted. |
+| `Stopped` event raised once on every terminal path. | This layer | The public event is part of the endpoint contract; its subscriber-failure isolation is covered, but the one-shot raising on every terminal path is not asserted. |
 | `IRawEndpoint`/`IBaseEndpoint` assignability. | This layer | Interface exposure is not covered. The `GetControls` predicate overload is covered by the `RawUnreliable` layer. |
 | Inbound scheduling rejection releases the buffer. | This layer | The manual queue exposes an opt-in reject-next seam; the test is not written yet. |
-| `OnReceived` throwing fails hard with `ExceptionFail` while releasing ownership. | This layer | Handler exception isolation is a documented failure path. |
-| `OnStopped` throwing and `Stopped` subscriber throwing are swallowed. | This layer | Callback exception isolation is a documented contract. |
+| `OnStopped` throwing is swallowed while the terminal transition completes. | This layer | The handler-notification isolation path is not asserted for the endpoint's own handler. |
 | `onFailToRun` accounting rollback when an accepted send is never executed. | This layer | Accepted-but-never-run actions are only produced by a released queue; the manual queue models no release barrier. |
 
 ## Deferred by design
@@ -93,8 +97,12 @@
   `FinishStart`/`FinishStop`; tests never sleep or use real time.
 - The recording handler clones each delivered buffer for inspection, releases the original, and
   releases the clones on dispose. Captured outbound buffers are cloned by the endpoint double.
-- The public `Stopped` event is raised independently of the handler callback; it is currently a
-  planned gap rather than covered behaviour.
+- The public `Stopped` event is raised independently of the handler callback; subscriber-failure
+  isolation is covered, while the one-shot raising of the event on every terminal path remains a
+  planned assertion.
+- `ScheduleToSend` selects the result state-first: endpoint state, then buffer validity, then size,
+  then capacity. A state rejection releases a live buffer and leaves a dead or null buffer to the
+  caller.
 - `FinishStop` and `FailHard` share one once-only handler latch, so the handler's stop notification
   is delivered at most once per endpoint. A stop completion that arrives after a hard failure is a
   no-op instead of an invalid-stage exception.

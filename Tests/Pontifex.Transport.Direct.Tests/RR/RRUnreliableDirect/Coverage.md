@@ -48,6 +48,7 @@
 | `TrySendToARemovedDestination_ReturnsErrorAndReleasesTheFrame` | Removed destination | A frame for a removed route returns `Error` and is released | The registry removal is driven through `ChannelManager.Disconnect`. |
 | `ServerStop_ClearsTheRegisteredClientCount` | Server stop | Stopping the carrier disposes registered channels and clears the count | The registration entry is removed before the count assertion. |
 | `SendAfterChannelLoss_ReturnsTheNoPeerPolicyNotNotConnected` | No-peer policy | A carrier send after its server stopped returns `Ok`, never `NotConnected` | The carrier's `acceptWithoutPeer` policy hides the missing peer. |
+| `RequestValidation_ChecksTheStateBeforeTheNullPayload` | Send-result precedence | A stopped client returns `NotConnected` for a null payload; a started client returns `InvalidMessage` | The state check precedes the payload check. |
 | `CreateClient_WithoutParameters_UsesTheThreeSecondDefault` | Binding defaults | The client request TTL is three seconds and the byte limit is `1048576` | Uses the hand-written build context. |
 | `CreateServer_WithoutParameters_UsesTheThreeSecondDefault` | Binding defaults | The server response TTL is three seconds and the byte limit is `1048576` | Uses the hand-written build context. |
 | `Create_WithExplicitTtls_UsesThem` | Binding TTLs | Explicit whole-second TTLs reach the transport | Client and server are created separately. |

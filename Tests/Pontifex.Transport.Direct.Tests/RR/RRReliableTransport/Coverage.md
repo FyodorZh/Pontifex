@@ -22,7 +22,9 @@
 | `Start_WhenTheCarrierReturnsFalse_InvalidatesWithoutOnStopped` | Section 7.2 failed start | A false carrier start invalidates without a stop callback | `AnyTransport` clears the started flag before failing. |
 | `Start_WhenTheCarrierThrows_AbortsWithoutOnStopped` | Section 7.2 failed start | A throwing carrier start clears pending state, stops the carrier, and delivers no callback | The catch path aborts instead of running a normal stop. |
 | `ValidatePayload_WhenNotStarted_ReleasesAndReturnsTheSelectedResult` | Section 9 precedence | A payload for a stopped transport is released and the role-selected result is returned | The role chooses `NotConnected` for a client and `Error` for a server. |
-| `ValidatePayload_WithNull_ReturnsInvalidMessage` | Section 9 precedence | A null payload returns `InvalidMessage` and is not consumed | Null has no buffer to release. |
+| `ValidatePayload_WhenNotStartedWithNull_ReturnsTheStateResult` | Section 9 precedence | A null payload for a stopped transport returns the selected state result, not `InvalidMessage` | The state check precedes the null check. |
+| `ValidatePayload_WhenNotStartedWithOversizedPayload_ReturnsTheStateResultAndReleases` | Section 9 precedence | An oversized payload for a stopped transport returns the state result and is released | The state check precedes the size check. |
+| `ValidatePayload_WhenStartedWithNull_ReturnsInvalidMessage` | Section 9 precedence | A null payload for a started transport returns `InvalidMessage` and is never released | A null buffer has no reference to release. |
 | `ValidatePayload_WhenStartedAndWithinTheLimit_AcceptsIt` | Section 8 payload limit | A started transport accepts a payload within the limit and keeps it alive | The limit is inclusive. |
 | `ValidatePayload_AboveTheLimit_ReturnsMessageTooBigAndReleases` | Section 8 payload limit | An oversized payload returns `MessageTooBig` and is released | The check is on the serialized payload only, before the header. |
 | `NextServerRequestId_StartsAtOneAndIncrements` | Server-global ids | The first id is one and ids increment | Ids are local to one server transport. |

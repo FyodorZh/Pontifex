@@ -175,16 +175,17 @@ public sealed class RawUnreliableClientTransportTests
         using var handler = new RecordingRawUnreliableHandler(Memory);
         transport.StartCarrierBehavior = static () => false;
         Assert.That(transport.Init(handler), Is.True);
-        StopReason? callbackReason = null;
+        bool callbackCalled = false;
 
-        Assert.That(transport.Start(r => callbackReason = r), Is.False);
+        Assert.That(transport.Start(_ => callbackCalled = true), Is.False);
 
         Assert.That(transport.StartCarrierCalls, Is.EqualTo(1));
         Assert.That(transport.CreateEndpointCalls, Is.Zero);
         Assert.That(transport.StopCarrierCalls, Is.EqualTo(1));
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
         Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
+        Assert.That(callbackCalled, Is.False,
+            "a failed initial start must not invoke the user callback");
         Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
     }
 
@@ -228,15 +229,16 @@ public sealed class RawUnreliableClientTransportTests
         var exception = new InvalidOperationException("endpoint factory failed");
         transport.CreateEndpointException = exception;
         Assert.That(transport.Init(handler), Is.True);
-        StopReason? callbackReason = null;
+        bool callbackCalled = false;
 
-        Assert.That(transport.Start(r => callbackReason = r), Is.False);
+        Assert.That(transport.Start(_ => callbackCalled = true), Is.False);
 
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
         Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
         Assert.That(((ExceptionFail)handler.StoppedReason!).Exception, Is.SameAs(exception));
         Assert.That(transport.LastStopCarrierReason, Is.SameAs(handler.StoppedReason));
-        Assert.That(callbackReason, Is.SameAs(handler.StoppedReason));
+        Assert.That(callbackCalled, Is.False,
+            "a failed initial start must not invoke the user callback");
     }
 
     [Test]
@@ -278,15 +280,16 @@ public sealed class RawUnreliableClientTransportTests
             return endpoint;
         };
         Assert.That(transport.Init(handler), Is.True);
-        StopReason? callbackReason = null;
+        bool callbackCalled = false;
 
-        Assert.That(transport.Start(r => callbackReason = r), Is.False);
+        Assert.That(transport.Start(_ => callbackCalled = true), Is.False);
 
         Assert.That(transport.StartCarrierCalls, Is.EqualTo(1));
         Assert.That(transport.CreateEndpointCalls, Is.EqualTo(1));
         Assert.That(transport.StopCarrierCalls, Is.EqualTo(1));
         Assert.That(transport.LastStopCarrierReason, Is.SameAs(reason));
-        Assert.That(callbackReason, Is.SameAs(reason));
+        Assert.That(callbackCalled, Is.False,
+            "an initial start attempt that a stop won must not invoke the user callback");
         Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
         // The no-endpoint fallback ran before the endpoint existed.
         Assert.That(handler.StoppedCount, Is.EqualTo(1));

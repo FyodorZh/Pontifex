@@ -244,7 +244,7 @@ public sealed class RawReliableServerTransportTests
     {
         var transport = Create();
         var reason = Reason();
-        StopReason? callbackReason = null;
+        bool callbackCalled = false;
         transport.StartCarrierBehavior = () =>
         {
             transport.Stop(reason);
@@ -252,15 +252,17 @@ public sealed class RawReliableServerTransportTests
         };
         Initialize(transport);
 
-        Assert.That(transport.Start(r => callbackReason = r), Is.False);
+        Assert.That(transport.Start(_ => callbackCalled = true), Is.False);
 
         Assert.That(transport.StartCarrierCalls, Is.EqualTo(1));
         Assert.That(transport.StopCarrierCalls, Is.EqualTo(1));
         Assert.That(transport.LastStopCarrierReason, Is.SameAs(reason));
         Assert.That(transport.LogicDriverFactoryCalls, Is.Zero);
         Assert.That(transport.Driver.StartCalls, Is.Zero);
-        Assert.That(callbackReason, Is.SameAs(reason));
-        Assert.That(transport.IsValid, Is.True);
+        Assert.That(callbackCalled, Is.False,
+            "an initial start attempt that a stop won must not invoke the user callback");
+        Assert.That(transport.IsValid, Is.False,
+            "the initial start attempt that never completed must invalidate the transport");
         Assert.That(transport.IsStarted, Is.False);
     }
 

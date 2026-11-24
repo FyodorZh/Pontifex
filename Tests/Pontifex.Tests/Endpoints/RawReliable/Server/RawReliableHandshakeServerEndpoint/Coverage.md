@@ -21,7 +21,7 @@
 | `FailHard_WhenConnected_NotifiesDisconnectedThenStopped` | A hard failure of a connected session notifies disconnection before stop. | `OnDisconnected` and `OnStopped` both receive the failure reason and `IsConnected` is false. | The `FailHard` override notifies before the base terminal stop notification. |
 | `FailHard_WhenConnecting_NotifiesStoppedOnly` | A hard failure before the connection completes has no logical disconnect notification. | `OnDisconnected` is not raised; `OnStopped` receives the reason. | The connection notification latch is still clear. |
 | `Disconnect_WhenConnected_MakesIsConnectedFalseDuringOnDisconnected` | `IsConnected` is false during the handler's disconnect notification. | The probe reads false from inside `OnDisconnected`. | The disconnect latch is set before the callback; the inherited low-level stage is already disconnecting. |
-| `OnConnected_WhenHandlerThrows_StopsWithExceptionFail` | A handler exception during the connection notification stops the endpoint. | `OnConnected` was observed once, then `OnDisconnected` and `OnStopped` receive `ExceptionFail`, and the watchdog is not started. | The connection latch is set before the handler call, so the throwing path still delivers the disconnect notification. |
+| `OnConnected_WhenHandlerThrows_LogsAndKeepsEndpointConnected` | A handler exception during the connection notification is isolated. | `OnConnected` was observed once, no disconnect or stop follows, and the endpoint stays connected. | The connection latch is set before the handler call; the throwing callback no longer fails the endpoint or skips the watchdog. |
 
 ## Planned
 

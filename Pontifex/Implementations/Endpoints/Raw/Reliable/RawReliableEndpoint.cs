@@ -175,20 +175,20 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <summary>
-        /// Arms the connected latch, invokes the handler's connection callback, and fails the endpoint hard when
-        /// the callback throws.
+        /// Arms the connected latch and invokes the handler's connection callback, isolating a callback
+        /// failure.
         /// </summary>
         /// <param name="onConnected">The callback that notifies the handler of the logical connection.</param>
-        /// <returns><see langword="true"/> when the callback returned normally; <see langword="false"/> when it
-        /// threw and the endpoint was stopped with an <see cref="ExceptionFail"/>.</returns>
+        /// <returns>Always <see langword="true"/>. The value is retained for compatibility; a throwing
+        /// callback no longer stops the endpoint.</returns>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the endpoint stop is
-        /// serialized on the serial action queue.</description></item>
-        /// <item><description><b>Other notes</b>: The latch is armed before the callback runs, so a callback
-        /// that throws still permits the later logical disconnect notification. Implementations that must not
-        /// deliver a disconnect after a failed connection arm the latch separately with
-        /// <see cref="MarkConnectedNotified"/>.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread.</description></item>
+        /// <item><description><b>Handler isolation</b>: a throwing <paramref name="onConnected"/> is logged and
+        /// swallowed. The endpoint keeps running and the latch stays armed, so the later logical disconnect
+        /// notification is still delivered. A handler exception never stops the endpoint.</description></item>
+        /// <item><description><b>Other notes</b>: Implementations that must not deliver a disconnect after a
+        /// failed connection arm the latch separately with <see cref="MarkConnectedNotified"/>.</description></item>
         /// </list>
         /// </remarks>
         protected bool NotifyConnectedCore(Action onConnected)
@@ -197,14 +197,13 @@ namespace Pontifex.Raw.Reliable
             try
             {
                 onConnected();
-                return true;
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                Stop(new ExceptionFail(TransportName, ex, "OnConnected failed"), false);
-                return false;
             }
+
+            return true;
         }
 
         /// <summary>
@@ -463,8 +462,28 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <inheritdoc cref="IRawEndpoint.Send"/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Precedence</b>: endpoint state is checked first, so a stopped endpoint
+        /// reports the state result even for a null, released, or oversized buffer. A running endpoint then
+        /// reports <see cref="SendResult.InvalidMessage"/> for a null or released buffer and
+        /// <see cref="SendResult.MessageTooBig"/> for an oversized one.</description></item>
+        /// <item><description><b>Ownership</b>: on a state rejection a non-null live buffer is released; a
+        /// null or dead buffer stays with the caller, as for every
+        /// <see cref="SendResult.InvalidMessage"/>.</description></item>
+        /// </list>
+        /// </remarks>
         public override SendResult Send(UnionDataList bufferToSend)
         {
+            if (!CanSendNow(out var errorCode))
+            {
+                if (bufferToSend != null! && bufferToSend.IsAlive)
+                {
+                    bufferToSend.Release();
+                }
+                return errorCode;
+            }
+
             if (bufferToSend != null! && bufferToSend.IsAlive)
             {
                 bufferToSend.PutFirst((byte)MessageType.PayloadMessage);

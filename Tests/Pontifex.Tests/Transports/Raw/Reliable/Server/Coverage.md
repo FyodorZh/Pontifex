@@ -22,7 +22,7 @@
 | `Start_WhenCarrierReturnsFalse_FailsWithoutStartingTicker` | A rejected carrier start fails the transport. | No ticker is created or started and no carrier stop is issued. | — |
 | `Start_WhenCarrierThrows_FailsWithoutStartingTicker` | A throwing carrier start fails the transport. | No ticker is created and the transport is invalid. | — |
 | `Start_SecondTime_FailsWithoutCallingCarrierAgain` | `Start` is one-shot. | The second call returns false without repeating carrier or ticker work. | — |
-| `Start_WhenCarrierStopsTransportSynchronously_ReturnsFalseWithoutStartingTicker` | A synchronous stop during `StartCarrier` beats the start path. | No ticker is created and the stop callback receives the supplied reason. | — |
+| `Start_WhenCarrierStopsTransportSynchronously_ReturnsFalseWithoutStartingTicker` | A synchronous stop during `StartCarrier` beats the start path. | No ticker is created, the stop reason reaches the carrier, the user callback is not invoked, and the transport becomes invalid. | The initial start attempt never completed, so it invalidates the transport without a user callback. |
 | `Start_AfterFailedStart_CannotStartAgain` | A failed start is terminal for start attempts. | The carrier is not invoked again and the transport stays invalid. | — |
 | `TryBeginHandshake_BeforeStart_ReturnsFalse` | The handshake gate requires a started transport. | Both constructed and initialized-but-not-started states reject admission. | — |
 | `TryBeginHandshake_WhenStarted_AllowsUpToLimitThenRejects` | The handshake gate admits exactly `maxConcurrentHandshakes` slots. | The limit is enforced. | — |

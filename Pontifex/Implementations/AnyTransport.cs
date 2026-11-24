@@ -18,6 +18,7 @@ namespace Pontifex
         private bool _isValid = true;
         private bool _started;
         private bool _hasStarted;
+        private bool _startSucceeded;
 
         private Action<StopReason>? _onStopped;
         
@@ -48,9 +49,24 @@ namespace Pontifex
         protected abstract void OnStarted();
 
         /// <summary>
-        /// Called when it is necessary to stop the running protocol.
-        /// Called only after a successful TryStart()
+        /// Called when a start attempt reached a terminal failure raised inside
+        /// <see cref="TryStart"/>, or when a successful start is stopped or fails.
         /// </summary>
+        /// <param name="reason">The reason the transport is stopping.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Teardown rule</b>: a plain <see cref="TryStart"/> returning
+        /// <see langword="false"/> produces no internal OnStopped; the carrier must release the
+        /// resources it acquired itself or raise <see cref="Fail(StopReasons.AnyFail)"/> /
+        /// <see cref="Stop"/> before returning false.</description></item>
+        /// <item><description>A <see cref="Fail(StopReasons.AnyFail)"/> or <see cref="Stop"/> raised
+        /// inside <see cref="TryStart"/> produces exactly one internal OnStopped, because that is the
+        /// path that releases the carrier resources.</description></item>
+        /// <item><description>A successful start followed by <see cref="Stop"/> or
+        /// <see cref="Fail(StopReasons.AnyFail)"/> produces exactly one internal
+        /// OnStopped.</description></item>
+        /// </list>
+        /// </remarks>
         protected abstract void OnStopped(StopReason reason);
 
         public string Name { get; }
@@ -112,9 +128,15 @@ namespace Pontifex
                     {
                         if (!_started)
                         {
+                            // A stop won the race inside the start attempt. The initial start did
+                            // not complete, so the transport becomes invalid and the user callback
+                            // is never invoked for this attempt.
                             _onStopped = null;
+                            Fail("Start", "Stop was requested during the start attempt");
                             return false;
                         }
+
+                        _startSucceeded = true;
                         OnStarted();
                         return true;
                     }
@@ -152,16 +174,21 @@ namespace Pontifex
                         {
                             Log.wtf(ex);
                         }
-                        
-                        try
+
+                        if (_startSucceeded)
                         {
-                            Conformance.BeforeStoppedCallbackGate.Hit();
-                            _onStopped?.Invoke(reason);
+                            try
+                            {
+                                Conformance.BeforeStoppedCallbackGate.Hit();
+                                _onStopped?.Invoke(reason);
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.wtf(ex);
+                            }
                         }
-                        catch (Exception ex)
-                        {
-                            Log.wtf(ex);
-                        }
+
+                        _onStopped = null;
                     }
                     return true;
                 }
@@ -190,15 +217,20 @@ namespace Pontifex
                         Log.wtf(ex);
                     }
 
-                    try
+                    if (_startSucceeded)
                     {
-                        Conformance.BeforeStoppedCallbackGate.Hit();
-                        _onStopped?.Invoke(reason);
+                        try
+                        {
+                            Conformance.BeforeStoppedCallbackGate.Hit();
+                            _onStopped?.Invoke(reason);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.wtf(ex);
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        Log.wtf(ex);
-                    }
+
+                    _onStopped = null;
                 }
             }
         }

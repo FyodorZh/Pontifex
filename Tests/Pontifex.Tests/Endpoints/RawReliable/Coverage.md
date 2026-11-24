@@ -35,7 +35,11 @@
 | `NotifyDisconnected_WhenNeverConnected_DoesNotNotify` | The logical disconnect requires that the handler observed the connection. | A call without an armed connected latch leaves `DisconnectedCount` zero. | This protects a session that fails before `OnConnected`. |
 | `NotifyDisconnected_WhenHandlerThrows_DoesNotThrowOutOfTheEndpoint` | A handler exception during the logical disconnect is logged and swallowed. | The throwing handler is called once and no exception escapes the helper. | The throwing double is fixture-local; the layer recorders cannot throw. |
 | `IsConnected_AfterDisconnectNotification_IsFalse` | The default predicate consults the disconnect latch, so `OnDisconnected` observes a disconnected endpoint. | While the low-level connection is still up, `IsConnected` is false inside the callback and after it. | Uses a fixture-local probe handler that captures `IsConnected` inside `OnDisconnected`. |
-| `NotifyConnectedCore_WhenCallbackThrows_StopsWithExceptionFail` | A throwing connection callback stops the endpoint with an `ExceptionFail`. | The helper returns false, the stop reason is an `ExceptionFail` sourced from the transport name, and no disconnect is delivered. | The callback is supplied directly; the server layer covers the `NotifyConnected` variant. |
+| `NotifyConnectedCore_WhenCallbackThrows_LogsAndKeepsEndpointUsable` | A throwing connection callback is isolated. | The helper returns true, logs the exception, keeps the endpoint connected and running, and later deliveries still reach the handler. | The connected latch stays armed, so no disconnect or stop notification follows. |
+| `Send_WhenStoppedWithNullBuffer_ReturnsNotConnected` | Section 9 precedence: endpoint state before message validity. | A stopped endpoint reports `NotConnected` for a null buffer instead of `InvalidMessage`. | The state check does not dereference the buffer. |
+| `Send_WhenStoppedWithOversizedBuffer_ReturnsNotConnectedAndReleases` | Section 9 precedence: endpoint state before message size. | A stopped endpoint reports `NotConnected` for an oversized buffer, and the live buffer is released exactly once. | The frame byte is not prepended on the state-rejection path. |
+| `Send_WhenStoppedWithFullBudget_ReturnsNotConnectedAndReleases` | Section 9 precedence: endpoint state before outbound capacity. | A stopped endpoint reports `NotConnected` even when the local byte budget could not admit the buffer, and releases the buffer. | Capacity is smaller than the serialized payload. |
+| `Send_WhenConnectedWithNullBuffer_ReturnsInvalidMessage` | A null outbound buffer is invalid while the endpoint is running. | A connected endpoint reports `InvalidMessage`. | Ownership stays with the caller. |
 
 ## Planned
 
@@ -45,7 +49,6 @@
 | `FinishConnect` `ifFailed` path while the reliable stage is disconnecting or disconnected. | This layer | Only the not-started failure path is covered. |
 | `Send` rejection still prepends the payload frame byte. | This layer | The `Send` override has a documented side effect even when admission fails. |
 | `IRawReliableEndpoint.Disconnect` returns `true`. | This layer | The call is asserted, but its return value is not. |
-| An override of `OnConnected` that throws routes to `FailHard`. | This layer | The virtual connection hook's exception path is not covered. |
 
 ## Deferred by design
 
@@ -64,5 +67,8 @@
   teardown begins. This ordering is deliberate and is asserted by
   `Stop_WhileConnecting_ReportsConnectionThenTearsDown`.
 - The manual queue is required for the deferred-stop ordering; tests never sleep.
+- `Send` selects the result state-first: endpoint state, then buffer validity, then size, then
+  capacity. A handler exception in `NotifyConnectedCore` is logged and isolated instead of stopping the
+  endpoint.
 - The layer intentionally omits inherited reject paths already owned by the root layer, except
   where this layer overrides the behaviour (for example `Send` framing).

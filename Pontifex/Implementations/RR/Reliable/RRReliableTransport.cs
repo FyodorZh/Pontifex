@@ -64,21 +64,30 @@ namespace Pontifex.RR.Reliable
         /// success.</param>
         /// <returns><see langword="true"/> when the payload may be sent; otherwise
         /// <see langword="false"/>.</returns>
+        /// <remarks>
+        /// The transport state is checked before the payload, so a stopped transport reports
+        /// <paramref name="notStartedResult"/> even for a null payload. A null payload is only
+        /// reported as <see cref="SendResult.InvalidMessage"/> while the transport is started, and
+        /// it is never released. Serializability and size are checked after the state.
+        /// </remarks>
         protected bool TryValidatePayload(UnionDataList message, SendResult notStartedResult,
             out SendResult failure)
         {
             failure = SendResult.Ok;
 
-            if (message == null!)
+            if (!IsStarted)
             {
-                failure = SendResult.InvalidMessage;
+                if (message != null!)
+                {
+                    message.Release();
+                }
+                failure = notStartedResult;
                 return false;
             }
 
-            if (!IsStarted)
+            if (message == null!)
             {
-                message.Release();
-                failure = notStartedResult;
+                failure = SendResult.InvalidMessage;
                 return false;
             }
 
