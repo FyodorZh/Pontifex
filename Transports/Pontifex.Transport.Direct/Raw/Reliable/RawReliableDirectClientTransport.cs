@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Scriba;
@@ -29,6 +30,8 @@ namespace Pontifex.Raw.Reliable.Direct
         private readonly long _bufferCapacityBytes;
         private readonly string _handshakeName;
         private readonly int _handshakeMaxByteSize;
+        private readonly TimeSpan _handshakeTimeout;
+        private readonly IRawReliableHandshakeTimerFactory _timerFactory;
 
         public override int MessageMaxByteSize => _messageMaxByteSize;
 
@@ -43,8 +46,10 @@ namespace Pontifex.Raw.Reliable.Direct
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted but not yet transmitted, or
         /// <see langword="null"/> for the direct default.</param>
         /// <param name="handshakeName">The transport handshake name sent to the server.</param>
-        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame. The in-process
-        /// handshake is synchronous, so there is no handshake timeout parameter.</param>
+        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame.</param>
+        /// <param name="handshakeTimeout">The handshake deadline, or <see langword="null"/> for ten seconds.
+        /// The public constructor rejects a non-positive or infinite value; only the internal test constructor
+        /// may disable the deadline.</param>
         public RawReliableDirectClientTransport(
             string serverName,
             ILogger logger,
@@ -52,9 +57,37 @@ namespace Pontifex.Raw.Reliable.Direct
             int? messageMaxSize = null,
             long? bufferCapacityBytes = null,
             string handshakeName = RawReliableDirectInfo.HandshakeName,
-            int handshakeMaxByteSize = RawReliableDirectInfo.DefaultHandshakeMaxByteSize)
+            int handshakeMaxByteSize = RawReliableDirectInfo.DefaultHandshakeMaxByteSize,
+            TimeSpan? handshakeTimeout = null)
+            : this(serverName, logger, memory, messageMaxSize, bufferCapacityBytes, handshakeName,
+                handshakeMaxByteSize, handshakeTimeout ?? TimeSpan.FromSeconds(10), null)
+        {
+            if (handshakeTimeout == Timeout.InfiniteTimeSpan || handshakeTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeTimeout));
+            }
+        }
+
+        internal RawReliableDirectClientTransport(
+            string serverName,
+            ILogger logger,
+            IMemoryRental memory,
+            int? messageMaxSize,
+            long? bufferCapacityBytes,
+            string handshakeName,
+            int handshakeMaxByteSize,
+            TimeSpan handshakeTimeout,
+            IRawReliableHandshakeTimerFactory? timerFactory)
             : base(RawReliableDirectInfo.TransportName, logger, memory)
         {
+            if (handshakeTimeout != Timeout.InfiniteTimeSpan && handshakeTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeTimeout));
+            }
+
+            _handshakeTimeout = handshakeTimeout;
+            _timerFactory = timerFactory ?? SystemRawReliableHandshakeTimerFactory.Instance;
+
             if (serverName == null)
             {
                 throw new ArgumentNullException(nameof(serverName));
@@ -106,6 +139,16 @@ namespace Pontifex.Raw.Reliable.Direct
         internal RawReliableDirectClientEndpoint? CurrentEndpoint =>
             AttachedEndpoint as RawReliableDirectClientEndpoint;
 
+        /// <summary>
+        /// Gets the resolved handshake deadline for parameter tests.
+        /// </summary>
+        internal TimeSpan HandshakeTimeoutForTests => _handshakeTimeout;
+
+        /// <summary>
+        /// Gets the configured outbound byte budget for parameter tests.
+        /// </summary>
+        internal long BufferCapacityBytesForTests => _bufferCapacityBytes;
+
         protected override IRawReliableClientEndpointImp CreateEndpoint(IRawReliableClientHandler handler)
         {
             return new RawReliableDirectClientEndpoint(
@@ -118,7 +161,9 @@ namespace Pontifex.Raw.Reliable.Direct
                 Memory,
                 Log,
                 _handshakeName,
-                _handshakeMaxByteSize);
+                _handshakeMaxByteSize,
+                _handshakeTimeout,
+                _timerFactory);
         }
 
         public override string ToString()

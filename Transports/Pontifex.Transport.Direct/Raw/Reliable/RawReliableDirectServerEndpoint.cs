@@ -36,6 +36,7 @@ namespace Pontifex.Raw.Reliable.Direct
         private static readonly TimeSpan NoIdleTimeout = TimeSpan.MaxValue;
 
         private readonly Action _onChannelDisposed;
+        private readonly int _handshakeMaxByteSize;
 
         private Channel? _channel;
 
@@ -46,6 +47,7 @@ namespace Pontifex.Raw.Reliable.Direct
             IRawReliableServerHandler handler,
             int messageMaxByteSize,
             long bufferCapacityBytes,
+            int handshakeMaxByteSize,
             IMemoryRental memory,
             ILogger log,
             UnionDataList pendingHandshakeResponse)
@@ -53,9 +55,16 @@ namespace Pontifex.Raw.Reliable.Direct
                 NoIdleTimeout)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
+            _handshakeMaxByteSize = handshakeMaxByteSize;
             SetPendingHandshakeResponse(pendingHandshakeResponse
                 ?? throw new ArgumentNullException(nameof(pendingHandshakeResponse)));
             _onChannelDisposed = OnChannelDisposed;
+        }
+
+        /// <inheritdoc/>
+        protected override bool ValidateHandshakeResponseFrame(UnionDataList framedResponse)
+        {
+            return framedResponse.GetDataSize() <= _handshakeMaxByteSize;
         }
 
         protected override void BeginConnect()

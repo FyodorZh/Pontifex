@@ -717,6 +717,25 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <summary>
+        /// Validates the total framed size of an inbound handshake frame.
+        /// </summary>
+        /// <param name="messageType">The frame type that was popped.</param>
+        /// <param name="totalSize">The complete framed size, measured before the frame type was popped.</param>
+        /// <returns><see langword="true"/> when the frame is admissible; otherwise
+        /// <see langword="false"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default returns <see langword="true"/>. A handshake client
+        /// overrides it to enforce <c>HandshakeMaxByteSize</c> on handshake responses and rejects, including the
+        /// frame type. A normal payload above 128 bytes must never be rejected by this hook.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual bool ValidateInboundHandshakeFrame(MessageType messageType, int totalSize)
+        {
+            return true;
+        }
+
+        /// <summary>
         /// Handles one inbound message by popping its frame type and dispatching it, releasing the message and
         /// stopping the endpoint when the frame cannot be handled.
         /// </summary>
@@ -739,10 +758,21 @@ namespace Pontifex.Raw.Reliable
                 return;
             }
 
+            int totalSize = message.GetDataSize();
+
             if (!message.TryPopFirst(out byte msgType))
             {
                 message.Release();
                 Log.e("Inbound reliable frame had no frame type and was discarded");
+                return;
+            }
+
+            MessageType frameType = (MessageType)msgType;
+            if (!ValidateInboundHandshakeFrame(frameType, totalSize))
+            {
+                message.Release();
+                Stop(new ProtocolMismatch(TransportName,
+                    "Handshake frame exceeds HandshakeMaxByteSize"), false);
                 return;
             }
 
@@ -753,7 +783,7 @@ namespace Pontifex.Raw.Reliable
                 return;
             }
 
-            if (!ProcessInboundMessage((MessageType)msgType, message))
+            if (!ProcessInboundMessage(frameType, message))
             {
                 message.Release();
                 Log.e("Inbound reliable frame type '{0}' is not handled and was discarded", msgType);

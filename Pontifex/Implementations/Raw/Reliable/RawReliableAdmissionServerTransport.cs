@@ -33,6 +33,7 @@ namespace Pontifex.Raw.Reliable
         private readonly int _handshakeMaxByteSize;
         private readonly TimeSpan _handshakeTimeout;
         private readonly TimeSpan _rejectLinger;
+        private readonly IRawReliableHandshakeTimerFactory _handshakeTimerFactory;
 
         private bool _initAttempted;
 
@@ -70,6 +71,33 @@ namespace Pontifex.Raw.Reliable
             int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize,
             TimeSpan? handshakeTimeout = null,
             TimeSpan? rejectLinger = null)
+            : this(typeName, logger, memory, maxConcurrentHandshakes, maxActiveSessions, tickPeriodMs,
+                handshakeName, handshakeMaxByteSize, handshakeTimeout, rejectLinger, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes the base reliable server transport with an injectable handshake timer factory.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal carrier seam. The protected constructor chains
+        /// here with the default system factory. A test carrier injects a manual factory so the default suite
+        /// never waits on a real timer.</description></item>
+        /// </list>
+        /// </remarks>
+        internal RawReliableAdmissionServerTransport(
+            string typeName,
+            ILogger logger,
+            IMemoryRental memory,
+            int maxConcurrentHandshakes,
+            int maxActiveSessions,
+            int tickPeriodMs,
+            string handshakeName,
+            int handshakeMaxByteSize,
+            TimeSpan? handshakeTimeout,
+            TimeSpan? rejectLinger,
+            IRawReliableHandshakeTimerFactory? handshakeTimerFactory)
             : base(typeName, logger, memory, new RawReliableConformanceControl(),
                 maxConcurrentHandshakes, maxActiveSessions, tickPeriodMs)
         {
@@ -99,6 +127,8 @@ namespace Pontifex.Raw.Reliable
             _handshakeMaxByteSize = handshakeMaxByteSize;
             _handshakeTimeout = resolvedTimeout;
             _rejectLinger = resolvedLinger;
+            _handshakeTimerFactory = handshakeTimerFactory ??
+                SystemRawReliableHandshakeTimerFactory.Instance;
         }
 
         /// <summary>
@@ -115,6 +145,11 @@ namespace Pontifex.Raw.Reliable
         /// Gets the server handshake deadline.
         /// </summary>
         internal TimeSpan HandshakeTimeout => _handshakeTimeout;
+
+        /// <summary>
+        /// Gets the factory that schedules a session handshake deadline.
+        /// </summary>
+        internal IRawReliableHandshakeTimerFactory HandshakeTimerFactory => _handshakeTimerFactory;
 
         /// <summary>
         /// Gets how long a rejected socket stays open after the reject frame is written.

@@ -45,9 +45,10 @@ namespace Pontifex.Raw.Reliable.Direct
         /// <param name="bufferCapacityBytes">The byte budget for messages accepted but not yet transmitted, or
         /// <see langword="null"/> for the direct default.</param>
         /// <param name="handshakeName">The transport handshake name. Must match the client name.</param>
-        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame. The in-process
-        /// handshake is synchronous, so there is no handshake timeout parameter and the reject linger is
-        /// zero.</param>
+        /// <param name="handshakeMaxByteSize">The inclusive maximum size of a handshake frame.</param>
+        /// <param name="handshakeTimeout">The server handshake deadline, or <see langword="null"/> for ten
+        /// seconds. The public constructor rejects a non-positive or infinite value; only the internal test
+        /// constructor may disable the deadline. The reject linger is zero.</param>
         public RawReliableDirectServerTransport(
             string serverName,
             ILogger logger,
@@ -55,11 +56,36 @@ namespace Pontifex.Raw.Reliable.Direct
             int? messageMaxSize = null,
             long? bufferCapacityBytes = null,
             string handshakeName = RawReliableDirectInfo.HandshakeName,
-            int handshakeMaxByteSize = RawReliableDirectInfo.DefaultHandshakeMaxByteSize)
+            int handshakeMaxByteSize = RawReliableDirectInfo.DefaultHandshakeMaxByteSize,
+            TimeSpan? handshakeTimeout = null)
+            : this(serverName, logger, memory, messageMaxSize, bufferCapacityBytes, handshakeName,
+                handshakeMaxByteSize, handshakeTimeout ?? TimeSpan.FromSeconds(10), null)
+        {
+            if (handshakeTimeout == Timeout.InfiniteTimeSpan || handshakeTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeTimeout));
+            }
+        }
+
+        internal RawReliableDirectServerTransport(
+            string serverName,
+            ILogger logger,
+            IMemoryRental memory,
+            int? messageMaxSize,
+            long? bufferCapacityBytes,
+            string handshakeName,
+            int handshakeMaxByteSize,
+            TimeSpan handshakeTimeout,
+            IRawReliableHandshakeTimerFactory? timerFactory)
             : base(RawReliableDirectInfo.TransportName, logger, memory,
                 int.MaxValue, int.MaxValue, int.MaxValue,
-                handshakeName, handshakeMaxByteSize, Timeout.InfiniteTimeSpan, TimeSpan.Zero)
+                handshakeName, handshakeMaxByteSize, handshakeTimeout, TimeSpan.Zero, timerFactory)
         {
+            if (handshakeTimeout != Timeout.InfiniteTimeSpan && handshakeTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handshakeTimeout));
+            }
+
             if (serverName == null)
             {
                 throw new ArgumentNullException(nameof(serverName));
@@ -87,6 +113,11 @@ namespace Pontifex.Raw.Reliable.Direct
         }
 
         public override int MessageMaxByteSize => _messageMaxByteSize;
+
+        /// <summary>
+        /// Gets the configured outbound byte budget for parameter tests.
+        /// </summary>
+        internal long BufferCapacityBytesForTests => _bufferCapacityBytes;
 
         protected override bool DisconnectionByTimeoutCheck => false;
 
@@ -164,12 +195,55 @@ namespace Pontifex.Raw.Reliable.Direct
                 return;
             }
 
+            StartHandshakeTimer(entry);
+
             // The channel may have been disposed between registration and our subscription, for example by
             // a concurrent stop. The disposal notification would then be lost, so observe the state directly.
             if (channel.IsDisposed)
             {
                 FailHandshake(entry);
             }
+        }
+
+        private void StartHandshakeTimer(HandshakeEntry entry)
+        {
+            if (HandshakeTimeout == Timeout.InfiniteTimeSpan)
+            {
+                return;
+            }
+
+            IDisposable? timer = null;
+            try
+            {
+                timer = HandshakeTimerFactory.Schedule(HandshakeTimeout,
+                    () => OnHandshakeTimeout(entry));
+                entry.SetTimer(timer);
+            }
+            catch (Exception ex)
+            {
+                Log.wtf(ex);
+                timer?.Dispose();
+                FailHandshake(entry);
+            }
+        }
+
+        private void OnHandshakeTimeout(HandshakeEntry entry)
+        {
+            if (!entry.TryClaim())
+            {
+                return;
+            }
+
+            RemoveEntry(entry, true);
+            AbandonAdmission();
+
+            if (!entry.Channel.IsDisposed)
+            {
+                SendRejection(entry.Channel, RawReliableHandshake.HandshakeStatus.Timeout,
+                    "handshake deadline elapsed");
+            }
+
+            RejectChannel(entry.Channel);
         }
 
         private void OnHandshakeMessage(HandshakeEntry entry, IEndPoint clientEp, UnionDataList message)
@@ -243,6 +317,7 @@ namespace Pontifex.Raw.Reliable.Direct
                         handler,
                         outcome.AgreedMaxByteSize,
                         _bufferCapacityBytes,
+                        HandshakeMaxByteSize,
                         Memory,
                         Log,
                         response);
@@ -327,21 +402,47 @@ namespace Pontifex.Raw.Reliable.Direct
         private void SendRejection(Channel channel, RawReliableHandshake.HandshakeStatus status,
             string? text = null)
         {
+            string detail = text ?? RawReliableHandshake.FormatRejectText(
+                HandshakeName, RawReliableHandshake.Version, status);
+
+            if (TrySendRejection(channel, status, detail))
+            {
+                return;
+            }
+
+            // The detail made the frame too large: fall back to a minimal reject with no text. If even
+            // that cannot fit, close without sending.
+            if (TrySendRejection(channel, status, null))
+            {
+                return;
+            }
+
+            Log.w("Handshake reject exceeds HandshakeMaxByteSize and was not sent");
+        }
+
+        private bool TrySendRejection(Channel channel, RawReliableHandshake.HandshakeStatus status,
+            string? detail)
+        {
             UnionDataList? rejection = null;
             try
             {
-                string detail = text ?? RawReliableHandshake.FormatRejectText(
-                    HandshakeName, RawReliableHandshake.Version, status);
                 rejection = RawReliableHandshake.BuildReject(
                     RawReliableHandshake.Version, HandshakeName, status, detail);
                 rejection.PutFirst(RawReliableDirectServerEndpoint.HandshakeRejectMessageType);
+                if (rejection.GetDataSize() > HandshakeMaxByteSize)
+                {
+                    return false;
+                }
+
                 var toSend = rejection;
                 rejection = null;
                 channel.SendToClient(toSend);
+                return true;
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
+                return false;
             }
             finally
             {
@@ -359,6 +460,8 @@ namespace Pontifex.Raw.Reliable.Direct
 
         private void RemoveEntry(HandshakeEntry entry, bool unsubscribe)
         {
+            entry.DisposeTimer();
+
             if (unsubscribe)
             {
                 entry.Channel.Disposed -= entry.OnDisposed;
@@ -384,7 +487,9 @@ namespace Pontifex.Raw.Reliable.Direct
 
         private sealed class HandshakeEntry
         {
+            private readonly object _timerGate = new object();
             private int _claimed;
+            private IDisposable? _timer;
 
             public readonly Channel Channel;
 
@@ -397,7 +502,39 @@ namespace Pontifex.Raw.Reliable.Direct
 
             public bool TryClaim()
             {
-                return Interlocked.Exchange(ref _claimed, 1) == 0;
+                if (Interlocked.Exchange(ref _claimed, 1) != 0)
+                {
+                    return false;
+                }
+
+                DisposeTimer();
+                return true;
+            }
+
+            public void SetTimer(IDisposable timer)
+            {
+                lock (_timerGate)
+                {
+                    if (_claimed != 0 || _timer != null)
+                    {
+                        timer.Dispose();
+                        return;
+                    }
+
+                    _timer = timer;
+                }
+            }
+
+            public void DisposeTimer()
+            {
+                IDisposable? timer;
+                lock (_timerGate)
+                {
+                    timer = _timer;
+                    _timer = null;
+                }
+
+                timer?.Dispose();
             }
         }
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Pontifex.Raw.Reliable;
 using Pontifex.RR.Reliable;
 
 namespace Pontifex.Tests.RR.TestSupport
@@ -14,7 +15,7 @@ namespace Pontifex.Tests.RR.TestSupport
     /// every handle. The factory is shared loose test support because the helpers, abstract
     /// transport, and Direct suites live in one test project.
     /// </remarks>
-    public sealed class ManualTimerFactory : IRRReliableTimerFactory
+    public sealed class ManualTimerFactory : IRRReliableTimerFactory, IRawReliableHandshakeTimerFactory
     {
         private readonly object _locker = new object();
         private readonly List<ManualTimerHandle> _handles = new List<ManualTimerHandle>();

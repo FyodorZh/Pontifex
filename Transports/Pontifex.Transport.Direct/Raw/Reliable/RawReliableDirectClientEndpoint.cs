@@ -31,8 +31,6 @@ namespace Pontifex.Raw.Reliable.Direct
         private readonly int _handshakeMaxByteSize;
         private readonly Action _onChannelDisposed;
 
-        private int _handshakeTimerCreateCalls;
-
         private Channel? _channel;
 
         internal RawReliableDirectClientEndpoint(
@@ -45,9 +43,11 @@ namespace Pontifex.Raw.Reliable.Direct
             IMemoryRental memory,
             ILogger log,
             string handshakeName,
-            int handshakeMaxByteSize)
+            int handshakeMaxByteSize,
+            TimeSpan handshakeTimeout,
+            IRawReliableHandshakeTimerFactory? timerFactory)
             : base(transportName, serverEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log,
-                null, handshakeName, handshakeMaxByteSize, Timeout.InfiniteTimeSpan)
+                null, handshakeName, handshakeMaxByteSize, handshakeTimeout, timerFactory)
         {
             _serverEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
             _clientEndPoint = clientEndPoint ?? throw new ArgumentNullException(nameof(clientEndPoint));
@@ -60,30 +60,16 @@ namespace Pontifex.Raw.Reliable.Direct
         /// </summary>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The in-process handshake is synchronous, so the Direct
-        /// endpoint never creates a <see cref="System.Threading.Timer"/>. This seam proves that property to the
-        /// Direct tests.</description></item>
+        /// <item><description><b>Other notes</b>: The Direct client now enforces the configured deadline like
+        /// every other carrier. Tests inject a manual factory to avoid a real timer.</description></item>
         /// </list>
         /// </remarks>
-        internal bool HasHandshakeTimer => false;
+        internal bool HasHandshakeTimer => HasHandshakeTimerForTests;
 
         /// <summary>
         /// Gets how many times the inherited handshake engine asked for a deadline timer.
         /// </summary>
-        /// <remarks>
-        /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: The Direct override is invoked but returns
-        /// <see langword="null"/>; this counter lets a test prove the override was reached while
-        /// <see cref="HasHandshakeTimer"/> stayed false.</description></item>
-        /// </list>
-        /// </remarks>
-        internal int HandshakeTimerCreateCalls => Volatile.Read(ref _handshakeTimerCreateCalls);
-
-        protected override IDisposable? CreateHandshakeTimer(TimeSpan timeout, Action onTimeout)
-        {
-            Interlocked.Increment(ref _handshakeTimerCreateCalls);
-            return null;
-        }
+        internal int HandshakeTimerCreateCalls => HandshakeTimerCreateCallsForTests;
 
         protected override void BeginConnect()
         {

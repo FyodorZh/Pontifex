@@ -56,33 +56,44 @@ reject:   HandshakeRejectMessage
 
 The server validates an inbound handshake synchronously, in this order:
 
-1. It rejects a frame whose serialized size exceeds `HandshakeMaxByteSize`
-   before parsing the body.
-2. It rejects a frame whose leading type byte is not
-   `HandshakeRequestMessage`.
-3. It delegates the dataset structure, version, name, and capacity checks to
-   the shared handshake implementation.
+1. It rejects a frame whose complete framed size exceeds `HandshakeMaxByteSize`
+   before parsing the body. The type byte is included in that total.
+2. It rejects a frame whose leading type byte is not `HandshakeRequestMessage`.
+3. It delegates the dataset structure, version, name, and capacity checks to the
+   shared handshake implementation.
 4. It calls the handler factory only after the version and name are accepted.
 5. On acceptance it answers with `agreedMax`, the minimum of the requested and
-   local message maxima.
+   local message maxima, after validating the complete framed response against
+   `HandshakeMaxByteSize`. A reject whose text would exceed the limit falls back
+   to a minimal reject with no text.
 
 The client validates the response version, name, and maximum before it reports
-`OnConnected`. It maps a reject status to the abstract cause through
-`ProtocolMismatch`, `HandshakeRejected`, or `TimeOut`.
+`OnConnected`. It enforces `HandshakeMaxByteSize` on the complete framed
+response and reject, including the type byte. It maps a reject status to the
+abstract cause through `ProtocolMismatch`, `HandshakeRejected`, or `TimeOut`.
 
+Both roles start a positive handshake deadline. The client starts it after the
+request is admitted and cancels it when the response or reject wins. The server
+starts one timer per waiting handshake and cancels it when the handshake is
+claimed, completed, removed, or the server stops. On expiry the server claims
+the entry, removes it, abandons the admission, sends a `Timeout` reject when the
+channel is still usable, and closes the channel.
 ## 5. Parameters
 
 | Parameter | Type and unit | Required | Default | Meaning |
 | --- | --- | --- | --- | --- |
 | `id` | string | yes | none | Channel identifier; the server binds it and the client connects to it. |
-| `handshake_max_byte_size` | integer, bytes | no | `128` | Inbound handshake frame limit. |
+| `handshake_max_byte_size` | integer, bytes in `1..2147483647` | no | `128` | Complete framed handshake limit, including the type byte. |
+| `message_max_size` | integer, bytes in `1..2147483647` | no | `1048576` | Requested message limit, also accepted by the constructors. |
+| `buffer_capacity_bytes` | integer, bytes | no | `104857600` | Outbound buffer budget. |
+| `handshake_timeout` | integer, seconds, positive | no | `10` | Handshake deadline for both roles. |
 | `handshakeName` | string | no | `direct` | Handshake name sent to the server; constructor only, not exposed by the binding. |
-| `messageMaxSize` | integer, bytes | no | `1048576` | Requested message limit; constructor only, not exposed by the binding. |
-| `bufferCapacityBytes` | integer, bytes | no | `104857600` | Outbound buffer budget; constructor only, not exposed by the binding. |
 
 Every parameter is implementation configuration, not part of the abstract
-contract. A `messageMaxSize` below `handshake_max_byte_size` is invalid and
-**MUST** be rejected at construction.
+contract. A message maximum below `handshake_max_byte_size` is invalid and
+**MUST** be rejected at binding validation and at construction. The public
+constructors reject a non-positive or infinite handshake timeout; only the
+internal test constructor may disable the deadline.
 
 ## 6. Lifecycle and teardown
 
@@ -105,7 +116,11 @@ An admitted session endpoint closes its channel when it stops.
 
 The reject linger of this carrier is `TimeSpan.Zero`: the reject frame is
 delivered synchronously before the channel closes, so no waiting is required.
-The carrier creates no `System.Threading.Timer` for the handshake.
+Both roles nevertheless enforce the positive handshake deadline through
+`IRawReliableHandshakeTimerFactory`. The system factory uses a
+`System.Threading.Timer`; a test injects a manual factory through the internal
+constructor.
+
 
 An inbound frame with no frame type, an unknown frame type, or a body above
 `MessageMaxByteSize` is logged, released, and dropped. It does not stop the
@@ -144,7 +159,7 @@ the isolation boundary.
 | Framing | The frame type is prepended on send and popped on receive; the payload limit excludes it, and the framed receive body is measured again against the limit. |
 | Pre-connect payloads | Buffered in arrival order (64 messages, 64 payload maxima) and drained after `OnConnected`; an overflow stops the session. |
 | Reject linger | Zero; the reject frame is delivered synchronously before the channel closes. |
-| Handshake path | Synchronous validation on the channel with no handshake timer. |
+| Handshake path | Synchronous validation on the channel plus a positive deadline from the handshake timer factory. |
 | Failure detection | Channel disposal is the only disconnection signal; a missing server is detected during endpoint start. |
 | Logging | Channel and handshake failures, malformed frames, and oversized bodies are logged through `Log`. |
 | Protection | None beyond the process boundary. |
@@ -161,9 +176,14 @@ the isolation boundary.
 - [ ] Reject an oversized handshake frame before parsing and reject a frame with
       an unexpected leading type byte.
 - [ ] Validate structure, version, name, and capacity before calling the factory.
-- [ ] Deliver the reject synchronously with zero linger and create no handshake
-      timer.
-- [ ] Reject a constructor message maximum below `HandshakeMaxByteSize`.
+- [ ] Deliver the reject synchronously with zero linger and enforce the positive
+      handshake deadline in both roles.
+- [ ] Enforce `HandshakeMaxByteSize` on the complete framed request, response,
+      and reject, including the type byte.
+- [ ] Fall back to a minimal reject when the reject text would exceed
+      `HandshakeMaxByteSize`.
+- [ ] Reject a constructor or binding message maximum below
+      `HandshakeMaxByteSize`.
 - [ ] Detach an admitted session channel from the server registry.
 - [ ] Remove a channel from the server registry when it is disposed before
       admission.
