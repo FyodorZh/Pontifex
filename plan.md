@@ -560,6 +560,10 @@ that `Send` returns, and enforce the declared message-count budget at admission.
    - Expose an internal `OutstandingCommitMessagesForTests` getter so the
      server test can observe the counter instead of being shadowed by the
      shared `SendBudget`.
+   - Add an internal `AfterPostForTests` hook in both Direct `DoSendRaw`
+     overrides, invoked after a successful `Post` and before returning. The
+     post-then-throw test throws there and asserts `ReleaseOnce` and a
+     non-negative counter.
 6. `Transports/Pontifex.Transport.Direct/Raw/Unreliable/RawUnreliableDirectClientEndpoint.cs`
    and `RawUnreliableDirectServerEndpoint.cs`:
    - In `CommitSend`, call `WaitForSendReturn()` immediately before
@@ -690,7 +694,10 @@ server reliable-debug answer truthful.
    - Add `protected virtual void OnStartFailed()` called by `AnyTransport` when
      the initial `Start` returns false or is invalidated, including “Start
      before Init”. `RawUnreliableDirectClientTransport` overrides it to release
-     owned explicit systems and reset to perfect factories. A failed start must
+     only systems with no endpoint hand-off, using the same per-direction
+     hand-off flags as `StopCarrier`, and resets those to perfect factories. An
+     endpoint that was created and then failed to start releases its own
+     systems; `OnStartFailed` must not release them again. A failed start must
      not leak systems that were configured before `Init`.
    - In `TryMakeReliableForDebug`, hold `_locker` for the entire transition:
      the `HasStartBeenAttempted` check, the release/reset of any explicit
@@ -700,9 +707,13 @@ server reliable-debug answer truthful.
      In reliable-debug mode, create perfect systems at endpoint creation and
      use an unbounded commit queue so the debug promise cannot be defeated by
      a full bounded queue.
-   - Pass an `unboundedCommitQueue` flag to `RawUnreliableDirectClientEndpoint`
-     and `RawUnreliableDirectServerEndpoint`; the endpoints choose the
-     unbounded `SerializedCallbackQueue` constructor when it is set.
+   - Pass an `unboundedCommitQueue` flag only to
+     `RawUnreliableDirectClientEndpoint`; the client endpoint chooses the
+     unbounded `SerializedCallbackQueue` constructor when reliable-debug mode
+     is active. The server transport returns `false` and has no debug state, so
+     there is no producer for a server flag; do not add one. Server replies keep
+     the bounded commit queue. Document this as a residual client-only debug
+     limitation in the Direct RawUnreliable spec §7/§8 and in Stage 11 L-13.
    - Add an internal `Func<...>? EndpointFactoryForTests` hook used only by
      `CreateEndpoint`, so a test can force endpoint construction to throw and
      verify system release. It must default to the real constructor and must
@@ -773,6 +784,10 @@ server reliable-debug answer truthful.
    - Add a normal start -> stop release-count test with construction-counting
      systems: each direction is released exactly once after a successful start
      and stop.
+   - Add an endpoint-created-then-start-fails test: arm `endpoint.Start()` to
+     return false after `CreateEndpoint` succeeds, and assert each system is
+     released exactly once (the endpoint releases its own; `OnStartFailed`
+     must not release a handed-off system).
    - Add a `SetDeliverySystem(netem, netem)` then `Start` before `Init` test:
      the start fails and both explicit systems are released exactly once.
    - Add a double `SetDeliverySystem` test: the first pair is released once,
@@ -783,6 +798,9 @@ server reliable-debug answer truthful.
      The reverse order (debug then `SetDeliverySystem`) throws
      `InvalidOperationException`, because reliable-debug mode already selected
      perfect systems; document and test that.
+   - Add a test that documents the residual: under reliable-debug client mode,
+     the client commit queue is unbounded, while the server reply queue keeps
+     its bounded behavior. Do not claim unconditional server-reply FIFO.
    - Add a server reliable-debug test asserting `false`. Add an adapter
      capability (for example `bool ServerSupportsReliableDebug`) to
      `IRawUnreliableConformanceAdapter`, set it false for Direct and true for
@@ -793,7 +811,10 @@ server reliable-debug answer truthful.
    - Update `Coverage.md` only where a documented suite exists.
 8. Update `Transports/Pontifex.Transport.Direct/Raw/Unreliable/Specification.md`
    §5, §6, §7, and §8 for lazy construction, exact ownership, the client-only
-   debug mode, and the unbounded debug commit path.
+   debug mode, and the client-only unbounded debug commit path. State plainly
+   that server replies remain on the bounded commit queue, so reliable-debug
+   mode does not make server-to-client FIFO unconditional under queue
+   saturation.
 
 **Verification**
 
@@ -857,8 +878,11 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      multiplication, which overflows at `message_max_size = int.MaxValue`.
      On overflow, release the buffered messages and stop the session with
      `TextFail(TransportName, "Pre-connect payload buffer exceeded")`; never
-     drop silently. Add an overflow test and a concurrent-arrival test to the
-     stage.
+     drop silently. If `OnConnected` throws, the latch is still set but the
+     handler is live; drain the buffer in the same `finally` after the callback
+     (or release it and stop the session if the endpoint is no longer live).
+     Add an overflow test, a concurrent-arrival test, and a throwing
+     `OnConnected` + buffered-payload test.
    - Change `Send` so it checks state, null/alive, and payload size before
      prepending the type byte. Measure `int payloadSize =
      buffer.GetDataSize()` before `PutFirst`, then call a new
@@ -909,9 +933,15 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      and one payload before `OnConnected`; assert the saturating byte cap
      accepts it and the drain delivers it once.
    - Update `Coverage.md` only where a documented suite exists.
-4. Update `Transports/Pontifex.Transport.Direct/Raw/Reliable/Specification.md`
-   §6 and §8 for malformed-frame dropping, framing exclusion, and the
-   pre-`OnConnected` payload buffering/drain rule (not dropping).
+4. Update both implementation specs that inherit the shared endpoint:
+   - `Transports/Pontifex.Transport.Direct/Raw/Reliable/Specification.md`
+     §6 and §8 for malformed-frame dropping, framing exclusion, and the
+     pre-`OnConnected` payload buffering/drain rule (not dropping).
+   - `Transports/Pontifex.Transport.Net/Tcp/Raw/Reliable/Specification.md`
+     §7/§8: the current “dropped packets are not logged” claim must become
+     “malformed frames are logged and dropped”, and the implementation-defined
+     choices table must record the pre-connect buffer cap and overflow
+     termination. Update its checklist where applicable.
 
 **Verification**
 
@@ -994,6 +1024,9 @@ make the binding’s parameter ranges match the constructors.
      wait.
 5. `RawReliableDirectClientTransport`:
    - Add a `handshakeTimeout` constructor parameter and pass it to the endpoint.
+     The public constructor rejects `Timeout.InfiniteTimeSpan` and
+     non-positive values; only an internal/test constructor may disable the
+     deadline. Add a client constructor test for the rejection.
    - Add an internal constructor overload or internal factory parameter that
      accepts `IRawReliableHandshakeTimerFactory`, forwarded to
      `RawReliableDirectClientEndpoint`. The Direct tests inject a manual
@@ -1412,10 +1445,11 @@ transitions match abstract §6.6.
    - Add concurrent session-map stress: new requests on multiple threads,
      completion on manual dispatch/timers, cancel, and session close; assert no
      exceptions, exactly-once completion, and the 65,536 cap. Put this
-     multithreaded fixture in the `RR/RRReliableTransport/Server/` layer with
-     both the suite root category `Direct.RRReliableTransport` and
-     `Direct.RRReliable.Integration`; the deterministic state tests stay in
-     the default run.
+     multithreaded fixture in its own file under
+     `RR/RRReliableTransport/Server/` with both the suite root category
+     `Direct.RRReliableTransport` and `Direct.RRReliable.Integration`; the
+     deterministic state tests stay in the default run. A separate file keeps
+     the Stage 12 file-level guard from skipping default fixtures.
    - Update `RRReliableTransport/Server/RRReliableServerTransportTests.cs`
      `ResponseHandle_MatrixOfFinishRejectAndClosedCalls` and its Coverage row:
      `Finish` then `Reject` now throws `InvalidOperationException` while live;
@@ -1646,7 +1680,10 @@ categories.
    `RR/RRReliableDirect/Tests/RRReliableDirectRoundTripTests.cs`, the
    `RRReliableTransport` client/server fixtures, and
    `ChannelManager/Tests/ChannelTests.cs` (gate the concurrent send/dispose
-   test with a blocking delivery system).
+   test with a blocking delivery system). Split the `Task.Run`/`SpinWait`
+   race cases in `RRReliableServerTransportTests.cs` into a separate
+   `*.Integration` fixture file; RULES-14 allows one fixture per file, so the
+   default fixture can stay polling-free.
 2. Use the seams introduced earlier:
    - Netem manual clock/pump for VirtualDelivery tests.
    - Manual handshake timer for RawReliable Direct timeout tests.
@@ -1754,14 +1791,19 @@ with one entry per change and per audit finding.
    - `dotnet test Tests/Pontifex.Transports.Tests/Pontifex.Transports.Tests.csproj`
    - `dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj`
    - `dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj`
+   - `dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj`
+   - `dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Tests.csproj`
+   - `dotnet test Api/Pontifex.Api.Tests/Pontifex.Api.Tests.csproj`
    - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory!~Integration"`
    - `dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory~Integration"`
    - Record the exact commands and results.
 2. Write `report.md` at the repository root. It must contain:
    - a short title and the final verification result;
    - a table of contents;
-   - one section per stage with its objective and the exact commit message
-     recovered from `git log --format=%s` for that stage commit;
+   - one section per stage with its objective and the exact message of that
+     stage's final commit, recovered from `git log --format=%s`; for Stage 13,
+     use the predefined message `Add implementation report (stage 13)` before
+     the commit exists;
    - one `###` subsection per audit finding ID, in the order H-01…L-26, with
      the exact headings `### H-01` through `### L-26`. Each subsection must
      contain the labels `Problem:`, `Change:`, `Why:`, `Files:`, and
@@ -1815,8 +1857,10 @@ so explicitly. Do not claim a deviation is fixed if the code still exposes it.
 - `dotnet build Pontifex.sln` succeeds.
 - `dotnet test Tests/Pontifex.Tests`,
   `Tests/Pontifex.Transports.Tests`, `Tests/Pontifex.Transport.Tests`,
-  `Tests/Pontifex.Transport.Direct.Tests` (default and integration), and
-  `Tests/Pontifex.Transport.Net.Tests` pass.
+  `Tests/Pontifex.Transport.Direct.Tests` (default and integration),
+  `Tests/Pontifex.Transport.Net.Tests`, `Tests/Pontifex.Factory.Tests`,
+  `Tests/Pontifex.TransportFormula.Tests`, and
+  `Api/Pontifex.Api.Tests` pass.
 - The Direct RawUnreliable conformance fixture passes.
 - The Direct specs and `Tests/RULES.md` suite documentation are consistent.
 - No default Direct-suite test depends on wall-clock polling or an unseamed
