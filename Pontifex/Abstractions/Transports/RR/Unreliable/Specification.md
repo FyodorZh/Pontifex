@@ -203,9 +203,9 @@ server-global id is server-side bookkeeping and is not required to appear on the
 wire.
 
 The client **MUST** fix the message count for a request from the first response
-frame that reaches it. A later frame for the same request with a different count
-**MUST** be released and dropped. A frame whose message id is not less than the count
-**MUST** be released and dropped.
+frame it accepts. A frame whose message id is not less than the count **MUST** be
+released and dropped without fixing the count. A later frame for the same request
+with a different count **MUST** be released and dropped.
 
 ### 6.5 Pending window and TTLs
 

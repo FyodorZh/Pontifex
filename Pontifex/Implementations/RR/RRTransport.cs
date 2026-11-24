@@ -19,6 +19,7 @@ namespace Pontifex.RR
     public abstract class RRTransport : AnyTransport, IRRTransport
     {
         private long _lastServerRequestId;
+        private volatile bool _running;
 
         /// <summary>
         /// Initializes a new RR transport.
@@ -33,6 +34,12 @@ namespace Pontifex.RR
 
         /// <inheritdoc/>
         public abstract int MessageMaxByteSize { get; }
+
+        /// <summary>
+        /// Gets a lock-free snapshot of the running state. Use it only where the lifecycle lock
+        /// cannot be taken, such as inside a response-handle gate.
+        /// </summary>
+        internal bool IsRunningUnsafe => _running;
 
         /// <summary>
         /// Gets the largest family header that a carrier frame adds to a payload.
@@ -90,6 +97,7 @@ namespace Pontifex.RR
             }
             catch (Exception)
             {
+                message.Release();
                 failure = SendResult.InvalidMessage;
                 return false;
             }
@@ -154,6 +162,7 @@ namespace Pontifex.RR
         /// <param name="reason">The failure reason passed to the carrier.</param>
         protected void AbortCarrier(StopReason reason)
         {
+            _running = false;
             ClearPendingRequests();
 
             try
@@ -169,12 +178,13 @@ namespace Pontifex.RR
         /// <inheritdoc/>
         protected override void OnStarted()
         {
-            // DO NOTHING
+            _running = true;
         }
 
         /// <inheritdoc/>
         protected override void OnStopped(StopReason reason)
         {
+            _running = false;
             ClearPendingRequests();
 
             try

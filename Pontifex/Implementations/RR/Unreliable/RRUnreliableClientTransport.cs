@@ -125,21 +125,26 @@ namespace Pontifex.RR.Unreliable
 
             if (bindable.IsBound)
             {
-                if (bindable.RequestId is not ushort boundId ||
-                    !_pendingResponses.TryGet(boundId, out RRUnreliableRequestState? previous,
-                        out _) ||
-                    !ReferenceEquals(previous.Handler, handler) ||
-                    !_pendingResponses.TryReapExpired(boundId, previous))
+                RRUnreliableRequestState? previous = null;
+                bool reaped = bindable.RequestId is ushort boundId &&
+                              _pendingResponses.TryGet(boundId, out previous, out _) &&
+                              ReferenceEquals(previous.Handler, handler) &&
+                              _pendingResponses.TryReapExpired(boundId, previous);
+
+                if (reaped && previous != null)
+                {
+                    previous.TryTerminate();
+
+                    if (!previous.IsCallbackActive)
+                    {
+                        bindable.TryUnbind(previous.RequestId);
+                    }
+                }
+
+                if (!reaped && bindable.IsBound)
                 {
                     throw new InvalidOperationException(
                         "The handler is already bound to a pending request.");
-                }
-
-                previous.TryTerminate();
-
-                if (!previous.IsCallbackActive)
-                {
-                    bindable.TryUnbind(previous.RequestId);
                 }
             }
 
@@ -168,9 +173,10 @@ namespace Pontifex.RR.Unreliable
                 if (_pendingResponses.TryAdd(requestId, candidate, sweep ? TerminateExpired : null,
                         sweep))
                 {
-                    AfterAddBeforeBindForTests?.Invoke();
-                    bindable.Bind(requestId, CancelRequest);
                     state = candidate;
+                    AfterAddBeforeBindForTests?.Invoke(requestId);
+                    bindable.Bind(requestId, CancelRequest);
+                    state.MarkPublished();
                     added = true;
                     break;
                 }
@@ -303,9 +309,9 @@ namespace Pontifex.RR.Unreliable
 
         /// <summary>
         /// Gets or sets a test hook invoked after the request entered the pending table and before
-        /// the handler is bound.
+        /// the handler is bound. The argument is the request id.
         /// </summary>
-        internal Action? AfterAddBeforeBindForTests { get; set; }
+        internal Action<ushort>? AfterAddBeforeBindForTests { get; set; }
 
         /// <summary>
         /// Gets or sets a test hook invoked immediately before the encoded request is sent.
@@ -383,6 +389,12 @@ namespace Pontifex.RR.Unreliable
 
             if (!_pendingResponses.TryGet(requestId, out RRUnreliableRequestState? state,
                     out bool expired))
+            {
+                frame.Release();
+                return;
+            }
+
+            if (!state.IsPublished)
             {
                 frame.Release();
                 return;

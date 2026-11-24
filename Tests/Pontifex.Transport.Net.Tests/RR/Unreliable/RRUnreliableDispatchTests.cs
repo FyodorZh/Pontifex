@@ -529,6 +529,157 @@ public sealed class RRUnreliableDispatchTests
     }
 
     [Test]
+    public void ResponseBeforeBind_IsDroppedAndTheHandlerStaysUsable()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+
+            client.AfterAddBeforeBindForTests = id =>
+                client.Receive(server, Response(id, 0, 1, 10));
+
+            var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            request.PutLast(1);
+
+            Assert.That(client.Request(request, handler), Is.EqualTo(SendResult.Ok));
+            Assert.That(handler.ResponseCount, Is.Zero);
+            Assert.That(handler.IsBound, Is.True);
+
+            handler.Cancel();
+            Assert.That(handler.IsBound, Is.False);
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void CancelFromTheResponseCallback_UnbindsAfterItReturns()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+            handler.OnResponse = handler.Cancel;
+
+            client.Receive(server, Response(requestId, 0, 2, 10));
+
+            Assert.That(handler.RequestId, Is.EqualTo(requestId));
+            Assert.That(handler.IsBound, Is.False);
+
+            client.Receive(server, Response(requestId, 1, 2, 11));
+
+            Assert.That(handler.ResponseCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void StopFromTheResponseCallback_UnbindsAndDoesNotDeadlock()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            ushort requestId = SendRequest(client, handler);
+            handler.OnResponse = () => client.Stop();
+
+            client.Receive(server, Response(requestId, 0, 1, 10));
+
+            Assert.That(client.IsStarted, Is.False);
+            Assert.That(handler.IsBound, Is.False);
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void SetMessageCount_AfterRejectionThrows()
+    {
+        var server = new TestServerTransport(100);
+        var handler = new RecordingServerHandler { Accept = false };
+
+        try
+        {
+            Assert.That(server.Init(handler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            server.Receive(Endpoint(6000), Request(1));
+
+            Assert.Throws<InvalidOperationException>(
+                () => handler.LastResponse!.SetMessageCount(2));
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
+    public void Request_WithAnUnserializablePayload_ReleasesIt()
+    {
+        var client = new TestClientTransport(Endpoint(5000), 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+            var payload = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            UnionData invalid = default;
+            payload.PutLast(invalid);
+
+            Assert.That(client.Request(payload, handler), Is.EqualTo(SendResult.InvalidMessage));
+            Assert.That(payload.IsAlive, Is.False);
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
+    public void Response_WithAnUnserializablePayload_ReleasesIt()
+    {
+        var server = new TestServerTransport(100);
+        var handler = new RecordingServerHandler();
+
+        try
+        {
+            Assert.That(server.Init(handler), Is.True);
+            Assert.That(server.Start(_ => { }), Is.True);
+            server.Receive(Endpoint(6000), Request(1));
+
+            var payload = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            UnionData invalid = default;
+            payload.PutLast(invalid);
+
+            Assert.That(handler.LastResponse!.Response(payload),
+                Is.EqualTo(SendResult.InvalidMessage));
+            Assert.That(payload.IsAlive, Is.False);
+        }
+        finally
+        {
+            server.Stop();
+        }
+    }
+
+    [Test]
     public void StopBetweenAddAndBind_DoesNotLeaveTheHandlerBound()
     {
         IpEndPoint server = Endpoint(5000);
@@ -539,7 +690,7 @@ public sealed class RRUnreliableDispatchTests
         {
             Assert.That(client.Start(_ => { }), Is.True);
 
-            client.AfterAddBeforeBindForTests = () => client.Stop();
+            client.AfterAddBeforeBindForTests = _ => client.Stop();
 
             var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
             request.PutLast(1);
@@ -762,6 +913,8 @@ public sealed class RRUnreliableDispatchTests
 
         public List<int> MessageCounts { get; } = new List<int>();
 
+        public Action? OnResponse { get; set; }
+
         public void Response(UnionDataList response, int messageId, int messageCount)
         {
             try
@@ -772,6 +925,7 @@ public sealed class RRUnreliableDispatchTests
                 Values.Add(value);
                 MessageIds.Add(messageId);
                 MessageCounts.Add(messageCount);
+                OnResponse?.Invoke();
             }
             finally
             {
@@ -788,6 +942,8 @@ public sealed class RRUnreliableDispatchTests
 
         public IRRUnreliableResponse? LastResponse { get; private set; }
 
+        public bool Accept { get; set; } = true;
+
         public bool OnRequested(IEndPoint client, UnionDataList request, IRRUnreliableResponse response)
         {
             try
@@ -795,7 +951,7 @@ public sealed class RRUnreliableDispatchTests
                 RequestCount++;
                 LastValue = request.Elements[0].Alias.IntValue;
                 LastResponse = response;
-                return true;
+                return Accept;
             }
             finally
             {

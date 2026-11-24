@@ -14,6 +14,7 @@ namespace Pontifex.RR.Unreliable
         private int _messageCount = -1;
         private int _terminal;
         private int _callbackActive;
+        private int _published;
 
         public RRUnreliableRequestState(ushort requestId, IRRUnreliableRequestHandler handler)
         {
@@ -45,6 +46,20 @@ namespace Pontifex.RR.Unreliable
         /// Gets whether the state no longer accepts deliveries.
         /// </summary>
         public bool IsTerminal => Volatile.Read(ref _terminal) != 0;
+
+        /// <summary>
+        /// Gets whether the handler has published the request id. A frame that arrives before this
+        /// point cannot be delivered because the handler does not identify the request yet.
+        /// </summary>
+        public bool IsPublished => Volatile.Read(ref _published) != 0;
+
+        /// <summary>
+        /// Marks the request id as published.
+        /// </summary>
+        public void MarkPublished()
+        {
+            Volatile.Write(ref _published, 1);
+        }
 
         /// <summary>
         /// Gets whether a callback for this request is currently running.

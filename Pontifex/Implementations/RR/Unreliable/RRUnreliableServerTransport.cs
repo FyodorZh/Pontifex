@@ -168,7 +168,7 @@ namespace Pontifex.RR.Unreliable
         internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload,
             bool canAnswer)
         {
-            if (!canAnswer || response.IsClosed || HasExpired(response))
+            if (!canAnswer || response.IsClosed || !IsRunningUnsafe || HasExpired(response))
             {
                 if (!response.IsClosed)
                 {
@@ -191,6 +191,7 @@ namespace Pontifex.RR.Unreliable
             }
             catch (Exception)
             {
+                payload.Release();
                 return SendResult.InvalidMessage;
             }
 

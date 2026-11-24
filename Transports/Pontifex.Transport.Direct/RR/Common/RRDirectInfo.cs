@@ -11,8 +11,8 @@ namespace Pontifex.RR.Direct
         public const string UnreliableTransportName = "direct-rr-unreliable";
 
         /// <summary>
-        /// The inclusive serialized payload limit of both RR Direct carriers. The request-id header is
-        /// outside this limit.
+        /// The inclusive serialized payload limit of both RR Direct carriers. The request and
+        /// response message headers are outside this limit.
         /// </summary>
         public const int MessageMaxByteSize = 1024 * 1024;
 
