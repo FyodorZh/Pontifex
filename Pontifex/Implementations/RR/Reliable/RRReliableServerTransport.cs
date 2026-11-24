@@ -138,6 +138,7 @@ namespace Pontifex.RR.Reliable
         /// <inheritdoc/>
         protected override void OnStarted()
         {
+            base.OnStarted();
             StartDispatch();
 
             lock (_dispatchLocker)

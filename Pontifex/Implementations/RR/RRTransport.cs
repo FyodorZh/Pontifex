@@ -176,6 +176,8 @@ namespace Pontifex.RR
         }
 
         /// <inheritdoc/>
+        /// <remarks>An override must call this base implementation so the running snapshot stays
+        /// valid.</remarks>
         protected override void OnStarted()
         {
             _running = true;

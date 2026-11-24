@@ -126,10 +126,15 @@ namespace Pontifex.RR.Unreliable
             if (bindable.IsBound)
             {
                 RRUnreliableRequestState? previous = null;
-                bool reaped = bindable.RequestId is ushort boundId &&
-                              _pendingResponses.TryGet(boundId, out previous, out _) &&
-                              ReferenceEquals(previous.Handler, handler) &&
-                              _pendingResponses.TryReapExpired(boundId, previous);
+                bool reaped = false;
+
+                if (bindable.RequestId is ushort boundId &&
+                    _pendingResponses.TryGet(boundId, out previous, out _) &&
+                    ReferenceEquals(previous.Handler, handler))
+                {
+                    BeforeReapExpiredForTests?.Invoke();
+                    reaped = _pendingResponses.TryReapExpired(boundId, previous);
+                }
 
                 if (reaped && previous != null)
                 {
@@ -306,6 +311,12 @@ namespace Pontifex.RR.Unreliable
                 ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
             }
         }
+
+        /// <summary>
+        /// Gets or sets a test hook invoked after an expired pending entry was found and before it is
+        /// reaped for handler reuse.
+        /// </summary>
+        internal Action? BeforeReapExpiredForTests { get; set; }
 
         /// <summary>
         /// Gets or sets a test hook invoked after the request entered the pending table and before

@@ -539,8 +539,12 @@ public sealed class RRUnreliableDispatchTests
         {
             Assert.That(client.Start(_ => { }), Is.True);
 
+            ushort requestId = 0;
             client.AfterAddBeforeBindForTests = id =>
+            {
+                requestId = id;
                 client.Receive(server, Response(id, 0, 1, 10));
+            };
 
             var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
             request.PutLast(1);
@@ -548,6 +552,12 @@ public sealed class RRUnreliableDispatchTests
             Assert.That(client.Request(request, handler), Is.EqualTo(SendResult.Ok));
             Assert.That(handler.ResponseCount, Is.Zero);
             Assert.That(handler.IsBound, Is.True);
+
+            // The dropped frame must not have fixed the count or marked the id as seen.
+            client.Receive(server, Response(requestId, 0, 2, 10));
+
+            Assert.That(handler.ResponseCount, Is.EqualTo(1));
+            Assert.That(handler.MessageCounts, Is.EqualTo(new[] { 2 }));
 
             handler.Cancel();
             Assert.That(handler.IsBound, Is.False);
