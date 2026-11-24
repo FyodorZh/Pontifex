@@ -65,6 +65,25 @@ public sealed class RRUnreliableUdpRoundTripTests
     }
 
     [Test]
+    public void EncodedResponseWithPrefixGrowth_FitsTheMinimumDatagram()
+    {
+        var payload = PayloadWith63Elements();
+
+        try
+        {
+            Assert.That(payload.GetDataSize(), Is.EqualTo(540));
+
+            RRUnreliableFrame.EncodeResponse(payload, 1, 0, 1);
+
+            Assert.That(payload.GetDataSize(), Is.EqualTo(548));
+        }
+        finally
+        {
+            payload.Release();
+        }
+    }
+
+    [Test]
     public void RequestAndResponse_RoundTripThroughUdp()
     {
         int port = GetFreeLoopbackUdpPort();
@@ -243,6 +262,26 @@ public sealed class RRUnreliableUdpRoundTripTests
             client.Stop();
             handler.Dispose();
         }
+    }
+
+    private static UnionDataList PayloadWith63Elements()
+    {
+        var message = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+
+        // 35 elements cost 9 bytes (1 type + 1 length + 7 data) and 28 elements cost 8 bytes
+        // (1 + 1 + 6). With the one-byte prefix for 63 elements the payload is 540 bytes; adding
+        // the three header elements crosses the 63-to-64 prefix boundary and reaches 548.
+        for (int i = 0; i < 35; i++)
+        {
+            message.PutLast(new UnionData(new MultiRefByteArray(new byte[7])));
+        }
+
+        for (int i = 0; i < 28; i++)
+        {
+            message.PutLast(new UnionData(new MultiRefByteArray(new byte[6])));
+        }
+
+        return message;
     }
 
     private static UnionDataList PayloadOfSize(int payloadSize)

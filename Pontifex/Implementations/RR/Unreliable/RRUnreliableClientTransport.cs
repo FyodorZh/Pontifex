@@ -135,12 +135,12 @@ namespace Pontifex.RR.Unreliable
                         "The handler is already bound to a pending request.");
                 }
 
-                lock (previous.SyncRoot)
-                {
-                    previous.TryTerminate();
-                }
+                previous.TryTerminate();
 
-                bindable.Unbind();
+                if (!previous.IsCallbackActive)
+                {
+                    bindable.Unbind();
+                }
             }
 
             if (!bindable.TryReserve())
@@ -282,19 +282,14 @@ namespace Pontifex.RR.Unreliable
                 return;
             }
 
-            bool removed;
-
-            lock (state.SyncRoot)
-            {
-                removed = state.TryTerminate();
-
-                if (removed)
-                {
-                    _pendingResponses.TryTakeExact(requestId, state, out _, out _);
-                }
-            }
+            bool removed = state.TryTerminate();
 
             if (removed)
+            {
+                _pendingResponses.TryTakeExact(requestId, state, out _, out _);
+            }
+
+            if (!state.IsCallbackActive)
             {
                 bindable.Unbind();
             }
@@ -307,14 +302,14 @@ namespace Pontifex.RR.Unreliable
 
         private static void TerminateExpired(RRUnreliableRequestState state)
         {
-            // Wait for a delivery that is already running, so the handler stays bound for the whole
-            // callback and cannot be rebound to a new request while that callback still runs.
-            lock (state.SyncRoot)
-            {
-                state.TryTerminate();
-            }
+            state.TryTerminate();
 
-            ((RRRequestHandler)state.Handler).Unbind();
+            // When a callback is already running, the delivery thread unbinds the handler when it
+            // exits. Waiting here would let two in-flight callbacks deadlock on each other's state.
+            if (!state.IsCallbackActive)
+            {
+                ((RRRequestHandler)state.Handler).Unbind();
+            }
         }
 
         /// <summary>
@@ -338,7 +333,11 @@ namespace Pontifex.RR.Unreliable
             _pendingResponses.Clear(state =>
             {
                 state.TryTerminate();
-                ((RRRequestHandler)state.Handler).Unbind();
+
+                if (!state.IsCallbackActive)
+                {
+                    ((RRRequestHandler)state.Handler).Unbind();
+                }
             });
         }
 
@@ -396,19 +395,10 @@ namespace Pontifex.RR.Unreliable
 
             if (expired)
             {
-                bool removed;
+                state.TryTerminate();
+                _pendingResponses.TryTakeExact(requestId, state, out _, out _);
 
-                lock (state.SyncRoot)
-                {
-                    removed = state.TryTerminate();
-
-                    if (removed)
-                    {
-                        _pendingResponses.TryTakeExact(requestId, state, out _, out _);
-                    }
-                }
-
-                if (removed)
+                if (!state.IsCallbackActive)
                 {
                     ((RRRequestHandler)state.Handler).Unbind();
                 }
@@ -445,7 +435,6 @@ namespace Pontifex.RR.Unreliable
 
                 if (last)
                 {
-                    state.TryTerminate();
                     _pendingResponses.TryTakeExact(requestId, state, out _, out _);
                 }
 
@@ -453,7 +442,23 @@ namespace Pontifex.RR.Unreliable
                 {
                     state.TryTerminate();
                     _pendingResponses.TryTakeExact(requestId, state, out _, out _);
-                    ((RRRequestHandler)state.Handler).Unbind();
+
+                    if (!state.IsCallbackActive)
+                    {
+                        ((RRRequestHandler)state.Handler).Unbind();
+                    }
+
+                    frame.Release();
+                    return;
+                }
+
+                if (!state.TryEnterCallback())
+                {
+                    if (!state.IsCallbackActive)
+                    {
+                        ((RRRequestHandler)state.Handler).Unbind();
+                    }
+
                     frame.Release();
                     return;
                 }
@@ -469,6 +474,11 @@ namespace Pontifex.RR.Unreliable
                 finally
                 {
                     if (last)
+                    {
+                        state.TryTerminate();
+                    }
+
+                    if (state.ExitCallback())
                     {
                         ((RRRequestHandler)state.Handler).Unbind();
                     }

@@ -140,13 +140,21 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
+        /// Gets whether the response TTL has expired. Takes no lifecycle lock.
+        /// </summary>
+        internal bool HasExpired(RRUnreliableResponse response)
+        {
+            return _timeProvider.Now > response.ExpiresAt;
+        }
+
+        /// <summary>
         /// Gets whether the handle can still answer: the transport is running and the response TTL
         /// has not expired. Read outside the handle gate so a stop that holds the lifecycle lock
         /// cannot deadlock against it.
         /// </summary>
         internal bool CanAnswer(RRUnreliableResponse response)
         {
-            return IsStarted && _timeProvider.Now <= response.ExpiresAt;
+            return IsStarted && !HasExpired(response);
         }
 
         /// <summary>
@@ -160,7 +168,7 @@ namespace Pontifex.RR.Unreliable
         internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload,
             bool canAnswer)
         {
-            if (!canAnswer || response.IsClosed)
+            if (!canAnswer || response.IsClosed || HasExpired(response))
             {
                 if (!response.IsClosed)
                 {

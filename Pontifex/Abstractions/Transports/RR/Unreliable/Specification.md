@@ -311,10 +311,10 @@ the pending-window rule.
 A stopped or failed transport **MUST** clear the pending window without raising a
 completion callback. A request removed this way is not replayed.
 
-A stop or failure that races a callback already in progress **MAY** let that
-callback complete after `onStopped` begins. No new callback begins after the
-stop. An application that reuses a handler after a stop or failure **MUST**
-tolerate that in-flight callback.
+A stop or failure that races a callback accepted before the stop **MAY** let
+that callback begin or complete after `onStopped` begins. No callback begins for
+a request that the stop removed. The handler remains bound until the in-flight
+callback returns.
 
 The transport-level `onStopped` callback **MUST** be invoked exactly once after
 the terminal transition.
@@ -330,7 +330,7 @@ the terminal transition.
 | Request cancelled | none |
 | Request TTL expired | none |
 | Response TTL expired | none |
-| Transport stops or fails | none for pending requests; `onStopped` runs |
+| Transport stops or fails | none for a request the stop removes; a message accepted before the stop may still deliver one callback; `onStopped` runs |
 
 ## 8. Message model and limits
 
@@ -481,6 +481,7 @@ No conformance controls are defined.
 - [ ] Unbind the handler after the last message callback returns, or when the
       request is cancelled, expires, or is abandoned.
 - [ ] Throw `ArgumentOutOfRangeException` for a message count outside `1..256`.
+- [ ] Validate the message count range before checking the handle state.
 - [ ] Throw `InvalidOperationException` for a second `SetMessageCount` call,
       after the first `Response` call, after close, after expiry, or after stop.
 - [ ] Keep every synchronous non-`Ok` result non-fatal.
@@ -504,11 +505,10 @@ No conformance controls are defined.
 - [ ] Call server `Init` exactly once before `Start`.
 - [ ] Derive every request handler from `RRRequestHandler`.
 - [ ] Use a distinct handler for each concurrently pending request; reuse only
-      after the request completed, was cancelled, or expired and no callback for
-      the old request is still running.
+      after the request completed, was cancelled, or expired.
 - [ ] Do not implement `IRRUnreliableResponse`.
-- [ ] After a stop or failure, do not reuse a handler until any in-flight
-      callback has returned.
+- [ ] After a stop or failure, reuse a handler only after any in-flight callback
+      has returned.
 - [ ] Treat every accepted request and every response message as potentially
       lost.
 - [ ] Never expect more than the `messageCount` argument's `Response` calls per

@@ -13,6 +13,7 @@ namespace Pontifex.RR.Unreliable
         private readonly ulong[] _seen = new ulong[SeenWords];
         private int _messageCount = -1;
         private int _terminal;
+        private int _callbackActive;
 
         public RRUnreliableRequestState(IRRUnreliableRequestHandler handler)
         {
@@ -38,6 +39,42 @@ namespace Pontifex.RR.Unreliable
         /// Gets whether the state no longer accepts deliveries.
         /// </summary>
         public bool IsTerminal => Volatile.Read(ref _terminal) != 0;
+
+        /// <summary>
+        /// Gets whether a callback for this request is currently running.
+        /// </summary>
+        public bool IsCallbackActive => Volatile.Read(ref _callbackActive) != 0;
+
+        /// <summary>
+        /// Marks a callback as running. Returns <see langword="false"/> when another callback is
+        /// already running or the state is terminal.
+        /// </summary>
+        public bool TryEnterCallback()
+        {
+            if (Interlocked.CompareExchange(ref _callbackActive, 1, 0) != 0)
+            {
+                return false;
+            }
+
+            if (IsTerminal)
+            {
+                ExitCallback();
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Marks the callback as finished.
+        /// </summary>
+        /// <returns><see langword="true"/> when the state became terminal while the callback ran,
+        /// so the caller must unbind the handler.</returns>
+        public bool ExitCallback()
+        {
+            Interlocked.Exchange(ref _callbackActive, 0);
+            return IsTerminal;
+        }
 
         /// <summary>
         /// Fixes the message count or verifies it against the value fixed earlier. The caller holds

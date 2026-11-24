@@ -71,7 +71,7 @@ namespace Pontifex.RR.Unreliable
 
             lock (_gate)
             {
-                if (_declarationLocked || IsClosed || !canAnswer)
+                if (_declarationLocked || IsClosed || !canAnswer || _transport.HasExpired(this))
                 {
                     throw new InvalidOperationException(
                         "The message count must be set once, before the first response is sent, " +
