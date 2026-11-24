@@ -62,7 +62,9 @@ The repository uses:
    category. L-25's scope is the Direct test project; the core and conformance
    suites are not reworked for determinism in this plan.
 7. Each stage leaves the repository buildable and the stage's tests green.
-   Do not commit a stage that has not passed its verification.
+   Do not commit a stage that has not passed its verification. Each stage is
+   exactly one commit (`Stage N — <description>`); squash fix-ups before the
+   next stage so the final report has one message per stage.
 8. Work only on the files named by the active stage, plus files strictly
    necessary to keep the solution compiling.
 9. `problems.md` is the task input. Do not rewrite or delete it during
@@ -281,7 +283,9 @@ precedence rules.
    - Throw `ArgumentNullException` from `Init` for a null handler before taking
      any state-changing action.
    - Return `false` without calling `Fail` for a second `Init`, an `Init` after
-     a start attempt, or an `Init` after a normal stop.
+     a start attempt, or an `Init` after a normal stop. Do not call
+     `SetupHandler` for a rejected call; only a first, valid, pre-start call
+     invokes it.
    - Call `Fail` only when a valid non-null `Init` cannot bind its handler
      (`SetupHandler` returns null).
    - Update the XML remarks to match §7.1 and §7.2.
@@ -292,9 +296,12 @@ precedence rules.
      order contains no user `stopped`, and `IsValid` is false.
    - Update
      `Tests/Pontifex.Tests/Transports/Raw/Reliable/Client/RawReliableClientTransportTests.cs`:
-     `Init(null)` throws; a second `Init` and `Init` after stop return false
-     with `IsValid` unchanged; failed `Start` paths deliver no `onStopped` but
-     still destroy the endpoint/carrier.
+     invert `Init_CalledTwice_FailsAndKeepsFirstHandler` (no `SetupHandler`
+     call on the second attempt, `IsValid` true),
+     `Init_WhenConnecting_FailsAndStopsWithHandlerNotification` (rejected call
+     does not stop), and `Init_AfterCompletedStop_FailsWithoutAdditionalNotification`
+     (`IsValid` true). `Init(null)` throws; failed `Start` paths deliver no
+     `onStopped` but still destroy the endpoint/carrier.
    - Update `Tests/Pontifex.Tests/Endpoints/RawEndpointTests.cs`:
      `Send_Null_ReturnsInvalidMessage` and
      `Send_TooBig_ReturnsMessageTooBigAndReleasesBuffer` must start the
@@ -413,6 +420,11 @@ hit the documented conformance gates.
      release the remaining buffered messages and stop draining as soon as a
      stop is latched. A stop can be requested after the second check but before
      or during the drain, and `Stop` does not take `_inboxLock`.
+   - Change `RawEndpoint._receiveAction` to check the latched stop (`IsRunning`
+     or `_stopReason == null`) as well as the stage. A receive job scheduled by
+     the drain before the stop latch must not deliver `OnReceived` after
+     `Stop` returns; release the message instead. The per-message drain check
+     alone cannot close this window.
    - Keep the inbox in `Buffering` or close it consistently; the `Stopped`
      subscription releases anything not drained.
    - Move the `BeforeHandlerStoppedGate.Hit()` call out of `BeginStop` and into
@@ -440,7 +452,9 @@ hit the documented conformance gates.
    - Add a test that `Stop` from `OnStarted`, a stop latched before the flush
      action, and a stop requested during the drain cannot deliver buffered
      messages afterwards. Use a gated handler or a large buffered batch to hit
-     the mid-drain window.
+     the mid-drain window. Also block the drain at `AfterReceivedGate`, latch
+     `Stop`, release the gate, and assert the already-scheduled receive job
+     releases its message and never invokes `OnReceived`.
    - Add gate tests for `BeforeHandlerStoppedGate` on hard failure and not on a
      throwing `OnStarted`, and for the client commit gate on a disposed
      channel.
@@ -881,7 +895,11 @@ framing from `MessageMaxByteSize`, and prevent payload delivery before
      drop silently. If `OnConnected` throws, the latch is still set but the
      handler is live; drain the buffer in the same `finally` after the callback
      (or release it and stop the session if the endpoint is no longer live).
-     Add an overflow test, a concurrent-arrival test, and a throwing
+     Add a one-shot terminal release: subscribe to the endpoint `Stopped`
+     event, or release from `FailHard`/`FinishStop`, under the same lock that
+     guards latch/append/drain, so a stop before `OnConnected` releases every
+     buffered payload exactly once and delivers none. Add an overflow test, a
+     concurrent-arrival test, a stop-while-buffering test, and a throwing
      `OnConnected` + buffered-payload test.
    - Change `Send` so it checks state, null/alive, and payload size before
      prepending the type byte. Measure `int payloadSize =
@@ -1001,6 +1019,11 @@ make the binding’s parameter ranges match the constructors.
      factory.
    - Remove the Direct override that returns `null`; the Direct client must
      start the deadline with the configured timeout.
+   - Before creating the timer, and again after creation, check
+     `_stage == State.HandshakeSent` and `IsRunning`. If the in-process
+     response already completed the handshake, dispose the new timer instead
+     of storing it. The serial action queue may run the response inline before
+     `StartHandshakeTimer` executes.
 3. `RawReliableAdmissionServerTransport`:
    - Expose the timer factory to the concrete carrier through an `internal`
      constructor overload or an `internal` property (not a protected member of
@@ -1039,10 +1062,12 @@ make the binding’s parameter ranges match the constructors.
      delta: `int before = body.GetDataSize(); body.PutFirst(type); int total =
      body.GetDataSize();`. The delta includes the element header and any
      list-count varint growth.
-   - On receive, add a protected virtual hook on `RawReliableEndpoint`, for
-     example `bool ValidateInboundHandshakeFrame(MessageType type, int
-     totalSize)`, called by the sealed dispatcher before it pops the type. The
-     handshake client overrides it and compares `totalSize` with
+   - On receive, capture `int totalSize = message.GetDataSize()` before
+     `TryPopFirst`, pop the type, then call a protected virtual hook
+     `bool ValidateInboundHandshakeFrame(MessageType type, int totalSize)`.
+     The hook receives the popped type and the saved total; it is not called
+     “before the type is known”. The handshake client overrides it and compares
+     `totalSize` with
      `_handshakeMaxByteSize` only for `HandshakeResponseMessage` and
      `HandshakeRejectMessage`; every other frame type returns true. Do not add
      a server-session hook for the handshake request: the Direct server
@@ -1075,7 +1100,8 @@ make the binding’s parameter ranges match the constructors.
    - Pass all values to both roles.
 8. Tests:
    - Add a manual timer test for client timeout before a response and server
-     timeout before a request.
+     timeout before a request. Add a successful in-process handshake test
+     asserting the manual factory has zero pending timers after connect.
    - Add oversized request/response/reject tests, including a reject whose text
      makes it too large; assert the minimal fallback or clean close.
    - Update `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/RawReliableHandshakeClientEndpoint/RawReliableHandshakeClientEndpointTests.cs`
@@ -1678,12 +1704,19 @@ categories.
    `RR/RRUnreliableDirect/Tests/RRUnreliableDirectCarrierTests.cs`,
    `RR/RRUnreliableDirect/Tests/RRUnreliableDirectLifecycleTests.cs`,
    `RR/RRReliableDirect/Tests/RRReliableDirectRoundTripTests.cs`, the
-   `RRReliableTransport` client/server fixtures, and
+   `RRReliableTransport` client/server fixtures,
+   `ChannelManager/Tests/ChannelManagerTests.cs`,
+   `RR/RRReliableCoreHelpers/Tests/RRReliableRequestTableTests.cs`,
+   `Raw/Reliable/RawReliable/RawReliableDirectTransportTests.cs`, and
    `ChannelManager/Tests/ChannelTests.cs` (gate the concurrent send/dispose
    test with a blocking delivery system). Split the `Task.Run`/`SpinWait`
    race cases in `RRReliableServerTransportTests.cs` into a separate
    `*.Integration` fixture file; RULES-14 allows one fixture per file, so the
-   default fixture can stay polling-free.
+   default fixture can stay polling-free. Do the same for
+   `RRReliableClientTransportTests.cs`,
+   `RRUnreliableDirectCarrierTests.cs`, and
+   `RRUnreliableDirectLifecycleTests.cs`: split their `Task.Run`/`new Thread`
+   cases into `*.Integration` fixtures rather than categorising the whole file.
 2. Use the seams introduced earlier:
    - Netem manual clock/pump for VirtualDelivery tests.
    - Manual handshake timer for RawReliable Direct timeout tests.
@@ -1729,7 +1762,8 @@ categories.
    - Fail when a default fixture contains polling forms: `Thread.Sleep`,
      `WaitFor`, `SpinWait`, a `DateTime.UtcNow` deadline, `Task.Delay`,
      `SemaphoreSlim.Wait(...timeout...)`, `Monitor.Wait(..., timeout)`,
-     `Task.Run`/`new Thread` in a default fixture without a declared
+     `Task.Run`/`new Thread`, `Parallel.For`/`Parallel.Invoke`, or
+     `ThreadPool.QueueUserWorkItem` in a default fixture without a declared
      integration category, or a real `System.Threading.Timer`/`new Timer`. Do
      not flag a one-shot
      `Stopwatch` duration assertion (the Direct reject latency check); only a
@@ -1801,9 +1835,11 @@ with one entry per change and per audit finding.
    - a short title and the final verification result;
    - a table of contents;
    - one section per stage with its objective and the exact message of that
-     stage's final commit, recovered from `git log --format=%s`; for Stage 13,
-     use the predefined message `Add implementation report (stage 13)` before
-     the commit exists;
+     stage's single final commit, recovered from `git log --format=%s`
+     (`Stage N — <description>`); for Stage 13, use the predefined message
+     `Add implementation report (stage 13)` before the commit exists. If a
+     stage needed fix-up commits, squash them into one stage commit before
+     proceeding;
    - one `###` subsection per audit finding ID, in the order H-01…L-26, with
      the exact headings `### H-01` through `### L-26`. Each subsection must
      contain the labels `Problem:`, `Change:`, `Why:`, `Files:`, and
