@@ -5,8 +5,9 @@ Black-box contract tests for the abstract transport class hierarchy in `Pontifex
 The suite lives under `Tests/Pontifex.Tests/Transports/` and tests the transport classes
 directly, without carriers, sockets, timers, or wall-clock time. It is the transport-level
 counterpart of the `Endpoints` suite: the same deterministic, public-plus-protected-contract
-approach, applied one layer up. Two categorised tests use gated, joined threads to prove the
-admission lock's and the handler-factory lock's single-call invariants; see
+approach, applied one layer up. Four categorised tests use gated, joined threads to prove the
+admission lock's and the handler-factory lock's single-call invariants, and one bounded parallel
+test proves that the admission counters never exceed their limits; see
 [Categories](#categories).
 
 ## Suite type
@@ -217,11 +218,13 @@ gaps, and deferred-by-design gaps for that layer.
 - Suite root category: `Transports`. Every fixture carries it.
 - Additional filtering categories: `Transports.Concurrency`.
 
-`Transports.Concurrency` marks the server-layer tests that use real threads to prove the
-single-factory-call invariant of the admission lock and of the handler-factory lock. The threads are
-controlled by gates, joined with bounded timeouts, and the gates are always released in `finally`;
-no test sleeps or polls. The tests still run in the default suite because they are deterministic
-and fast. Any future non-default facet
+`Transports.Concurrency` marks the server-layer tests that use real threads. It covers the four
+gated tests that prove the single-factory-call invariant of the admission lock and of the
+handler-factory lock, and the one bounded parallel test that proves the lock-free admission
+counters never exceed their limits. The gated threads are controlled by gates, joined with bounded
+timeouts, and the gates are always released in `finally`; no test sleeps or polls. The bound test
+completes synchronously and asserts an invariant, not a scheduling order. The tests still run in
+the default suite because they are deterministic and fast. Any future non-default facet
 (real I/O, load, timing stress) must go into a separate layer or group with its own declared
 category, not the default suite run.
 
@@ -285,9 +288,8 @@ repeated.
 - **Init**: from `Constructed`, `Init` runs `SetupHandler`, stores the returned handler, and moves
   to `Initialized`; a null handler, a null `SetupHandler` result, a wrong state, or an already
   started transport fails and invalidates. A second `Init` fails but keeps the first handler.
-  `Init` after a failed start does not call `SetupHandler`; `Init` while connecting fails and
-  drives the stop path, where the transport notifies the handler `OnStopped` when it owns the
-  notification (see the stop notification matrix). The transport never calls `OnDisconnected`.
+  `Init` after a failed start does not call `SetupHandler`; `Init` while connecting fails without
+  stopping the transport or notifying the handler. The transport never calls `OnDisconnected`.
 - **Start / connect**: `Start` works only from `Initialized`; it calls `BeginConnect` and, while
   the state is still `Initialized`, moves to `Connecting`. A `false` from `BeginConnect` fails and
   destroys, and does **not** notify the handler `OnStopped`; a `BeginConnect` that stops the
@@ -395,8 +397,10 @@ that delta; the inherited `AnyTransport` lifecycle and the unreliable marker fac
 - **Start**: works only after `Init`. The sequence is `StartCarrier`, `CreateEndpoint`, attachment
   (subscription to the endpoint's terminal notification), then `endpoint.Start`; a second `Start` does
   nothing. A rejected or throwing `StartCarrier` fails the start, stops the carrier once, and — because no
-  endpoint exists — notifies the handler with a `TextFail` or `ExceptionFail`; the start callback receives
-  the same reason.
+  endpoint exists — notifies the handler with a `TextFail` or `ExceptionFail`. A rejected or throwing
+  `endpoint.Start` fails the start and stops the carrier once, but the attached endpoint owns the handler
+  notification and, because that endpoint never raised `OnStarted`, the handler receives nothing. No failed
+  initial start invokes the user start callback.
 - **Endpoint factory failure**: a throwing `CreateEndpoint` is logged, the handler receives an
   `ExceptionFail` carrying the exception, `StopCarrier` runs once, and `Start` returns `false`. This is the
   reachable "no endpoint created" fallback path: the transport owns the handler stop notification exactly

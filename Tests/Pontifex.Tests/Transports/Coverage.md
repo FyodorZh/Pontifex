@@ -50,7 +50,7 @@
 
 | Missing layer or test | Owner | Reason |
 |---|---|---|
-| — | — | No missing reliable layers: the inheritance tree is fully covered. |
+| — | — | No missing layers: the whole selected inheritance tree is covered. |
 
 ## Deferred by design
 

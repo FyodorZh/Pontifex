@@ -242,6 +242,47 @@ public sealed class RawUnreliableClientTransportTests
     }
 
     [Test]
+    public void Start_WhenEndpointStartIsRejected_FailsWithoutHandlerNotification()
+    {
+        using var transport = Create();
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        TestRawUnreliableEndpoint? endpoint = null;
+        transport.EndpointFactory = h =>
+        {
+            endpoint = new TestRawUnreliableEndpoint(
+                h, transportName: transport.Name, memory: transport.Memory, log: transport.Log);
+            // The serial queue rejects the endpoint.Start() admission, as a bounded or released queue would.
+            endpoint.RejectNextSchedule();
+            return endpoint;
+        };
+        Assert.That(transport.Init(handler), Is.True);
+        bool callbackCalled = false;
+
+        Assert.That(transport.Start(_ => callbackCalled = true), Is.False);
+
+        Assert.That(transport.StartCarrierCalls, Is.EqualTo(1));
+        Assert.That(transport.CreateEndpointCalls, Is.EqualTo(1));
+        Assert.That(transport.StopCarrierCalls, Is.EqualTo(1));
+        Assert.That(transport.LastStopCarrierReason, Is.TypeOf<TextFail>());
+        Assert.That(callbackCalled, Is.False,
+            "a failed initial start must not invoke the user callback");
+        Assert.That(transport.IsValid, Is.False);
+        Assert.That(transport.ExposedAttachedEndpoint, Is.Null);
+        Assert.That(endpoint!.IsRunning, Is.False);
+        Assert.That(handler.StartedCount, Is.Zero);
+        Assert.That(handler.StoppedCount, Is.Zero,
+            "the endpoint owns the notification and its handler gate suppresses it because OnStarted never ran");
+
+        endpoint.DrainAll();
+
+        Assert.That(endpoint.IsRunning, Is.False);
+        Assert.That(handler.StartedCount, Is.Zero);
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(endpoint.StoppedReasons, Has.Count.EqualTo(1));
+        Assert.That(endpoint.StoppedReasons[0], Is.TypeOf<TextFail>());
+    }
+
+    [Test]
     public void Start_WhenEndpointStopsDuringStart_ReplaysStopAfterStart()
     {
         using var transport = Create();

@@ -66,6 +66,12 @@ internal sealed class TestRawUnreliableEndpoint : RawUnreliableEndpoint, IDispos
     /// </summary>
     public void DrainOne() => _queue!.DrainOne();
 
+    /// <summary>
+    /// Makes the next action submission fail, modelling a queue that rejects an admission or a start.
+    /// The flag is consumed by that call and is off by default.
+    /// </summary>
+    public void RejectNextSchedule() => _queue!.RejectNextSchedule();
+
     #endregion
 
     #region Lifecycle helpers
