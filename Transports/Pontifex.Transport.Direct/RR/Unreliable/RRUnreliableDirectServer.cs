@@ -46,7 +46,7 @@ namespace Pontifex.RR.Unreliable.Direct
 
             _serverEndPoint = new StringEndPoint(serverId);
             _queueCapacity = queueCapacity;
-            _carrier = new DirectRrChannelServer(serverId, Log, OnInbound);
+            _carrier = new DirectRrChannelServer(RRDirectInfo.UnreliableTransportName, serverId, Log, OnInbound);
         }
 
         public override int MessageMaxByteSize => RRDirectInfo.MessageMaxByteSize;

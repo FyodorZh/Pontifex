@@ -33,7 +33,7 @@ namespace Pontifex.RR.Reliable.Direct
             }
 
             _serverEndPoint = new StringEndPoint(serverId);
-            _carrier = new DirectRrChannelServer(serverId, Log, OnInbound, OnSessionClosed);
+            _carrier = new DirectRrChannelServer(RRDirectInfo.ReliableTransportName, serverId, Log, OnInbound, OnSessionClosed);
         }
 
         public override int MessageMaxByteSize => RRDirectInfo.MessageMaxByteSize;

@@ -123,7 +123,7 @@ namespace Pontifex.Raw.Reliable.Direct
 
         protected override bool StartCarrier()
         {
-            if (!ChannelManager.Instance.RegisterServer(_serverEndPoint, OnChannelCreated))
+            if (!ChannelManager.Instance.RegisterServer(RawReliableDirectInfo.TransportName, _serverEndPoint, OnChannelCreated))
             {
                 Log.e("Failed to register direct server '{0}'. Name already in use.", _serverEndPoint);
                 return false;
@@ -136,7 +136,7 @@ namespace Pontifex.Raw.Reliable.Direct
         {
             // Disposes every channel that is still waiting for a handshake request. Admitted sessions were
             // detached from the registry and are stopped by the base transport.
-            ChannelManager.Instance.UnregisterServer(_serverEndPoint);
+            ChannelManager.Instance.UnregisterServer(RawReliableDirectInfo.TransportName, _serverEndPoint);
 
             HandshakeEntry[] snapshot;
             lock (_channelsLock)
@@ -336,7 +336,7 @@ namespace Pontifex.Raw.Reliable.Direct
                 response = null;
                 handedOff = true;
 
-                if (!ChannelManager.Instance.Detach(_serverEndPoint, clientEp))
+                if (!ChannelManager.Instance.Detach(RawReliableDirectInfo.TransportName, _serverEndPoint, clientEp))
                 {
                     Log.d("The direct channel was already detached from the server registry");
                 }
@@ -454,7 +454,7 @@ namespace Pontifex.Raw.Reliable.Direct
         {
             // Removes the channel from the server registry; the registry may already be gone, so the
             // explicit dispose covers that case.
-            ChannelManager.Instance.Disconnect(_serverEndPoint, channel.ClientEp);
+            ChannelManager.Instance.Disconnect(RawReliableDirectInfo.TransportName, _serverEndPoint, channel.ClientEp);
             channel.Dispose();
         }
 

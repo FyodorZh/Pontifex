@@ -7,36 +7,50 @@ namespace Pontifex
     {
         public static readonly ChannelManager Instance = new ChannelManager();
 
-        private readonly ConcurrentDictionary<IEndPoint, ServerEntry> _servers =
-            new ConcurrentDictionary<IEndPoint, ServerEntry>();
+        private readonly ConcurrentDictionary<ServerKey, ServerEntry> _servers =
+            new ConcurrentDictionary<ServerKey, ServerEntry>();
 
         private ChannelManager()
         {
         }
 
-        public bool RegisterServer(IEndPoint serverEp, Action<Channel> onChannelCreated)
+        public bool RegisterServer(string scheme, IEndPoint serverEp, Action<Channel> onChannelCreated)
         {
+            if (scheme == null)
+            {
+                throw new ArgumentNullException(nameof(scheme));
+            }
+
             var entry = new ServerEntry(onChannelCreated);
-            return _servers.TryAdd(serverEp, entry);
+            return _servers.TryAdd(new ServerKey(scheme, serverEp), entry);
         }
 
-        public void UnregisterServer(IEndPoint serverEp)
+        public void UnregisterServer(string scheme, IEndPoint serverEp)
         {
-            if (_servers.TryRemove(serverEp, out var entry))
+            if (_servers.TryRemove(new ServerKey(scheme, serverEp), out var entry))
             {
                 entry.DisconnectAll();
             }
         }
 
-        public Channel? Connect(IEndPoint serverEp, IEndPoint clientEp)
+        public Channel? Connect(string scheme, IEndPoint serverEp, IEndPoint clientEp)
         {
-            if (_servers.TryGetValue(serverEp, out var entry))
+            if (_servers.TryGetValue(new ServerKey(scheme, serverEp), out var entry))
             {
                 var channel = new Channel(clientEp, serverEp);
                 if (entry.AddClient(clientEp, channel))
                 {
-                    entry.InvokeOnChannelCreated(channel);
-                    return channel;
+                    try
+                    {
+                        entry.InvokeOnChannelCreated(channel);
+                        return channel;
+                    }
+                    catch (Exception)
+                    {
+                        // A throwing server callback must not leave a registered channel behind.
+                        entry.RemoveClient(clientEp);
+                        return null;
+                    }
                 }
 
                 channel.Dispose();
@@ -51,9 +65,9 @@ namespace Pontifex
         /// <returns><see langword="true"/> when the channel was registered and has been disposed; otherwise
         /// <see langword="false"/>. A missing entry does not mean the channel is alive: it may have been
         /// detached by its owner already.</returns>
-        public bool Disconnect(IEndPoint serverEp, IEndPoint clientEp)
+        public bool Disconnect(string scheme, IEndPoint serverEp, IEndPoint clientEp)
         {
-            if (_servers.TryGetValue(serverEp, out var entry))
+            if (_servers.TryGetValue(new ServerKey(scheme, serverEp), out var entry))
             {
                 return entry.RemoveClient(clientEp);
             }
@@ -66,14 +80,49 @@ namespace Pontifex
         /// endpoint takes ownership of an established channel.
         /// </summary>
         /// <returns><see langword="true"/> when the channel was removed from the registry.</returns>
-        public bool Detach(IEndPoint serverEp, IEndPoint clientEp)
+        public bool Detach(string scheme, IEndPoint serverEp, IEndPoint clientEp)
         {
-            if (_servers.TryGetValue(serverEp, out var entry))
+            if (_servers.TryGetValue(new ServerKey(scheme, serverEp), out var entry))
             {
                 return entry.DetachClient(clientEp);
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// The registry key: a protocol scheme plus the server endpoint. The same id may exist under
+        /// different Direct protocols without mixing channels.
+        /// </summary>
+        private readonly struct ServerKey : IEquatable<ServerKey>
+        {
+            private readonly string _scheme;
+            private readonly IEndPoint _endPoint;
+
+            public ServerKey(string scheme, IEndPoint endPoint)
+            {
+                _scheme = scheme ?? throw new ArgumentNullException(nameof(scheme));
+                _endPoint = endPoint ?? throw new ArgumentNullException(nameof(endPoint));
+            }
+
+            public bool Equals(ServerKey other)
+            {
+                return string.Equals(_scheme, other._scheme, StringComparison.Ordinal)
+                    && _endPoint.Equals(other._endPoint);
+            }
+
+            public override bool Equals(object? obj)
+            {
+                return obj is ServerKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    return (_scheme.GetHashCode() * 397) ^ _endPoint.GetHashCode();
+                }
+            }
         }
 
         private sealed class ServerEntry

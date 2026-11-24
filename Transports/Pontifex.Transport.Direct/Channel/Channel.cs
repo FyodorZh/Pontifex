@@ -102,11 +102,21 @@ namespace Pontifex
 
             if (Volatile.Read(ref _disposed) != 0)
             {
-                DeliverySystemLifetime.Release(system);
+                SafeRelease(system);
                 return;
             }
 
-            system.Delivered += handler;
+            try
+            {
+                system.Delivered += handler;
+            }
+            catch (Exception)
+            {
+                // The subscription failed before the channel took ownership; the caller still owns the
+                // system, so the install must not release it.
+                throw;
+            }
+
             IDeliverySystem old = Interlocked.Exchange(ref field, system);
 
             if (ReferenceEquals(old, system))
@@ -116,8 +126,23 @@ namespace Pontifex
                 return;
             }
 
-            old.Delivered -= handler;
-            DeliverySystemLifetime.Release(old);
+            try
+            {
+                old.Delivered -= handler;
+
+                // The same instance may still be referenced by the other direction. In that case the
+                // other field (or disposal) owns the single release.
+                if (!ReferenceEquals(old, _clientDeliverySystem)
+                    && !ReferenceEquals(old, _serverDeliverySystem))
+                {
+                    SafeRelease(old);
+                }
+            }
+            catch (Exception)
+            {
+                // Once the exchange succeeded the channel owns the new system. A later subscription or
+                // release failure must not escape and must not make the caller release the system again.
+            }
 
             if (Volatile.Read(ref _disposed) == 0)
             {
@@ -129,11 +154,34 @@ namespace Pontifex
             // compare-exchange succeeds only in that case: take the system back and release it.
             if (ReferenceEquals(Interlocked.CompareExchange(ref field, old, system), system))
             {
-                system.Delivered -= handler;
-                DeliverySystemLifetime.Release(system);
+                try
+                {
+                    system.Delivered -= handler;
+                }
+                catch (Exception)
+                {
+                }
+
+                SafeRelease(system);
             }
         }
         
+        private static void SafeRelease(IDeliverySystem? system)
+        {
+            if (system == null)
+            {
+                return;
+            }
+
+            try
+            {
+                DeliverySystemLifetime.Release(system);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
         private void OnClientDeliveredMessage(UnionDataList message)
         {
             var handler = _clientHandler;
@@ -185,13 +233,32 @@ namespace Pontifex
                 return;
             }
 
-            var oldClient = Interlocked.Exchange(ref _clientDeliverySystem, new PerfectDeliverySystem());
-            oldClient.Delivered -= OnClientDeliveredMessage;
-            DeliverySystemLifetime.Release(oldClient);
+            var oldClient = Interlocked.Exchange(ref _clientDeliverySystem,
+                DiscardingDeliverySystem.Instance);
+            try
+            {
+                oldClient.Delivered -= OnClientDeliveredMessage;
+            }
+            catch (Exception)
+            {
+            }
 
-            var oldServer = Interlocked.Exchange(ref _serverDeliverySystem, new PerfectDeliverySystem());
-            oldServer.Delivered -= OnServerDeliveredMessage;
-            DeliverySystemLifetime.Release(oldServer);
+            SafeRelease(oldClient);
+
+            var oldServer = Interlocked.Exchange(ref _serverDeliverySystem,
+                DiscardingDeliverySystem.Instance);
+            try
+            {
+                oldServer.Delivered -= OnServerDeliveredMessage;
+            }
+            catch (Exception)
+            {
+            }
+
+            if (!ReferenceEquals(oldServer, oldClient))
+            {
+                SafeRelease(oldServer);
+            }
 
             _clientHandler = null;
             _serverHandler = null;

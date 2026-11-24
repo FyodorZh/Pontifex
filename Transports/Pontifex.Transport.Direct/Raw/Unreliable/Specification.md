@@ -105,8 +105,10 @@ server role.
 The carrier owns the `Channel`, its two endpoint halves, and the registry entry
 for the server `id`.
 
-`Start` on the server registers `id` with `ChannelManager`; a duplicate `id`
-fails `Start`. The server creates one session endpoint for each source route
+`Start` on the server registers `id` with `ChannelManager` under the
+`direct-raw-unreliable` scheme; a duplicate `id` within that scheme fails
+`Start`. The same `id` may exist under another Direct scheme, and a client sees
+only its own scheme. The server creates one session endpoint for each source route
 through the abstract routing rules. The client creates one endpoint at start and
 acquires its channel on the first send.
 
@@ -221,7 +223,8 @@ integrity protection; the process boundary is the isolation boundary.
 
 - [ ] Register the scheme `direct-raw-unreliable` for
       `TransportType.RawUnreliable`.
-- [ ] Bind the server to the exact `id` and fail `Start` on a duplicate `id`.
+- [ ] Bind the server to the exact `id` and fail `Start` on a duplicate `id`
+      within the `direct-raw-unreliable` scheme.
 - [ ] Connect the client lazily on the first send and release the message when
       no server is registered.
 - [ ] Key every server route by source-endpoint equality and hash code.

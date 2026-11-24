@@ -284,7 +284,7 @@ public sealed class RawUnreliableDirectServerContractTests
         }), Is.True);
         Assert.That(server.Start(onStopped ?? (_ => { })), Is.True);
 
-        var connected = ChannelManager.Instance.Connect(new StringEndPoint(id), new GuidEndPoint(Guid.NewGuid()));
+        var connected = ChannelManager.Instance.Connect(RawUnreliableDirectInfo.TransportName, new StringEndPoint(id), new GuidEndPoint(Guid.NewGuid()));
         Assert.That(connected, Is.Not.Null, "the server did not accept the test channel.");
         channel = connected!;
         return server;

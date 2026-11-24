@@ -295,6 +295,108 @@ public sealed class ChannelTests
         });
     }
 
+    [Test]
+    public void Dispose_WithAThrowingDeliverySystem_StillReleasesTheOtherAndRaisesDisposed()
+    {
+        var channel = NewChannel(out _);
+        var throwing = new TrackingDeliverySystem { ThrowOnClear = true };
+        var other = new TrackingDeliverySystem();
+        int disposed = 0;
+        channel.Disposed += () => disposed++;
+        channel.SetClientDeliverySystem(throwing);
+        channel.SetServerDeliverySystem(other);
+
+        Assert.DoesNotThrow(channel.Dispose);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(throwing.ClearCount, Is.EqualTo(1));
+            Assert.That(other.ClearCount, Is.EqualTo(1));
+            Assert.That(disposed, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void Dispose_WithAThrowingDisposedSubscriber_StillNotifiesTheNextSubscriber()
+    {
+        var channel = NewChannel(out _);
+        int second = 0;
+        channel.Disposed += () => throw new InvalidOperationException("Expected subscriber failure.");
+        channel.Disposed += () => second++;
+
+        Assert.DoesNotThrow(channel.Dispose);
+        Assert.That(second, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Dispose_WithTheSameSystemInBothDirections_ReleasesItOnce()
+    {
+        var channel = NewChannel(out _);
+        var shared = new TrackingDeliverySystem();
+        channel.SetClientDeliverySystem(shared);
+        channel.SetServerDeliverySystem(shared);
+
+        channel.Dispose();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(shared.ClearCount, Is.EqualTo(1));
+            Assert.That(shared.DisposeCount, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task SendRacingDispose_ReleasesTheMessage()
+    {
+        var channel = NewChannel(out _);
+        var blocking = new BlockingDeliverySystem();
+        channel.SetClientDeliverySystem(blocking);
+        UnionDataList message = NewMessage(1);
+
+        var send = Task.Run(() => channel.SendToClient(message));
+        await blocking.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        channel.Dispose();
+        blocking.Release();
+
+        Assert.That(await send.WaitAsync(TimeSpan.FromSeconds(5)), Is.EqualTo(SendResult.Ok));
+        Assert.That(message.IsAlive, Is.False, "a racing send must not leak its message");
+    }
+
+    private sealed class BlockingDeliverySystem : IDeliverySystem
+    {
+        private readonly ManualResetEventSlim _gate = new(false);
+
+        public TaskCompletionSource Entered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public event Action<UnionDataList>? Delivered;
+
+        public void Deliver(UnionDataList message)
+        {
+            Entered.TrySetResult();
+            _gate.Wait(TimeSpan.FromSeconds(5));
+            var delivered = Delivered;
+            if (delivered != null)
+            {
+                delivered(message);
+            }
+            else
+            {
+                message.Release();
+            }
+        }
+
+        public void Clear()
+        {
+        }
+
+        public void Release()
+        {
+            _gate.Set();
+        }
+    }
+
     private static Channel NewChannel(out IEndPoint clientEndPoint)
     {
         clientEndPoint = new StringEndPoint("client-" + Guid.NewGuid().ToString("N"));

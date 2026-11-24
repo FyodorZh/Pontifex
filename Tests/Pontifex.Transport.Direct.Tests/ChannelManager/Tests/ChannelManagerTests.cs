@@ -21,7 +21,7 @@ public sealed class ChannelManagerTests
     {
         foreach (var server in _servers)
         {
-            ChannelManager.Instance.UnregisterServer(server);
+            ChannelManager.Instance.UnregisterServer("test", server);
         }
 
         _servers.Clear();
@@ -36,7 +36,7 @@ public sealed class ChannelManagerTests
     {
         var server = NewServerEndPoint();
 
-        Assert.That(ChannelManager.Instance.RegisterServer(server, _ => { }), Is.True);
+        Assert.That(ChannelManager.Instance.RegisterServer("test", server, _ => { }), Is.True);
         _servers.Add(server);
     }
 
@@ -45,7 +45,7 @@ public sealed class ChannelManagerTests
     {
         var server = Register();
 
-        Assert.That(ChannelManager.Instance.RegisterServer(server, _ => { }), Is.False);
+        Assert.That(ChannelManager.Instance.RegisterServer("test", server, _ => { }), Is.False);
     }
 
     [Test]
@@ -53,17 +53,17 @@ public sealed class ChannelManagerTests
     {
         var name = "cm-dup-" + Guid.NewGuid().ToString("N");
         var server = new StringEndPoint(name);
-        Assert.That(ChannelManager.Instance.RegisterServer(server, _ => { }), Is.True);
+        Assert.That(ChannelManager.Instance.RegisterServer("test", server, _ => { }), Is.True);
         _servers.Add(server);
         var equal = new StringEndPoint(name);
 
-        Assert.That(ChannelManager.Instance.RegisterServer(equal, _ => { }), Is.False);
+        Assert.That(ChannelManager.Instance.RegisterServer("test", equal, _ => { }), Is.False);
     }
 
     [Test]
     public void Connect_WithoutARegisteredServer_ReturnsNull()
     {
-        var channel = ChannelManager.Instance.Connect(NewServerEndPoint(), NewClientEndPoint());
+        var channel = ChannelManager.Instance.Connect("test", NewServerEndPoint(), NewClientEndPoint());
 
         Assert.That(channel, Is.Null);
     }
@@ -75,7 +75,7 @@ public sealed class ChannelManagerTests
         var server = Register(channel => created = channel);
         var client = NewClientEndPoint();
 
-        var channel = ChannelManager.Instance.Connect(server, client);
+        var channel = ChannelManager.Instance.Connect("test", server, client);
 
         Assert.Multiple(() =>
         {
@@ -91,8 +91,8 @@ public sealed class ChannelManagerTests
         var server = Register();
         var client = NewClientEndPoint();
 
-        var first = ChannelManager.Instance.Connect(server, client);
-        var second = ChannelManager.Instance.Connect(server, client);
+        var first = ChannelManager.Instance.Connect("test", server, client);
+        var second = ChannelManager.Instance.Connect("test", server, client);
 
         Assert.Multiple(() =>
         {
@@ -107,12 +107,12 @@ public sealed class ChannelManagerTests
     {
         var server = Register();
         var client = NewClientEndPoint();
-        var channel = ChannelManager.Instance.Connect(server, client);
+        var channel = ChannelManager.Instance.Connect("test", server, client);
 
         Assert.That(channel, Is.Not.Null);
-        Assert.That(ChannelManager.Instance.Disconnect(server, client), Is.True);
+        Assert.That(ChannelManager.Instance.Disconnect("test", server, client), Is.True);
         Assert.That(channel!.IsDisposed, Is.True);
-        Assert.That(ChannelManager.Instance.Disconnect(server, client), Is.False);
+        Assert.That(ChannelManager.Instance.Disconnect("test", server, client), Is.False);
     }
 
     [Test]
@@ -120,7 +120,7 @@ public sealed class ChannelManagerTests
     {
         var server = Register();
 
-        Assert.That(ChannelManager.Instance.Disconnect(server, NewClientEndPoint()), Is.False);
+        Assert.That(ChannelManager.Instance.Disconnect("test", server, NewClientEndPoint()), Is.False);
     }
 
     [Test]
@@ -128,14 +128,14 @@ public sealed class ChannelManagerTests
     {
         var server = Register();
         var client = NewClientEndPoint();
-        var channel = ChannelManager.Instance.Connect(server, client);
+        var channel = ChannelManager.Instance.Connect("test", server, client);
 
         Assert.That(channel, Is.Not.Null);
-        Assert.That(ChannelManager.Instance.Detach(server, client), Is.True);
+        Assert.That(ChannelManager.Instance.Detach("test", server, client), Is.True);
         Assert.That(channel!.IsDisposed, Is.False);
-        Assert.That(ChannelManager.Instance.Disconnect(server, client), Is.False);
+        Assert.That(ChannelManager.Instance.Disconnect("test", server, client), Is.False);
 
-        var replacement = ChannelManager.Instance.Connect(server, client);
+        var replacement = ChannelManager.Instance.Connect("test", server, client);
         Assert.That(replacement, Is.Not.Null);
 
         replacement!.Dispose();
@@ -147,23 +147,23 @@ public sealed class ChannelManagerTests
     {
         var server = Register();
 
-        Assert.That(ChannelManager.Instance.Detach(server, NewClientEndPoint()), Is.False);
+        Assert.That(ChannelManager.Instance.Detach("test", server, NewClientEndPoint()), Is.False);
     }
 
     [Test]
     public void UnregisterServer_DisposesEveryConnectedChannel()
     {
         var server = Register();
-        var first = ChannelManager.Instance.Connect(server, NewClientEndPoint());
-        var second = ChannelManager.Instance.Connect(server, NewClientEndPoint());
+        var first = ChannelManager.Instance.Connect("test", server, NewClientEndPoint());
+        var second = ChannelManager.Instance.Connect("test", server, NewClientEndPoint());
 
-        ChannelManager.Instance.UnregisterServer(server);
+        ChannelManager.Instance.UnregisterServer("test", server);
 
         Assert.Multiple(() =>
         {
             Assert.That(first!.IsDisposed, Is.True);
             Assert.That(second!.IsDisposed, Is.True);
-            Assert.That(ChannelManager.Instance.Connect(server, NewClientEndPoint()), Is.Null);
+            Assert.That(ChannelManager.Instance.Connect("test", server, NewClientEndPoint()), Is.Null);
         });
     }
 
@@ -171,7 +171,7 @@ public sealed class ChannelManagerTests
     public void UnregisterServer_WithAnUnknownEndPoint_DoesNotThrow()
     {
         Assert.DoesNotThrow(
-            () => ChannelManager.Instance.UnregisterServer(NewServerEndPoint()));
+            () => ChannelManager.Instance.UnregisterServer("test", NewServerEndPoint()));
     }
 
     [Test]
@@ -179,11 +179,11 @@ public sealed class ChannelManagerTests
     {
         var name = "cm-equal-" + Guid.NewGuid().ToString("N");
         var registered = new StringEndPoint(name);
-        Assert.That(ChannelManager.Instance.RegisterServer(registered, _ => { }), Is.True);
+        Assert.That(ChannelManager.Instance.RegisterServer("test", registered, _ => { }), Is.True);
         _servers.Add(registered);
 
         var equal = new StringEndPoint(name);
-        var channel = ChannelManager.Instance.Connect(equal, NewClientEndPoint());
+        var channel = ChannelManager.Instance.Connect("test", equal, NewClientEndPoint());
 
         Assert.That(channel, Is.Not.Null);
     }
@@ -192,7 +192,7 @@ public sealed class ChannelManagerTests
     public void Connect_DeliversMessagesInBothDirections()
     {
         var server = Register();
-        var channel = ChannelManager.Instance.Connect(server, NewClientEndPoint())!;
+        var channel = ChannelManager.Instance.Connect("test", server, NewClientEndPoint())!;
 
         int clientValue = -1;
         int serverValue = -1;
@@ -233,7 +233,7 @@ public sealed class ChannelManagerTests
         }
 
         Parallel.For(0, count,
-            i => channels[i] = ChannelManager.Instance.Connect(server, clients[i]));
+            i => channels[i] = ChannelManager.Instance.Connect("test", server, clients[i]));
 
         Assert.Multiple(() =>
         {
@@ -241,9 +241,58 @@ public sealed class ChannelManagerTests
             Assert.That(CreatedCount, Is.EqualTo(count));
         });
 
-        ChannelManager.Instance.UnregisterServer(server);
+        ChannelManager.Instance.UnregisterServer("test", server);
 
         Assert.That(channels.All(channel => channel!.IsDisposed), Is.True);
+    }
+
+    [Test]
+    public void Connect_WhenTheServerCallbackThrows_ReturnsNullAndLeavesNoClientEntry()
+    {
+        var server = NewServerEndPoint();
+        var client = NewClientEndPoint();
+        Assert.That(ChannelManager.Instance.RegisterServer("test", server,
+            _ => throw new InvalidOperationException("Expected server callback failure.")), Is.True);
+        _servers.Add(server);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ChannelManager.Instance.Connect("test", server, client), Is.Null);
+            Assert.That(ChannelManager.Instance.Disconnect("test", server, client), Is.False,
+                "a throwing callback must not leave a registered channel");
+        });
+    }
+
+    [Test]
+    public void RegisterServer_SameIdUnderDifferentSchemes_BothStartAndStayIsolated()
+    {
+        var id = NewServerEndPoint();
+        var clientA = NewClientEndPoint();
+        var clientB = NewClientEndPoint();
+        int callsA = 0;
+        int callsB = 0;
+        Assert.That(ChannelManager.Instance.RegisterServer("scheme-a", id, _ => callsA++), Is.True);
+        Assert.That(ChannelManager.Instance.RegisterServer("scheme-b", id, _ => callsB++), Is.True);
+
+        try
+        {
+            var channelA = ChannelManager.Instance.Connect("scheme-a", id, clientA);
+            var channelB = ChannelManager.Instance.Connect("scheme-b", id, clientB);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(channelA, Is.Not.Null);
+                Assert.That(channelB, Is.Not.Null);
+                Assert.That(channelA, Is.Not.SameAs(channelB));
+                Assert.That(callsA, Is.EqualTo(1));
+                Assert.That(callsB, Is.EqualTo(1));
+            });
+        }
+        finally
+        {
+            ChannelManager.Instance.UnregisterServer("scheme-a", id);
+            ChannelManager.Instance.UnregisterServer("scheme-b", id);
+        }
     }
 
     private IEndPoint Register(Action<Channel>? onCreated = null)
@@ -259,7 +308,7 @@ public sealed class ChannelManagerTests
             onCreated?.Invoke(channel);
         };
 
-        Assert.That(ChannelManager.Instance.RegisterServer(server, callback), Is.True);
+        Assert.That(ChannelManager.Instance.RegisterServer("test", server, callback), Is.True);
         _servers.Add(server);
         return server;
     }

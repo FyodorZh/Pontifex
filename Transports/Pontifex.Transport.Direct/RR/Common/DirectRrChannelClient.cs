@@ -12,6 +12,7 @@ namespace Pontifex.RR.Direct
     internal sealed class DirectRrChannelClient
     {
         private readonly object _lock = new object();
+        private readonly string _scheme;
         private readonly IEndPoint _server;
         private readonly IEndPoint _client;
         private readonly ILogger _log;
@@ -27,6 +28,7 @@ namespace Pontifex.RR.Direct
         private bool _stopped;
 
         public DirectRrChannelClient(
+            string scheme,
             IEndPoint server,
             IEndPoint client,
             ILogger logger,
@@ -36,6 +38,7 @@ namespace Pontifex.RR.Direct
             Func<IDeliverySystem>? clientToServerFactory = null,
             Func<IDeliverySystem>? serverToClientFactory = null)
         {
+            _scheme = scheme ?? throw new ArgumentNullException(nameof(scheme));
             _server = server ?? throw new ArgumentNullException(nameof(server));
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _log = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -124,7 +127,7 @@ namespace Pontifex.RR.Direct
 
                 if (channel != null)
                 {
-                    ChannelManager.Instance.Disconnect(_server, _client);
+                    ChannelManager.Instance.Disconnect(_scheme, _server, _client);
                 }
             }
 
@@ -155,7 +158,7 @@ namespace Pontifex.RR.Direct
                 // channel is already disposed, so its own disposal notification cannot re-enter.
                 ClearChannelUnderLock();
                 purgeChannel = channel;
-                ChannelManager.Instance.Disconnect(_server, _client);
+                ChannelManager.Instance.Disconnect(_scheme, _server, _client);
                 channel = null;
             }
 
@@ -197,7 +200,7 @@ namespace Pontifex.RR.Direct
                 // The channel already released the frame. Clearing and removing the registry entry
                 // happens under the lock, so a concurrent send cannot reconnect into a stale entry.
                 ClearChannelUnderLock();
-                ChannelManager.Instance.Disconnect(_server, _client);
+                ChannelManager.Instance.Disconnect(_scheme, _server, _client);
                 purgeChannel = channel;
                 return acceptWithoutPeer ? SendResult.Ok : SendResult.Error;
             }
@@ -225,7 +228,7 @@ namespace Pontifex.RR.Direct
 
             try
             {
-                channel = ChannelManager.Instance.Connect(_server, _client);
+                channel = ChannelManager.Instance.Connect(_scheme, _server, _client);
                 if (channel == null)
                 {
                     frame.Release();
@@ -312,7 +315,7 @@ namespace Pontifex.RR.Direct
 
                 // Remove the registry entry under the lock for the same reason as Stop: a send that
                 // races this notification must not be refused by a stale entry.
-                ChannelManager.Instance.Disconnect(_server, _client);
+                ChannelManager.Instance.Disconnect(_scheme, _server, _client);
                 notify = true;
             }
 
@@ -342,7 +345,7 @@ namespace Pontifex.RR.Direct
                 return;
             }
 
-            ChannelManager.Instance.Disconnect(_server, _client);
+            ChannelManager.Instance.Disconnect(_scheme, _server, _client);
 
             if (!channel.IsDisposed)
             {

@@ -392,7 +392,7 @@ public sealed class RawUnreliableDirectOwnershipTests
         var serverHandler = new RecordingHandler();
         RawUnreliableDirectServerTransport? realServer = null;
 
-        Assert.That(ChannelManager.Instance.RegisterServer(new StringEndPoint(id),
+        Assert.That(ChannelManager.Instance.RegisterServer(RawUnreliableDirectInfo.TransportName, new StringEndPoint(id),
             _ => throw new InvalidOperationException("Expected manager callback failure.")), Is.True);
         try
         {
@@ -404,11 +404,12 @@ public sealed class RawUnreliableDirectOwnershipTests
             Assert.Multiple(() =>
             {
                 Assert.That(client.IsStarted, Is.True);
-                Assert.That(explicitClient.ClearCalls, Is.EqualTo(1));
-                Assert.That(explicitServer.ClearCalls, Is.EqualTo(1));
+                Assert.That(explicitClient.ClearCalls, Is.Zero,
+                    "a null connect result leaves the configured systems unhanded");
+                Assert.That(explicitServer.ClearCalls, Is.Zero);
             });
 
-            ChannelManager.Instance.UnregisterServer(new StringEndPoint(id));
+            ChannelManager.Instance.UnregisterServer(RawUnreliableDirectInfo.TransportName, new StringEndPoint(id));
             realServer = new RawUnreliableDirectServerTransport(id, Logger, MemoryRental.Shared);
             Assert.That(realServer.Init(_ => serverHandler), Is.True);
             Assert.That(realServer.Start(_ => { }), Is.True);
@@ -420,7 +421,7 @@ public sealed class RawUnreliableDirectOwnershipTests
         {
             client.Stop();
             realServer?.Stop();
-            ChannelManager.Instance.UnregisterServer(new StringEndPoint(id));
+            ChannelManager.Instance.UnregisterServer(RawUnreliableDirectInfo.TransportName, new StringEndPoint(id));
         }
     }
 

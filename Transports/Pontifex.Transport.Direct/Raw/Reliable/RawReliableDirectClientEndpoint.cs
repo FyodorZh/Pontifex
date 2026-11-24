@@ -75,7 +75,7 @@ namespace Pontifex.Raw.Reliable.Direct
         {
             try
             {
-                Channel? channel = ChannelManager.Instance.Connect(_serverEndPoint, _clientEndPoint);
+                Channel? channel = ChannelManager.Instance.Connect(RawReliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint);
                 if (channel == null)
                 {
                     Stop(new TextFail(TransportName, $"Direct server '{_serverEndPoint}' is not available"), false);
@@ -236,7 +236,7 @@ namespace Pontifex.Raw.Reliable.Direct
 
             // The manager removes the channel from the server registry. When the server is already gone
             // there is no entry left to remove, so the channel is disposed directly.
-            ChannelManager.Instance.Disconnect(_serverEndPoint, _clientEndPoint);
+            ChannelManager.Instance.Disconnect(RawReliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint);
             channel.Dispose();
         }
 

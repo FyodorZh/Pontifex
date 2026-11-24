@@ -79,7 +79,7 @@ public sealed class RawReliableDirectTransportTests
     public void Client_handshake_timeout_fires_before_a_response()
     {
         var serverName = NewServerName();
-        Assert.That(ChannelManager.Instance.RegisterServer(new StringEndPoint(serverName), _ => { }),
+        Assert.That(ChannelManager.Instance.RegisterServer(RawReliableDirectInfo.TransportName, new StringEndPoint(serverName), _ => { }),
             Is.True);
 
         try
@@ -103,7 +103,7 @@ public sealed class RawReliableDirectTransportTests
         }
         finally
         {
-            ChannelManager.Instance.UnregisterServer(new StringEndPoint(serverName));
+            ChannelManager.Instance.UnregisterServer(RawReliableDirectInfo.TransportName, new StringEndPoint(serverName));
         }
     }
 
@@ -112,7 +112,7 @@ public sealed class RawReliableDirectTransportTests
     {
         var factory = new RecordingFactory(_ => new RecordingServerHandler());
         var server = StartServer(factory, out var serverName);
-        var channel = ChannelManager.Instance.Connect(new StringEndPoint(serverName),
+        var channel = ChannelManager.Instance.Connect(RawReliableDirectInfo.TransportName, new StringEndPoint(serverName),
             new GuidEndPoint(Guid.NewGuid()));
         Assert.That(channel, Is.Not.Null);
 
@@ -285,7 +285,7 @@ public sealed class RawReliableDirectTransportTests
 
         var serverEndPoint = new StringEndPoint(serverName);
         var clientEndPoint = new GuidEndPoint(Guid.NewGuid());
-        var channel = ChannelManager.Instance.Connect(serverEndPoint, clientEndPoint);
+        var channel = ChannelManager.Instance.Connect(RawReliableDirectInfo.TransportName, serverEndPoint, clientEndPoint);
         Assert.That(channel, Is.Not.Null);
 
         UnionDataList? rejection = null;
@@ -717,7 +717,7 @@ public sealed class RawReliableDirectTransportTests
             _handshakeName = handshakeName;
             _messageMaxByteSize = messageMaxByteSize;
 
-            Assert.That(ChannelManager.Instance.RegisterServer(_serverEndPoint, OnChannelCreated), Is.True);
+            Assert.That(ChannelManager.Instance.RegisterServer(RawReliableDirectInfo.TransportName, _serverEndPoint, OnChannelCreated), Is.True);
         }
 
         private void OnChannelCreated(Channel channel)
@@ -746,7 +746,7 @@ public sealed class RawReliableDirectTransportTests
 
         public void Dispose()
         {
-            ChannelManager.Instance.UnregisterServer(_serverEndPoint);
+            ChannelManager.Instance.UnregisterServer(RawReliableDirectInfo.TransportName, _serverEndPoint);
         }
     }
 

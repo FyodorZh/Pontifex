@@ -21,6 +21,10 @@
 | `SendToServer_AfterDispose_ReturnsNotConnectedAndReleasesTheMessage` | Disposed send | A server-bound send after dispose returns `NotConnected` and releases the message | Companion to the client direction. |
 | `Dispose_IsIdempotentAndRaisesTheEventOnce` | Disposal | Repeated dispose raises `Disposed` exactly once and leaves `IsDisposed` true | Pins the one-shot interlocked gate. |
 | `Dispose_ContinuesWhenASubscriberThrows` | Disposal fault isolation | A throwing subscriber does not stop later subscribers | The channel has no logger, so failures are swallowed by design. |
+| `Dispose_WithAThrowingDeliverySystem_StillReleasesTheOtherAndRaisesDisposed` | Delivery-system teardown isolation | A throwing clear does not skip the other direction or the `Disposed` event | The channel swallows release failures by design. |
+| `Dispose_WithAThrowingDisposedSubscriber_StillNotifiesTheNextSubscriber` | Subscriber isolation | A throwing subscriber does not skip the next one | Pins the invocation-list loop. |
+| `Dispose_WithTheSameSystemInBothDirections_ReleasesItOnce` | Shared-system ownership | A shared instance is released exactly once | Deduplicated by reference. |
+| `SendRacingDispose_ReleasesTheMessage` | Racing send/dispose | A blocked send that races disposal still releases its message | The blocking delivery system forces the interleaving. |
 | `Messages_AreDeliveredInSendOrder` | Delivery order | Five client-bound sends arrive in call order | The perfect delivery system invokes synchronously; no scheduler is involved. |
 | `ClientEndPoint_IsTheConfiguredInstance` | Endpoint exposure | `ClientEp` returns the exact configured endpoint | The channel does not clone or wrap the endpoint. |
 | `ReplacingTheClientDeliverySystem_ReleasesTheOldSystem` | Delivery-system ownership | Replacing the client direction clears and disposes the old system | A disposable system is disposed after clearing. |
@@ -44,6 +48,8 @@
 | `ServerEndPointEquality_KeysTheRegistry` | Registry addressing | An equal but distinct server endpoint resolves the same registration | Equality and hash code are the only keys. |
 | `Connect_DeliversMessagesInBothDirections` | End-to-end channel | A connected pair delivers both directions through the registered channel | Uses the default perfect systems. |
 | `ConcurrentConnects_FromDistinctClients_CreateOneChannelEach` | Concurrent pairing | Thirty-two parallel connects create one channel per distinct client | No timing dependence; the assertion is on the final registry and callback counts. |
+| `Connect_WhenTheServerCallbackThrows_ReturnsNullAndLeavesNoClientEntry` | Callback failure cleanup | A throwing server callback returns `null` and leaves no registered client entry | The plan Stage 4 manager-callback test now asserts this returned-null path. |
+| `RegisterServer_SameIdUnderDifferentSchemes_BothStartAndStayIsolated` | Protocol-scoped id | The same `id` under two schemes registers and connects independently | The registry key is `(scheme, IEndPoint)`. |
 
 ## Planned
 

@@ -158,7 +158,7 @@ confidentiality, or integrity protection.
 | Capacity | The server dispatch queue and its pre-start pending list default to `1024` items; a full list releases the request and closes its handle. |
 | Persistence | None. Pending requests, sessions, and the duplicate window do not survive a restart. |
 | Payload limit | `1048576` bytes, excluding the reliable header and channel framing. |
-| Server id uniqueness | `id` is unique across all Direct transports in the process; a duplicate server registration fails `Start`. |
+| Server id uniqueness | `id` is unique within the `direct-rr-reliable` scheme; a duplicate registration in that scheme fails `Start`. Another Direct scheme may use the same `id`. |
 | Callback scheduler | One server-side serialized dispatch queue owns `OnRequested`; the client callback pump owns `Response` and `Finish`. |
 | Reconnect policy | The first request connects lazily. After a live session a channel disposal fails the transport; there is no reconnect or background retry. |
 | Failure detection | Channel disposal is the only session-loss signal. A missing server is detected during `ChannelManager.Connect`. |
@@ -180,7 +180,8 @@ confidentiality, or integrity protection.
 - [ ] Schedule `Finish(Failed)` for every accepted pending request before `onStopped`.
 - [ ] Leave `IsValid` true after a normal stop and after a later channel disposal.
 - [ ] Release the frame on every failing connect, install, send, and dispatch path.
-- [ ] Fail `Start` on a duplicate `id` and keep the first server usable.
+- [ ] Fail `Start` on a duplicate `id` within the `direct-rr-reliable` scheme
+      and keep the first server usable.
 - [ ] Record every terminal client-local id in the per-session duplicate window.
 - [ ] Reject new requests when the 65,536-request window is full.
 - [ ] Keep the three declared deviations within their stated bounds.

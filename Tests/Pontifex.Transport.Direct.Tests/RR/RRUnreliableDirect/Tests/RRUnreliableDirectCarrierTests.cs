@@ -286,7 +286,7 @@ public sealed class RRUnreliableDirectCarrierTests
 
         var serverEndpoint = new StringEndPoint(name);
         var clientEndPoint = new GuidEndPoint(Guid.NewGuid());
-        Channel? channel = ChannelManager.Instance.Connect(serverEndpoint, clientEndPoint);
+        Channel? channel = ChannelManager.Instance.Connect(RRDirectInfo.UnreliableTransportName, serverEndpoint, clientEndPoint);
         Assert.That(channel, Is.Not.Null);
         Action<IEndPoint, UnionDataList> handler = CaptureServerHandler(channel!);
 
@@ -356,6 +356,7 @@ public sealed class RRUnreliableDirectCarrierTests
         int disposedCount = 0;
         int liveCount = 0;
         var carrier = new DirectRrChannelClient(
+            RRDirectInfo.UnreliableTransportName,
             serverEndpoint,
             new GuidEndPoint(Guid.NewGuid()),
             Logger,
@@ -368,7 +369,7 @@ public sealed class RRUnreliableDirectCarrierTests
             Is.EqualTo(SendResult.Error));
         Assert.That(noPeerFrame.IsAlive, Is.False);
 
-        var server = new DirectRrChannelServer(serverEndpoint.EP, Logger, (_, frame) => frame.Release());
+        var server = new DirectRrChannelServer(RRDirectInfo.UnreliableTransportName, serverEndpoint.EP, Logger, (_, frame) => frame.Release());
         Assert.That(server.TryStart(), Is.True);
         try
         {
@@ -398,12 +399,13 @@ public sealed class RRUnreliableDirectCarrierTests
     public void SystemInstalledOnARejectedChannel_IsReleased()
     {
         var serverEndpoint = new StringEndPoint(NewName());
-        Assert.That(ChannelManager.Instance.RegisterServer(serverEndpoint, channel => channel.Dispose()),
+        Assert.That(ChannelManager.Instance.RegisterServer(RRDirectInfo.UnreliableTransportName, serverEndpoint, channel => channel.Dispose()),
             Is.True);
 
         var clientToServer = new TrackingDeliverySystem();
         var serverToClient = new TrackingDeliverySystem();
         var carrier = new DirectRrChannelClient(
+            RRDirectInfo.UnreliableTransportName,
             serverEndpoint,
             new GuidEndPoint(Guid.NewGuid()),
             Logger,
@@ -426,7 +428,7 @@ public sealed class RRUnreliableDirectCarrierTests
         finally
         {
             carrier.Stop();
-            ChannelManager.Instance.UnregisterServer(serverEndpoint);
+            ChannelManager.Instance.UnregisterServer(RRDirectInfo.UnreliableTransportName, serverEndpoint);
         }
     }
 
@@ -435,12 +437,13 @@ public sealed class RRUnreliableDirectCarrierTests
     {
         var serverEndpoint = new StringEndPoint(NewName());
         Channel? channel = null;
-        Assert.That(ChannelManager.Instance.RegisterServer(serverEndpoint, created => channel = created),
+        Assert.That(ChannelManager.Instance.RegisterServer(RRDirectInfo.UnreliableTransportName, serverEndpoint, created => channel = created),
             Is.True);
 
         var clientToServer = new TrackingDeliverySystem();
         var serverToClient = new TrackingDeliverySystem();
         var carrier = new DirectRrChannelClient(
+            RRDirectInfo.UnreliableTransportName,
             serverEndpoint,
             new GuidEndPoint(Guid.NewGuid()),
             Logger,
@@ -474,7 +477,7 @@ public sealed class RRUnreliableDirectCarrierTests
         finally
         {
             carrier.Stop();
-            ChannelManager.Instance.UnregisterServer(serverEndpoint);
+            ChannelManager.Instance.UnregisterServer(RRDirectInfo.UnreliableTransportName, serverEndpoint);
         }
     }
 
@@ -484,18 +487,19 @@ public sealed class RRUnreliableDirectCarrierTests
         var serverEndpoint = new StringEndPoint(NewName());
         var clientEndpoint = new GuidEndPoint(Guid.NewGuid());
         var server = new DirectRrChannelServer(
+            RRDirectInfo.UnreliableTransportName,
             serverEndpoint.EP, Logger, (_, frame) => frame.Release());
         Assert.That(server.TryStart(), Is.True);
 
         try
         {
-            Channel channel = ChannelManager.Instance.Connect(serverEndpoint, clientEndpoint)!;
+            Channel channel = ChannelManager.Instance.Connect(RRDirectInfo.UnreliableTransportName, serverEndpoint, clientEndpoint)!;
             Assert.That(channel, Is.Not.Null);
             Assert.That(server.RegisteredClientCount, Is.EqualTo(1));
             Assert.That(server.TrySend(clientEndpoint, TestMessages.Int(1)),
                 Is.EqualTo(SendResult.Ok));
 
-            Assert.That(ChannelManager.Instance.Disconnect(serverEndpoint, clientEndpoint),
+            Assert.That(ChannelManager.Instance.Disconnect(RRDirectInfo.UnreliableTransportName, serverEndpoint, clientEndpoint),
                 Is.True);
             Assert.That(server.RegisteredClientCount, Is.Zero);
 
@@ -514,10 +518,11 @@ public sealed class RRUnreliableDirectCarrierTests
     {
         var serverEndpoint = new StringEndPoint(NewName());
         var server = new DirectRrChannelServer(
+            RRDirectInfo.UnreliableTransportName,
             serverEndpoint.EP, Logger, (_, frame) => frame.Release());
         Assert.That(server.TryStart(), Is.True);
 
-        Channel channel = ChannelManager.Instance.Connect(
+        Channel channel = ChannelManager.Instance.Connect(RRDirectInfo.UnreliableTransportName, 
             serverEndpoint, new GuidEndPoint(Guid.NewGuid()))!;
         Assert.That(channel, Is.Not.Null);
         Assert.That(server.RegisteredClientCount, Is.EqualTo(1));
@@ -529,7 +534,7 @@ public sealed class RRUnreliableDirectCarrierTests
             Assert.That(server.RegisteredClientCount, Is.Zero);
             Assert.That(channel.IsDisposed, Is.True);
             Assert.That(
-                ChannelManager.Instance.Connect(serverEndpoint, new GuidEndPoint(Guid.NewGuid())),
+                ChannelManager.Instance.Connect(RRDirectInfo.UnreliableTransportName, serverEndpoint, new GuidEndPoint(Guid.NewGuid())),
                 Is.Null);
         });
     }
@@ -573,10 +578,12 @@ public sealed class RRUnreliableDirectCarrierTests
     {
         var serverEndpoint = new StringEndPoint(NewName());
         var server = new DirectRrChannelServer(
+            RRDirectInfo.UnreliableTransportName,
             serverEndpoint.EP, Logger, (_, frame) => frame.Release());
         Assert.That(server.TryStart(), Is.True);
 
         var carrier = new DirectRrChannelClient(
+            RRDirectInfo.UnreliableTransportName,
             serverEndpoint,
             new GuidEndPoint(Guid.NewGuid()),
             Logger,

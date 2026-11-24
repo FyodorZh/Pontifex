@@ -140,7 +140,7 @@ confidentiality, or integrity protection.
 | Reconnect policy | The first request connects lazily. A channel disposal is a loss; the next request reconnects with fresh delivery systems. There is no background retry. |
 | Capacity | The server dispatch queue is bounded by the configured capacity, default `100`; a full queue releases the frame. The pre-start pending list is bounded by `100`. |
 | Payload limit | `1048576` bytes, excluding the request-id header and channel framing. |
-| Server id uniqueness | `id` is unique across all Direct transports in the process; a duplicate server registration fails `Start`. |
+| Server id uniqueness | `id` is unique within the `direct-rr-unreliable` scheme; a duplicate registration in that scheme fails `Start`. Another Direct scheme may use the same `id`. |
 | Callback scheduler | One server dispatch queue serializes `OnRequested`; client responses are delivered on the channel's callback path. |
 | Failure detection | Channel disposal is the only session-loss signal; a missing server is detected during `ChannelManager.Connect`. |
 | Logging | Malformed, oversized, foreign-route, and delivery-system failures are logged. A request dropped for a missing peer is not logged. |
@@ -160,7 +160,8 @@ confidentiality, or integrity protection.
 - [ ] Release the frame on every failing connect, install, send, and dispatch path.
 - [ ] Clear the channel under the lock before disconnecting on a loss.
 - [ ] Remove the disposed channel from the registry and reconnect with fresh systems.
-- [ ] Fail `Start` on a duplicate `id` and keep the first server usable.
+- [ ] Fail `Start` on a duplicate `id` within the `direct-rr-unreliable` scheme
+      and keep the first server usable.
 - [ ] Release every held frame and the queue on stop.
 - [ ] Send nothing and fail nothing when no server is registered.
 - [ ] Keep the four declared deviations within their stated bounds.

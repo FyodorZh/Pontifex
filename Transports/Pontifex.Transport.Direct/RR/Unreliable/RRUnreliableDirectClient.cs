@@ -54,6 +54,7 @@ namespace Pontifex.RR.Unreliable.Direct
         protected override bool StartCarrier()
         {
             _carrier = new DirectRrChannelClient(
+                RRDirectInfo.UnreliableTransportName,
                 ServerEndPoint,
                 _clientEndPoint,
                 Log,

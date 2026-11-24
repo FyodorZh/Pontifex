@@ -43,7 +43,7 @@ public sealed class RawUnreliableDirectDrainIntegrationTests
             Assert.That(server.Init(_ => handler), Is.True);
             Assert.That(server.Start(_ => { }), Is.True);
 
-            channel = ChannelManager.Instance.Connect(new StringEndPoint(id),
+            channel = ChannelManager.Instance.Connect(RawUnreliableDirectInfo.TransportName, new StringEndPoint(id),
                 new GuidEndPoint(Guid.NewGuid()));
             Assert.That(channel, Is.Not.Null);
 

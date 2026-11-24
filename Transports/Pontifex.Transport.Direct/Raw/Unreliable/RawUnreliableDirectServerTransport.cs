@@ -125,7 +125,7 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <inheritdoc/>
         protected override bool StartCarrier()
         {
-            if (!ChannelManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
+            if (!ChannelManager.Instance.RegisterServer(RawUnreliableDirectInfo.TransportName, _serverEp, OnChannelCreated))
             {
                 Log.e("Failed to register server '{0}'. Name already in use.", _serverEp);
                 return false;
@@ -137,7 +137,7 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <inheritdoc/>
         protected override void StopCarrier(StopReason reason)
         {
-            ChannelManager.Instance.UnregisterServer(_serverEp);
+            ChannelManager.Instance.UnregisterServer(RawUnreliableDirectInfo.TransportName, _serverEp);
 
             foreach (var pair in _channels)
             {

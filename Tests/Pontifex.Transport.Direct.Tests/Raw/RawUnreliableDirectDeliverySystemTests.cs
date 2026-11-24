@@ -61,7 +61,7 @@ public sealed class RawUnreliableDirectDeliverySystemTests
     {
         string serverName = "rejects-" + Guid.NewGuid().ToString("N");
         var serverEndPoint = new StringEndPoint(serverName);
-        Assert.That(ChannelManager.Instance.RegisterServer(serverEndPoint, channel => channel.Dispose()),
+        Assert.That(ChannelManager.Instance.RegisterServer(RawUnreliableDirectInfo.TransportName, serverEndPoint, channel => channel.Dispose()),
             Is.True);
 
         try
@@ -97,7 +97,7 @@ public sealed class RawUnreliableDirectDeliverySystemTests
         }
         finally
         {
-            ChannelManager.Instance.UnregisterServer(serverEndPoint);
+            ChannelManager.Instance.UnregisterServer(RawUnreliableDirectInfo.TransportName, serverEndPoint);
         }
     }
 

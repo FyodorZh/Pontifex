@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
+using Pontifex.RR.Direct;
 using Pontifex.RR.Reliable;
 using Pontifex.RR.Reliable.Direct;
 using Pontifex.StopReasons;
@@ -247,7 +248,7 @@ public sealed class RRReliableDirectLifecycleTests
         _transports.Add(client);
 
         var serverEndpoint = new StringEndPoint(name);
-        Assert.That(ChannelManager.Instance.RegisterServer(serverEndpoint, channel => channel.Dispose()),
+        Assert.That(ChannelManager.Instance.RegisterServer(RRDirectInfo.ReliableTransportName, serverEndpoint, channel => channel.Dispose()),
             Is.True);
 
         try
@@ -267,7 +268,7 @@ public sealed class RRReliableDirectLifecycleTests
         }
         finally
         {
-            ChannelManager.Instance.UnregisterServer(serverEndpoint);
+            ChannelManager.Instance.UnregisterServer(RRDirectInfo.ReliableTransportName, serverEndpoint);
         }
 
         using var serverHandler = new RecordingReliableServerHandler(

@@ -17,6 +17,8 @@ internal sealed class TrackingDeliverySystem : IDeliverySystem, IDisposable
 
     public int DisposeCount => Volatile.Read(ref _disposeCount);
 
+    public bool ThrowOnClear { get; set; }
+
     public event Action<UnionDataList>? Delivered;
 
     public void Deliver(UnionDataList message)
@@ -35,6 +37,10 @@ internal sealed class TrackingDeliverySystem : IDeliverySystem, IDisposable
     public void Clear()
     {
         Interlocked.Increment(ref _clearCount);
+        if (ThrowOnClear)
+        {
+            throw new InvalidOperationException("Expected delivery-system clear failure.");
+        }
     }
 
     public void Dispose()

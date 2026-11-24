@@ -44,6 +44,7 @@ namespace Pontifex.RR.Reliable.Direct
         {
             _hasLiveSession = false;
             _carrier = new DirectRrChannelClient(
+                RRDirectInfo.ReliableTransportName,
                 ServerEndPoint,
                 _clientEndPoint,
                 Log,

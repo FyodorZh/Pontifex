@@ -100,8 +100,9 @@ internal test constructor may disable the deadline.
 The carrier owns the `Channel`, its two endpoint halves, and the registry entry
 for the server `id`.
 
-`Start` on the server registers `id` with `ChannelManager`; a duplicate `id`
-fails `Start`. `Start` on the client creates its single endpoint, which connects
+`Start` on the server registers `id` with `ChannelManager` under the `direct`
+scheme; a duplicate `id` within that scheme fails `Start`. The same `id` may
+exist under another Direct scheme, and a client sees only its own scheme. `Start` on the client creates its single endpoint, which connects
 to the registered server as part of its start transition. A missing or rejecting
 server stops the client endpoint; it is not a failed `Start`.
 
@@ -168,7 +169,8 @@ the isolation boundary.
 
 - [ ] Register the scheme `direct` for `TransportType.RawReliable`.
 - [ ] Use `direct` as the handshake name and `1` as the handshake version.
-- [ ] Bind the server to the exact `id` and fail `Start` on a duplicate `id`.
+- [ ] Bind the server to the exact `id` and fail `Start` on a duplicate `id`
+      within the `direct` scheme.
 - [ ] Pair the client and server halves by exact `id` equality and identify each
       client with a unique `GuidEndPoint`.
 - [ ] Prepend the frame type byte and keep every handshake frame within

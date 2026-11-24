@@ -14,6 +14,7 @@ namespace Pontifex.RR.Direct
     internal sealed class DirectRrChannelServer
     {
         private readonly object _locker = new object();
+        private readonly string _scheme;
         private readonly IEndPoint _server;
         private readonly ILogger _log;
         private readonly Action<IEndPoint, UnionDataList> _inbound;
@@ -24,6 +25,7 @@ namespace Pontifex.RR.Direct
         private bool _stopping;
 
         public DirectRrChannelServer(
+            string scheme,
             string serverId,
             ILogger logger,
             Action<IEndPoint, UnionDataList> inbound,
@@ -34,6 +36,7 @@ namespace Pontifex.RR.Direct
                 throw new ArgumentNullException(nameof(serverId));
             }
 
+            _scheme = scheme ?? throw new ArgumentNullException(nameof(scheme));
             _server = new StringEndPoint(serverId);
             _log = logger ?? throw new ArgumentNullException(nameof(logger));
             _inbound = inbound ?? throw new ArgumentNullException(nameof(inbound));
@@ -65,7 +68,7 @@ namespace Pontifex.RR.Direct
                     return false;
                 }
 
-                if (!ChannelManager.Instance.RegisterServer(_server, OnChannelCreated))
+                if (!ChannelManager.Instance.RegisterServer(_scheme, _server, OnChannelCreated))
                 {
                     _log.e("Failed to register RR Direct server '{0}'. Name already in use.", _server);
                     return false;
@@ -127,7 +130,7 @@ namespace Pontifex.RR.Direct
                 _stopping = true;
             }
 
-            ChannelManager.Instance.UnregisterServer(_server);
+            ChannelManager.Instance.UnregisterServer(_scheme, _server);
 
             foreach (KeyValuePair<IEndPoint, Channel> pair in _channels)
             {
@@ -212,7 +215,7 @@ namespace Pontifex.RR.Direct
 
         private void RejectChannel(IEndPoint clientEndPoint, Channel channel)
         {
-            ChannelManager.Instance.Disconnect(_server, clientEndPoint);
+            ChannelManager.Instance.Disconnect(_scheme, _server, clientEndPoint);
             channel.Dispose();
         }
     }

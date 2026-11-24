@@ -298,7 +298,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             try
             {
-                channel = ChannelManager.Instance.Connect(_serverEndPoint, _clientEndPoint);
+                channel = ChannelManager.Instance.Connect(RawUnreliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint);
                 if (channel == null)
                 {
                     return null;
@@ -338,7 +338,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
                     // Remove the failed channel from the server registry and dispose it. The registry, not
                     // the endpoint, owns a channel created by the manager.
-                    if (!ChannelManager.Instance.Disconnect(_serverEndPoint, _clientEndPoint))
+                    if (!ChannelManager.Instance.Disconnect(RawUnreliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint))
                     {
                         channel.Dispose();
                     }
@@ -449,7 +449,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             // The manager removes the channel from the server registry and disposes it. When the server is
             // already gone there is no entry left to remove, so the channel is disposed directly.
-            if (!ChannelManager.Instance.Disconnect(_serverEndPoint, _clientEndPoint))
+            if (!ChannelManager.Instance.Disconnect(RawUnreliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint))
             {
                 channel.Dispose();
             }
