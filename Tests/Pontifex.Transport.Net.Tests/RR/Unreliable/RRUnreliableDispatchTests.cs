@@ -529,6 +529,32 @@ public sealed class RRUnreliableDispatchTests
     }
 
     [Test]
+    public void StopBetweenAddAndBind_DoesNotLeaveTheHandlerBound()
+    {
+        IpEndPoint server = Endpoint(5000);
+        var client = new TestClientTransport(server, 100);
+        var handler = new RecordingHandler();
+
+        try
+        {
+            Assert.That(client.Start(_ => { }), Is.True);
+
+            client.AfterAddBeforeBindForTests = () => client.Stop();
+
+            var request = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
+            request.PutLast(1);
+
+            Assert.That(client.Request(request, handler), Is.EqualTo(SendResult.NotConnected));
+            Assert.That(handler.IsBound, Is.False);
+            Assert.That(client.PendingCountForTests, Is.Zero);
+        }
+        finally
+        {
+            client.Stop();
+        }
+    }
+
+    [Test]
     public void TryUnbind_DoesNotClearANewerBinding()
     {
         var handler = new RecordingHandler();

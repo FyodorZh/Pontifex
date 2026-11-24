@@ -168,6 +168,7 @@ namespace Pontifex.RR.Unreliable
                 if (_pendingResponses.TryAdd(requestId, candidate, sweep ? TerminateExpired : null,
                         sweep))
                 {
+                    AfterAddBeforeBindForTests?.Invoke();
                     bindable.Bind(requestId, CancelRequest);
                     state = candidate;
                     added = true;
@@ -184,33 +185,21 @@ namespace Pontifex.RR.Unreliable
 
             if (_stopping)
             {
-                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
-                {
-                    bindable.TryUnbind(requestId);
-                }
-
+                AbortProvisional(requestId, state, bindable);
                 request.Release();
                 return IsStarted ? SendResult.Error : SendResult.NotConnected;
             }
 
             if (!bindable.IsBound || bindable.ConsumeCancelRequested())
             {
-                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
-                {
-                    bindable.TryUnbind(requestId);
-                }
-
+                AbortProvisional(requestId, state, bindable);
                 request.Release();
                 return SendResult.Error;
             }
 
             if (!IsStarted)
             {
-                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
-                {
-                    bindable.TryUnbind(requestId);
-                }
-
+                AbortProvisional(requestId, state, bindable);
                 request.Release();
                 return SendResult.NotConnected;
             }
@@ -227,36 +216,36 @@ namespace Pontifex.RR.Unreliable
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
-                {
-                    bindable.TryUnbind(requestId);
-                }
-
+                AbortProvisional(requestId, state, bindable);
                 return SendResult.Error;
             }
 
             if (result != SendResult.Ok)
             {
-                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
-                {
-                    bindable.TryUnbind(requestId);
-                }
-
+                AbortProvisional(requestId, state, bindable);
                 return result;
             }
 
             if (_stopping)
             {
-                if (_pendingResponses.TryTakeExact(requestId, state, out _, out _))
-                {
-                    bindable.TryUnbind(requestId);
-                }
-
+                AbortProvisional(requestId, state, bindable);
                 return SendResult.Error;
             }
 
             _pendingResponses.ReArm(requestId);
             return SendResult.Ok;
+        }
+
+        private void AbortProvisional(ushort requestId, RRUnreliableRequestState state,
+            RRRequestHandler handler)
+        {
+            state.TryTerminate();
+            _pendingResponses.TryTakeExact(requestId, state, out _, out _);
+
+            if (!state.IsCallbackActive)
+            {
+                handler.TryUnbind(requestId);
+            }
         }
 
         /// <summary>
@@ -311,6 +300,12 @@ namespace Pontifex.RR.Unreliable
                 ((RRRequestHandler)state.Handler).TryUnbind(state.RequestId);
             }
         }
+
+        /// <summary>
+        /// Gets or sets a test hook invoked after the request entered the pending table and before
+        /// the handler is bound.
+        /// </summary>
+        internal Action? AfterAddBeforeBindForTests { get; set; }
 
         /// <summary>
         /// Gets or sets a test hook invoked immediately before the encoded request is sent.

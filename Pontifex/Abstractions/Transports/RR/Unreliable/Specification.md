@@ -222,9 +222,10 @@ following wins:
 4. the transport stops or fails, which clears the pending window.
 
 Expiry is silent: no callback is raised, the pending id is no longer eligible,
-and the handler is unbound once any in-flight callback returns. A frame for an id that is unknown, expired, already
-completed, cancelled, or sent by another route **MUST** be released and dropped.
-A duplicate message id **MUST** be released and dropped.
+and the handler is unbound once any in-flight callback returns. A frame for an
+id that is unknown, expired, already completed, cancelled, or sent by another
+route **MUST** be released and dropped. A duplicate message id **MUST** be
+released and dropped.
 
 An accepted request therefore receives **zero or more** `Response` calls, at most
 one per message id. The callback for the last message ends the request. When
