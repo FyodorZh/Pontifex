@@ -75,6 +75,7 @@ namespace Pontifex.Raw.Unreliable.Direct
                     return () => new PerfectDeliverySystem();
                 case "netem":
                     var config = ParseNetemConfig(value);
+                    config.Validate();
                     _ = NetemDeliverySystem.CreateLossModel(config);
                     return () => new NetemDeliverySystem(
                         config,
@@ -105,12 +106,18 @@ namespace Pontifex.Raw.Unreliable.Direct
                     "The 'delivery' value requires a 'type' field.", nameof(value));
             }
 
+            if (TryGetString(value, "lossmodel", out var configuredLossModel))
+            {
+                _ = ParseLossModelKind(configuredLossModel);
+            }
+
             switch (type)
             {
                 case "perfect":
                     return;
                 case "netem":
                     var config = ParseNetemConfig(value);
+                    config.Validate();
                     _ = NetemDeliverySystem.CreateLossModel(config);
                     return;
                 default:
@@ -406,8 +413,8 @@ namespace Pontifex.Raw.Unreliable.Direct
                 new IntegerField("maxdelayns", false, new IntegerType(long.MinValue, long.MaxValue)),
                 new IntegerField("distdelayns", false, new IntegerType(long.MinValue, long.MaxValue)),
                 new IntegerField("distjitterns", false, new IntegerType(long.MinValue, long.MaxValue)),
-                new IntegerField("maxpackets", false, new IntegerType(int.MinValue, int.MaxValue)),
-                new IntegerField("maxbytes", false, new IntegerType(int.MinValue, int.MaxValue))
+                new IntegerField("maxpackets", false, new IntegerType(0, int.MaxValue)),
+                new IntegerField("maxbytes", false, new IntegerType(0, int.MaxValue))
             });
 
             var fourState = new StructSchema(new StructField[]
@@ -437,10 +444,10 @@ namespace Pontifex.Raw.Unreliable.Direct
                 new IntegerField("reorderprobability", false, new IntegerType(0, uint.MaxValue)),
                 new IntegerField("gap", false, new IntegerType(0, uint.MaxValue)),
                 new IntegerField("ratebytespersec", false, new IntegerType(0, long.MaxValue)),
-                new IntegerField("packetoverhead", false, new IntegerType(int.MinValue, int.MaxValue)),
+                new IntegerField("packetoverhead", false, new IntegerType(0, int.MaxValue)),
                 new IntegerField("cellsize", false, new IntegerType(0, uint.MaxValue)),
-                new IntegerField("celloverhead", false, new IntegerType(int.MinValue, int.MaxValue)),
-                new IntegerField("queuelimit", false, new IntegerType(int.MinValue, int.MaxValue)),
+                new IntegerField("celloverhead", false, new IntegerType(0, int.MaxValue)),
+                new IntegerField("queuelimit", false, new IntegerType(0, int.MaxValue)),
                 new StringField("lossmodel", required: false),
                 new NestedStructField("correlation", false, correlation),
                 new NestedStructField("slot", false, slot),

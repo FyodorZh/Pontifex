@@ -18,17 +18,19 @@ public sealed class NetemDeliverySystemTests
         var config = new NetemConfig
         {
             // Duplication creates a second copy before the loss decision. A dropped packet must
-            // stay dropped instead of surviving as the remaining copy.
+            // stay dropped instead of surviving as the remaining copy. The manual pump keeps the
+            // decision synchronous and independent of any latency value.
             DuplicateProbability = uint.MaxValue,
             LossProbability = uint.MaxValue,
-            LatencyNs = 3_600_000_000_000,
             Correlation = new CorrelationParams(0, 0, 0, 0)
         };
 
         var delivery = new NetemDeliverySystem(
             config,
             MemoryRental.Shared.CollectablePool,
-            MemoryRental.Shared.ByteArraysPool);
+            MemoryRental.Shared.ByteArraysPool,
+            () => 1_000,
+            manualMode: true);
 
         try
         {
@@ -37,8 +39,7 @@ public sealed class NetemDeliverySystemTests
 
             delivery.Deliver(message);
 
-            // A queued packet would still be alive: the base latency is one hour. A dropped packet
-            // is released before Deliver returns.
+            // The loss decision runs synchronously in Deliver; a queued packet would still be alive.
             Assert.That(message.IsAlive, Is.False,
                 "A duplicated packet survived a saturated loss decision.");
         }

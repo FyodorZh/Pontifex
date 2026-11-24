@@ -54,22 +54,31 @@
 | `Rate_one_byte_per_sec_gives_ns_per_byte` | Rate unit conversion | One byte per second yields 500,000,000,000 ns for 500 bytes | Pins the bytes-to-nanoseconds conversion. |
 | `Empty_packet_has_minimal_time` | Empty packet | An empty packet takes less time than a one-byte packet | Pins the minimum packet handling. |
 | `Cell_size_zero_does_not_round` | Disabled cells | Without a cell size, an adjacent one-byte increase changes the time | Proves the rounding branch is bypassed. |
-| `SaturatedLossWithDuplication_DropsThePacket` | Duplication and loss ordering | A packet with both probabilities saturated is released synchronously, not delivered as the surviving duplicate | The base latency is one hour, so a queued packet would stay alive; the assertion distinguishes a drop from a delay without waiting on the dequeue thread. |
+| `SaturatedLossWithDuplication_DropsThePacket` | Duplication and loss ordering | A packet with both probabilities saturated is released synchronously, not delivered as the surviving duplicate | Uses the manual-pump constructor, so the assertion is independent of latency and never waits on the dequeue thread. |
+| `MonotonicTime_ConvertsLargeTicksWithoutOverflow` | Overflow-free monotonic conversion | Large tick counts at `1e9` and `1e7` frequencies produce the split-arithmetic nanosecond value | Exercises tick values that overflow the old multiply-first formula. |
+| `MonotonicTime_IsNonDecreasing` | Monotonic source | Two reads do not decrease | Pins the real source's monotonicity. |
+| `ManualPump_DeliversALatentMessageOnlyAfterTheDelay` | Latency pipeline | A message stays queued before its due time and is delivered at it | Manual clock and pump; no real timer. |
+| `ManualPump_DuplicateProbabilityDeliversEveryCopy` | Duplicate delivery | A saturated duplicate probability delivers exactly two copies | The pump runs twice. |
+| `QueueLimit_ClampsDuplicationToTheAvailableRoom` | Queue limit with duplication | Duplication never exceeds `QueueLimit`; a full queue releases the next packet | Pins the clamp and the room check. |
+| `ManualPump_RateLimiterPacesConsecutiveMessages` | Rate pacing | The first and second messages become due only after their byte time | Uses the manual pump and a fixed rate. |
+| `ManualPump_SlotWindowClosesAfterThePacketBudget` | Slot windows | The second message waits until the next slot opens | `MaxPackets` is one. |
+| `Dispose_WithQueuedMessages_ReleasesThem` | Disposal | A constructed manual system releases queued messages on dispose | The thread was never started, so dispose must not join it. |
+| `ClearAndDispose_AreRepeatSafe` | Repeated release | Repeated `Clear` and `Dispose` do not throw | Pins the disposed flag. |
+| `Validate_RejectsEveryNegativeField` | Configuration validation | Every negative duration, overhead, queue limit, and slot field is rejected | One assertion per field. |
+| `LossModels_ValidateTheirParameterSets` | Loss-model validation | Valid parameter sets are accepted and missing or unknown ones are rejected | Covers all three models. |
 
 ## Planned
 
 | Missing test | Owner layer |
 | --- | --- |
 | Uniform jitter fallback without a `DelayDistribution`: the formula lives in `NetemDeliverySystem.CalculateBaseDelay`. | Root |
-| `SlotScheduler`: enabled/disabled slots, packet and byte caps, uniform and distribution spacing, reset. | Root |
-| `NetemDeliverySystem` pipeline: queue limit, delay and jitter, reorder, slot gating, duplicate delivery, and disposal with queued messages. | Root |
-| `NetemConfig` defaults and the rate-limiter chain behavior under sustained traffic. | Root |
-| `RateLimiter` leaky-bucket sequence, not only per-packet time. | Root |
+| `SlotScheduler` distribution spacing and reset. | Root |
+| Reorder-gap behaviour and the leaky-bucket sequence under sustained traffic. | Root |
 
 ## Deferred By Design
 
 | Requirement | Reason |
 | --- | --- |
-| Wall-clock delivery through the netem background thread | Default suite runs must be deterministic. The pipeline is an integration facet and needs a separate declared category or a clock seam before it is added. |
+| Wall-clock delivery through the netem background thread | The deterministic tests use the internal manual clock and pump; the real thread remains an integration facet. |
 | Platform-specific timing accuracy and thread scheduling | Not observable through the deterministic component contracts. |
 | Statistical confidence intervals for the loss models | The tests pin scripted transitions and bounded rates; they do not claim a statistical proof. |

@@ -98,6 +98,60 @@ public sealed class UnreliableDeliveryBindingTests
             MemoryRental.Shared));
     }
 
+    [Test]
+    public void Validate_WithPerfectTypeAndUnknownLossModel_Throws()
+    {
+        var value = FakeStruct.Empty()
+            .SetString("type", "perfect")
+            .SetString("lossmodel", "bogus");
+
+        Assert.Throws<ArgumentException>(() => UnreliableDeliveryBinding.Validate(value));
+    }
+
+    [Test]
+    public void Validate_RejectsNegativeConfiguredFields()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => UnreliableDeliveryBinding.Validate(FakeStruct.Empty()
+                .SetString("type", "netem").SetLong("packetoverhead", -1)),
+                Throws.InstanceOf<ArgumentOutOfRangeException>());
+            Assert.That(() => UnreliableDeliveryBinding.Validate(FakeStruct.Empty()
+                .SetString("type", "netem").SetLong("celloverhead", -1)),
+                Throws.InstanceOf<ArgumentOutOfRangeException>());
+            Assert.That(() => UnreliableDeliveryBinding.Validate(FakeStruct.Empty()
+                .SetString("type", "netem").SetLong("queuelimit", -1)),
+                Throws.InstanceOf<ArgumentOutOfRangeException>());
+        });
+    }
+
+    [Test]
+    public void CreateFactory_ReturnsAnIndependentSystemPerCall()
+    {
+        var factory = UnreliableDeliveryBinding.CreateFactory(
+            FakeStruct.Empty().SetString("type", "perfect"), MemoryRental.Shared);
+
+        var first = factory();
+        var second = factory();
+
+        try
+        {
+            Assert.That(first, Is.Not.SameAs(second));
+        }
+        finally
+        {
+            DeliverySystemLifetime.Release(first);
+            DeliverySystemLifetime.Release(second);
+        }
+    }
+
+    [Test]
+    public void CreateFactory_WithUnknownType_ThrowsWithoutConstructing()
+    {
+        Assert.Throws<ArgumentException>(() => UnreliableDeliveryBinding.CreateFactory(
+            FakeStruct.Empty().SetString("type", "bogus"), MemoryRental.Shared));
+    }
+
     private sealed class FakeStruct : ITransportStructValue
     {
         private readonly Dictionary<string, string> _strings = new();

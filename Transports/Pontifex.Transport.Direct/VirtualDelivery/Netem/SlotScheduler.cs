@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 
 namespace Pontifex.VirtualDelivery.Netem
 {
@@ -10,6 +9,7 @@ namespace Pontifex.VirtualDelivery.Netem
 
         private readonly SlotConfig _config;
         private readonly DistributionTable? _dist;
+        private readonly Func<long> _clock;
         private readonly Random _random = new Random();
 
         private long _slotNext;
@@ -19,9 +19,15 @@ namespace Pontifex.VirtualDelivery.Netem
         public long NextSlotTime => _slotNext;
 
         public SlotScheduler(SlotConfig config, DistributionTable? dist)
+            : this(config, dist, MonotonicTime.NowNanoseconds)
+        {
+        }
+
+        internal SlotScheduler(SlotConfig config, DistributionTable? dist, Func<long> clock)
         {
             _config = config;
             _dist = dist;
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
 
             int maxPackets = config.MaxPackets > 0 ? config.MaxPackets : MaxPacketsDefault;
             int maxBytes = config.MaxBytes > 0 ? config.MaxBytes : MaxBytesDefault;
@@ -68,9 +74,9 @@ namespace Pontifex.VirtualDelivery.Netem
             }
         }
 
-        private static long CurrentTimeNs()
+        private long CurrentTimeNs()
         {
-            return Stopwatch.GetTimestamp() * 1_000_000_000L / Stopwatch.Frequency;
+            return _clock();
         }
 
         public void Reset()

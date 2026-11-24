@@ -101,5 +101,42 @@ namespace Pontifex.VirtualDelivery.Netem
         public CorrelationParams Correlation { get; init; }
         public SlotConfig Slot { get; init; }
         public DistributionTable? SlotDistribution { get; init; }
+
+        /// <summary>
+        /// Validates the configuration values that the delivery system cannot interpret.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">A negative duration, overhead, or queue limit was
+        /// supplied.</exception>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Cells are enabled exactly when <see cref="CellSize"/> is
+        /// greater than zero; zero disables them. The loss-model parameter set is validated by the delivery
+        /// system factory. A negative <see cref="CellSize"/> is impossible because the type is
+        /// <see cref="uint"/>.</description></item>
+        /// </list>
+        /// </remarks>
+        public void Validate()
+        {
+            RequireNonNegative(LatencyNs, nameof(LatencyNs));
+            RequireNonNegative(JitterNs, nameof(JitterNs));
+            RequireNonNegative(PacketOverhead, nameof(PacketOverhead));
+            RequireNonNegative(CellOverhead, nameof(CellOverhead));
+            RequireNonNegative(QueueLimit, nameof(QueueLimit));
+            RequireNonNegative(Slot.MinDelayNs, nameof(Slot) + "." + nameof(Slot.MinDelayNs));
+            RequireNonNegative(Slot.MaxDelayNs, nameof(Slot) + "." + nameof(Slot.MaxDelayNs));
+            RequireNonNegative(Slot.DistDelayNs, nameof(Slot) + "." + nameof(Slot.DistDelayNs));
+            RequireNonNegative(Slot.DistJitterNs, nameof(Slot) + "." + nameof(Slot.DistJitterNs));
+            RequireNonNegative(Slot.MaxPackets, nameof(Slot) + "." + nameof(Slot.MaxPackets));
+            RequireNonNegative(Slot.MaxBytes, nameof(Slot) + "." + nameof(Slot.MaxBytes));
+        }
+
+        private static void RequireNonNegative(long value, string name)
+        {
+            if (value < 0)
+            {
+                throw new ArgumentOutOfRangeException(name,
+                    "The netem configuration value must not be negative.");
+            }
+        }
     }
 }

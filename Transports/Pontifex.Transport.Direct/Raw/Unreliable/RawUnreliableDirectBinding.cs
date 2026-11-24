@@ -61,6 +61,7 @@ namespace Pontifex.Raw.Unreliable.Direct
             var transport = new RawUnreliableDirectClientTransport(id, context.Logger, context.Memory);
             if (context.TryGetStruct("delivery", out var delivery))
             {
+                UnreliableDeliveryBinding.Validate(delivery);
                 transport.SetDeliverySystemFactory(
                     factoryBuilder(delivery, context.Memory),
                     factoryBuilder(delivery, context.Memory));
