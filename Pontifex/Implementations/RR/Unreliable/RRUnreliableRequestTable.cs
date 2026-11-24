@@ -46,6 +46,20 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
+        /// Gets the number of entries, including expired entries that were not swept yet.
+        /// </summary>
+        public int Count
+        {
+            get
+            {
+                lock (_locker)
+                {
+                    return _entries.Count;
+                }
+            }
+        }
+
+        /// <summary>
         /// Adds an entry with a provisional deadline and prunes expired entries. The deadline is set
         /// by <see cref="ReArm"/> once the frame is submitted.
         /// </summary>

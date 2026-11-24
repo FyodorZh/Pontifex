@@ -648,6 +648,37 @@ public sealed class RRUnreliableDirectCarrierTests
         return handler!;
     }
 
+    [Test]
+    public void SendFrame_WithANullCarrier_ReturnsErrorAndReleasesTheFrame()
+    {
+        var client = new RRUnreliableDirectClient(
+            new StringEndPoint(NewName()),
+            TimeSpan.FromSeconds(3),
+            Logger,
+            MemoryRental.Shared);
+        UnionDataList frame = TestMessages.Int(1);
+
+        var result = client.SendFrameForTests(frame);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(SendResult.Error));
+            Assert.That(frame.IsAlive, Is.False);
+        });
+    }
+
+    [Test]
+    public void ConfiguredQueueCapacity_IsUsedForTheDispatchGate()
+    {
+        using var handler = new RecordingServerHandler(MemoryRental.Shared);
+        var ten = StartServer(new ManualClock(), handler, out _, queueCapacity: 10);
+        Assert.That(ten.DispatchCapacityForTests, Is.EqualTo(10));
+
+        using var other = new RecordingServerHandler(MemoryRental.Shared);
+        var twoHundred = StartServer(new ManualClock(), other, out _, queueCapacity: 200);
+        Assert.That(twoHundred.DispatchCapacityForTests, Is.EqualTo(200));
+    }
+
     private static string NewName()
     {
         return "rr-carrier-" + Guid.NewGuid().ToString("N");

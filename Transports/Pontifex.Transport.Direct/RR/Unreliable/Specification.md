@@ -107,6 +107,13 @@ system itself and releases the frame once. A delivery-system exception is caught
 frame, and returns `Error`. An inbound frame that is malformed, has a foreign source, or exceeds
 `MessageMaxByteSize` is released and logged without stopping the transport.
 
+A request that races a client stop is never silently accepted. The client sets a one-way stop latch
+before it clears the pending table; a racing request sees the latch before binding, before sending,
+or after the send, removes itself, unbinds its handler, and returns `Error` (or `NotConnected` when
+the transport already stopped). A request the client accepts after a stop has begun therefore never
+remains bound and can never receive a response. A send through a null carrier releases the encoded
+frame and returns `Error`; only a live carrier with no peer applies the no-peer policy.
+
 This implementation declares four bounded deviations from the abstract type.
 
 1. **Already-expired request presented.** Shared §6.5 says a request whose response TTL expired
@@ -138,7 +145,7 @@ confidentiality, or integrity protection.
 | TTL values | `request_ttl` and `response_ttl` default to three seconds and are configured in whole seconds. |
 | Pending storage | The client uses `RRUnreliableRequestTable`; the server holds no pending request table, only the dispatch queue. |
 | Reconnect policy | The first request connects lazily. A channel disposal is a loss; the next request reconnects with fresh delivery systems. There is no background retry. |
-| Capacity | The server dispatch queue is bounded by the configured capacity, default `100`; a full queue releases the frame. The pre-start pending list is bounded by `100`. |
+| Capacity | The server dispatch queue is bounded by the configured capacity, default `100`; a full queue releases the frame. The pre-start pending list uses the same configured capacity. |
 | Payload limit | `1048576` bytes, excluding the request-id header and channel framing. |
 | Server id uniqueness | `id` is unique within the `direct-rr-unreliable` scheme; a duplicate registration in that scheme fails `Start`. Another Direct scheme may use the same `id`. |
 | Callback scheduler | One server dispatch queue serializes `OnRequested`; client responses are delivered on the channel's callback path. |

@@ -61,6 +61,9 @@
 | `CreateClient_WithPerfectDelivery_ProducesAStartedTransport` | Binding construction | A perfect-delivery client starts and stops | No channel is created before the first send. |
 | `BindingCreatedPair_RoundTripsARequest` | Integration | A client and server compiled through the real binding exchange a request and response | Category `Direct.RRUnreliable.Integration`; bounded signal waits. |
 | `BindingCreatedClient_WithNetemReconnectsAfterAChannelLoss` | Integration and reconnect | A real netem client reconnects after its channel is disposed and serves a second request | Category `Direct.RRUnreliable.Integration`; real netem teardown is bounded by its five-second join. |
+| `SendFrame_WithANullCarrier_ReturnsErrorAndReleasesTheFrame` | Stopped-carrier rejection | A frame sent without a carrier is released and reported as `Error` | Only a live carrier with no peer keeps the no-peer `Ok`. |
+| `ConfiguredQueueCapacity_IsUsedForTheDispatchGate` | Configured pre-start capacity | Capacities of 10 and 200 reach the server and drive the pending gate | The gate compares against `_queueCapacity`, not the constant. |
+| `RequestRacingStop_ReturnsErrorAndUnbindsTheHandler` | Stop race | A gated request that races a stop returns a non-`Ok` result, unbinds its handler, and leaves no pending entry | Category `Direct.RRUnreliable.Integration`; the send is gated. |
 
 ## Planned
 

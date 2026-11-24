@@ -77,11 +77,21 @@ namespace Pontifex.RR.Unreliable.Direct
             DirectRrChannelClient? carrier = _carrier;
             if (carrier == null)
             {
+                // A stopped carrier must reject the request so the core unbinds the handler. Only a live
+                // carrier with no peer applies the no-peer policy.
                 frame.Release();
-                return SendResult.Ok;
+                return SendResult.Error;
             }
 
             return carrier.TrySend(frame, acceptWithoutPeer: true);
+        }
+
+        /// <summary>
+        /// Sends one frame through the carrier for tests, including the null-carrier path.
+        /// </summary>
+        internal SendResult SendFrameForTests(UnionDataList frame)
+        {
+            return SendFrame(frame);
         }
 
         public override string ToString()

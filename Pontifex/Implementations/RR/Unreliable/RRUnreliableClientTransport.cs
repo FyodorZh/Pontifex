@@ -25,6 +25,7 @@ namespace Pontifex.RR.Unreliable
         private readonly TimeSpan _requestTtl;
         private readonly RRUnreliableRequestTable<IRRUnreliableRequestHandler> _pendingResponses;
         private long _nextRequestId;
+        private volatile bool _stopping;
 
         /// <summary>
         /// Initializes a new RR unreliable client transport.
@@ -105,6 +106,12 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         public SendResult Request(UnionDataList request, IRRUnreliableRequestHandler handler)
         {
+            if (_stopping)
+            {
+                ReleaseQuietly(request);
+                return IsStarted ? SendResult.Error : SendResult.NotConnected;
+            }
+
             if (handler == null!)
             {
                 throw new ArgumentNullException(nameof(handler));
@@ -163,6 +170,17 @@ namespace Pontifex.RR.Unreliable
                 return SendResult.BufferOverflow;
             }
 
+            if (_stopping)
+            {
+                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                {
+                    bindable.Unbind();
+                }
+
+                request.Release();
+                return IsStarted ? SendResult.Error : SendResult.NotConnected;
+            }
+
             if (!bindable.IsBound || bindable.ConsumeCancelRequested())
             {
                 if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
@@ -186,6 +204,8 @@ namespace Pontifex.RR.Unreliable
             }
 
             RRUnreliableFrame.Encode(request, requestId);
+
+            BeforeSendForTests?.Invoke();
 
             SendResult result;
             try
@@ -211,6 +231,16 @@ namespace Pontifex.RR.Unreliable
                 }
 
                 return result;
+            }
+
+            if (_stopping)
+            {
+                if (_pendingResponses.TryTakeExact(requestId, handler, out _, out _))
+                {
+                    bindable.Unbind();
+                }
+
+                return SendResult.Error;
             }
 
             _pendingResponses.ReArm(requestId);
@@ -239,10 +269,20 @@ namespace Pontifex.RR.Unreliable
             }
         }
 
+        private static void ReleaseQuietly(UnionDataList? request)
+        {
+            request?.Release();
+        }
+
         private static void UnbindExpired(IRRUnreliableRequestHandler handler)
         {
             ((RRRequestHandler)handler).Unbind();
         }
+
+        /// <summary>
+        /// Gets or sets a test hook invoked immediately before the encoded request is sent.
+        /// </summary>
+        internal Action? BeforeSendForTests { get; set; }
 
         /// <summary>
         /// Sends one encoded frame to the server.
@@ -254,8 +294,16 @@ namespace Pontifex.RR.Unreliable
         /// <inheritdoc/>
         protected sealed override void ClearPendingRequests()
         {
+            // The one-way latch is set before the table is cleared, so a request that races the stop sees
+            // it and removes itself instead of being silently accepted.
+            _stopping = true;
             _pendingResponses.Clear(handler => ((RRRequestHandler)handler).Unbind());
         }
+
+        /// <summary>
+        /// Gets the number of pending requests, so a stop-race test can assert none remain.
+        /// </summary>
+        internal int PendingCountForTests => _pendingResponses.Count;
 
         /// <summary>
         /// Handles one inbound datagram received by the concrete carrier.
