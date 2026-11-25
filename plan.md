@@ -45,18 +45,22 @@ structure. The concrete Direct RR suites remain in place and keep passing.
   `[Category("Transports.RR.Reliable")]`; RRUnreliable fixtures carry
   `[Category("Transports.RR.Unreliable")]`. Client/server subcategories may be added.
 - Genuinely threaded tests carry `[Category("Transports.Concurrency")]`.
-- Remove `Direct.*` categories from moved abstract tests.
+- Remove `Direct.*` categories from moved abstract tests. The exception is the
+  `RRReliableServerSession` stress tests relocated to the Direct CoreHelpers suite: they
+  keep `Direct.RRReliable.Integration` and gain `Direct.RRReliableCoreHelpers`.
 - Test names use `Scenario_ExpectedResult`.
 - Use the suite root namespace `Pontifex.Tests.Transports` for test files and harness
-  unless a concrete name collision requires a documented sub-namespace.
+  unless a concrete name collision requires a documented sub-namespace. The relocated
+  CoreHelpers stress test uses `Pontifex.Tests.RR.RRReliableCoreHelpers`.
 - Keep the default run deterministic: no sleeps, real timers, sockets, or uncontrolled
   threads. Use manual queues, clocks, and gated/joined threads with bounded waits.
 - Preserve buffer ownership: release every `UnionDataList` the test owns; clone only when
   inspection must outlive the contract's release point.
 - Update the owning layer's `Coverage.md` in the same stage as the tests it records.
 - Do not create a new shared test-support project. Copy the small `ManualTimerFactory`
-  into the Transports harness; keep the Direct copy for Direct tests.
-- Do not modify the plan file after implementation starts.
+  into `Transports/RR/Reliable/Harness`; keep the Direct copy for Direct tests.
+- Do not revise or rewrite the plan after implementation starts. The only permitted plan
+  change is the final deletion at completion.
 - Do not commit unrelated files or multiple stages in one commit.
 
 ## Non-Goals
@@ -77,6 +81,13 @@ structure. The concrete Direct RR suites remain in place and keep passing.
   double and local scripted send/receive seams. Evidence: the production classes expose
   protected `SendFrame`/`OnFrameReceived` and internal test hooks, and
   `InternalsVisibleTo` includes `Pontifex.Tests`.
+- The RRUnreliable client has no injectable request-id seed: `CreateRandomRequestId` is
+  `private static` and `_nextRequestId` is private. Seed determinism, wraparound, and
+  generator-failure tests are therefore deferred by design rather than attempted through
+  reflection or a production change.
+- RRUnreliable server `OnRequested` serialization is carrier-owned, not owned by
+  `RRUnreliableServerTransport`. The Direct carrier covers it with
+  `ServerHandler_IsNeverConcurrent`; the abstract layer records it as deferred.
 - The `RRReliableServerSession` stress tests belong to `RRReliableCoreHelpers`, not the
   transport server layer. Evidence: they construct `RRReliableServerSession` directly and
   are documented as a multithreaded stress fixture for the session maps.
@@ -122,11 +133,14 @@ CoreHelpers suite.
    - exposed protected `TryValidatePayload`, `NextServerRequestId`, `FrameMaxByteSize`, and
      running snapshot.
 3. Move the existing RRReliable suite files:
-   - `Harness/ScriptedReliableCarrier.cs` → `Transports/RR/Harness/ScriptedReliableCarrier.cs`;
+   - `Harness/ScriptedReliableCarrier.cs` → `Transports/RR/Reliable/Harness/ScriptedReliableCarrier.cs`;
    - `Harness/TestRRReliableTransport.cs` → `Transports/RR/Reliable/Harness/TestRRReliableTransport.cs`;
+   - `Coverage.md` → `Transports/RR/Reliable/Coverage.md`;
+   - `RRReliableTransportTests.cs` → `Transports/RR/Reliable/RRReliableTransportTests.cs`;
    - `Generic/*` → `Transports/RR/Reliable/Generic/*`;
    - `Client/*` → `Transports/RR/Reliable/Client/*`;
-   - `Server/*` → `Transports/RR/Reliable/Server/*`.
+   - `Server/*` → `Transports/RR/Reliable/Server/*`, excluding
+     `RRReliableServerSessionStressTests.cs`, which action 6 moves directly to CoreHelpers.
 4. Split `RRReliableTransportTests.cs`:
    - Move shared lifecycle, payload-validation, frame-size formula, and
      server-request-id tests into `RRTransportTests.cs`, retargeted at `TestRRTransport`.
@@ -135,30 +149,46 @@ CoreHelpers suite.
      `AbortCarrier`; payload validation precedence (state before null/size, started null,
      valid, oversized, serialization failure); `NextServerRequestId` starts at one and
      increments.
+   - The serialization-failure test uses a list containing `PutLast(default(UnionData))`;
+     `UnionData.GetDataSize()` throws for `UnionDataType.Unknown`, and
+     `TryValidatePayload` must release the list and return `SendResult.InvalidMessage`.
    - Keep in `RRReliableTransportTests.cs`: `Type_IsRRReliable`, the reliable
-     `FrameMaxByteSize` assertion using `RRReliableFrame.MaxOverheadBytes`, and a
-     timer-factory injection/default test if not already covered.
-   - Move `Stop_SchedulesTerminalWorkBeforeOnStoppedBegins` to `RRTransportTests.cs` and
-     replace its timer-factory dependency with a local scheduled-action probe. Keep a
-     reliable-specific timer-factory test in `RRReliableTransportTests.cs` only if it
-     adds reliable delta coverage.
+     `FrameMaxByteSize` assertion using `RRReliableFrame.MaxOverheadBytes`, and
+     `TimerFactory_IsInjected` (the test double exposes the protected `TimerFactory` and
+     asserts constructor injection). These become the reliable layer's delta.
+   - Move `Stop_SchedulesTerminalWorkBeforeOnStoppedBegins` to `RRTransportTests.cs` as
+     `Stop_ClearsPendingBeforeOnStoppedBegins` and replace its timer-factory dependency
+     with a local `ClearPendingRequests` callback that sets a bool. Do not add a
+     reliable-specific timer-factory test beyond `TimerFactory_IsInjected`.
 5. Copy `Tests/Pontifex.Transport.Direct.Tests/RR/TestSupport/ManualTimerFactory.cs` to
-   `Tests/Pontifex.Tests/Transports/RR/Harness/ManualTimerFactory.cs`. Keep the Direct copy.
+   `Tests/Pontifex.Tests/Transports/RR/Reliable/Harness/ManualTimerFactory.cs`; change the
+   copied file's namespace to `Pontifex.Tests.Transports`. Keep the Direct copy.
 6. Move `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Server/RRReliableServerSessionStressTests.cs`
    to `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Tests/RRReliableServerSessionTests.cs`.
-   Rename the fixture to `RRReliableServerSessionTests`, keep both tests, and categorize
-   it `Direct.RRReliableCoreHelpers`. Update `RRReliableCoreHelpers/README.md` and
-   `Coverage.md` to add `RRReliableServerSession` to the suite subject and coverage.
-7. Update namespaces in moved files to `Pontifex.Tests.Transports` (or a documented
-   sub-namespace only if a name collision occurs). Remove all `Pontifex.Tests.RR.*`
-   namespaces from moved files.
-8. Update categories on every moved fixture:
+   Rename the fixture to `RRReliableServerSessionTests`, use the
+   `Pontifex.Tests.RR.RRReliableCoreHelpers` namespace, keep both tests, keep
+   `Direct.RRReliable.Integration`, add `Direct.RRReliableCoreHelpers`, and remove
+   `Direct.RRReliableTransport`. Update `RRReliableCoreHelpers/README.md` directory layout
+   and `Coverage.md` to add `RRReliableServerSession` to the suite subject and coverage.
+   This is a mechanical relocation grouped with the suite move because the plan-executor
+   granularity rule groups mechanical moves; it is not a separate behavioral checkpoint.
+7. Update namespaces in files moved into `Transports` to `Pontifex.Tests.Transports` (or a
+   documented sub-namespace only if a name collision occurs). Do not apply this step to
+   the CoreHelpers stress test from action 6.
+8. Update categories on every fixture moved into `Transports`:
    - `[Category("Transports")]`;
    - `[Category("Transports.RR")]`;
    - `[Category("Transports.RR.Reliable")]`;
    - add `.Client`/`.Server` where useful;
-   - add `[Category("Transports.Concurrency")]` only to tests that use real gated threads;
-   - remove `Direct.*` categories.
+   - add `[Category("Transports.Concurrency")]` to these tests that contain `Task.Run` or
+     `SpinWait`: `TerminalKeepsTheHandlerBoundUntilTheFinishCallbackReturns`,
+     `CancelOutsideACallback_DeliversOneCanceledAndSuppressesLateResponses`,
+     `Stop_SchedulesOneFailedPerPendingRequestBeforeOnStoppedAndDeliversAfter`,
+     `ConcurrentResponsesForDifferentRequests_AreDeliveredSafely`,
+     `ThrowingHandler_RejectsTheUndecidedHandle`,
+     `BlockedResponse_WithConcurrentStop_DoesNotHang`, and
+     `TwoThreadsOnOneHandle_ProduceOneTerminalResult`;
+   - remove `Direct.*` categories from these moved files.
 9. Delete the old `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport` directory.
 10. Update `Tests/Pontifex.Tests/Transports/README.md`:
     - extend the selected inheritance tree with the RR branch;
@@ -167,16 +197,20 @@ CoreHelpers suite.
       `RRReliableServerTransport`;
     - update the directory layout and harness layout;
     - add RRTransport and RRReliable contract matrices;
-    - add categories, filter commands, and out-of-scope entries;
-    - record the RRUnreliable layers as planned for Stages 2–4.
+    - add categories, filter commands, and out-of-scope entries.
 11. Update `Tests/Pontifex.Tests/Transports/RR/Coverage.md` and every moved Coverage file:
-    - move existing rows with the tests;
+    - move the old root coverage to `Transports/RR/Reliable/Coverage.md` and trim the
+      shared rows that move to `Transports/RR/Coverage.md`;
     - add rows for the shared tests now owned by RRTransport;
     - add rows for any existing RRReliable tests missing from the old coverage tables:
       `Request_WhenTheTimerFactoryThrows_ReturnsErrorAndUnbindsTheHandler`,
       `Finish_WhenTheSendFails_LeavesTheHandleRetryable`,
       `Reject_WhenTheSendFails_LeavesTheHandleRetryable`,
-      `Reject_AfterTheResponseTtlClosedTheHandle_ReturnsError`.
+      `Reject_AfterTheResponseTtlClosedTheHandle_ReturnsError`;
+    - add `RRUnreliableTransport`, `RRUnreliableTransport<THandler>`,
+      `RRUnreliableClientTransport`, and `RRUnreliableServerTransport` to the `Planned`
+      section of `Transports/RR/Coverage.md`. Do not put planned coverage status in the
+      README (README-16).
 12. Update Direct documentation and category references:
     - search for `RRReliableTransport` and `Direct.RRReliableTransport` outside the moved
       files;
@@ -192,19 +226,23 @@ dotnet build Pontifex.sln
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.Concurrency
 dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj
-git grep -n "Direct.RRReliableTransport"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory=Direct.RRReliableCoreHelpers"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --filter "TestCategory=Direct.RRReliable.Integration"
+git grep -n "Direct.RRReliableTransport" -- ':!plan.md'
+git grep -n 'Category("Direct' Tests/Pontifex.Tests/Transports
 ```
 
 Expected:
 
 - build succeeds with no errors;
-- Transports filter passes; total count increases by the moved RRReliable transport tests
-  (75 tests: 15 root, 8 generic, 30 client, 22 server), excluding the 2 stress tests that
-  move to Direct CoreHelpers;
+- Transports filter passes; total count increases by at least the 75 moved RRReliable
+  transport tests (15 root, 8 generic, 30 client, 22 server), plus the new
+  serialization-failure and `TimerFactory_IsInjected` tests; the exact count is recorded in
+  the stage report and Coverage files;
 - Transports.Concurrency passes;
-- Direct test project passes;
-- the `git grep` finds no remaining `Direct.RRReliableTransport` category or live
-  documentation reference;
+- Direct default, CoreHelpers, and integration runs pass;
+- `git grep` finds no `Direct.RRReliableTransport` match outside `plan.md` and no
+  `Direct.` category in `Tests/Pontifex.Tests/Transports`;
 - the old `RRReliableTransport` directory no longer exists.
 
 **Definition of done**
@@ -218,8 +256,11 @@ owns the session stress tests.
 - Name collisions between Raw harness and moved RR harness in
   `Pontifex.Tests.Transports` must be resolved by renaming the harness type, not by
   reverting to layer-specific namespaces unless necessary.
-- `Stop_SchedulesTerminalWorkBeforeOnStoppedBegins` must not depend on
-  `ManualTimerFactory` after moving to the shared RRTransport layer; use a local probe.
+- `Stop_ClearsPendingBeforeOnStoppedBegins` must not depend on `ManualTimerFactory`
+  after moving to the shared RRTransport layer; use a local probe.
+- The moved RRReliable client/server fixtures must not keep fixture-level
+  `Direct.Integration`; tag only the enumerated `Task.Run`/`SpinWait` tests with
+  `Transports.Concurrency`.
 - Do not leave `Direct.Integration` on moved abstract unit fixtures.
 
 ### Stage 2 — Add RRUnreliable base and generic layers
@@ -246,10 +287,8 @@ RRTransport.
 3. Add the RRUnreliable base tests:
    - `Type_IsRRUnreliable` — `Type == TransportType.RRUnreliable`;
    - `FrameMaxByteSize_UsesTheUnreliableOverhead` — message limit +
-     `RRUnreliableFrame.OverheadBytes` + 1;
-   - `Start_UsesTheSharedRRCarrierLifecycle` — the inherited `RRTransport` lifecycle is
-     exercised once through the unreliable double, without repeating all RRTransport
-     tests.
+     `RRUnreliableFrame.OverheadBytes` + 1.
+   Do not add an inherited-lifecycle test; `RRTransportTests` owns that coverage.
 4. Add the generic-layer tests:
    - `Init_WithNull_Throws`;
    - `Init_IsOneTime`;
@@ -263,9 +302,12 @@ RRTransport.
 5. Update `Transports/RR/Unreliable/Coverage.md`, the Generic coverage file, and the
    Transports README:
    - add both layer rows;
-   - remove their planned entries from the RRTransport/RR branch planned table;
+   - remove the `RRUnreliableTransport` and `RRUnreliableTransport<THandler>` rows from the
+     `Planned` table in `Transports/RR/Coverage.md`;
+   - add `RRUnreliableClientTransport` and `RRUnreliableServerTransport` as planned in the
+     `Transports/RR/Unreliable/Coverage.md` Planned table (nearest existing ancestor);
    - add the RRUnreliable contract summary for the base and generic layers;
-   - add directory and harness entries.
+   - add directory and harness entries. Do not put planned coverage status in the README.
 
 **Verification**
 
@@ -275,7 +317,7 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
 ```
 
 Expected: build succeeds; Transports filter passes with the new RRUnreliable base/generic
-tests included.
+tests included (2 base tests + 9 generic tests; record the exact count).
 
 **Definition of done**
 
@@ -305,20 +347,20 @@ deterministically through a concrete test double.
 
 1. Create `Transports/RR/Unreliable/Client/Coverage.md`,
    `RRUnreliableClientTransportTests.cs`, and `Harness/` files:
-   - `TestRRUnreliableClientTransport.cs` — concrete client with configurable random seed
-     (including a throwing generator), configurable `SendFrame` result/throw/capture,
-     exposed `OnFrameReceived`, `PendingCountForTests`, and the three internal test hooks;
+   - `TestRRUnreliableClientTransport.cs` — concrete client with configurable `SendFrame`
+     result/throw/capture, exposed `OnFrameReceived`, `PendingCountForTests`, and the three
+     internal test hooks. Do not add a random-seed configuration; the production seed is
+     private static and a production change is out of scope;
    - `RecordingUnreliableClientHandler.cs` — derives from `RRRequestHandler`, implements
      `IRRUnreliableRequestHandler`, records response ids/counts, can throw or cancel from a
      callback, and releases received buffers;
-   - `ManualClock.cs` — deterministic `IDateTimeProvider`;
-   - `TestMessages.cs` — integer payload and exact-size payload builders.
+   - put `ManualClock.cs` and `TestMessages.cs` in the nearest common ancestor
+     `Transports/RR/Unreliable/Harness` so the server layer can reuse them.
 2. Add client tests:
    - `Constructor_WithNullServerEndPoint_Throws`;
-   - `Constructor_WithNonPositiveRequestTtl_Throws`;
+   - `Constructor_WithNonPositiveRequestTtl_Throws` — assert
+     `ArgumentOutOfRangeException` with `ParamName == "ttl"`;
    - `Constructor_ExposesServerEndPointAndRequestTtl`;
-   - `Start_IsOneTimeAndUsesTheRandomSeed`;
-   - `Start_WhenRandomSeedGenerationThrows_ReturnsFalseWithoutStartingCarrier`;
    - `Request_WithNullHandler_ThrowsBeforeConsumingPayload`;
    - `Request_WithNonRRHandler_ThrowsBeforeConsumingPayload`;
    - `Request_WithAlreadyBoundHandler_Throws`;
@@ -330,7 +372,9 @@ deterministically through a concrete test double.
    - `Request_WhenSendFrameReturnsNonOk_ReturnsResultAndUnbindsWithoutCallback`;
    - `Request_WhenSendFrameThrows_ReturnsErrorAndUnbindsWithoutCallback`;
    - `RequestId_IsPublishedBeforeSendFrame`;
-   - `RequestIds_StartAtTheRandomSeedAndWrap`;
+   - `Response_WhenDeliveredBeforeRequestReturns_IsStillDelivered` — the test double's
+     `SendFrame` calls `Receive` before returning, proving the response may arrive during
+     `Request`;
    - `Response_FromForeignRoute_IsReleasedWithoutCallback`;
    - `Response_WhenMalformed_IsReleasedWithoutCallback`;
    - `Response_WhenOversized_IsReleasedWithoutCallback`;
@@ -338,21 +382,38 @@ deterministically through a concrete test double.
    - `Response_AfterRequestTtlExpires_IsDroppedAndHandlerUnbound`;
    - `Response_FirstFrameFixesMessageCount`;
    - `Response_WithInconsistentMessageCount_IsDropped`;
-   - `Response_WithMessageIdAtOrAboveCount_IsDropped`;
+   - `Response_WithMessageIdAtOrAboveCount_IsDropped` — build the invalid header manually
+     because `RRUnreliableFrame.EncodeResponse` rejects `messageId >= messageCount`;
    - `Response_WithDuplicateMessageId_IsDropped`;
-   - `Response_LastMessage_UnbindsHandlerAfterCallback`;
+   - `Response_LastMessage_UnbindsHandlerAfterCallback` — reuse the same handler for a
+     second request after the last callback to prove unbinding;
    - `Response_WhenHandlerThrows_IsIsolatedAndStillCompletes`;
+   - `Response_Callbacks_AreSerializedPerRequest` — category
+     `Transports.Concurrency`;
+   - `Stop_FromInsideAResponseCallback_DoesNotDeadlock` — category
+     `Transports.Concurrency`;
+   - `Request_FromInsideAResponseCallback_IsAccepted` — category
+     `Transports.Concurrency`;
    - `Cancel_RemovesPendingRequestWithoutCallback`;
-   - `Cancel_BeforeSendAbortsTheRequest`;
+   - `Cancel_BeforeSend_RemovesPendingEntryAndDropsLaterResponse` — after the
+     `BeforeSendForTests` hook cancels, `Request` still returns `Ok` because production does
+     not re-check cancellation after that hook; assert the pending count is zero and a later
+     response produces no callback;
    - `Cancel_WhenLastMessageCallbackActive_DefersUnbind`;
    - `Stop_ClearsPendingWindowWithoutCallbacks`;
    - `Stop_WhenRequestRacesStop_ReturnsErrorOrNotConnectedAndUnbinds`;
-   - `Response_WhenTransportStopped_IsDropped`.
-3. If `BufferOverflow` cannot be produced without a public prefill seam, record it under
-   `Deferred by design` with the reason that the table is internal and the only public
-   path would need 65,536 accepted requests. Do not use reflection.
+   - `Response_WhenTransportStopped_IsDropped`;
+   - `ExpiredRequest_AllowsTheSameHandlerToBeReused`.
+3. Record under `Deferred by design` in the client Coverage:
+   - random request-id seed determinism, wraparound, and generator failure — the abstract
+     type exposes no injectable seed (`CreateRandomRequestId` is private static) and
+     production changes are out of scope; `RequestId_IsPublishedBeforeSendFrame` still pins
+     publication;
+   - `BufferOverflow` prefill — the table is internal and the only public path would need
+     65,536 accepted requests. Do not use reflection.
 4. Update the layer Coverage.md, Transports README layer table/directory/harness,
-   RRUnreliable contract matrix, and remove the client planned entry.
+   RRUnreliable contract matrix, and remove the `RRUnreliableClientTransport` row from the
+   `Transports/RR/Unreliable/Coverage.md` Planned table.
 
 **Verification**
 
@@ -362,8 +423,8 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.Concurrency
 ```
 
-Expected: build succeeds; all client tests pass; no real timers, sockets, or sleeps are
-introduced.
+Expected: build succeeds; all client tests pass (the exact count is recorded); no real
+timers, sockets, or sleeps are introduced.
 
 **Definition of done**
 
@@ -401,8 +462,9 @@ solution is green.
      `SendFrame` result/throw/capture, exposed `OnFrameReceived`, and a manual clock;
    - `RecordingUnreliableServerHandler.cs` — implements `IRRUnreliableServerHandler`,
      records requests and handles, accepts/rejects/throws, and releases requests;
-   - reuse the Stage 3 manual clock and message builders by moving them to the nearest
-     common ancestor `Transports/RR/Harness` if both client and server layers need them.
+   - reuse the Stage 3 `ManualClock` and `TestMessages` from
+     `Transports/RR/Unreliable/Harness`; use `RecordingLogConsumer` from
+     `Tests/Pontifex.Tests/Endpoints/Harness` for the throwing-handler log assertion.
 2. Add server tests:
    - `Constructor_WithNonPositiveResponseTtl_Throws`;
    - `Constructor_ExposesResponseTtl`;
@@ -413,9 +475,9 @@ solution is green.
    - `OnFrameReceived_WhenHandlerNotInitialized_ReleasesWithoutPresenting`;
    - `OnRequested_WhenHandlerAccepts_KeepsHandleOpen`;
    - `OnRequested_WhenHandlerRejects_ClosesHandleAndLaterResponseReturnsError`;
-   - `OnRequested_WhenHandlerThrows_LogsRejectsAndTransportStaysValid`;
+   - `OnRequested_WhenHandlerThrows_LogsRejectsAndTransportStaysValid` — use
+     `RecordingLogConsumer` and assert the log entry;
    - `OnRequested_AssignsServerGlobalIdsFromOne`;
-   - `OnRequested_IsSerialized`;
    - `Response_SendsClientRequestIdMessageIdAndCount`;
    - `Response_DefaultMessageCountIsOne`;
    - `SetMessageCount_AcceptsOneTo256`;
@@ -429,14 +491,23 @@ solution is green.
    - `Response_WhenSendFrameThrows_ReturnsErrorAndCanRetry`;
    - `Response_WithNullPayload_ReturnsInvalidMessage`;
    - `Response_WithOversizedPayload_ReturnsMessageTooBigAndReleases`;
+   - `Response_DeclaredSequenceSendsZeroBasedIdsAndCloses`;
    - `Response_AfterLastMessage_ReturnsError`;
    - `Response_AfterResponseTtlExpires_ReturnsErrorAndCloses`;
    - `Response_AfterTransportStopped_ReturnsError`;
    - `OnFrameReceived_AfterStop_ReleasesWithoutPresenting`;
+   - `OnFrameReceived_DuplicateClientRequest_IsPresentedAgain` — RRUnreliable permits
+     duplicate presentation; this pins the absence of base-level suppression;
+   - `OnFrameReceived_FromDifferentClients_HaveIndependentHandles`;
    - `Response_ConcurrentCallsProduceOneSequence` (categorized
      `Transports.Concurrency`).
 3. Update the layer Coverage.md, Transports README layer table/directory/harness,
-   RRUnreliable contract matrix, categories, and planned/deferred tables.
+   RRUnreliable contract matrix, categories, and planned/deferred tables:
+   - remove the `RRUnreliableServerTransport` row from the
+     `Transports/RR/Unreliable/Coverage.md` Planned table;
+   - record `OnRequested` serialization under `Deferred by design`: the abstract base calls
+     the handler directly and serialization is carrier-owned; the Direct suite covers it
+     with `ServerHandler_IsNeverConcurrent`.
 4. Finalize the Transports README:
    - selected tree shows the complete RR branch;
    - every RR layer has a row and a coverage link;
@@ -460,7 +531,8 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
 ```
 
 Expected: all commands pass; the RR filters run only RR fixtures; no `Direct.*` category
-is attached to a Transports fixture; the Direct project still passes.
+is attached to a Transports fixture; the Direct project still passes; the exact server test
+count is recorded.
 
 **Definition of done**
 
@@ -490,10 +562,14 @@ set is green.
   `RRReliableClientTransport`, `RRReliableServerTransport`, `RRUnreliableTransport`,
   `RRUnreliableTransport<THandler>`, `RRUnreliableClientTransport`, and
   `RRUnreliableServerTransport` each have a layer, tests, `Coverage.md`, and a README row.
-- Every moved/added fixture carries the `Transports` category and the RR subcategories,
-  and no moved fixture carries a `Direct.*` category.
-- `RRReliableServerSessionTests` lives in the Direct CoreHelpers suite and the CoreHelpers
+- Every fixture moved into `Transports` carries the `Transports` category and the RR
+  subcategories, and no fixture moved into `Transports` carries a `Direct.*` category.
+- `RRReliableServerSessionTests` lives in the Direct CoreHelpers suite with
+  `Direct.RRReliableCoreHelpers` and `Direct.RRReliable.Integration`, and the CoreHelpers
   README/Coverage list it.
+- The RRUnreliable client seed-determinism/wraparound/generator-failure gap and the
+  carrier-owned server callback-serialization gap are recorded under `Deferred by design`
+  with exact reasons.
 - The full verification set passes:
   - solution build;
   - `Transports`;
