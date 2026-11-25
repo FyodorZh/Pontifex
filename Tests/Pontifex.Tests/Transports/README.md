@@ -54,6 +54,7 @@ Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md
 - [RawReliableEndpointClientTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableEndpointClientTransport.cs)
 - [IRawReliableClient.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClient.cs)
 - [RawReliableAdmissionServerTransport.cs](../../../Pontifex/Implementations/Raw/Reliable/RawReliableAdmissionServerTransport.cs)
+- [RawReliableHandshake.cs](../../../Pontifex/Implementations/Raw/Reliable/Handshake/RawReliableHandshake.cs)
 - [IRawReliableServer.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServer.cs)
 - [IRawReliableServerHandlerFactory.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServerHandlerFactory.cs)
 - [RawUnreliableTransport.cs](../../../Pontifex/Implementations/Raw/Unreliable/RawUnreliableTransport.cs)
@@ -128,6 +129,7 @@ Transports/
     │   │       ├── Coverage.md
     │   │       ├── RawReliableEndpointClientTransportTests.cs
     │   │       └── Harness/
+    │   │           ├── FakeRawReliableClientEndpoint.cs
     │   │           └── TestRawReliableEndpointClientTransport.cs
     │   └── Server/                                  RawReliableServerTransport layer
     │       ├── Coverage.md
@@ -179,7 +181,9 @@ drivers.
   `RecordingRawReliableHandshakeClientHandler`
   from `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/RawReliableHandshakeClientEndpoint/Harness`; the
   `RawReliableAdmissionServerTransport` layer
-  reuses `TestRawReliableServerSession` from the server layer's `Harness/`.
+  reuses `TestRawReliableServerSession` from the server layer's `Harness/`. The endpoint-client layer
+  also keeps its own `FakeRawReliableClientEndpoint` for the failed-start paths; it is local because
+  those tests need a deliberately failing endpoint.
 - The client layer reuses the endpoint double from
   `Tests/Pontifex.Tests/Endpoints/RawReliable/Client/Harness`. Both suites live in the same test
   assembly and the endpoint double is covered by the `Endpoints` suite.
@@ -246,6 +250,11 @@ category, not the default suite run.
   while running it stops the transport, invokes `OnStopped` and then the `Start` callback, and
   keeps `IsValid` true; a null reason becomes `Unknown` sourced from `Name`; repeated stops return
   `true` without a second notification; a stop on an invalid transport returns `false`.
+- **Cleanup hooks**: a valid stop before any start attempt runs `OnStopBeforeStart` on every such
+  call; a running stop, a stop that wins inside `TryStart`, and a stop on an invalid transport do
+  not. `OnStartFailed` runs exactly once after a plain failed `TryStart`, after a stop that won
+  inside `TryStart`, or after a `Fail` raised inside it; a start rejected because the transport was
+  already started or stopped, and a retry after a failed start, do not run it again.
 - **Failure visibility**: during `OnStopped` from `Stop`, `IsStarted` is already false and
   `IsValid` is still true; during `OnStopped` from `Fail`, both are false.
 - **Fail**: while running it invalidates the transport and notifies `OnStopped` then the start
@@ -320,6 +329,26 @@ repeated.
   this layer; `DestroyTransport`, detach, and the start callback still run, and the transport ends in
   the disconnected state.
 
+### `RawReliableEndpointClientTransport<TClientHandler>` contract matrix
+
+The endpoint client transport supplies the endpoint factory and the carrier-independent teardown
+around the inherited reliable client lifecycle. Its delta is the creation/start hand-off and the
+failed-start teardown; the inherited init, connection state machine, and handler-notification rules
+are covered by the client layer and not repeated.
+
+- **Facade**: `Type` is `TransportType.RawReliable`, and the transport is assignable to
+  `IRawReliableClient`.
+- **Successful connect**: `BeginConnect` reads the initialized handler, calls `CreateEndpoint`, attaches
+  the returned endpoint, then calls `endpoint.Start`. The attached endpoint owns connectivity and the
+  handler's connection callbacks.
+- **Factory failure**: a throwing `CreateEndpoint` is logged and `BeginConnect` returns `false`. No
+  endpoint is attached, the transport start fails and invalidates, and neither the handler nor the
+  start callback is notified.
+- **Endpoint start failure**: an endpoint that returns `false` or throws from `Start` is already
+  attached. The inherited failed-start path invalidates the transport, calls `DestroyTransport`, which
+  stops the attached endpoint exactly once with the failure reason, then detaches it. The handler is not
+  notified because the start attempt never handed the lifecycle to a connected endpoint.
+
 ### `RawReliableServerTransport<TServerHandler>` contract matrix
 
 The server transport owns the carrier hooks, the bounded admission gates, the live-session registry,
@@ -361,7 +390,9 @@ the `RawTransport`/`RawReliableTransport` facades are not repeated.
   asks every registered session to stop with the transport reason and `tryBeGentle: false`. Sessions
   already stopped are not stopped again. A null reason is replaced by `Unknown` sourced from the
   transport name before it reaches the carrier. Stopping before start does not call `StopCarrier` and
-  still allows a later start. `Fail` runs the same stop delta and invalidates the transport.
+  still allows a later start. `Fail` runs the same stop delta and invalidates the transport: the carrier and
+  every live route are stopped with the failure reason, each handler observes it once, and the start callback
+  is invoked because the start had succeeded.
 - **Ticker**: the ticker is created through the `LogicDriverFactory` seam and started exactly once
   after a successful carrier start. Each tick calls `PeriodicTick` on every registered session; a
   stopped session is skipped, a session added after start is picked up, and an exception from one
@@ -370,6 +401,32 @@ the `RawTransport`/`RawReliableTransport` facades are not repeated.
   `DisconnectionByTimeoutCheck` to `false` (carriers without an idle-session timeout). The test
   double supplies a hand-driven `ILogicDriver<IPeriodicLogicDriverCtl>`, so no background thread or
   real time is involved.
+
+### `RawReliableAdmissionServerTransport` contract matrix
+
+The admission transport adds the client handshake and the factory-backed session hand-off on top of
+the reliable server transport. Its delta is the handshake validation and admission outcome; the
+inherited session admission, registry, stop cascade, and ticker are covered by the server layer and
+not repeated.
+
+- **Constructor**: `handshakeName` is required; `handshakeMaxByteSize` must be at least 1;
+  `handshakeTimeout` must be positive or `Timeout.InfiniteTimeSpan`; `rejectLinger` must not be
+  negative. Each rejection uses the matching parameter name. The defaults are a 10-second handshake
+  timeout, a 2-second reject linger, and the protocol default frame cap (128 bytes).
+- **Handshake structure**: a request is `version (short) + name (string) + messageMaxByteSize (int)`.
+  An empty list, a wrong element count, or wrong element types is rejected before any factory call.
+- **Handshake validation order**: structure, then version, then name, then capacity, then transport
+  liveness and factory presence. A version mismatch reports `VersionMismatch`; a name mismatch
+  reports `NameMismatch`; a request maximum below 1 or below `HandshakeMaxByteSize` reports
+  `CapacityExceeded`. None of these paths calls the factory.
+- **Admission prerequisite**: a handshake requires a valid, started transport and a bound factory.
+  A handshake before start, after stop, without a factory, or with a null factory result is
+  rejected. A throwing factory is logged and treated as a rejection.
+- **Accepted handshake**: the factory's handler is wrapped in `StopOnceServerHandler`; the response
+  is built with the shared version and name and with `AgreedMaxByteSize =
+  min(request maximum, MessageMaxByteSize)`. A response-build failure is logged, the created
+  handler receives one `OnStopped` with an `ExceptionFail`, and the outcome is a rejection with no
+  response.
 
 ### `RawUnreliableTransport` contract matrix
 
@@ -431,7 +488,10 @@ facade are not repeated.
   returns `false`, and does not call `StopCarrier`. The default limits are
   `MessageMaxByteSize * 100` bytes and 100 messages; carriers override the two properties to derive the
   caps from their queue capacity and configure each endpoint's local budget with the byte cap.
-- **Admission**: `OnCarrierInbound` requires a non-null source and trigger. A message for an existing route
+- **Admission**: `OnCarrierInbound` requires a non-null source and trigger. A message whose data size exceeds
+  `MessageMaxByteSize` is discarded before the admission lock: it calls neither the factory nor a handler,
+  publishes or refreshes no route, releases the trigger, and leaves the transport started. A message for an
+  existing route
   is delivered to that endpoint outside the lock. For an unknown route, one admission lock serializes the
   `BeforeHandlerFactoryGate`, factory invocation, endpoint construction, and route publication. A null
   factory, a null handler, or a throwing factory releases the trigger exactly once, publishes no route, and
@@ -471,7 +531,8 @@ never use reflection. Only these are asserted:
 - `TestAnyTransport : AnyTransport` implements `Type` and the three abstract lifecycle hooks. It
   records `TryStartCalls`, `OnStartedCalls`, `OnStoppedCalls`, `LastOnStoppedReason`, the state
   observed inside `OnStopped`, hook names in invocation order, and lets each test choose the
-  `TryStart` result or supply behavior for the hooks.
+  `TryStart` result or supply behavior for the hooks. It also overrides the `OnStopBeforeStart` and
+  `OnStartFailed` cleanup hooks and records their counts and event names.
 - `TestRawTransport : RawTransport` supplies the abstract `MessageMaxByteSize` and `Type` values
   and implements the inherited lifecycle hooks with no additional behavior.
 - `TestRawReliableTransport : RawReliableTransport` supplies the inherited abstract members and a

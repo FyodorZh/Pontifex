@@ -1,3 +1,4 @@
+using System;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.Tests.Endpoints;
@@ -29,9 +30,37 @@ internal sealed class TestRawReliableEndpointClientTransport
     public int CreateEndpointCalls { get; private set; }
 
     /// <summary>
+    /// Gets or sets an exception thrown from <see cref="CreateEndpoint"/> before an endpoint is created.
+    /// </summary>
+    public Exception? CreateEndpointException { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the created endpoint rejects its start by returning
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool EndpointStartReturnsFalse { get; set; }
+
+    /// <summary>
+    /// Gets or sets an exception thrown from the created endpoint's start.
+    /// </summary>
+    public Exception? EndpointStartException { get; set; }
+
+    /// <summary>
+    /// Gets whether the endpoint saw itself attached to the transport when its start was invoked, or
+    /// <see langword="null"/> when no probe ran.
+    /// </summary>
+    public bool? EndpointWasAttachedDuringStart { get; private set; }
+
+    /// <summary>
     /// Gets the endpoint returned by the most recent <see cref="CreateEndpoint"/> call.
     /// </summary>
     public TestRawReliableHandshakeClientEndpoint? LastCreatedEndpoint { get; private set; }
+
+    /// <summary>
+    /// Gets the start-failure fake returned by the most recent <see cref="CreateEndpoint"/> call, or
+    /// <see langword="null"/> when the normal endpoint double was returned.
+    /// </summary>
+    public FakeRawReliableClientEndpoint? LastFakeEndpoint { get; private set; }
 
     /// <summary>
     /// Gets the endpoint currently attached to the transport, or <see langword="null"/> when none is
@@ -42,6 +71,24 @@ internal sealed class TestRawReliableEndpointClientTransport
     protected override IRawReliableClientEndpointImp CreateEndpoint(IRawReliableClientHandler handler)
     {
         CreateEndpointCalls++;
+
+        if (CreateEndpointException != null)
+        {
+            throw CreateEndpointException;
+        }
+
+        if (EndpointStartReturnsFalse || EndpointStartException != null)
+        {
+            LastFakeEndpoint = new FakeRawReliableClientEndpoint
+            {
+                StartResult = !EndpointStartReturnsFalse,
+                StartException = EndpointStartException,
+                StartProbe = () => EndpointWasAttachedDuringStart = AttachedEndpoint != null,
+            };
+
+            return LastFakeEndpoint;
+        }
+
         var endpoint = new TestRawReliableHandshakeClientEndpoint(
             handler,
             transportName: Name,

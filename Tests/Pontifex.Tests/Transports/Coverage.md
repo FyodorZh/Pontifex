@@ -45,6 +45,17 @@
 | `HasStartBeenAttempted_TrueAfterAcceptedStartAttempt` | A successful start records an attempt. | The flag becomes true. | — |
 | `HasStartBeenAttempted_StaysFalseAfterStopBeforeStart` | A stop before start does not record an attempt. | The flag stays false. | — |
 | `HasStartBeenAttempted_TrueAfterFailedStart` | A failed `Start` still records an attempt. | The flag becomes true. | — |
+| `Stop_BeforeStart_CallsOnStopBeforeStartOnce` | A valid, never-started `Stop` runs the `OnStopBeforeStart` cleanup hook. | The hook runs exactly once and no start-failure hook runs. | The hook name is recorded in the shared event log. |
+| `Stop_BeforeStartCalledTwice_CallsOnStopBeforeStartEachTime` | Every valid pre-start stop runs the pre-start cleanup hook. | Two pre-start stops produce two hook calls. | Pins the actual production behaviour: the hook is not one-shot. |
+| `Stop_WhenRunning_DoesNotCallOnStopBeforeStart` | The pre-start hook belongs only to a true pre-start stop. | A running stop runs `OnStopped` but not `OnStopBeforeStart`. | — |
+| `Stop_DuringStartAttempt_DoesNotCallOnStopBeforeStart` | A stop that wins inside `TryStart` is not a pre-start stop. | The pre-start hook is skipped even though the start never completed. | `TryStart` calls `Stop` reentrantly on the lifecycle thread; deterministic and single-threaded. The attempt also runs `OnStartFailed`. |
+| `Stop_WhenInvalid_DoesNotCallOnStopBeforeStart` | A stop on an invalid transport is rejected before any cleanup. | `Stop` returns false and neither cleanup hook runs. | — |
+| `Start_WhenTryStartReturnsFalse_CallsOnStartFailedOnce` | A plain failed `TryStart` runs the start-failure cleanup hook. | `OnStartFailed` runs exactly once after `TryStart` returns false. | The hook is recorded after `tryStart`; no internal `OnStopped` runs on this path. |
+| `Start_WhenTryStartStopsTransport_CallsOnStartFailedOnce` | A stop that wins inside `TryStart` is an initial-start failure. | `OnStartFailed` runs once after the internal teardown `OnStopped`. | Stop ordering is `tryStart`, internal `stopped`, `startFailed`. |
+| `Start_WhenTryStartFails_CallsOnStartFailedOnce` | A `Fail` raised inside `TryStart` is an initial-start failure. | `OnStartFailed` runs once and the internal teardown `OnStopped` also runs exactly once. | Proves the failed-start hook does not replace or duplicate the teardown hook. |
+| `Start_CalledTwice_DoesNotCallOnStartFailed` | A second start rejected because the transport is already started is not a start failure. | No cleanup hook runs. | — |
+| `Start_AfterStop_DoesNotCallOnStartFailed` | A start after a normal stop is rejected without cleanup. | The start-failure hook does not run. | — |
+| `Start_AfterFailedStart_DoesNotCallOnStartFailedAgain` | A retry after a failed start is rejected without cleanup. | `OnStartFailed` keeps its single call. | The failed transport is already invalid, so the retry never enters the start path. |
 
 ## Planned
 
@@ -67,7 +78,8 @@
   coverage is recorded in their own `Coverage.md` files.
 - `TestAnyTransport : AnyTransport` implements the abstract lifecycle hooks and records `TryStart`,
   `OnStarted`, and the internal `OnStopped` calls separately from the user start callback, their
-  order, and the state observed inside `OnStopped`.
+  order, and the state observed inside `OnStopped`. It also overrides the two cleanup hooks,
+  `OnStopBeforeStart` and `OnStartFailed`, and records their counts and event names.
 - A failed initial start, including one that a stop won inside `TryStart`, invalidates the transport
   and never invokes the user callback. A plain `TryStart` false produces no internal teardown; a
   `Fail`/`Stop` raised inside `TryStart` produces exactly one internal `OnStopped`.

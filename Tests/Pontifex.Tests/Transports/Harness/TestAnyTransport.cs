@@ -40,6 +40,16 @@ internal sealed class TestAnyTransport : AnyTransport
     public int OnStoppedCalls { get; private set; }
 
     /// <summary>
+    /// Gets the number of times <see cref="OnStopBeforeStart"/> was invoked.
+    /// </summary>
+    public int OnStopBeforeStartCalls { get; private set; }
+
+    /// <summary>
+    /// Gets the number of times <see cref="OnStartFailed"/> was invoked.
+    /// </summary>
+    public int OnStartFailedCalls { get; private set; }
+
+    /// <summary>
     /// Gets the number of times the user callback passed to <see cref="AnyTransport.Start"/> was invoked.
     /// Internal teardown is recorded separately through <see cref="OnStoppedCalls"/>.
     /// </summary>
@@ -99,5 +109,17 @@ internal sealed class TestAnyTransport : AnyTransport
         IsValidDuringOnStopped = IsValid;
         _events.Add("stopped");
         OnStoppedBehavior?.Invoke(reason);
+    }
+
+    protected override void OnStopBeforeStart()
+    {
+        OnStopBeforeStartCalls++;
+        _events.Add("stopBeforeStart");
+    }
+
+    protected override void OnStartFailed()
+    {
+        OnStartFailedCalls++;
+        _events.Add("startFailed");
     }
 }

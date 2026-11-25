@@ -428,6 +428,126 @@ public sealed class RawUnreliableServerTransportTests
         Assert.That(transport.ExposedIsStopping, Is.True);
     }
 
+    [Test]
+    public void OnCarrierInbound_WhenNewSourceMessageExceedsMax_ReleasesTriggerWithoutAdmission()
+    {
+        var logConsumer = new RecordingLogConsumer();
+        using var transport = Create(messageMaxByteSize: 64, logger: new Logger([logConsumer]));
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        StartWithFactory(transport, source => handler, out _);
+        UnionDataList trigger = TestBuffers.WithPayload(Memory, 65);
+        Assert.That(trigger.GetDataSize(), Is.GreaterThan(transport.MessageMaxByteSize));
+
+        transport.ExposedOnCarrierInbound(new StringEndPoint("source"), trigger);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(transport.InvokeFactoryCalls, Is.Zero);
+            Assert.That(transport.CreateEndpointCalls, Is.Zero);
+            Assert.That(transport.ExposedRouteCount, Is.Zero);
+            Assert.That(trigger.IsAlive, Is.False);
+            Assert.That(transport.IsStarted, Is.True);
+            Assert.That(transport.IsValid, Is.True);
+            Assert.That(transport.StopCarrierCalls, Is.Zero);
+            Assert.That(logConsumer.Messages, Has.Some.Contains("exceeds MessageMaxByteSize"));
+        });
+    }
+
+    [Test]
+    public void OnCarrierInbound_WhenExistingRouteMessageExceedsMax_KeepsRouteAndReleasesTrigger()
+    {
+        using var transport = Create(messageMaxByteSize: 64);
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        StartWithFactory(transport, source => handler, out _);
+        var source = new StringEndPoint("source");
+        transport.ExposedOnCarrierInbound(source, TestBuffers.WithByte(Memory, 1));
+        var endpoint = (TestRawUnreliableServerEndpoint)transport.CreatedEndpoints[0];
+        endpoint.DrainAll();
+        UnionDataList oversized = TestBuffers.WithPayload(Memory, 65);
+
+        transport.ExposedOnCarrierInbound(source, oversized);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(transport.InvokeFactoryCalls, Is.EqualTo(1));
+            Assert.That(transport.CreateEndpointCalls, Is.EqualTo(1));
+            Assert.That(transport.ExposedRouteCount, Is.EqualTo(1));
+            Assert.That(handler.ReceivedCount, Is.EqualTo(1));
+            Assert.That(handler.StoppedCount, Is.Zero);
+            Assert.That(oversized.IsAlive, Is.False);
+            Assert.That(transport.IsStarted, Is.True);
+        });
+
+        transport.StopAndDrainAll();
+    }
+
+    [Test]
+    public void OnCarrierInbound_WhenRouteExists_NotifiesHandlerOutsideAdmissionLock()
+    {
+        using var transport = Create();
+        using var handler = new ReceivedProbeHandler(
+            Memory, () => transport.ExposedAdmissionLockHeld);
+        StartWithFactory(transport, source => handler, out _);
+        var source = new StringEndPoint("source");
+        transport.ExposedOnCarrierInbound(source, TestBuffers.WithByte(Memory, 1));
+        var endpoint = (TestRawUnreliableServerEndpoint)transport.CreatedEndpoints[0];
+        endpoint.DrainAll();
+
+        transport.ExposedOnCarrierInbound(source, TestBuffers.WithByte(Memory, 2));
+        endpoint.DrainAll();
+
+        Assert.That(handler.ReceivedCount, Is.EqualTo(2));
+        Assert.That(handler.AdmissionLockHeldDuringReceived, Is.False,
+            "delivery to an existing route must run after the admission lock is released");
+        transport.StopAndDrainAll();
+    }
+
+    [Test]
+    public void OnCarrierInbound_WhenEndpointIsDeclined_NotifiesHandlerOutsideAdmissionLock()
+    {
+        using var transport = Create();
+        var handler = new StopProbeHandler(() => transport.ExposedAdmissionLockHeld);
+        transport.CreateEndpointReturnsNull = true;
+        StartWithFactory(transport, source => handler, out _);
+        UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
+
+        transport.ExposedOnCarrierInbound(new StringEndPoint("source"), trigger);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(transport.ExposedRouteCount, Is.Zero);
+            Assert.That(trigger.IsAlive, Is.False);
+            Assert.That(handler.StartedCount, Is.Zero);
+            Assert.That(handler.StoppedCount, Is.EqualTo(1));
+            Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
+            Assert.That(handler.AdmissionLockHeldDuringStopped, Is.False,
+                "the terminal notification must run after the admission lock is released");
+        });
+    }
+
+    [Test]
+    public void OnCarrierInbound_WhenEndpointCreationThrows_NotifiesHandlerOutsideAdmissionLock()
+    {
+        using var transport = Create();
+        var handler = new StopProbeHandler(() => transport.ExposedAdmissionLockHeld);
+        transport.CreateEndpointException = new InvalidOperationException("endpoint creation failed");
+        StartWithFactory(transport, source => handler, out _);
+        UnionDataList trigger = TestBuffers.WithByte(Memory, 1);
+
+        transport.ExposedOnCarrierInbound(new StringEndPoint("source"), trigger);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(transport.ExposedRouteCount, Is.Zero);
+            Assert.That(trigger.IsAlive, Is.False);
+            Assert.That(handler.StartedCount, Is.Zero);
+            Assert.That(handler.StoppedCount, Is.EqualTo(1));
+            Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
+            Assert.That(handler.AdmissionLockHeldDuringStopped, Is.False,
+                "the terminal notification must run after the admission lock is released");
+        });
+    }
+
     #endregion
 
     #region Concurrency
@@ -730,6 +850,52 @@ public sealed class RawUnreliableServerTransportTests
     }
 
     [Test]
+    public void Fail_WhenRoutesExist_RunsStopDeltaAndInvalidates()
+    {
+        using var transport = Create();
+        using var firstHandler = new RecordingRawUnreliableHandler(Memory);
+        using var secondHandler = new RecordingRawUnreliableHandler(Memory);
+        var firstSource = new StringEndPoint("first");
+        var secondSource = new StringEndPoint("second");
+        StopReason? callbackReason = null;
+        Assert.That(transport.ExposedTryInitializeServer(
+            source => ReferenceEquals(source, firstSource) ? firstHandler : secondHandler), Is.True);
+        Assert.That(transport.Start(r => callbackReason = r), Is.True);
+        transport.ExposedOnCarrierInbound(firstSource, TestBuffers.WithByte(Memory, 1));
+        transport.ExposedOnCarrierInbound(secondSource, TestBuffers.WithByte(Memory, 2));
+        var firstEndpoint = (TestRawUnreliableServerEndpoint)transport.CreatedEndpoints[0];
+        var secondEndpoint = (TestRawUnreliableServerEndpoint)transport.CreatedEndpoints[1];
+        firstEndpoint.DrainAll();
+        secondEndpoint.DrainAll();
+        var reason = new TextFail("test", "transport failure");
+
+        transport.Fail(reason);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(transport.IsValid, Is.False);
+            Assert.That(transport.IsStarted, Is.False);
+            Assert.That(transport.StopCarrierCalls, Is.EqualTo(1));
+            Assert.That(transport.LastStopCarrierReason, Is.SameAs(reason));
+            Assert.That(transport.ExposedRouteCount, Is.Zero);
+            Assert.That(callbackReason, Is.SameAs(reason));
+        });
+
+        firstEndpoint.DrainAll();
+        secondEndpoint.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstHandler.StoppedCount, Is.EqualTo(1));
+            Assert.That(firstHandler.StoppedReason, Is.SameAs(reason));
+            Assert.That(secondHandler.StoppedCount, Is.EqualTo(1));
+            Assert.That(secondHandler.StoppedReason, Is.SameAs(reason));
+            Assert.That(firstEndpoint.StoppedReasons, Is.EqualTo(new[] { reason }));
+            Assert.That(secondEndpoint.StoppedReasons, Is.EqualTo(new[] { reason }));
+        });
+    }
+
+    [Test]
     public void Stop_WhileEndpointIsBeingCreated_RemovesRouteAndStopsUnstartedEndpoint()
     {
         using var transport = Create();
@@ -763,4 +929,58 @@ public sealed class RawUnreliableServerTransportTests
     }
 
     #endregion
+
+    private sealed class ReceivedProbeHandler : RecordingRawUnreliableHandler
+    {
+        private readonly Func<bool> _probe;
+
+        public ReceivedProbeHandler(IMemoryRental memory, Func<bool> probe)
+            : base(memory)
+        {
+            _probe = probe;
+        }
+
+        public bool? AdmissionLockHeldDuringReceived { get; private set; }
+
+        public override void OnReceived(UnionDataList receivedBuffer)
+        {
+            AdmissionLockHeldDuringReceived = _probe();
+            base.OnReceived(receivedBuffer);
+        }
+    }
+
+    private sealed class StopProbeHandler : IRawUnreliableHandler
+    {
+        private readonly Func<bool> _probe;
+
+        public StopProbeHandler(Func<bool> probe)
+        {
+            _probe = probe;
+        }
+
+        public bool? AdmissionLockHeldDuringStopped { get; private set; }
+
+        public int StartedCount { get; private set; }
+
+        public int StoppedCount { get; private set; }
+
+        public StopReason? StoppedReason { get; private set; }
+
+        public void OnStarted(IRawUnreliableEndpoint endpoint)
+        {
+            StartedCount++;
+        }
+
+        public void OnReceived(UnionDataList receivedBuffer)
+        {
+            receivedBuffer.Release();
+        }
+
+        public void OnStopped(StopReason reason)
+        {
+            AdmissionLockHeldDuringStopped = _probe();
+            StoppedCount++;
+            StoppedReason = reason;
+        }
+    }
 }
