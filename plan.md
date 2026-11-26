@@ -395,12 +395,15 @@ for rel, (layer, subject, directory, parent) in expected.items():
     if '| Dependency | — |' not in text:
         print(f'missing/non-canonical Dependency row: {path}')
         sys.exit(1)
-    if '| Contract |' not in text:
-        print(f'missing Contract row: {path}')
+    contract = re.search(r'\| Contract \|(.*?)(?=\n\||\n\n|\Z)', text, re.S)
+    if contract is None or not re.search(r'\]\((?:\.\./)+', contract.group(1)):
+        print(f'bad Contract row: {path}')
         sys.exit(1)
-    if not re.search(r'\]\((?:\.\./)+', text):
-        print(f'Contract row has no relative link: {path}')
-        sys.exit(1)
+    for link in re.findall(r'\]\(([^)]+)\)', contract.group(1)):
+        target = os.path.normpath(os.path.join(os.path.dirname(path), link))
+        if not os.path.exists(target):
+            print(f'broken contract link: {path} {link}')
+            sys.exit(1)
     for link in re.findall(r'\]\(([^)]+)\)', text):
         if link.startswith(('..', '.')):
             target = os.path.normpath(os.path.join(os.path.dirname(path), link))
@@ -608,13 +611,17 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 grep -q '| Layer | `RRUnreliableTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
+grep -q '| Subject | `Pontifex.RR.Unreliable.RRUnreliableTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
+grep -q '| Directory | `Tests/Pontifex.Tests/Transports/RR/Unreliable` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
 grep -q '| Inheritance parent | `Pontifex.RR.RRTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
 grep -q '| Dependency | — |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
-grep -Eq '\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
+grep -Eq '^\| Contract \|.*\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
 grep -q '| Layer | `RRUnreliableTransportGeneric` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
+grep -q '| Subject | `Pontifex.RR.Unreliable.RRUnreliableTransport<THandler>` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
+grep -q '| Directory | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 grep -q '| Inheritance parent | `Pontifex.RR.Unreliable.RRUnreliableTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 grep -q '| Dependency | — |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
-grep -Eq '\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
+grep -Eq '^\| Contract \|.*\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests.cs)" -eq 2
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs
@@ -786,9 +793,11 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.Concurrency
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 grep -q '| Layer | `RRUnreliableClientTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
+grep -q '| Subject | `Pontifex.RR.Unreliable.RRUnreliableClientTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
+grep -q '| Directory | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Client` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 grep -q '| Inheritance parent | `Pontifex.RR.Unreliable.RRUnreliableTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 grep -q '| Dependency | — |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
-grep -Eq '\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
+grep -Eq '^\| Contract \|.*\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientTransportTests.cs)" -eq 35
 ! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client
@@ -1014,9 +1023,19 @@ for rel, (layer, subject, directory, parent) in expected.items():
         if f'| {field} | `{value}` |' not in text:
             print(f'bad {field}: {path} expected {value}')
             sys.exit(1)
-    if 'Direct test assembly' in text or 'Tests/Pontifex.Transport.Direct.Tests' in text:
-        print(f'stale dependency text: {path}')
+    dependency = re.search(r'\| Dependency \|(.*?)\|\s*\n', text, re.S)
+    if dependency is None or dependency.group(1).strip() != '—':
+        print(f'bad Dependency row: {path}')
         sys.exit(1)
+    contract = re.search(r'\| Contract \|(.*?)(?=\n\||\n\n|\Z)', text, re.S)
+    if contract is None or not re.search(r'\]\((?:\.\./)+', contract.group(1)):
+        print(f'bad Contract row: {path}')
+        sys.exit(1)
+    for link in re.findall(r'\]\(([^)]+)\)', contract.group(1)):
+        target = os.path.normpath(os.path.join(os.path.dirname(path), link))
+        if not os.path.exists(target):
+            print(f'broken contract link: {path} {link}')
+            sys.exit(1)
     for link in re.findall(r'\]\(([^)]+)\)', text):
         if link.startswith(('..', '.')):
             target = os.path.normpath(os.path.join(os.path.dirname(path), link))
