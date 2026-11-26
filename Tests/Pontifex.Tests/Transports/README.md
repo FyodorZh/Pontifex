@@ -5,10 +5,11 @@ Black-box contract tests for the abstract transport class hierarchy in `Pontifex
 The suite lives under `Tests/Pontifex.Tests/Transports/` and tests the transport classes
 directly, without carriers, sockets, timers, or wall-clock time. It is the transport-level
 counterpart of the `Endpoints` suite: the same deterministic, public-plus-protected-contract
-approach, applied one layer up. Thirty-three categorised tests cover concurrency boundaries:
+approach, applied one layer up. Thirty-four categorised tests cover concurrency boundaries:
 the admission lock's and the handler-factory lock's single-call invariants, the bounded parallel
-admission counters, the gated or joined raw and RR client/server paths, and the unreliable
-client's callback-serialization, stop-from-callback, and request-from-callback tests; see
+admission counters, the gated or joined raw and RR client/server paths, the unreliable
+client's callback-serialization, stop-from-callback, and request-from-callback tests, and the
+unreliable server's concurrent response-sequence test; see
 [Categories](#categories).
 
 ## Suite type
@@ -38,14 +39,14 @@ AnyTransport
     │       └── RRReliableServerTransport
     └── RRUnreliableTransport
         ├── RRUnreliableTransport<THandler>
-        ├── RRUnreliableClientTransport
-        └── RRUnreliableServerTransport
+        │   └── RRUnreliableServerTransport
+        └── RRUnreliableClientTransport
 ```
 
 The four concrete unreliable carriers (Ack/NoAck × Direct/UDP) live in the `Transports` projects
 and are out of scope for this suite, like the reliable carriers.
 
-Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md`.
+Coverage gaps are recorded in the owning layer's `Coverage.md`.
 
 ## Contract references
 
@@ -88,6 +89,13 @@ Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md
 - [IRRReliableTimerFactory.cs](../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTimerFactory.cs)
 - [RRUnreliableTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableTransport.cs)
 - [IRRUnreliableTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/IRRUnreliableTransport.cs)
+- [RRUnreliableClientTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableClientTransport.cs)
+- [IRRUnreliableClientTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/Client/IRRUnreliableClientTransport.cs)
+- [IRRUnreliableRequestHandler.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/Client/IRRUnreliableRequestHandler.cs)
+- [RRUnreliableServerTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableServerTransport.cs)
+- [IRRUnreliableServerTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/Server/IRRUnreliableServerTransport.cs)
+- [IRRUnreliableServerHandler.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/Server/IRRUnreliableServerHandler.cs)
+- [IRRUnreliableResponse.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/Server/IRRUnreliableResponse.cs)
 - [RR shared specification](../../../Pontifex/Abstractions/Transports/RR/Specification.md)
 - [RRReliable specification](../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md)
 - [RRUnreliable specification](../../../Pontifex/Abstractions/Transports/RR/Unreliable/Specification.md)
@@ -117,6 +125,7 @@ inheritance parent, and coverage file.
 | `RRUnreliableTransport` | `Pontifex.RR.Unreliable.RRUnreliableTransport` | `Tests/Pontifex.Tests/Transports/RR/Unreliable` | `RRTransport` | [`RR/Unreliable/Coverage.md`](RR/Unreliable/Coverage.md) |
 | `RRUnreliableTransportGeneric` | `Pontifex.RR.Unreliable.RRUnreliableTransport<THandler>` | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic` | `RRUnreliableTransport` | [`RR/Unreliable/Generic/Coverage.md`](RR/Unreliable/Generic/Coverage.md) |
 | `RRUnreliableClientTransport` | `Pontifex.RR.Unreliable.RRUnreliableClientTransport` | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Client` | `RRUnreliableTransport` | [`RR/Unreliable/Client/Coverage.md`](RR/Unreliable/Client/Coverage.md) |
+| `RRUnreliableServerTransport` | `Pontifex.RR.Unreliable.RRUnreliableServerTransport` | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Server` | `RRUnreliableTransport<THandler>` | [`RR/Unreliable/Server/Coverage.md`](RR/Unreliable/Server/Coverage.md) |
 
 Directory nesting does not imply inheritance. The inheritance parent is the one declared in the
 layer table above.
@@ -237,11 +246,17 @@ Transports/
         │   └── Harness/
         │       ├── RecordingUnreliableClientHandler.cs
         │       └── TestRRUnreliableClientTransport.cs
-        └── Generic/                                 RRUnreliableTransport<THandler> layer
+        ├── Generic/                                 RRUnreliableTransport<THandler> layer
+        │   ├── Coverage.md
+        │   ├── RRUnreliableTransportGenericTests.cs
+        │   └── Harness/
+        │       └── TestRRUnreliableTransportGeneric.cs
+        └── Server/                                  RRUnreliableServerTransport layer
             ├── Coverage.md
-            ├── RRUnreliableTransportGenericTests.cs
+            ├── RRUnreliableServerTransportTests.cs
             └── Harness/
-                └── TestRRUnreliableTransportGeneric.cs
+                ├── RecordingUnreliableServerHandler.cs
+                └── TestRRUnreliableServerTransport.cs
 ```
 
 ## Harness layout and sharing
@@ -292,6 +307,8 @@ drivers.
 - `RR/Unreliable/Client/Harness/` holds `TestRRUnreliableClientTransport` and its recording
   client handler.
 - `RR/Unreliable/Generic/Harness/` holds `TestRRUnreliableTransportGeneric` and its empty handler.
+- `RR/Unreliable/Server/Harness/` holds `TestRRUnreliableServerTransport` and its recording server
+  handler. The double records outbound frames, and the handler releases every presented request.
 
 ## Coverage
 
@@ -315,6 +332,7 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`RR/Unreliable/Coverage.md`](RR/Unreliable/Coverage.md) — `RRUnreliableTransport`
 - [`RR/Unreliable/Client/Coverage.md`](RR/Unreliable/Client/Coverage.md) — `RRUnreliableClientTransport`
 - [`RR/Unreliable/Generic/Coverage.md`](RR/Unreliable/Generic/Coverage.md) — `RRUnreliableTransport<THandler>`
+- [`RR/Unreliable/Server/Coverage.md`](RR/Unreliable/Server/Coverage.md) — `RRUnreliableServerTransport`
 
 Each layer covers only the contract delta and invariants introduced by its subject. Ancestor
 behaviour is not repeated. A layer's `Coverage.md` lists the current covered tests, planned
@@ -325,25 +343,28 @@ gaps, and deferred-by-design gaps for that layer.
 - Suite root category: `Transports`. Every fixture carries it.
 - Additional filtering categories: `Transports.RR`, `Transports.RR.Reliable`,
   `Transports.RR.Reliable.Client`, `Transports.RR.Reliable.Server`,
-  `Transports.RR.Unreliable`, `Transports.RR.Unreliable.Client`, and
-  `Transports.Concurrency`.
+  `Transports.RR.Unreliable`, `Transports.RR.Unreliable.Client`,
+  `Transports.RR.Unreliable.Server`, and `Transports.Concurrency`.
 
 The RR branch carries `Transports.RR`; every reliable fixture additionally carries
 `Transports.RR.Reliable`, and the client and server layers add `.Client` and `.Server`. The
-unreliable layers carry `Transports.RR.Unreliable`, and the unreliable client layer adds `.Client`.
+unreliable layers carry `Transports.RR.Unreliable`, and the unreliable client and server layers
+add `.Client` and `.Server`.
 
-`Transports.Concurrency` marks 33 deterministic, concurrency-categorised tests: five Raw
+`Transports.Concurrency` marks 34 deterministic, concurrency-categorised tests: five Raw
 admission-lock and bounded-counter tests, four reliable client callback-pump tests, twenty-one
-reliable server dispatch, handle, and session tests, and three unreliable client request/callback
-tests. Most of them use gates and joined workers with bounded timeouts, and gates are always
-released in `finally`; no test sleeps or polls. Two of the unreliable client tests —
-`Stop_FromInsideAResponseCallback_DoesNotDeadlock` and
+reliable server dispatch, handle, and session tests, three unreliable client request/callback
+tests, and one unreliable server response-sequence test. Most of them use gates and joined workers
+with bounded timeouts, and gates are always released in `finally`; no test sleeps or polls. Two of
+the unreliable client tests — `Stop_FromInsideAResponseCallback_DoesNotDeadlock` and
 `Request_FromInsideAResponseCallback_IsAccepted` — exercise callback reentrancy and stop on the
-`Receive` caller thread rather than gated threads; only
-`Response_Callbacks_AreSerializedPerRequest` starts workers. A bounded test completes synchronously
-and asserts an invariant, not a scheduling order. The tests still run in the default suite because
-they are deterministic and fast. Any future non-default facet (real I/O, load, timing stress) must
-go into a separate layer or group with its own declared category, not the default suite run.
+`Receive` caller thread rather than gated threads. The remaining worker-based tests are
+`Response_Callbacks_AreSerializedPerRequest` (unreliable client) and
+`Response_ConcurrentCallsProduceOneSequence` (unreliable server). A bounded test completes
+synchronously and asserts an invariant, not a scheduling order. The tests still run in the default
+suite because they are deterministic and fast. Any future non-default facet (real I/O, load,
+timing stress) must go into a separate layer or group with its own declared category, not the
+default suite run.
 
 ## Contract summaries
 
@@ -800,6 +821,44 @@ layers and are not repeated.
   arrives afterwards is released. `Stop` from inside a response callback completes without waiting
   on the callback gate.
 
+### `RRUnreliableServerTransport` contract matrix
+
+The unreliable server transport owns server-global request ids, per-request response handles, the
+declared message sequence, the response TTL, and inbound request framing around the inherited
+lifecycle and handler gate.
+
+- **Construction**: a non-positive `responseTtl` throws `ArgumentOutOfRangeException` with
+  `ParamName` `responseTtl`; `ResponseTtl` exposes the constructor value unchanged.
+- **Inbound validation**: a null frame does nothing. A frame without a request-id header is released
+  and never presented. The request header is removed before the payload is measured, so an oversized
+  payload is released and never presented. A frame received before start, after stop, or without a
+  bound handler is released without a callback.
+- **Acceptance**: every presented request receives a distinct server-global id starting at one.
+  Accepting keeps the handle open. Rejecting closes it, so a later `Response` returns `Error`. A
+  throwing handler is logged, treated as a rejection, and leaves the transport valid and started.
+- **Wire correlation**: a response frame carries the received client-local request id, the
+  zero-based message id, and the declared message count, and is sent to the request's source route.
+  The server-global id is local bookkeeping.
+- **Message count**: the count defaults to one and may be set once before the first response. One
+  and 256 are accepted; values outside the range throw `ArgumentOutOfRangeException` before the
+  state is checked, even on a closed handle. A second declaration, a declaration after the first
+  response, after close, after TTL expiry, or after stop throws `InvalidOperationException`.
+- **Send precedence**: a closed handle or a stopped transport returns `Error`; a null payload
+  returns `InvalidMessage`; a payload above `MessageMaxByteSize` returns `MessageTooBig` and is
+  released; otherwise the carrier result is returned.
+- **Message sequence**: accepted sends carry ids from zero in order and the declared count. A
+  non-`Ok` or throwing send keeps the id unchanged and the handle retryable. The handle closes after
+  the declared number of accepted sends; a later send returns `Error`.
+- **TTLs and stop**: the response TTL starts at receipt and is strictly expired when `Now >
+  ExpiresAt`; a later send returns `Error` and releases the payload. A stop closes the answerability
+  window, so a later send returns `Error`.
+- **Duplicates and routing**: RRUnreliable has no base-level duplicate suppression, so the same
+  client request is presented again. Different clients with the same client-local id receive
+  independent handles and responses return to their own route.
+- **Serialization**: concurrent sends on one handle are serialized by the transport and produce one
+  ordered sequence. Serializing `OnRequested` across requests is carrier-owned and recorded in the
+  layer coverage.
+
 ## How it works
 
 ### Black-box boundary
@@ -879,6 +938,11 @@ never use reflection. Only these are asserted:
 - `RecordingUnreliableClientHandler : RRRequestHandler, IRRUnreliableRequestHandler` records
   message ids, counts, and values, releases received buffers, tracks active and maximum active
   callbacks, and can block, throw, or cancel from inside a callback.
+- `TestRRUnreliableServerTransport : RRUnreliableServerTransport` supplies a manual clock and a
+  configurable response TTL, records outbound frames and active sends, and can block, fail, or throw
+  a send.
+- `RecordingUnreliableServerHandler : IRRUnreliableServerHandler` records presented requests,
+  sources, and handles, releases every request, and can accept, reject, or throw.
 - `TestReliableClientTransport : RRReliableClientTransport` supplies a deterministic random-id seed,
   a send override, and the frame-receive and before-send seams, and records send calls.
 - `RecordingReliableClientHandler : RRRequestHandler, IRRReliableRequestHandler` records response

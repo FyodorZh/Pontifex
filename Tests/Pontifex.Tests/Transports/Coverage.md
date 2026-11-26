@@ -61,8 +61,7 @@
 
 | Missing layer or test | Owner | Reason |
 |---|---|---|
-| — | `RRTransport` and the `RRReliable` family | Covered: the RR branch has its own layers under `RR/`. |
-| — | The four `RRUnreliable` layers | Planned: the unreliable RR subtree is recorded in [`RR/Coverage.md`](RR/Coverage.md) until its layers exist. |
+| — | — | No missing layers: the whole selected inheritance tree is covered. |
 
 ## Deferred by design
 

@@ -27,7 +27,7 @@
 
 | Missing layer or test | Owner | Reason |
 | --- | --- | --- |
-| — | `RRUnreliableServerTransport` | The server layer is not implemented yet; it will be added under `Transports/RR/Unreliable/Server`. |
+| — | — | No known missing test for this layer. |
 
 ## Deferred by design
 

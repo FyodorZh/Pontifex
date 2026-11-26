@@ -33,7 +33,7 @@
 
 | Missing layer or test | Owner | Reason |
 | --- | --- | --- |
-| None at this layer. Both families have their base layers; the remaining unreliable client and server layers are planned in their nearest ancestors. | — | — |
+| None at this layer. Both families have their base layers; the client and server layers are recorded in their own coverage files. | — | — |
 
 The reliable family lives under `Transports/RR/Reliable`. Its layers cover only their delta over
 this base; the shared lifecycle, payload-validation, frame-size, and id-allocation tests recorded
