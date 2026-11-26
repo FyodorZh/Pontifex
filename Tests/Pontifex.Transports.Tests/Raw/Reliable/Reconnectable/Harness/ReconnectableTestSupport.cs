@@ -12,9 +12,9 @@ using Pontifex.Utils;
 namespace Pontifex.Tests.Raw.Reliable.Reconnectable.Harness
 {
     /// <summary>
-    /// A deterministic, manual <see cref="INegotiationClock"/>: no wall-clock time and no real timers.
+    /// A deterministic, manual <see cref="ITimerFactory"/>: no wall-clock time and no real timers.
     /// </summary>
-    internal sealed class ManualReconnectableClock : INegotiationClock
+    internal sealed class ManualReconnectableClock : ITimerFactory
     {
         private sealed class Entry : IDisposable
         {

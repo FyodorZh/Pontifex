@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Pontifex.Raw.Reliable;
+using Pontifex.Utils;
 
 namespace Pontifex.Tests.Raw.Reliable.Api.Harness
 {
     /// <summary>
-    /// A deterministic, manual <see cref="INegotiationClock"/> for the Api suite: no wall-clock time and no
+    /// A deterministic, manual <see cref="ITimerFactory"/> for the Api suite: no wall-clock time and no
     /// real timers. Scheduled callbacks fire only from <see cref="Advance"/>, in due-time order.
     /// </summary>
-    internal sealed class ManualApiNegotiationClock : INegotiationClock
+    internal sealed class ManualApiNegotiationClock : ITimerFactory
     {
         private sealed class Entry : IDisposable
         {

@@ -20,7 +20,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
         private readonly short _negotiationVersion;
         private readonly string _negotiationName;
         private readonly int _handshakeMaxByteSize;
-        private readonly INegotiationClock _clock;
+        private readonly ITimerFactory _timerFactory;
         private readonly Func<DateTime> _now;
 
         private readonly ThreadSafeDateTime _nextReconnectionTime = new ThreadSafeDateTime();
@@ -38,7 +38,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
             short negotiationVersion,
             string negotiationName,
             int handshakeMaxByteSize,
-            INegotiationClock? clock,
+            ITimerFactory? timerFactory,
             Func<DateTime>? now,
             ILogger logger,
             IMemoryRental memoryRental)
@@ -50,7 +50,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
             _negotiationVersion = negotiationVersion;
             _negotiationName = negotiationName ?? throw new ArgumentNullException(nameof(negotiationName));
             _handshakeMaxByteSize = handshakeMaxByteSize;
-            _clock = clock ?? NegotiationClock.Shared;
+            _timerFactory = timerFactory ?? SystemTimerFactory.Instance;
             _now = now ?? (() => DateTime.UtcNow);
 
             _nextReconnectionTime.Time = _now();
@@ -70,7 +70,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
             }
 
             var attempt = new ClientAttemptHandler(this, _negotiationVersion, _negotiationName,
-                _handshakeMaxByteSize, _clock);
+                _handshakeMaxByteSize, _timerFactory);
             if (!transport.Init(attempt))
             {
                 return false;
@@ -210,20 +210,20 @@ namespace Pontifex.Raw.Reliable.Reconnectable
             private readonly short _version;
             private readonly string _name;
             private readonly int _handshakeMaxByteSize;
-            private readonly INegotiationClock _clock;
+            private readonly ITimerFactory _timerFactory;
 
             private IRawReliableEndpoint? _endpoint;
             private NegotiationSession? _negotiation;
             private volatile bool _admitted;
 
             public ClientAttemptHandler(ReconnectableClientLogic logic, short version, string name,
-                int handshakeMaxByteSize, INegotiationClock clock)
+                int handshakeMaxByteSize, ITimerFactory timerFactory)
             {
                 _logic = logic;
                 _version = version;
                 _name = name;
                 _handshakeMaxByteSize = handshakeMaxByteSize;
-                _clock = clock;
+                _timerFactory = timerFactory;
             }
 
             public void OnConnected(IRawReliableEndpoint endPoint)
@@ -240,7 +240,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
                     OnAccepted,
                     appendData: _logic.FillNegotiationData,
                     handshakeMaxByteSize: _handshakeMaxByteSize,
-                    clock: _clock,
+                    timerFactory: _timerFactory,
                     log: _logic.Log);
 
                 _negotiation = negotiation;

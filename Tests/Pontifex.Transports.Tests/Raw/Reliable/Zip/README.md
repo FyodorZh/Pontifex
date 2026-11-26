@@ -77,7 +77,7 @@ All harness types are hand-written (no mocking library) and test-only:
   `IRawReliableServer`, `IRawReliableEndpoint`, and one server-session driver.
   Delivery is synchronous and caller-driven; outbound payloads are cloned into
   `Sent` for assertions and released with `ReleaseSent`.
-- `ZipTestSupport.cs` contains the manual `INegotiationClock` seam, a minimal
+- `ZipTestSupport.cs` contains the manual `Pontifex.Utils.ITimerFactory` seam, a minimal
   `IEndPoint`, and payload build/describe helpers.
 - `ZipPair.cs` links fake clients and one fake server through the public
   `RawReliableWrapperClient`/`RawReliableWrapperServer` bases and the internal

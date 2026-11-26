@@ -28,7 +28,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
         private readonly short _negotiationVersion;
         private readonly string _negotiationName;
         private readonly int _handshakeMaxByteSize;
-        private readonly INegotiationClock? _clock;
+        private readonly ITimerFactory? _timerFactory;
         private readonly Func<TimeSpan, ILogicDriver<IPeriodicLogicDriverCtl>>? _driverFactory;
         private readonly Func<DateTime>? _now;
 
@@ -57,7 +57,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
             short negotiationVersion,
             string? negotiationName,
             int handshakeMaxByteSize,
-            INegotiationClock? clock,
+            ITimerFactory? timerFactory,
             Func<TimeSpan, ILogicDriver<IPeriodicLogicDriverCtl>>? driverFactory,
             Func<DateTime>? now)
             : base(ReconnectableInfo.TransportName, logger, memoryRental, new RawReliableConformanceControl())
@@ -68,7 +68,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
             _negotiationVersion = negotiationVersion;
             _negotiationName = negotiationName ?? ReconnectableInfo.TransportName;
             _handshakeMaxByteSize = handshakeMaxByteSize;
-            _clock = clock;
+            _timerFactory = timerFactory;
             _driverFactory = driverFactory;
             _now = now;
         }
@@ -210,7 +210,7 @@ namespace Pontifex.Raw.Reliable.Reconnectable
                 _negotiationVersion,
                 _negotiationName,
                 _handshakeMaxByteSize,
-                _clock,
+                _timerFactory,
                 _now,
                 Log,
                 Memory);

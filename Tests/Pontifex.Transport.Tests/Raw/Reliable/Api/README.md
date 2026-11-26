@@ -81,7 +81,7 @@ All harness types are hand-written (no mocking library) and test-only:
   `ServerToClient` hooks let a test replace or drop one direction.
 - `TailAppendingClientSideApi` overrides `AppendNegotiationData` to prove the
   append-only hook.
-- `ManualApiNegotiationClock` implements `INegotiationClock`; tests advance it
+- `ManualApiNegotiationClock` implements `Pontifex.Utils.ITimerFactory`; tests advance it
   to fire the negotiation deadline and the rejection linger without real time.
 
 There are no harness self-tests, so the

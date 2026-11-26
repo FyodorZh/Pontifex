@@ -9,9 +9,9 @@ using Pontifex.Utils;
 namespace Pontifex.Tests.Raw.Reliable.Zip.Harness
 {
     /// <summary>
-    /// A deterministic, manual <see cref="INegotiationClock"/>: no wall-clock time and no real timers.
+    /// A deterministic, manual <see cref="ITimerFactory"/>: no wall-clock time and no real timers.
     /// </summary>
-    internal sealed class ManualZipClock : INegotiationClock
+    internal sealed class ManualZipClock : ITimerFactory
     {
         private sealed class Entry : IDisposable
         {

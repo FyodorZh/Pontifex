@@ -76,7 +76,7 @@ Protocol/
 
 All harness types are hand-written (no mocking library) and test-only:
 
-- `ManualNegotiationClock` implements the internal `INegotiationClock` seam so
+- `ManualNegotiationClock` implements the `Pontifex.Utils.ITimerFactory` seam so
   the ten-second deadline and the two-second rejection linger are advanced
   explicitly. `PendingDelays` and `PendingCount` expose what is scheduled;
   `Advance`/`FireNext` fire due callbacks in due-time order.

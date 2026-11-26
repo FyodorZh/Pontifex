@@ -408,7 +408,7 @@ internal sealed class ApiNegotiationPair : IDisposable
     public ApiNegotiationPair(
         ClientSideApi? clientApi = null,
         ServerSideApiInstance<ApiNegotiationTestApi>? instance = null,
-        INegotiationClock? clock = null,
+        ITimerFactory? clock = null,
         Func<ServerSideApiInstance<ApiNegotiationTestApi>>? instanceFactory = null)
     {
         if (instanceFactory != null)

@@ -240,7 +240,7 @@ public sealed class RawReliableWrapperTests
             reason => disconnects.Add(reason),
             _ => { },
             checkData: _ => false,
-            clock: clock,
+            timerFactory: clock,
             log: Log);
 
         session.Start();

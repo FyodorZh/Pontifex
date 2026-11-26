@@ -79,7 +79,7 @@ There are no groups under `Tests/`: the suite has one layer and one test file.
 
 All harness types are hand-written (no mocking library) and test-only:
 
-- `ReconnectableTestSupport.cs` contains the manual `INegotiationClock` seam,
+- `ReconnectableTestSupport.cs` contains the manual `Pontifex.Utils.ITimerFactory` seam,
   a hand-driven multi-logic `ILogicDriver`, endpoint and payload helpers, and
   recording application client/server handlers plus a recording server factory.
 - `FakeReconnectableTransport.cs` contains the scripted `IRawReliableClient`,
