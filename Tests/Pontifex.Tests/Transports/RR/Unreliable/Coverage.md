@@ -24,7 +24,7 @@ are not repeated here.
 
 | Missing layer or test | Owner | Reason |
 | --- | --- | --- |
-| — | `RRUnreliableClientTransport` | The client layer is not implemented yet; it will be added under `Transports/RR/Unreliable/Client`. |
+| — | — | No known missing test for this layer. |
 
 ## Deferred by design
 
