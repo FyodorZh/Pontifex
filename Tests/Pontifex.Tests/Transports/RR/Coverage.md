@@ -33,10 +33,7 @@
 
 | Missing layer or test | Owner | Reason |
 | --- | --- | --- |
-| — | `RRUnreliableTransport` (base) | The RRUnreliable family base layer is not implemented yet; it will be added under `Transports/RR/Unreliable`. |
-| — | `RRUnreliableTransport<THandler>` | The RRUnreliable generic layer is not implemented yet; it will be added under `Transports/RR/Unreliable/Generic`. |
-| — | `RRUnreliableClientTransport` | The RRUnreliable client layer is not implemented yet; it will be added under `Transports/RR/Unreliable/Client`. |
-| — | `RRUnreliableServerTransport` | The RRUnreliable server layer is not implemented yet; it will be added under `Transports/RR/Unreliable/Server`. |
+| None at this layer. Both families have their base layers; the remaining unreliable client and server layers are planned in their nearest ancestors. | — | — |
 
 The reliable family lives under `Transports/RR/Reliable`. Its layers cover only their delta over
 this base; the shared lifecycle, payload-validation, frame-size, and id-allocation tests recorded

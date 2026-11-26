@@ -85,8 +85,11 @@ Planned layers and coverage gaps are recorded in the owning layer's `Coverage.md
 - [RRReliableClientTransport.cs](../../../Pontifex/Implementations/RR/Reliable/RRReliableClientTransport.cs)
 - [RRReliableServerTransport.cs](../../../Pontifex/Implementations/RR/Reliable/RRReliableServerTransport.cs)
 - [IRRReliableTimerFactory.cs](../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTimerFactory.cs)
+- [RRUnreliableTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableTransport.cs)
+- [IRRUnreliableTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/IRRUnreliableTransport.cs)
 - [RR shared specification](../../../Pontifex/Abstractions/Transports/RR/Specification.md)
 - [RRReliable specification](../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md)
+- [RRUnreliable specification](../../../Pontifex/Abstractions/Transports/RR/Unreliable/Specification.md)
 
 ## Layers
 
@@ -110,6 +113,8 @@ inheritance parent, and coverage file.
 | `RRReliableTransportGeneric` | `Pontifex.RR.Reliable.RRReliableTransport<THandler>` | `Tests/Pontifex.Tests/Transports/RR/Reliable/Generic` | `RRReliableTransport` | [`RR/Reliable/Generic/Coverage.md`](RR/Reliable/Generic/Coverage.md) |
 | `RRReliableClientTransport` | `Pontifex.RR.Reliable.RRReliableClientTransport` | `Tests/Pontifex.Tests/Transports/RR/Reliable/Client` | `RRReliableTransport` | [`RR/Reliable/Client/Coverage.md`](RR/Reliable/Client/Coverage.md) |
 | `RRReliableServerTransport` | `Pontifex.RR.Reliable.RRReliableServerTransport` | `Tests/Pontifex.Tests/Transports/RR/Reliable/Server` | `RRReliableTransport<THandler>` | [`RR/Reliable/Server/Coverage.md`](RR/Reliable/Server/Coverage.md) |
+| `RRUnreliableTransport` | `Pontifex.RR.Unreliable.RRUnreliableTransport` | `Tests/Pontifex.Tests/Transports/RR/Unreliable` | `RRTransport` | [`RR/Unreliable/Coverage.md`](RR/Unreliable/Coverage.md) |
+| `RRUnreliableTransportGeneric` | `Pontifex.RR.Unreliable.RRUnreliableTransport<THandler>` | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic` | `RRUnreliableTransport` | [`RR/Unreliable/Generic/Coverage.md`](RR/Unreliable/Generic/Coverage.md) |
 
 Directory nesting does not imply inheritance. The inheritance parent is the one declared in the
 layer table above.
@@ -117,8 +122,9 @@ layer table above.
 ## Naming conventions
 
 - Layer name = subject type name.
-- The generic reliable layer uses the `RRReliableTransportGeneric` name because a file name cannot
-  contain angle brackets.
+- The generic reliable layer uses the `RRReliableTransportGeneric` name and the generic unreliable
+  layer uses the `RRUnreliableTransportGeneric` name because a file name cannot contain angle
+  brackets.
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
 - Test methods = `Scenario_ExpectedResult`, for example
   `Start_WhenBeginConnectReturnsFalse_DestroysWithoutNotifyingHandler`.
@@ -193,29 +199,39 @@ Transports/
     ├── RRTransportTests.cs
     ├── Harness/
     │   └── TestRRTransport.cs
-    └── Reliable/                                    RRReliableTransport layer
+    ├── Reliable/                                    RRReliableTransport layer
+    │   ├── Coverage.md
+    │   ├── RRReliableTransportTests.cs
+    │   ├── Harness/
+    │   │   ├── ManualTimerFactory.cs
+    │   │   ├── ScriptedReliableCarrier.cs
+    │   │   └── TestRRReliableTransport.cs
+    │   ├── Generic/                                 RRReliableTransport<THandler> layer
+    │   │   ├── Coverage.md
+    │   │   ├── RRReliableTransportGenericTests.cs
+    │   │   └── Harness/
+    │   │       └── TestRRReliableTransportGeneric.cs
+    │   ├── Client/                                  RRReliableClientTransport layer
+    │   │   ├── Coverage.md
+    │   │   ├── RRReliableClientTransportTests.cs
+    │   │   └── Harness/
+    │   │       ├── PlainReliableClientHandler.cs
+    │   │       └── TestReliableClientTransport.cs
+    │   └── Server/                                  RRReliableServerTransport layer
+    │       ├── Coverage.md
+    │       ├── RRReliableServerTransportTests.cs
+    │       └── Harness/
+    │           └── TestReliableServerTransport.cs
+    └── Unreliable/                                  RRUnreliableTransport layer
         ├── Coverage.md
-        ├── RRReliableTransportTests.cs
+        ├── RRUnreliableTransportTests.cs
         ├── Harness/
-        │   ├── ManualTimerFactory.cs
-        │   ├── ScriptedReliableCarrier.cs
-        │   └── TestRRReliableTransport.cs
-        ├── Generic/                                 RRReliableTransport<THandler> layer
-        │   ├── Coverage.md
-        │   ├── RRReliableTransportGenericTests.cs
-        │   └── Harness/
-        │       └── TestRRReliableTransportGeneric.cs
-        ├── Client/                                  RRReliableClientTransport layer
-        │   ├── Coverage.md
-        │   ├── RRReliableClientTransportTests.cs
-        │   └── Harness/
-        │       ├── PlainReliableClientHandler.cs
-        │       └── TestReliableClientTransport.cs
-        └── Server/                                  RRReliableServerTransport layer
+        │   └── TestRRUnreliableTransport.cs
+        └── Generic/                                 RRUnreliableTransport<THandler> layer
             ├── Coverage.md
-            ├── RRReliableServerTransportTests.cs
+            ├── RRUnreliableTransportGenericTests.cs
             └── Harness/
-                └── TestReliableServerTransport.cs
+                └── TestRRUnreliableTransportGeneric.cs
 ```
 
 ## Harness layout and sharing
@@ -260,6 +276,9 @@ drivers.
   and the plain non-`RRRequestHandler` handler used by the type-check test.
 - `RR/Reliable/Server/Harness/` holds `TestReliableServerTransport` and its recording server
   handler.
+- `RR/Unreliable/Harness/` holds `TestRRUnreliableTransport`, the concrete double for the
+  unreliable family base.
+- `RR/Unreliable/Generic/Harness/` holds `TestRRUnreliableTransportGeneric` and its empty handler.
 
 ## Coverage
 
@@ -280,6 +299,8 @@ Coverage is recorded per layer, next to the layer's tests:
 - [`RR/Reliable/Generic/Coverage.md`](RR/Reliable/Generic/Coverage.md) — `RRReliableTransport<THandler>`
 - [`RR/Reliable/Client/Coverage.md`](RR/Reliable/Client/Coverage.md) — `RRReliableClientTransport`
 - [`RR/Reliable/Server/Coverage.md`](RR/Reliable/Server/Coverage.md) — `RRReliableServerTransport`
+- [`RR/Unreliable/Coverage.md`](RR/Unreliable/Coverage.md) — `RRUnreliableTransport`
+- [`RR/Unreliable/Generic/Coverage.md`](RR/Unreliable/Generic/Coverage.md) — `RRUnreliableTransport<THandler>`
 
 Each layer covers only the contract delta and invariants introduced by its subject. Ancestor
 behaviour is not repeated. A layer's `Coverage.md` lists the current covered tests, planned
@@ -289,11 +310,12 @@ gaps, and deferred-by-design gaps for that layer.
 
 - Suite root category: `Transports`. Every fixture carries it.
 - Additional filtering categories: `Transports.RR`, `Transports.RR.Reliable`,
-  `Transports.RR.Reliable.Client`, `Transports.RR.Reliable.Server`, and
-  `Transports.Concurrency`.
+  `Transports.RR.Reliable.Client`, `Transports.RR.Reliable.Server`,
+  `Transports.RR.Unreliable`, and `Transports.Concurrency`.
 
 The RR branch carries `Transports.RR`; every reliable fixture additionally carries
-`Transports.RR.Reliable`, and the client and server layers add `.Client` and `.Server`.
+`Transports.RR.Reliable`, and the client and server layers add `.Client` and `.Server`. The
+unreliable layers carry `Transports.RR.Unreliable`.
 
 `Transports.Concurrency` marks the 30 deterministic tests that use real threads or gated, joined
 workers: five Raw admission-lock and bounded-counter tests, four reliable client callback-pump
@@ -704,6 +726,30 @@ the serialized `OnRequested` dispatch, response TTLs, and session closure.
 - **Stop**: stop marks handles closed without waiting for an in-flight `Response`; two concurrent
   `Finish` calls on one handle produce exactly one `Ok` and one terminal frame.
 
+### `RRUnreliableTransport` contract matrix
+
+`RRUnreliableTransport` adds the unreliable transport type and the largest unreliable header. The
+shared lifecycle, validation, frame formula, and id allocation are covered by the `RRTransport`
+layer and are not repeated.
+
+- **Type**: the family base reports `TransportType.RRUnreliable`.
+- **Overhead**: `FrameOverheadBytes` is `RRUnreliableFrame.OverheadBytes`, so the ceiling is the
+  message limit plus that constant plus one.
+
+### `RRUnreliableTransport<THandler>` contract matrix
+
+The generic unreliable transport binds one server handler before start and gates its dispatch.
+
+- **Init**: a null handler throws `ArgumentNullException` without binding. The first `Init` stores
+  the handler and succeeds; later calls, calls after a start attempt, and calls on an invalid
+  transport return `false`. A stopped transport cannot be reinitialized. `Init` alone never starts
+  or registers the carrier.
+- **Start gating**: `Start` without a bound handler returns `false` and invalidates without touching
+  the carrier or invoking the user callback. A failed carrier start never enables dispatch.
+- **Dispatch gate**: `DispatchHandler` is `null` before start and after stop; it returns the bound
+  handler only while the transport is dispatching. Stopping hides the handler before the carrier
+  stop runs.
+
 ## How it works
 
 ### Black-box boundary
@@ -772,6 +818,11 @@ never use reflection. Only these are asserted:
   exposes the frame ceiling and the injected timer factory.
 - `TestRRReliableTransportGeneric<THandler> : RRReliableTransport<THandler>` supplies the carrier
   hooks, exposes `DispatchHandler`, and holds the empty `TestReliableHandler`.
+- `TestRRUnreliableTransport : RRUnreliableTransport` supplies `MessageMaxByteSize` and the carrier
+  hooks and exposes the protected frame ceiling.
+- `TestRRUnreliableTransportGeneric<THandler> : RRUnreliableTransport<THandler>` supplies the
+  carrier hooks, exposes `DispatchHandler`, records the dispatch handler observed inside
+  `StopCarrier`, and holds the empty `TestUnreliableHandler`.
 - `TestReliableClientTransport : RRReliableClientTransport` supplies a deterministic random-id seed,
   a send override, and the frame-receive and before-send seams, and records send calls.
 - `RecordingReliableClientHandler : RRRequestHandler, IRRReliableRequestHandler` records response
@@ -873,6 +924,12 @@ Filter to the reliable RR layers:
 
 ```
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.RR.Reliable
+```
+
+Filter to the unreliable RR layers:
+
+```
+dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.RR.Unreliable
 ```
 
 ## Out of scope
