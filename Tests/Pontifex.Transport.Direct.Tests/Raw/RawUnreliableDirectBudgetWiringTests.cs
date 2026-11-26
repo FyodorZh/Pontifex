@@ -37,8 +37,8 @@ public sealed class RawUnreliableDirectBudgetWiringTests
     public void DirectClientAndServer_DeriveTheInfoBudgetCaps()
     {
         var logger = new Logger([]);
-        var client = new RawUnreliableDirectClient("budget-wiring", logger, MemoryRental.Shared);
-        var server = new RawUnreliableDirectServer("budget-wiring", logger, MemoryRental.Shared);
+        var client = new RawUnreliableDirectClientTransport("budget-wiring", logger, MemoryRental.Shared);
+        var server = new RawUnreliableDirectServerTransport("budget-wiring", logger, MemoryRental.Shared);
 
         Assert.Multiple(() =>
         {

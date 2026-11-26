@@ -2,6 +2,7 @@ using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
+using Scriba;
 
 namespace Pontifex.Tests.Endpoints;
 
@@ -29,6 +30,11 @@ public sealed class RawReliableEndpointTests
     private static UserIntention Reason(string source = "test")
     {
         return new UserIntention(source);
+    }
+
+    private static byte PayloadOf(UnionDataList buffer)
+    {
+        return buffer.Elements[0].Alias.ByteValue;
     }
 
     #region Connect
@@ -126,7 +132,7 @@ public sealed class RawReliableEndpointTests
     }
 
     [Test]
-    public void Send_FramingCountsTowardMessageMaxByteSize()
+    public void Send_PayloadAtExactMessageMaxByteSize_IsAccepted()
     {
         using var handler = new RecordingRawReliableHandler(Memory);
         using var ep = Create(handler, max: 3);
@@ -134,9 +140,72 @@ public sealed class RawReliableEndpointTests
         UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
         Assert.That(buffer.GetDataSize(), Is.EqualTo(3));
 
-        // The raw payload fits the limit exactly, but the prepended PayloadMessage byte pushes the
-        // framed message over MessageMaxByteSize.
+        // Transport framing never counts toward the payload limit: a payload exactly at the maximum is
+        // accepted and the framed buffer is one byte larger.
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.Ok));
+        ep.DrainAll();
+        Assert.Multiple(() =>
+        {
+            Assert.That(ep.CapturedSends, Has.Count.EqualTo(1));
+            Assert.That(ep.CapturedSends[0].GetDataSize(), Is.GreaterThan(3));
+        });
+    }
+
+    [Test]
+    public void Send_OneByteOverMessageMaxByteSize_ReturnsMessageTooBig()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler, max: 3);
+        ep.ConnectAndComplete();
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        buffer.PutLast((byte)2);
+
         Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.MessageTooBig));
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithNullBuffer_ReturnsNotConnected()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+
+        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.NotConnected));
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithOversizedBuffer_ReturnsNotConnectedAndReleases()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler, max: 3);
+        UnionDataList buffer = TestBuffers.WithPayload(Memory, 32);
+        Assert.That(buffer.GetDataSize(), Is.GreaterThan(3));
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.NotConnected));
+        Assert.That(buffer.IsAlive, Is.False);
+        Assert.That(buffer.RefCount.RefCount, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithFullBudget_ReturnsNotConnectedAndReleases()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler, max: 1024, capacity: 1);
+        UnionDataList buffer = TestBuffers.WithByte(Memory, 1);
+        Assert.That(buffer.GetDataSize(), Is.GreaterThan(1));
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.NotConnected));
+        Assert.That(buffer.IsAlive, Is.False);
+        Assert.That(buffer.RefCount.RefCount, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenConnectedWithNullBuffer_ReturnsInvalidMessage()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.ConnectAndComplete();
+
+        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.InvalidMessage));
     }
 
     #endregion
@@ -184,7 +253,7 @@ public sealed class RawReliableEndpointTests
     [TestCase(TestRawReliableEndpoint.HandshakeRequestFrame)]
     [TestCase(TestRawReliableEndpoint.HandshakeResponseFrame)]
     [TestCase(TestRawReliableEndpoint.HandshakeRejectFrame)]
-    public void ProcessInbound_UnhandledFrameType_StopsWithTextFail(byte frameType)
+    public void ProcessInbound_UnhandledFrameType_IsDroppedWithoutStopping(byte frameType)
     {
         using var handler = new RecordingRawReliableHandler(Memory);
         using var ep = Create(handler);
@@ -193,14 +262,17 @@ public sealed class RawReliableEndpointTests
 
         ep.ExposedProcessInbound(framed);
         ep.DrainAll();
-        ep.CompleteDisconnect();
 
-        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
-        Assert.That(framed.IsAlive, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(framed.IsAlive, Is.False);
+            Assert.That(handler.StoppedReason, Is.Null);
+            Assert.That(ep.IsLowLevelConnected, Is.True);
+        });
     }
 
     [Test]
-    public void ProcessInbound_WhenNotConnected_ReleasesAndStopsWithTextFail()
+    public void ProcessInbound_WhenNotConnected_IsDroppedWithoutStopping()
     {
         using var handler = new RecordingRawReliableHandler(Memory);
         using var ep = Create(handler);
@@ -215,14 +287,16 @@ public sealed class RawReliableEndpointTests
         Assert.That(handler.ReceivedCount, Is.Zero);
 
         ep.CompleteConnect();
-        ep.CompleteDisconnect();
 
-        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
-        Assert.That(handler.ReceivedCount, Is.Zero);
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.StoppedReason, Is.Null);
+            Assert.That(handler.ReceivedCount, Is.Zero);
+        });
     }
 
     [Test]
-    public void ProcessInbound_EmptyFrame_StopsWithTextFail()
+    public void ProcessInbound_EmptyFrame_IsDroppedWithoutStopping()
     {
         using var handler = new RecordingRawReliableHandler(Memory);
         using var ep = Create(handler);
@@ -231,9 +305,192 @@ public sealed class RawReliableEndpointTests
 
         ep.ExposedProcessInbound(empty);
         ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(empty.IsAlive, Is.False);
+            Assert.That(handler.StoppedReason, Is.Null);
+            Assert.That(ep.IsLowLevelConnected, Is.True);
+        });
+    }
+
+    [Test]
+    public void ProcessInbound_PayloadBeforeOnConnectedCompleted_IsBufferedThenDeliveredInOrder()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.AutoNotifyConnectedForTests = false;
+        ep.Start();
+        ep.DrainAll();
+        ep.CompleteConnect();
+        UnionDataList first = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 1);
+        UnionDataList second = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 2);
+
+        ep.ExposedNotifyConnectedCore(() =>
+        {
+            ep.ExposedProcessInbound(first);
+            ep.ExposedProcessInbound(second);
+            Assert.That(handler.ReceivedCount, Is.Zero,
+                "no payload may be exposed before OnConnected returns");
+        });
+        ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.EqualTo(2));
+            Assert.That(PayloadOf(handler.Received[0]), Is.EqualTo((byte)1));
+            Assert.That(PayloadOf(handler.Received[1]), Is.EqualTo((byte)2));
+        });
+    }
+
+    [Test]
+    public async Task ProcessInbound_PayloadConcurrentWithLatchCompletion_IsDeliveredExactlyOnceInOrder()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.AutoNotifyConnectedForTests = false;
+        ep.Start();
+        ep.DrainAll();
+        ep.CompleteConnect();
+        UnionDataList first = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 1);
+        UnionDataList concurrent = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 2);
+        var injected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        ep.ExposedNotifyConnectedCore(() =>
+        {
+            ep.ExposedProcessInbound(first);
+            _ = Task.Run(() =>
+            {
+                ep.ExposedProcessInbound(concurrent);
+                injected.TrySetResult();
+            });
+            Assert.That(injected.Task.Wait(TimeSpan.FromSeconds(5)), Is.True);
+        });
+        ep.DrainAll();
+
+        await Task.Yield();
+        ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.EqualTo(2));
+            Assert.That(PayloadOf(handler.Received[0]), Is.EqualTo((byte)1));
+            Assert.That(PayloadOf(handler.Received[1]), Is.EqualTo((byte)2));
+        });
+    }
+
+    [Test]
+    public void ProcessInbound_WhenOnConnectedThrows_StillDrainsBufferedPayloads()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.AutoNotifyConnectedForTests = false;
+        ep.Start();
+        ep.DrainAll();
+        ep.CompleteConnect();
+        UnionDataList buffered = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 7);
+
+        ep.ExposedNotifyConnectedCore(() =>
+        {
+            ep.ExposedProcessInbound(buffered);
+            throw new InvalidOperationException("Expected handler failure.");
+        });
+        ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.EqualTo(1));
+            Assert.That(PayloadOf(handler.Received[0]), Is.EqualTo((byte)7));
+            Assert.That(ep.IsRunning, Is.True);
+        });
+    }
+
+    [Test]
+    public void ProcessInbound_PreConnectBufferOverflow_ReleasesEverythingAndStops()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.PreConnectMessagesOverride = 1;
+        ep.AutoNotifyConnectedForTests = false;
+        ep.Start();
+        ep.DrainAll();
+        ep.CompleteConnect();
+        UnionDataList first = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 1);
+        UnionDataList overCap = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 2);
+
+        ep.ExposedNotifyConnectedCore(() =>
+        {
+            ep.ExposedProcessInbound(first);
+            ep.ExposedProcessInbound(overCap);
+        });
+        ep.DrainAll();
         ep.CompleteDisconnect();
 
-        Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.Zero);
+            Assert.That(first.IsAlive, Is.False);
+            Assert.That(overCap.IsAlive, Is.False);
+            Assert.That(handler.StoppedReason, Is.TypeOf<TextFail>());
+        });
+    }
+
+    [Test]
+    public void ProcessInbound_StopDuringOnConnected_ReleasesBufferedPayloadWithoutDelivery()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler);
+        ep.AutoNotifyConnectedForTests = false;
+        ep.Start();
+        ep.DrainAll();
+        ep.CompleteConnect();
+        var reason = Reason();
+        UnionDataList buffered = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 1);
+
+        ep.ExposedNotifyConnectedCore(() =>
+        {
+            ep.ExposedProcessInbound(buffered);
+            ep.Stop(reason, tryBeGentle: false);
+        });
+        ep.DrainAll();
+        ep.CompleteDisconnect();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.Zero);
+            Assert.That(buffered.IsAlive, Is.False);
+            Assert.That(handler.StoppedReason, Is.SameAs(reason));
+        });
+    }
+
+    [Test]
+    public void ProcessInbound_PreConnectPayloadWithMaxIntMessageLimit_IsAcceptedAndDelivered()
+    {
+        using var handler = new RecordingRawReliableHandler(Memory);
+        using var ep = Create(handler, max: int.MaxValue);
+        ep.AutoNotifyConnectedForTests = false;
+        ep.Start();
+        ep.DrainAll();
+        ep.CompleteConnect();
+        UnionDataList buffered = TestRawReliableEndpoint.Frame(Memory,
+            TestRawReliableEndpoint.PayloadFrame, 9);
+
+        ep.ExposedNotifyConnectedCore(() => ep.ExposedProcessInbound(buffered));
+        ep.DrainAll();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.EqualTo(1));
+            Assert.That(PayloadOf(handler.Received[0]), Is.EqualTo((byte)9));
+        });
     }
 
     #endregion
@@ -465,22 +722,31 @@ public sealed class RawReliableEndpointTests
     }
 
     [Test]
-    public void NotifyConnectedCore_WhenCallbackThrows_StopsWithExceptionFail()
+    public void NotifyConnectedCore_WhenCallbackThrows_LogsAndKeepsEndpointUsable()
     {
+        var logConsumer = new RecordingLogConsumer();
         using var handler = new RecordingRawReliableHandler(Memory);
-        using var ep = Create(handler);
+        using var ep = new TestRawReliableEndpoint(handler, log: new Logger([logConsumer]));
         ep.ConnectAndComplete();
         var exception = new InvalidOperationException("OnConnected failed");
+        bool result = false;
 
-        bool result = ep.ExposedNotifyConnectedCore(() => throw exception);
+        Assert.DoesNotThrow(() => result = ep.ExposedNotifyConnectedCore(() => throw exception));
+
+        Assert.That(result, Is.True);
+        Assert.That(ep.IsRunning, Is.True, "a throwing connection callback must not stop the endpoint");
+        Assert.That(ep.IsConnected, Is.True);
+        Assert.That(ep.BeginDisconnectCalls, Is.Zero);
+        Assert.That(ep.LastDisconnectReason, Is.Null);
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(logConsumer.Messages, Has.Some.Contains("OnConnected failed"));
+
+        UnionDataList framed = TestRawReliableEndpoint.Frame(Memory, TestRawReliableEndpoint.PayloadFrame, 5);
+        ep.ExposedProcessInbound(framed);
         ep.DrainAll();
 
-        Assert.That(result, Is.False);
-        Assert.That(ep.LastDisconnectReason, Is.TypeOf<ExceptionFail>());
-        var fail = (ExceptionFail)ep.LastDisconnectReason!;
-        Assert.That(fail.Source, Is.EqualTo(ep.ExposedTransportName));
-        Assert.That(fail.Exception, Is.SameAs(exception));
-        Assert.That(handler.DisconnectedCount, Is.Zero);
+        Assert.That(handler.ReceivedCount, Is.EqualTo(1), "the endpoint must keep delivering messages");
     }
 
     #endregion

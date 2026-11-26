@@ -49,6 +49,8 @@ namespace Pontifex.Raw.Reliable
         private readonly string _handshakeName;
         private readonly int _handshakeMaxByteSize;
         private readonly TimeSpan _handshakeTimeout;
+        private readonly IRawReliableHandshakeTimerFactory _timerFactory;
+        private int _handshakeTimerCreateCalls;
 
         private volatile State _stage;
         private IDisposable? _handshakeTimer;
@@ -85,7 +87,8 @@ namespace Pontifex.Raw.Reliable
             IRawReliableClientHandler handler, int messageMaxByteSize, long bufferCapacityBytes,
             IMemoryRental memory, ILogger log, RawReliableClientEndpoint.PingOptions? pingOptions,
             string handshakeName, int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize,
-            TimeSpan? handshakeTimeout = null)
+            TimeSpan? handshakeTimeout = null,
+            IRawReliableHandshakeTimerFactory? timerFactory = null)
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log, pingOptions)
         {
             if (handshakeName == null)
@@ -114,6 +117,7 @@ namespace Pontifex.Raw.Reliable
             _handshakeName = handshakeName;
             _handshakeMaxByteSize = handshakeMaxByteSize;
             _handshakeTimeout = resolvedTimeout;
+            _timerFactory = timerFactory ?? SystemRawReliableHandshakeTimerFactory.Instance;
 
             Stopped += OnEndpointStopped;
         }
@@ -126,6 +130,19 @@ namespace Pontifex.Raw.Reliable
         {
             return IsLowLevelConnected && _stage == State.LogicallyConnected;
         }
+
+        /// <summary>
+        /// Gets whether the endpoint sent the handshake request and is still waiting for the response
+        /// or the reject frame.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: A concrete carrier that handles a rejection
+        /// synchronously uses this to ignore handshake frames that arrive outside the handshake
+        /// phase, matching the inherited scheduled path.</description></item>
+        /// </list>
+        /// </remarks>
+        protected bool IsHandshakePending => _stage == State.HandshakeSent;
 
         /// <summary>
         /// Starts the transport handshake. The inherited keep-alive behavior is deliberately not started here;
@@ -201,11 +218,28 @@ namespace Pontifex.Raw.Reliable
         /// </remarks>
         protected virtual IDisposable? CreateHandshakeTimer(TimeSpan timeout, Action onTimeout)
         {
-            return new Timer(_ => onTimeout(), null, timeout, Timeout.InfiniteTimeSpan);
+            Interlocked.Increment(ref _handshakeTimerCreateCalls);
+            return _timerFactory.Schedule(timeout, onTimeout);
         }
+
+        /// <summary>
+        /// Gets whether a handshake deadline timer is currently installed.
+        /// </summary>
+        internal bool HasHandshakeTimerForTests => Volatile.Read(ref _handshakeTimer) != null;
+
+        /// <summary>
+        /// Gets how many times the handshake engine asked the timer factory for a deadline.
+        /// </summary>
+        internal int HandshakeTimerCreateCallsForTests =>
+            Volatile.Read(ref _handshakeTimerCreateCalls);
 
         private void StartHandshakeTimer()
         {
+            if (_stage != State.HandshakeSent || !IsRunning)
+            {
+                return;
+            }
+
             IDisposable? timer;
             try
             {
@@ -220,6 +254,21 @@ namespace Pontifex.Raw.Reliable
 
             if (timer == null)
             {
+                return;
+            }
+
+            if (_stage != State.HandshakeSent || !IsRunning)
+            {
+                // The in-process response may complete the handshake inline before the timer exists.
+                try
+                {
+                    timer.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Log.wtf(ex);
+                }
+
                 return;
             }
 
@@ -292,30 +341,28 @@ namespace Pontifex.Raw.Reliable
             switch (messageType)
             {
                 case MessageType.HandshakeResponseMessage:
-                    if (message.GetDataSize() > _handshakeMaxByteSize)
-                    {
-                        message.Release();
-                        Stop(new TextFail(TransportName, "Handshake response exceeds HandshakeMaxByteSize"), false);
-                        return true;
-                    }
-
                     CompleteHandshake(message);
                     return true;
 
                 case MessageType.HandshakeRejectMessage:
-                    if (message.GetDataSize() > _handshakeMaxByteSize)
-                    {
-                        message.Release();
-                        Stop(new TextFail(TransportName, "Handshake reject exceeds HandshakeMaxByteSize"), false);
-                        return true;
-                    }
-
                     CompleteRejectedHandshake(message);
                     return true;
 
                 default:
                     return base.ProcessInboundMessage(messageType, message);
             }
+        }
+
+        /// <inheritdoc/>
+        protected override bool ValidateInboundHandshakeFrame(MessageType messageType, int totalSize)
+        {
+            if (messageType == MessageType.HandshakeResponseMessage ||
+                messageType == MessageType.HandshakeRejectMessage)
+            {
+                return totalSize <= _handshakeMaxByteSize;
+            }
+
+            return true;
         }
 
         private void CompleteHandshake(UnionDataList message)

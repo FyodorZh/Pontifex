@@ -98,31 +98,51 @@ namespace Pontifex.Raw.Reliable
         {
         }
 
+        /// <summary>
+        /// Binds the client handler before the transport may start.
+        /// </summary>
+        /// <param name="handler">The non-null client handler to bind.</param>
+        /// <returns><see langword="true"/> only for the first valid pre-start call; every later or
+        /// ineligible call returns <see langword="false"/> without changing the transport state.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="handler"/> is
+        /// <see langword="null"/>; the transport state is not changed.</exception>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Contract</b>: initialization is one-time and pre-start. A second call, a
+        /// call after any start attempt, a call after a stop, and a call on an invalid transport all return
+        /// <see langword="false"/> without invoking <see cref="SetupHandler"/> and without invalidating the
+        /// transport.</description></item>
+        /// <item><description><b>Handler binding</b>: only a first, valid, pre-start call invokes
+        /// <see cref="SetupHandler"/>. A <see langword="null"/> result from that call is the only case that
+        /// invalidates the transport.</description></item>
+        /// <item><description><b>Other notes</b>: a successful call does not start carrier activity or invoke
+        /// a handler callback.</description></item>
+        /// </list>
+        /// </remarks>
         public bool Init(TClientHandler handler)
         {
+            if (handler == null!)
+            {
+                throw new ArgumentNullException(nameof(handler));
+            }
+
             lock (_locker)
             {
-                if (IsValid)
+                if (_state != State.Constructed || HasStartBeenAttempted || !IsValid)
                 {
-                    var processedHandler = SetupHandler(handler);
-                    if (processedHandler != null)
-                    {
-                        if (!IsStarted && _state == State.Constructed)
-                        {
-                            //processedHandler = processedHandler.Test(text => Log.e(text));
-                            _handler = processedHandler;
-                            _state = State.Initialized;
-                            return true;
-                        }
-
-                        Fail("Init", "Wrong transport state (state={0}, started={1})", _state, IsStarted);
-                    }
-                    else
-                    {
-                        Fail("Init", "Transport is not set up");
-                    }
+                    return false;
                 }
-                return false;
+
+                var processedHandler = SetupHandler(handler);
+                if (processedHandler == null)
+                {
+                    Fail("Init", "Transport is not set up");
+                    return false;
+                }
+
+                _handler = processedHandler;
+                _state = State.Initialized;
+                return true;
             }
         }
         

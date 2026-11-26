@@ -7,6 +7,11 @@ namespace Pontifex.Tests.Raw.Unreliable;
 public interface IRawUnreliableConformanceAdapter<TServer>
     where TServer : Pontifex.Raw.Unreliable.IRawUnreliableTransport
 {
+    /// <summary>
+    /// Gets a value indicating whether the adapter's server can enforce reliable debug delivery.
+    /// </summary>
+    bool ServerSupportsReliableDebug { get; }
+
     IRawUnreliableConformanceFixture<TServer> CreateFixture(
         RawUnreliableConformanceFixtureOptions? options = null);
 }

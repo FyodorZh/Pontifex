@@ -48,22 +48,38 @@ namespace Pontifex.VirtualDelivery.Netem
         private readonly uint _p32;
         private readonly uint _p14;
         private readonly uint _p23;
+        private readonly Func<uint> _nextRandom;
 
         private FourState _state;
 
         public FourStateLossModel(FourStateParams p)
+            : this(p, null)
+        {
+        }
+
+        /// <summary>
+        /// Test seam: supplies the uniform 32-bit source used by the transition checks.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; the public constructor uses
+        /// the shared time-seeded source.</description></item>
+        /// </list>
+        /// </remarks>
+        internal FourStateLossModel(FourStateParams p, Func<uint>? nextRandom)
         {
             _p13 = p.P13;
             _p31 = p.P31;
             _p32 = p.P32;
             _p14 = p.P14;
             _p23 = p.P23;
+            _nextRandom = nextRandom ?? NextU32;
             _state = FourState.TxGap;
         }
 
         public bool ShouldDrop()
         {
-            uint rnd = NextU32();
+            uint rnd = _nextRandom();
 
             switch (_state)
             {
@@ -148,15 +164,31 @@ namespace Pontifex.VirtualDelivery.Netem
         private readonly uint _r;
         private readonly uint _h;
         private readonly uint _k1;
+        private readonly Func<uint> _nextRandom;
 
         private GeState _state;
 
         public GilbertElliotLossModel(GilbertElliotParams p)
+            : this(p, null)
+        {
+        }
+
+        /// <summary>
+        /// Test seam: supplies the uniform 32-bit source used by the transition checks.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; the public constructor uses
+        /// the shared time-seeded source.</description></item>
+        /// </list>
+        /// </remarks>
+        internal GilbertElliotLossModel(GilbertElliotParams p, Func<uint>? nextRandom)
         {
             _p = p.P;
             _r = p.R;
             _h = p.H;
             _k1 = p.K1;
+            _nextRandom = nextRandom ?? NextU32;
             _state = GeState.Good;
         }
 
@@ -165,16 +197,16 @@ namespace Pontifex.VirtualDelivery.Netem
             switch (_state)
             {
                 case GeState.Good:
-                    if (NextU32() < _p)
+                    if (_nextRandom() < _p)
                         _state = GeState.Bad;
-                    if (NextU32() < _k1)
+                    if (_nextRandom() < _k1)
                         return true;
                     break;
 
                 case GeState.Bad:
-                    if (NextU32() < _r)
+                    if (_nextRandom() < _r)
                         _state = GeState.Good;
-                    if (NextU32() > _h)
+                    if (_nextRandom() > _h)
                         return true;
                     break;
             }

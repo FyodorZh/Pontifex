@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Utils;
@@ -16,6 +15,9 @@ namespace Pontifex.VirtualDelivery.Netem
         private readonly CancellationTokenSource _cts = new();
         private readonly Thread _dequeueThread;
         private readonly NetemConfig _config;
+        private readonly Func<long> _clock;
+        private readonly bool _manualMode;
+        private readonly object _lifecycleGate = new();
         private readonly ICollectablePool _collectablePool;
         private readonly IPool<IMultiRefByteArray, int> _bytesPool;
         private readonly ILossModel _lossModel;
@@ -25,8 +27,10 @@ namespace Pontifex.VirtualDelivery.Netem
         private readonly CorrelatedRandom _dupCrng;
         private readonly CorrelatedRandom _reorderCrng;
         private uint _gapCounter;
+        private long _lastTimeToSend;
         private volatile bool _cleared;
-        private bool _disposed;
+        private int _disposed;
+        private volatile bool _dequeueThreadStarted;
 
         public event Action<UnionDataList>? Delivered;
 
@@ -34,10 +38,28 @@ namespace Pontifex.VirtualDelivery.Netem
             NetemConfig config,
             ICollectablePool collectablePool,
             IPool<IMultiRefByteArray, int> bytesPool)
+            : this(config, collectablePool, bytesPool, null, false)
         {
+        }
+
+        internal NetemDeliverySystem(
+            NetemConfig config,
+            ICollectablePool collectablePool,
+            IPool<IMultiRefByteArray, int> bytesPool,
+            Func<long>? clock,
+            bool manualMode)
+        {
+            if (config == null)
+            {
+                throw new ArgumentNullException(nameof(config));
+            }
+
+            config.Validate();
             _config = config;
             _collectablePool = collectablePool;
             _bytesPool = bytesPool;
+            _clock = MonotonicTime.CreateClock(clock);
+            _manualMode = manualMode;
 
             _delayCrng = new CorrelatedRandom(config.Correlation.DelayRho);
             _dupCrng = new CorrelatedRandom(config.Correlation.DuplicateRho);
@@ -45,14 +67,38 @@ namespace Pontifex.VirtualDelivery.Netem
 
             _lossModel = CreateLossModel(config);
             _rateLimiter = new RateLimiter(config.RateBytesPerSec, config.PacketOverhead, config.CellSize, config.CellOverhead);
-            _slotScheduler = new SlotScheduler(config.Slot, config.SlotDistribution);
+            _slotScheduler = new SlotScheduler(config.Slot, config.SlotDistribution, _clock);
 
             _dequeueThread = new Thread(DequeueLoop)
             {
                 IsBackground = true,
                 Name = "NetemDequeue"
             };
-            _dequeueThread.Start();
+
+            if (!_manualMode)
+            {
+                _dequeueThread.Start();
+                _dequeueThreadStarted = true;
+            }
+        }
+
+        private void EnsureDequeueThreadStarted()
+        {
+            if (_manualMode || _dequeueThreadStarted)
+            {
+                return;
+            }
+
+            lock (_lifecycleGate)
+            {
+                if (_manualMode || _dequeueThreadStarted || Volatile.Read(ref _disposed) != 0)
+                {
+                    return;
+                }
+
+                _dequeueThread.Start();
+                _dequeueThreadStarted = true;
+            }
         }
 
         public void Deliver(UnionDataList message)
@@ -63,8 +109,10 @@ namespace Pontifex.VirtualDelivery.Netem
                 return;
             }
 
-            if (_disposed)
+            if (Volatile.Read(ref _disposed) != 0)
                 throw new ObjectDisposedException(nameof(NetemDeliverySystem));
+
+            EnsureDequeueThreadStarted();
 
             lock (_lock)
             {
@@ -74,20 +122,25 @@ namespace Pontifex.VirtualDelivery.Netem
                 if (_config.DuplicateProbability != 0 && _config.DuplicateProbability >= _dupCrng.Next())
                     count++;
 
+                // Loss drops the packet, not one copy of it: with duplication enabled, a lost
+                // packet must still be lost, and a saturated loss probability must drop everything.
                 if (_lossModel.ShouldDrop())
-                    count--;
-
-                if (count == 0)
                 {
                     message.Release();
                     return;
                 }
 
                 int totalQueued = _reorderQueue.Count + _timeQueue.Count;
-                if (totalQueued >= _config.QueueLimit)
+                int availableRoom = _config.QueueLimit - totalQueued;
+                if (availableRoom <= 0)
                 {
                     message.Release();
                     return;
+                }
+
+                if (count > availableRoom)
+                {
+                    count = availableRoom;
                 }
 
                 long now = CurrentTimeNs();
@@ -136,6 +189,11 @@ namespace Pontifex.VirtualDelivery.Netem
 
         public void Clear()
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                return;
+            }
+
             lock (_lock)
             {
                 _cleared = true;
@@ -152,19 +210,101 @@ namespace Pontifex.VirtualDelivery.Netem
                 _timeQueue.Clear();
             }
 
-            _signal.Set();
+            SignalQuietly();
+        }
+
+        private void SignalQuietly()
+        {
+            try
+            {
+                _signal.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        /// <summary>
+        /// Performs one deterministic dequeue decision at the given time.
+        /// </summary>
+        /// <param name="nowNs">The monotonic time in nanoseconds.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal manual-pump seam for tests. It performs exactly the
+        /// work the dequeue thread performs for one loop iteration and invokes <see cref="Delivered"/> or
+        /// releases the message. A no-op in a system that was never started in manual
+        /// mode.</description></item>
+        /// </list>
+        /// </remarks>
+        internal void PumpDue(long nowNs)
+        {
+            QueueEntry? entry = null;
+
+            lock (_lock)
+            {
+                if (_reorderQueue.Count > 0)
+                {
+                    entry = _reorderQueue.Dequeue();
+                }
+                else if (_timeQueue.Count > 0)
+                {
+                    var peek = _timeQueue[0];
+                    if (peek.TimeToSend <= nowNs && _slotScheduler.IsOpen(nowNs))
+                    {
+                        entry = peek;
+                        _timeQueue.RemoveAt(0);
+                        _slotScheduler.Consume(nowNs, entry.DataSize);
+                    }
+                }
+            }
+
+            if (entry == null)
+            {
+                return;
+            }
+
+            if (_cleared)
+            {
+                entry.Message.Release();
+                return;
+            }
+
+            var delivered = Delivered;
+            if (delivered != null)
+            {
+                delivered(entry.Message);
+            }
+            else
+            {
+                entry.Message.Release();
+            }
         }
 
         public void Dispose()
         {
-            if (_disposed)
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
                 return;
+            }
 
-            _disposed = true;
-            _cts.Cancel();
-            _signal.Set();
+            try
+            {
+                _cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
 
-            _dequeueThread.Join(TimeSpan.FromSeconds(5));
+            SignalQuietly();
+
+            // A delivery callback runs on the dequeue thread, and a transport teardown invoked from
+            // that callback releases this system from it. Joining the current thread would block
+            // forever, so skip the join and let the loop observe the cancellation when the callback
+            // returns. A constructed-and-never-started system must not be joined either.
+            if (_dequeueThreadStarted && !ReferenceEquals(Thread.CurrentThread, _dequeueThread))
+            {
+                _dequeueThread.Join(TimeSpan.FromSeconds(5));
+            }
 
             lock (_lock)
             {
@@ -186,9 +326,9 @@ namespace Pontifex.VirtualDelivery.Netem
             _signal.Dispose();
         }
 
-        private static long CurrentTimeNs()
+        private long CurrentTimeNs()
         {
-            return Stopwatch.GetTimestamp() * 1_000_000_000L / Stopwatch.Frequency;
+            return _clock();
         }
 
         private bool CheckReorder()
@@ -205,7 +345,7 @@ namespace Pontifex.VirtualDelivery.Netem
             _gapCounter = 0;
 
             return _config.ReorderProbability != 0 &&
-                   _config.ReorderProbability < _reorderCrng.Next();
+                   _config.ReorderProbability >= _reorderCrng.Next();
         }
 
         private long CalculateBaseDelay()
@@ -225,10 +365,9 @@ namespace Pontifex.VirtualDelivery.Netem
 
         private long GetLastTimeToSend()
         {
-            if (_timeQueue.Count > 0)
-                return _timeQueue[_timeQueue.Count - 1].TimeToSend;
-
-            return 0;
+            // Retains the last scheduled send across an empty queue: the pacing bucket must not
+            // forget a packet that was just dequeued, or a burst can exceed the configured rate.
+            return _lastTimeToSend;
         }
 
         private void InsertSorted(QueueEntry entry)
@@ -238,6 +377,11 @@ namespace Pontifex.VirtualDelivery.Netem
                 index = ~index;
 
             _timeQueue.Insert(index, entry);
+
+            if (entry.TimeToSend > _lastTimeToSend)
+            {
+                _lastTimeToSend = entry.TimeToSend;
+            }
         }
 
         private UnionDataList CloneMessage(UnionDataList source)
@@ -317,12 +461,21 @@ namespace Pontifex.VirtualDelivery.Netem
                 }
                 else
                 {
-                    _signal.WaitOne(waitMs);
+                    try
+                    {
+                        _signal.WaitOne(waitMs);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // The system was disposed while the loop was about to wait. The cancellation
+                        // flag is already set, so leaving the loop is the only work left.
+                        break;
+                    }
                 }
             }
         }
 
-        private static ILossModel CreateLossModel(NetemConfig config)
+        internal static ILossModel CreateLossModel(NetemConfig config)
         {
             switch (config.LossModel)
             {

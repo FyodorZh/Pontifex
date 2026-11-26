@@ -84,6 +84,24 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <summary>
+        /// Validates the framed handshake response before it is scheduled for transmission.
+        /// </summary>
+        /// <param name="framedResponse">The response including its frame type.</param>
+        /// <returns><see langword="true"/> when the response fits the carrier's handshake limit; otherwise
+        /// <see langword="false"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default returns <see langword="true"/>. A carrier that
+        /// enforces a handshake size limit overrides it and compares the framed size, so the response is checked
+        /// after its type byte is added.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual bool ValidateHandshakeResponseFrame(UnionDataList framedResponse)
+        {
+            return true;
+        }
+
+        /// <summary>
         /// Sends the pending handshake response, admits the session, and then starts the inherited idle-session
         /// watchdog.
         /// </summary>
@@ -92,8 +110,8 @@ namespace Pontifex.Raw.Reliable
         /// <item><description><b>Thread safety</b>: Called on the serial action queue.</description></item>
         /// <item><description><b>Preconditions/Postconditions</b>: A missing response or a response that cannot
         /// be admitted for outbound delivery stops the endpoint without notifying the handler of a connection.
-        /// A handler exception during the connection notification returns without starting the
-        /// watchdog.</description></item>
+        /// A handler exception during the connection notification is logged and isolated, and the watchdog is
+        /// still started.</description></item>
         /// </list>
         /// </remarks>
         protected override void OnConnected()
@@ -111,6 +129,13 @@ namespace Pontifex.Raw.Reliable
                 try
                 {
                     response.PutFirst((byte)MessageType.HandshakeResponseMessage);
+                    if (!ValidateHandshakeResponseFrame(response))
+                    {
+                        Stop(new TextFail(TransportName,
+                            "Handshake response exceeds HandshakeMaxByteSize"), false);
+                        return;
+                    }
+
                     sent = ScheduleToSend(response.Acquire()) == SendResult.Ok;
                 }
                 catch (Exception ex)

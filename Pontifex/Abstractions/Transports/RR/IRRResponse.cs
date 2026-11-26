@@ -13,7 +13,7 @@ namespace Pontifex.RR
         long RequestId { get; }
 
         /// <summary>
-        /// Sends one response for the request.
+        /// Sends one message of the response for the request.
         /// </summary>
         /// <param name="response">The response payload. The transport owns it after a non-throwing
         /// call.</param>

@@ -46,6 +46,20 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
+        /// Gets the number of entries, including expired entries that were not swept yet.
+        /// </summary>
+        public int Count
+        {
+            get
+            {
+                lock (_locker)
+                {
+                    return _entries.Count;
+                }
+            }
+        }
+
+        /// <summary>
         /// Adds an entry with a provisional deadline and prunes expired entries. The deadline is set
         /// by <see cref="ReArm"/> once the frame is submitted.
         /// </summary>
@@ -58,15 +72,30 @@ namespace Pontifex.RR.Unreliable
         public bool TryAdd(ushort requestId, TValue value, Action<TValue>? onExpired = null,
             bool sweep = true)
         {
+            List<TValue>? expired = null;
+            bool added;
+
             lock (_locker)
             {
                 if (sweep)
                 {
-                    Sweep(_timeProvider.Now, onExpired);
+                    expired = SweepLocked(_timeProvider.Now);
                 }
 
-                return _entries.TryAdd(requestId, new Entry(value, DateTime.MaxValue));
+                added = _entries.TryAdd(requestId, new Entry(value, DateTime.MaxValue));
             }
+
+            if (expired != null)
+            {
+                // Run outside the table lock so an expiry callback may take other locks without
+                // inverting the lock order.
+                foreach (TValue expiredValue in expired)
+                {
+                    onExpired?.Invoke(expiredValue);
+                }
+            }
+
+            return added;
         }
 
         /// <summary>
@@ -80,6 +109,31 @@ namespace Pontifex.RR.Unreliable
                 {
                     _entries[requestId] = new Entry(entry.Value, _timeProvider.Now + _ttl);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Gets the entry with the given id without removing it.
+        /// </summary>
+        /// <param name="requestId">The id of the entry.</param>
+        /// <param name="value">The value of the entry, or the default when it is absent.</param>
+        /// <param name="expired">Whether the entry had already expired.</param>
+        /// <returns><see langword="true"/> when the entry is present; otherwise
+        /// <see langword="false"/>.</returns>
+        public bool TryGet(ushort requestId, out TValue value, out bool expired)
+        {
+            lock (_locker)
+            {
+                if (_entries.TryGetValue(requestId, out Entry entry))
+                {
+                    value = entry.Value;
+                    expired = entry.ExpiresAt <= _timeProvider.Now;
+                    return true;
+                }
+
+                value = default!;
+                expired = false;
+                return false;
             }
         }
 
@@ -179,31 +233,35 @@ namespace Pontifex.RR.Unreliable
             }
         }
 
-        private void Sweep(DateTime now, Action<TValue>? onExpired)
+        private List<TValue>? SweepLocked(DateTime now)
         {
-            List<ushort>? expired = null;
+            List<ushort>? expiredKeys = null;
 
             foreach (KeyValuePair<ushort, Entry> pair in _entries)
             {
                 if (pair.Value.ExpiresAt <= now)
                 {
-                    (expired ??= new List<ushort>()).Add(pair.Key);
+                    (expiredKeys ??= new List<ushort>()).Add(pair.Key);
                 }
             }
 
-            if (expired == null)
+            if (expiredKeys == null)
             {
-                return;
+                return null;
             }
 
-            foreach (ushort requestId in expired)
+            var expiredValues = new List<TValue>(expiredKeys.Count);
+
+            foreach (ushort requestId in expiredKeys)
             {
                 if (_entries.TryGetValue(requestId, out Entry entry))
                 {
                     _entries.Remove(requestId);
-                    onExpired?.Invoke(entry.Value);
+                    expiredValues.Add(entry.Value);
                 }
             }
+
+            return expiredValues;
         }
     }
 }

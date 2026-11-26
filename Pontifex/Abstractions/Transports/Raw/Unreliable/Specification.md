@@ -172,6 +172,16 @@ invokes `handler.OnStarted(endpoint)` when its start completes and, after that
 notification returns successfully, delivers the triggering message through
 `handler.OnReceived`.
 
+If the factory returns a handler but the endpoint cannot be created, either
+because the carrier declines the route or because construction throws, the
+server **MUST** release and drop the triggering message, publish no route, and
+invoke `handler.OnStopped(reason)` exactly once. That notification **MUST NOT**
+run under any admission serialization that application code could re-enter; a
+handler may call `transport.Stop()` from it. The handler **MUST NOT** receive
+`OnStarted` or `OnReceived` for the declined route. A later valid message from
+the same source is eligible to invoke the factory again and create a new
+endpoint.
+
 While the factory or `OnStarted` is in progress for a source route, the server
 **MUST** queue later valid inbound messages from that same equal source. It
 **MUST NOT** invoke another factory for those pending messages. After
@@ -335,6 +345,12 @@ An endpoint whose `OnStarted` returned successfully **MUST** invoke `OnStopped`
 exactly once after invalidation. During and after `OnStopped`, `IsValid` **MUST**
 be false. A handler whose `OnStarted` threw **MUST NOT** receive `OnStopped`.
 
+A factory-created handler whose endpoint is declined by the carrier or by a
+throwing construction **MUST** receive exactly one `OnStopped`, even though its
+`OnStarted` never ran. That is the terminal notification defined in section 6.2;
+it releases the resources the factory acquired and is not a start or delivery
+callback.
+
 If `OnStopped` throws, the transport **MUST** catch and log the exception and
 continue its already-determined teardown.
 
@@ -371,6 +387,7 @@ transport in the invalid state **MUST NOT** be restarted.
 | Client `OnStarted` throws | none for that handler; transport `onStopped` runs |
 | Server factory returns null | none; the triggering message is dropped |
 | Server factory throws | none; the triggering message is dropped |
+| Server factory returns a handler but endpoint creation fails | one `OnStopped` for that handler; no `OnStarted` or `OnReceived` |
 | Server `OnStarted` throws | none; the endpoint is invalidated and the message is dropped |
 | Endpoint stops or is invalidated | one `OnStopped` |
 | Unrecoverable failure | one `OnStopped` per started handler, then `onStopped` |

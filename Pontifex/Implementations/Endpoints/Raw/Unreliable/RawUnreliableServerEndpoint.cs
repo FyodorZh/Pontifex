@@ -87,18 +87,44 @@ namespace Pontifex.Raw.Unreliable
         /// <item><description><b>Thread safety</b>: Safe for concurrent calls from any thread; the shared budget
         /// check is a best-effort snapshot and may overshoot a bounded amount under concurrent
         /// senders.</description></item>
-        /// <item><description><b>Preconditions/Postconditions</b>: A null, released, or oversized message is
-        /// passed to the inherited implementation unchanged, so it is reported as
-        /// <see cref="SendResult.InvalidMessage"/> or <see cref="SendResult.MessageTooBig"/>. A message rejected
-        /// by the shared budget is released and reported as
+        /// <item><description><b>Precedence</b>: endpoint state is checked first, so a stopped endpoint reports
+        /// its mapped state result for a null, released, oversized, or budget-rejected buffer. A running
+        /// endpoint then reports <see cref="SendResult.InvalidMessage"/> for a null buffer and delegates the
+        /// released-buffer and oversized cases to the inherited implementation
+        /// (<see cref="SendResult.InvalidMessage"/> and <see cref="SendResult.MessageTooBig"/>). A message
+        /// rejected by the shared budget is released and reported as
         /// <see cref="SendResult.BufferOverflow"/>.</description></item>
         /// <item><description><b>Other notes</b>: The shared budget reserves nothing here; the matching deltas are
         /// emitted by the inherited admission through <see cref="RawEndpoint.OnPendingSendChanged"/>, including
-        /// the rollback that follows a rejected local admission.</description></item>
+        /// the rollback that follows a rejected local admission. A state rejection releases a non-null live
+        /// buffer; a null or dead buffer stays with the caller, as for
+        /// <see cref="SendResult.InvalidMessage"/>.</description></item>
         /// </list>
         /// </remarks>
         public override SendResult Send(UnionDataList bufferToSend)
         {
+            EnterSendReturnBarrier();
+            try
+            {
+                return SendCore(bufferToSend);
+            }
+            finally
+            {
+                ExitSendReturnBarrier();
+            }
+        }
+
+        private SendResult SendCore(UnionDataList bufferToSend)
+        {
+            if (!CanSendNow(out var stateResult))
+            {
+                if (bufferToSend != null! && bufferToSend.IsAlive)
+                {
+                    bufferToSend.Release();
+                }
+                return stateResult;
+            }
+
             if (bufferToSend == null!)
             {
                 return SendResult.InvalidMessage;

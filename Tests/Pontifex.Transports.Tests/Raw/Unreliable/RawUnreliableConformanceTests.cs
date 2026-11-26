@@ -1278,14 +1278,24 @@ public abstract class RawUnreliableConformanceTests<TServer>
     }
 
     [Test]
-    public void TryMakeReliable_ClientAndServer_ReportSupported()
+    public void TryMakeReliable_ReportsTheAdaptersCapabilities()
     {
-        // Guard against the suite silently degrading to skips: every adapter must provide the reliable debug
-        // mode that the reliable-mode tests depend on. This test FAILS, it never ignores.
+        // Guard against the suite silently degrading to skips: the client must always provide the reliable
+        // debug mode that the reliable-mode tests depend on. The server result must match the adapter's
+        // declared capability, so the Direct carrier's client-only mode and the UDP server's support are both
+        // pinned.
         using var fixture = CreateAdapter().CreateFixture();
         var client = fixture.CreateClient();
+        bool serverSupports = CreateAdapter().ServerSupportsReliableDebug;
 
-        Assert.That(EnableReliable(client, fixture.Server), Is.True);
+        var clientControl = GetControl<IRawUnreliableTransportConformanceControl>(client);
+        var serverControl = GetControl<IRawUnreliableTransportConformanceControl>(fixture.Server);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(clientControl.TryMakeReliable(), Is.True);
+            Assert.That(serverControl.TryMakeReliable(), Is.EqualTo(serverSupports));
+        });
     }
 
     [Test]
@@ -1310,11 +1320,12 @@ public abstract class RawUnreliableConformanceTests<TServer>
         Assert.That(serverHandler.ReceivedValues, Is.EqualTo(Enumerable.Range(0, messageCount)));
     }
 
-    protected static bool EnableReliable(IRawUnreliableClient client, IRawUnreliableTransport server)
+    protected bool EnableReliable(IRawUnreliableClient client, IRawUnreliableTransport server)
     {
         var c = GetControl<IRawUnreliableTransportConformanceControl>(client);
-        var s = GetControl<IRawUnreliableTransportConformanceControl>(server);
         if (!c.TryMakeReliable()) return false;
+        if (!CreateAdapter().ServerSupportsReliableDebug) return true;
+        var s = GetControl<IRawUnreliableTransportConformanceControl>(server);
         if (!s.TryMakeReliable()) return false;
         return true;
     }

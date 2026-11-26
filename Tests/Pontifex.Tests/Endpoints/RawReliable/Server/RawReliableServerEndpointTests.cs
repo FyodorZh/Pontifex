@@ -185,22 +185,22 @@ public sealed class RawReliableServerEndpointTests
     }
 
     [Test]
-    public void NotifyConnected_WhenHandlerThrows_StopsWithExceptionFail()
+    public void NotifyConnected_WhenHandlerThrows_LogsAndKeepsEndpointConnected()
     {
         var handler = new ThrowingRawReliableServerHandler();
         using var ep = new TestRawReliableServerEndpoint(handler);
         ep.ConnectAndComplete();
         var exception = new InvalidOperationException("OnConnected failed");
         handler.Exception = exception;
+        bool notified = false;
 
-        bool notified = ep.ExposedNotifyConnected();
+        Assert.DoesNotThrow(() => notified = ep.ExposedNotifyConnected());
         ep.DrainAll();
 
-        Assert.That(notified, Is.False);
-        Assert.That(ep.LastDisconnectReason, Is.TypeOf<ExceptionFail>());
-        var fail = (ExceptionFail)ep.LastDisconnectReason!;
-        Assert.That(fail.Source, Is.EqualTo("TestServerTransport"));
-        Assert.That(fail.Exception, Is.SameAs(exception));
+        Assert.That(notified, Is.True);
+        Assert.That(ep.LastDisconnectReason, Is.Null);
+        Assert.That(ep.BeginDisconnectCalls, Is.Zero);
+        Assert.That(ep.IsRunning, Is.True);
         Assert.That(handler.DisconnectedCount, Is.Zero);
     }
 

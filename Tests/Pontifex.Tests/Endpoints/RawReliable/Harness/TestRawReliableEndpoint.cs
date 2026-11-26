@@ -138,7 +138,34 @@ internal sealed class TestRawReliableEndpoint : RawReliableEndpoint, IDisposable
     protected override void OnConnected()
     {
         OnConnectedCalls++;
+        if (AutoNotifyConnectedForTests)
+        {
+            NotifyConnectedCore(NoOp);
+        }
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the harness arms the connect-completed latch automatically
+    /// from <see cref="OnConnected"/>. A pre-connect buffering test disables it and calls
+    /// <see cref="ExposedNotifyConnectedCore"/> itself.
+    /// </summary>
+    public bool AutoNotifyConnectedForTests { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the pre-connect message cap override used by overflow tests.
+    /// </summary>
+    public int? PreConnectMessagesOverride { get; set; }
+
+    /// <summary>
+    /// Gets or sets the pre-connect byte cap override used by overflow tests.
+    /// </summary>
+    public long? PreConnectBytesOverride { get; set; }
+
+    protected override int PreConnectBufferMaxMessages =>
+        PreConnectMessagesOverride ?? base.PreConnectBufferMaxMessages;
+
+    protected override long PreConnectBufferMaxBytes =>
+        PreConnectBytesOverride ?? base.PreConnectBufferMaxBytes;
 
     protected override void DoSendRaw(UnionDataList bufferToSend)
     {

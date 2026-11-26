@@ -39,6 +39,22 @@ internal sealed class TestAnyTransport : AnyTransport
 
     public int OnStoppedCalls { get; private set; }
 
+    /// <summary>
+    /// Gets the number of times <see cref="OnStopBeforeStart"/> was invoked.
+    /// </summary>
+    public int OnStopBeforeStartCalls { get; private set; }
+
+    /// <summary>
+    /// Gets the number of times <see cref="OnStartFailed"/> was invoked.
+    /// </summary>
+    public int OnStartFailedCalls { get; private set; }
+
+    /// <summary>
+    /// Gets the number of times the user callback passed to <see cref="AnyTransport.Start"/> was invoked.
+    /// Internal teardown is recorded separately through <see cref="OnStoppedCalls"/>.
+    /// </summary>
+    public int UserStoppedCalls { get; private set; }
+
     public StopReason? LastOnStoppedReason { get; private set; }
 
     /// <summary>
@@ -54,9 +70,20 @@ internal sealed class TestAnyTransport : AnyTransport
     public bool? IsValidDuringOnStopped { get; private set; }
 
     /// <summary>
-    /// Gets the hook names in invocation order (<c>tryStart</c>, <c>started</c>, <c>stopped</c>).
+    /// Gets the hook and user-callback names in invocation order (<c>tryStart</c>, <c>started</c>,
+    /// internal <c>stopped</c>, user <c>userStopped</c>).
     /// </summary>
     public IReadOnlyList<string> Events => _events;
+
+    /// <summary>
+    /// Gets the start callback that records each user invocation separately from the internal
+    /// <see cref="OnStopped"/> hook.
+    /// </summary>
+    public Action<StopReason> TrackUserStopped => _ =>
+    {
+        UserStoppedCalls++;
+        _events.Add("userStopped");
+    };
 
     public bool ExposedHasStartBeenAttempted => HasStartBeenAttempted;
 
@@ -82,5 +109,17 @@ internal sealed class TestAnyTransport : AnyTransport
         IsValidDuringOnStopped = IsValid;
         _events.Add("stopped");
         OnStoppedBehavior?.Invoke(reason);
+    }
+
+    protected override void OnStopBeforeStart()
+    {
+        OnStopBeforeStartCalls++;
+        _events.Add("stopBeforeStart");
+    }
+
+    protected override void OnStartFailed()
+    {
+        OnStartFailedCalls++;
+        _events.Add("startFailed");
     }
 }

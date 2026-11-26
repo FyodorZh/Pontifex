@@ -10,11 +10,11 @@ namespace Pontifex.RR.Unreliable
     /// Base class for RR unreliable server transports.
     /// </summary>
     /// <remarks>
-    /// The class owns the server request mechanics: server-global request ids, response handles, and the
-    /// request dispatch. The lifecycle is inherited from
+    /// The class owns the server request mechanics: server-global request ids, response handles, the
+    /// per-handle message sequence, and the request dispatch. The lifecycle is inherited from
     /// <see cref="RRUnreliableTransport{THandler}"/>; a carrier supplies the datagram transport through
-    /// <see cref="RRUnreliableTransport.StartCarrier"/>,
-    /// <see cref="RRUnreliableTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
+    /// <see cref="RRTransport.StartCarrier"/>,
+    /// <see cref="RRTransport.StopCarrier"/>, and <see cref="SendFrame"/> and reports
     /// inbound frames through <see cref="OnFrameReceived"/>.
     /// </remarks>
     public abstract class RRUnreliableServerTransport
@@ -50,6 +50,11 @@ namespace Pontifex.RR.Unreliable
         public TimeSpan ResponseTtl => _responseTtl;
 
         /// <summary>
+        /// Gets the clock used by the response TTL.
+        /// </summary>
+        protected IDateTimeProvider TimeProvider => _timeProvider;
+
+        /// <summary>
         /// Sends one encoded frame to <paramref name="destination"/>.
         /// </summary>
         /// <param name="destination">The route that received the request.</param>
@@ -71,12 +76,24 @@ namespace Pontifex.RR.Unreliable
         /// </remarks>
         protected void OnFrameReceived(IEndPoint source, UnionDataList frame)
         {
+            OnFrameReceived(source, frame, _timeProvider.Now);
+        }
+
+        /// <summary>
+        /// Handles one inbound datagram whose receipt time is already known.
+        /// </summary>
+        /// <param name="source">The route that sent the datagram.</param>
+        /// <param name="frame">The received frame. The method owns it.</param>
+        /// <param name="receivedAt">The instant the carrier received the frame; the response TTL starts
+        /// here.</param>
+        internal void OnFrameReceived(IEndPoint source, UnionDataList frame, DateTime receivedAt)
+        {
             if (frame == null!)
             {
                 return;
             }
 
-            if (!RRUnreliableFrame.TryDecode(frame, out ushort clientRequestId))
+            if (!RRUnreliableFrame.TryDecodeRequest(frame, out ushort clientRequestId))
             {
                 Log.w("{0} received a malformed request frame from {1}", Name, source);
                 frame.Release();
@@ -101,7 +118,7 @@ namespace Pontifex.RR.Unreliable
             var response = new RRUnreliableResponse(
                 this,
                 requestId,
-                _timeProvider.Now + _responseTtl,
+                receivedAt + _responseTtl,
                 source,
                 clientRequestId);
 
@@ -123,14 +140,35 @@ namespace Pontifex.RR.Unreliable
         }
 
         /// <summary>
-        /// Sends the single response held by <paramref name="response"/>.
+        /// Gets whether the response TTL has expired. Takes no lifecycle lock.
         /// </summary>
-        /// <param name="response">The response handle that owns the route.</param>
-        /// <param name="payload">The response payload. The method owns it.</param>
-        /// <returns>The result of the send attempt.</returns>
-        internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload)
+        internal bool HasExpired(RRUnreliableResponse response)
         {
-            if (response.IsClosed || !IsStarted || _timeProvider.Now > response.ExpiresAt)
+            return _timeProvider.Now > response.ExpiresAt;
+        }
+
+        /// <summary>
+        /// Gets whether the handle can still answer: the transport is running and the response TTL
+        /// has not expired. Read outside the handle gate so a stop that holds the lifecycle lock
+        /// cannot deadlock against it.
+        /// </summary>
+        internal bool CanAnswer(RRUnreliableResponse response)
+        {
+            return IsStarted && !HasExpired(response);
+        }
+
+        /// <summary>
+        /// Sends the next message held by <paramref name="response"/>.
+        /// </summary>
+        /// <param name="response">The response handle that owns the route and the sequence state.</param>
+        /// <param name="payload">The response payload. The method owns it.</param>
+        /// <param name="canAnswer">The answerability snapshot taken before the handle gate was
+        /// acquired.</param>
+        /// <returns>The result of the send attempt.</returns>
+        internal SendResult SendResponse(RRUnreliableResponse response, UnionDataList payload,
+            bool canAnswer)
+        {
+            if (!canAnswer || response.IsClosed || !IsRunningUnsafe || HasExpired(response))
             {
                 if (!response.IsClosed)
                 {
@@ -153,6 +191,7 @@ namespace Pontifex.RR.Unreliable
             }
             catch (Exception)
             {
+                payload.Release();
                 return SendResult.InvalidMessage;
             }
 
@@ -162,17 +201,19 @@ namespace Pontifex.RR.Unreliable
                 return SendResult.MessageTooBig;
             }
 
-            if (!response.TryClose())
-            {
-                payload.Release();
-                return SendResult.Error;
-            }
-
-            RRUnreliableFrame.Encode(payload, response.ClientRequestId);
+            RRUnreliableFrame.EncodeResponse(payload, response.ClientRequestId,
+                response.NextMessageId, response.MessageCount);
 
             try
             {
-                return SendFrame(response.Client, payload);
+                SendResult result = SendFrame(response.Client, payload);
+
+                if (result == SendResult.Ok)
+                {
+                    response.CommitMessage();
+                }
+
+                return result;
             }
             catch (Exception ex)
             {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
@@ -89,11 +90,19 @@ namespace Pontifex.Raw.Reliable
 
         private readonly IRawReliableHandler _handler;
 
+        private readonly object _connectGate = new object();
+        private readonly System.Collections.Generic.Queue<UnionDataList> _preConnectInbox =
+            new System.Collections.Generic.Queue<UnionDataList>();
+
         private volatile State _currentStage;
 
         private int _connectedNotified;
 
         private int _disconnectedNotified;
+
+        private bool _connectCompleted;
+        private bool _preConnectReleased;
+        private long _preConnectBytes;
 
         /// <inheritdoc/>
         public bool IsLowLevelConnected => _currentStage == State.Connected;
@@ -144,7 +153,35 @@ namespace Pontifex.Raw.Reliable
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log)
         {
             _handler = handler;
+            Stopped += OnEndpointStopped;
         }
+
+        /// <summary>
+        /// Gets the maximum number of payloads buffered between the handshake and the completion of the
+        /// handler's <c>OnConnected</c> callback.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Overridable for tests. Reaching the limit terminates the
+        /// session with a <see cref="TextFail"/> reason instead of dropping a payload
+        /// silently.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual int PreConnectBufferMaxMessages => 64;
+
+        /// <summary>
+        /// Gets the maximum total payload bytes buffered between the handshake and the completion of the
+        /// handler's <c>OnConnected</c> callback.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Computed with saturating 64-bit arithmetic from
+        /// <see cref="RawEndpoint.MessageMaxByteSize"/>, so a maximum of <see cref="int.MaxValue"/> does not
+        /// overflow. Overridable for tests.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual long PreConnectBufferMaxBytes =>
+            (long)MessageMaxByteSize * PreConnectBufferMaxMessages;
 
         /// <summary>
         /// Gets the handler that receives inbound messages and connection lifecycle notifications.
@@ -175,20 +212,20 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <summary>
-        /// Arms the connected latch, invokes the handler's connection callback, and fails the endpoint hard when
-        /// the callback throws.
+        /// Arms the connected latch and invokes the handler's connection callback, isolating a callback
+        /// failure.
         /// </summary>
         /// <param name="onConnected">The callback that notifies the handler of the logical connection.</param>
-        /// <returns><see langword="true"/> when the callback returned normally; <see langword="false"/> when it
-        /// threw and the endpoint was stopped with an <see cref="ExceptionFail"/>.</returns>
+        /// <returns>Always <see langword="true"/>. The value is retained for compatibility; a throwing
+        /// callback no longer stops the endpoint.</returns>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Thread safety</b>: Safe to call from any thread; the endpoint stop is
-        /// serialized on the serial action queue.</description></item>
-        /// <item><description><b>Other notes</b>: The latch is armed before the callback runs, so a callback
-        /// that throws still permits the later logical disconnect notification. Implementations that must not
-        /// deliver a disconnect after a failed connection arm the latch separately with
-        /// <see cref="MarkConnectedNotified"/>.</description></item>
+        /// <item><description><b>Thread safety</b>: Safe to call from any thread.</description></item>
+        /// <item><description><b>Handler isolation</b>: a throwing <paramref name="onConnected"/> is logged and
+        /// swallowed. The endpoint keeps running and the latch stays armed, so the later logical disconnect
+        /// notification is still delivered. A handler exception never stops the endpoint.</description></item>
+        /// <item><description><b>Other notes</b>: Implementations that must not deliver a disconnect after a
+        /// failed connection arm the latch separately with <see cref="MarkConnectedNotified"/>.</description></item>
         /// </list>
         /// </remarks>
         protected bool NotifyConnectedCore(Action onConnected)
@@ -197,14 +234,81 @@ namespace Pontifex.Raw.Reliable
             try
             {
                 onConnected();
-                return true;
             }
             catch (Exception ex)
             {
                 Log.wtf(ex);
-                Stop(new ExceptionFail(TransportName, ex, "OnConnected failed"), false);
-                return false;
             }
+            finally
+            {
+                CompleteConnectAndDrainPreConnectInbox();
+            }
+
+            return true;
+        }
+
+        private void CompleteConnectAndDrainPreConnectInbox()
+        {
+            lock (_connectGate)
+            {
+                _connectCompleted = true;
+
+                if (_preConnectReleased || IsStopRequested)
+                {
+                    // A stop requested before or during the start notification releases every buffered
+                    // payload without delivering it.
+                    while (_preConnectInbox.Count > 0)
+                    {
+                        _preConnectInbox.Dequeue().Release();
+                    }
+
+                    _preConnectBytes = 0;
+                    return;
+                }
+
+                while (_preConnectInbox.Count > 0)
+                {
+                    UnionDataList message = _preConnectInbox.Dequeue();
+                    _preConnectBytes -= message.GetDataSize();
+                    base.ProcessInboundMessage(message);
+                }
+
+                _preConnectBytes = 0;
+            }
+        }
+
+        private void ReleasePreConnectInbox()
+        {
+            List<UnionDataList>? released = null;
+
+            lock (_connectGate)
+            {
+                _preConnectReleased = true;
+
+                if (_preConnectInbox.Count > 0)
+                {
+                    released = new List<UnionDataList>(_preConnectInbox.Count);
+                    while (_preConnectInbox.Count > 0)
+                    {
+                        released.Add(_preConnectInbox.Dequeue());
+                    }
+                }
+
+                _preConnectBytes = 0;
+            }
+
+            if (released != null)
+            {
+                foreach (UnionDataList message in released)
+                {
+                    message.Release();
+                }
+            }
+        }
+
+        private void OnEndpointStopped(StopReason reason)
+        {
+            ReleasePreConnectInbox();
         }
 
         /// <summary>
@@ -463,14 +567,42 @@ namespace Pontifex.Raw.Reliable
         }
 
         /// <inheritdoc cref="IRawEndpoint.Send"/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Precedence</b>: endpoint state is checked first, so a stopped endpoint
+        /// reports the state result even for a null, released, or oversized buffer. A running endpoint then
+        /// reports <see cref="SendResult.InvalidMessage"/> for a null or released buffer and
+        /// <see cref="SendResult.MessageTooBig"/> for an oversized one.</description></item>
+        /// <item><description><b>Ownership</b>: on a state rejection a non-null live buffer is released; a
+        /// null or dead buffer stays with the caller, as for every
+        /// <see cref="SendResult.InvalidMessage"/>.</description></item>
+        /// </list>
+        /// </remarks>
         public override SendResult Send(UnionDataList bufferToSend)
         {
-            if (bufferToSend != null! && bufferToSend.IsAlive)
+            if (!CanSendNow(out var errorCode))
             {
-                bufferToSend.PutFirst((byte)MessageType.PayloadMessage);
-                return ScheduleToSend(bufferToSend);
+                if (bufferToSend != null! && bufferToSend.IsAlive)
+                {
+                    bufferToSend.Release();
+                }
+                return errorCode;
             }
-            return SendResult.InvalidMessage;
+
+            if (bufferToSend == null! || !bufferToSend.IsAlive)
+            {
+                return SendResult.InvalidMessage;
+            }
+
+            int payloadSize = bufferToSend.GetDataSize();
+            if (payloadSize > MessageMaxByteSize)
+            {
+                bufferToSend.Release();
+                return SendResult.MessageTooBig;
+            }
+
+            bufferToSend.PutFirst((byte)MessageType.PayloadMessage);
+            return ScheduleToSend(bufferToSend, payloadSize);
         }
 
         /// <summary>
@@ -512,8 +644,7 @@ namespace Pontifex.Raw.Reliable
             switch (messageType)
             {
                 case MessageType.PayloadMessage:
-                    base.ProcessInboundMessage(message);
-                    return true;
+                    return DeliverPayload(message);
                 case MessageType.DisconnectMessage:
                     message.Release();
                     Stop(new GracefulRemoteIntention(TransportName), false);
@@ -521,6 +652,87 @@ namespace Pontifex.Raw.Reliable
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// Delivers or buffers one inbound payload according to the connect-completed latch.
+        /// </summary>
+        /// <param name="message">The payload body. Ownership transfers to this method.</param>
+        /// <returns>Always <see langword="true"/>; the payload is either delivered, buffered, or released by
+        /// this method.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: A payload that arrives before the handler's
+        /// <c>OnConnected</c> completed is buffered in arrival order and drained immediately after the
+        /// callback, so it is delivered exactly once and in order rather than dropped. A payload that cannot
+        /// fit the pre-connect caps releases every buffered payload and the triggering payload, then stops
+        /// the session with a <see cref="TextFail"/> reason; it is never dropped silently.</description></item>
+        /// </list>
+        /// </remarks>
+        private bool DeliverPayload(UnionDataList message)
+        {
+            bool overflow = false;
+
+            lock (_connectGate)
+            {
+                if (_connectCompleted)
+                {
+                    base.ProcessInboundMessage(message);
+                    return true;
+                }
+
+                if (_preConnectReleased || IsStopRequested)
+                {
+                    message.Release();
+                    return true;
+                }
+
+                int size = message.GetDataSize();
+                if (_preConnectInbox.Count >= PreConnectBufferMaxMessages ||
+                    _preConnectBytes + size > PreConnectBufferMaxBytes)
+                {
+                    overflow = true;
+                    while (_preConnectInbox.Count > 0)
+                    {
+                        _preConnectInbox.Dequeue().Release();
+                    }
+
+                    _preConnectBytes = 0;
+                    message.Release();
+                }
+                else
+                {
+                    _preConnectInbox.Enqueue(message);
+                    _preConnectBytes += size;
+                }
+            }
+
+            if (overflow)
+            {
+                Log.e("Pre-connect payload buffer exceeded; the session is stopping");
+                Stop(new TextFail(TransportName, "Pre-connect payload buffer exceeded"), false);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Validates the total framed size of an inbound handshake frame.
+        /// </summary>
+        /// <param name="messageType">The frame type that was popped.</param>
+        /// <param name="totalSize">The complete framed size, measured before the frame type was popped.</param>
+        /// <returns><see langword="true"/> when the frame is admissible; otherwise
+        /// <see langword="false"/>.</returns>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: The default returns <see langword="true"/>. A handshake client
+        /// overrides it to enforce <c>HandshakeMaxByteSize</c> on handshake responses and rejects, including the
+        /// frame type. A normal payload above 128 bytes must never be rejected by this hook.</description></item>
+        /// </list>
+        /// </remarks>
+        protected virtual bool ValidateInboundHandshakeFrame(MessageType messageType, int totalSize)
+        {
+            return true;
         }
 
         /// <summary>
@@ -539,12 +751,42 @@ namespace Pontifex.Raw.Reliable
         /// </remarks>
         protected sealed override void ProcessInboundMessage(UnionDataList message)
         {
-            if (!IsLowLevelConnected ||
-                !message.TryPopFirst(out byte msgType) ||
-                !ProcessInboundMessage((MessageType)msgType, message))
+            if (!IsLowLevelConnected)
+            {
+                // A frame delivered after the connection ended is not malformed; it is simply late.
+                message.Release();
+                return;
+            }
+
+            int totalSize = message.GetDataSize();
+
+            if (!message.TryPopFirst(out byte msgType))
             {
                 message.Release();
-                Stop(new TextFail(TransportName, "Failed to parse incoming message"), false);
+                Log.e("Inbound reliable frame had no frame type and was discarded");
+                return;
+            }
+
+            MessageType frameType = (MessageType)msgType;
+            if (!ValidateInboundHandshakeFrame(frameType, totalSize))
+            {
+                message.Release();
+                Stop(new ProtocolMismatch(TransportName,
+                    "Handshake frame exceeds HandshakeMaxByteSize"), false);
+                return;
+            }
+
+            if (message.GetDataSize() > MessageMaxByteSize)
+            {
+                message.Release();
+                Log.e("Inbound reliable payload exceeds MessageMaxByteSize and was discarded");
+                return;
+            }
+
+            if (!ProcessInboundMessage(frameType, message))
+            {
+                message.Release();
+                Log.e("Inbound reliable frame type '{0}' is not handled and was discarded", msgType);
             }
         }
     }

@@ -3,6 +3,7 @@ using Actuarius.Memory;
 using Operarius;
 using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
+using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Tests.Transports;
@@ -53,6 +54,21 @@ internal sealed class TestRawReliableAdmissionServerTransport : RawReliableAdmis
     public bool ExposedHasStartBeenAttempted => HasStartBeenAttempted;
 
     public int ExposedActiveSessions => ActiveSessions;
+
+    public string ExposedHandshakeName => HandshakeName;
+
+    public int ExposedHandshakeMaxByteSize => HandshakeMaxByteSize;
+
+    public TimeSpan ExposedHandshakeTimeout => HandshakeTimeout;
+
+    public TimeSpan ExposedRejectLinger => RejectLinger;
+
+    public IRawReliableHandshakeTimerFactory ExposedHandshakeTimerFactory => HandshakeTimerFactory;
+
+    public HandshakeOutcome ExposedTryHandshake(IEndPoint remote, UnionDataList request)
+    {
+        return TryHandshake(remote, request);
+    }
 
     public bool ExposedTryMarkInitialized() => TryMarkInitialized();
 

@@ -163,7 +163,8 @@ namespace Pontifex.Raw.Reliable.Tcp
 
                 _source = new SingleReaderWriterConcurrentQueue<IMultiRefByteArray>(_sendSourceInitialCapacity);
                 _receiveCompositor = new UnionDataListCompositor(
-                    OnFramedMessage, Memory.CollectablePool, Memory.ByteArraysPool, MessageMaxByteSize);
+                    OnFramedMessage, Memory.CollectablePool, Memory.ByteArraysPool,
+                    RawReliableFraming.FramedMaxByteSize(MessageMaxByteSize));
 
                 accessor = new SystemSocket(socket);
                 lowLevel = new LowLevelTcpSocket(
@@ -373,7 +374,9 @@ namespace Pontifex.Raw.Reliable.Tcp
         {
             if (message == null)
             {
-                Stop(new TextFail(TransportName, "Failed to decompose packet from stream"), false);
+                // An undecodable frame is logged and dropped; the stream stays open because the
+                // compositor already consumed the complete framed body.
+                Log.e("Undecodable reliable frame was discarded");
                 return;
             }
 

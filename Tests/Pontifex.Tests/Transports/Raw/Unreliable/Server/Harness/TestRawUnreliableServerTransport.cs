@@ -95,6 +95,8 @@ internal sealed class TestRawUnreliableServerTransport
 
     public bool ExposedIsStopping => IsStopping;
 
+    public bool ExposedAdmissionLockHeld => AdmissionLockHeldForTests;
+
     public int ExposedRouteCount => RouteCount;
 
     public long ExposedSendBudgetBytes => SendBudgetBytes;

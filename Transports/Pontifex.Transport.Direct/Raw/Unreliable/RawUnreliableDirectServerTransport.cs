@@ -10,9 +10,8 @@ using Scriba;
 namespace Pontifex.Raw.Unreliable.Direct
 {
     /// <summary>
-    /// Base class for all RawUnreliable Direct server transports. Owns the in-process channel registry
-    /// for the unreliable Direct carrier. The generic parameter is the server handler-factory delegate
-    /// type.
+    /// In-process RawUnreliable Direct server transport. Owns the channel registry for the unreliable
+    /// Direct carrier.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
@@ -23,24 +22,66 @@ namespace Pontifex.Raw.Unreliable.Direct
     /// still-registered channel, which stops the session endpoints that hold it.</description></item>
     /// </list>
     /// </remarks>
-    public abstract class RawUnreliableDirectServerTransport<TFactory> : RawUnreliableServerTransport<TFactory>,
-        IRawUnreliableDebugReliability
-        where TFactory : Delegate
+    public sealed class RawUnreliableDirectServerTransport
+        : RawUnreliableServerTransport<Func<IEndPoint, IRawUnreliableHandler?>>, IRawUnreliableServer,
+            IRawUnreliableDebugReliability
     {
         private readonly IEndPoint _serverEp;
         private readonly ConcurrentDictionary<IEndPoint, Channel> _channels =
             new ConcurrentDictionary<IEndPoint, Channel>();
 
         /// <summary>
+        /// Gets or sets a test-only endpoint factory that replaces the real endpoint construction.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam. It defaults to <see langword="null"/>, in
+        /// which case <see cref="CreateEndpoint"/> constructs the real endpoint. A test can force a declined or
+        /// throwing construction deterministically.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Func<IRawUnreliableHandler, IEndPoint, UnionDataList, RawUnreliableServerEndpoint?>?
+            EndpointFactoryForTests { get; set; }
+
+        public override TransportType Type => TransportType.RawUnreliable;
+
+        public override int MessageMaxByteSize => RawUnreliableDirectInfo.MessageMaxByteSize;
+
+        /// <summary>
         /// Gets the capacity of the carrier queue that bounds the shared outbound budget.
         /// </summary>
-        protected abstract int QueueCapacity { get; }
+        private int QueueCapacity => RawUnreliableDirectInfo.QueueCapacity;
 
-        protected RawUnreliableDirectServerTransport(string typeName, string serverName, ILogger logger,
+        /// <summary>
+        /// Initializes the in-process unreliable server transport.
+        /// </summary>
+        /// <param name="serverName">The name of the server.</param>
+        /// <param name="logger">The logging system used by the transport.</param>
+        /// <param name="memoryRental">The memory rental system used by the transport.</param>
+        public RawUnreliableDirectServerTransport(string serverName, ILogger logger,
             IMemoryRental memoryRental)
-            : base(typeName, logger, memoryRental)
+            : base(RawUnreliableDirectInfo.TransportName, logger, memoryRental)
         {
             _serverEp = new StringEndPoint(serverName);
+        }
+
+        /// <inheritdoc/>
+        public bool Init(Func<IEndPoint, IRawUnreliableHandler?> handlerFactory)
+        {
+            if (handlerFactory == null)
+            {
+                throw new ArgumentNullException(nameof(handlerFactory));
+            }
+
+            return TryInitializeServer(handlerFactory);
+        }
+
+        /// <inheritdoc/>
+        protected override IRawUnreliableHandler? InvokeFactory(
+            Func<IEndPoint, IRawUnreliableHandler?> factory, IEndPoint source,
+            UnionDataList triggeringMessage)
+        {
+            return factory(source);
         }
 
         /// <inheritdoc/>
@@ -70,10 +111,21 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </remarks>
         internal int ExposedSendBudgetMessages => SendBudgetMessages;
 
+        /// <summary>
+        /// Gets the number of channels currently registered with this server.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; it exposes the registry size
+        /// so ownership tests can prove that a disposed channel is removed.</description></item>
+        /// </list>
+        /// </remarks>
+        internal int RegisteredChannelCount => _channels.Count;
+
         /// <inheritdoc/>
         protected override bool StartCarrier()
         {
-            if (!ChannelManager.Instance.RegisterServer(_serverEp, OnChannelCreated))
+            if (!ChannelManager.Instance.RegisterServer(RawUnreliableDirectInfo.TransportName, _serverEp, OnChannelCreated))
             {
                 Log.e("Failed to register server '{0}'. Name already in use.", _serverEp);
                 return false;
@@ -85,7 +137,7 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <inheritdoc/>
         protected override void StopCarrier(StopReason reason)
         {
-            ChannelManager.Instance.UnregisterServer(_serverEp);
+            ChannelManager.Instance.UnregisterServer(RawUnreliableDirectInfo.TransportName, _serverEp);
 
             foreach (var pair in _channels)
             {
@@ -119,6 +171,13 @@ namespace Pontifex.Raw.Unreliable.Direct
                 return null;
             }
 
+            Func<IRawUnreliableHandler, IEndPoint, UnionDataList, RawUnreliableServerEndpoint?>?
+                endpointFactory = EndpointFactoryForTests;
+            if (endpointFactory != null)
+            {
+                return endpointFactory(handler, source, trigger);
+            }
+
             return new RawUnreliableDirectServerEndpoint(
                 Name,
                 source,
@@ -143,7 +202,32 @@ namespace Pontifex.Raw.Unreliable.Direct
             }
 
             channel.ServerHandler = (clientEp, message) => OnCarrierInbound(clientEp, message);
-            _channels.TryAdd(channel.ClientEp, channel);
+
+            if (!_channels.TryAdd(channel.ClientEp, channel))
+            {
+                channel.ServerHandler = null;
+                channel.Dispose();
+                return;
+            }
+
+            channel.Disposed += () => RemoveChannel(channel);
+
+            // A concurrent stop may have swept the registry before the channel was added, and the channel
+            // may already have been disposed while it was being registered. Both cases must leave no entry.
+            if (channel.IsDisposed || IsStopping || !IsStarted)
+            {
+                RemoveChannel(channel);
+                channel.Dispose();
+            }
+        }
+
+        private void RemoveChannel(Channel channel)
+        {
+            if (_channels.TryGetValue(channel.ClientEp, out Channel? current)
+                && ReferenceEquals(current, channel))
+            {
+                _channels.TryRemove(channel.ClientEp, out _);
+            }
         }
 
         public override string ToString()
@@ -155,11 +239,11 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// <inheritdoc/>
         /// <remarks>
         /// <list type="bullet">
-        /// <item><description><b>Other notes</b>: Direct delivery is perfect once the client endpoint
-        /// requests the debug pair on its channel, so the server side needs no per-route
-        /// state.</description></item>
+        /// <item><description><b>Other notes</b>: The Direct server has no delivery systems of its own and
+        /// cannot enforce reliable delivery for server replies, so the request is declined. Reliable debug mode
+        /// is client-only for this carrier.</description></item>
         /// </list>
         /// </remarks>
-        public bool TryMakeReliableForDebug() => true;
+        public bool TryMakeReliableForDebug() => false;
     }
 }

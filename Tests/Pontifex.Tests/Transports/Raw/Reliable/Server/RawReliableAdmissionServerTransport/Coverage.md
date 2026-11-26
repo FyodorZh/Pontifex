@@ -18,6 +18,27 @@
 | `Init_WithNull_ThrowsWithoutChangingLifecycle` | A null factory is rejected without changing the lifecycle. | `ArgumentNullException` is thrown, the transport stays valid and unstarted, and a later valid `Init` succeeds. | — |
 | `Init_FirstCallSucceeds_SecondFails` | `Init` is one-shot and keeps the first factory. | The second initializer is ignored and the first one serves `TryCreateHandler`. | The returned gate's `Inner` identifies the factory handler. |
 | `Init_AfterStartAttempt_ReturnsFalse` | `Init` is illegal after a start attempt. | The transport rejects initialization and does not restart the carrier. | — |
+| `Constructor_WithNullHandshakeName_ThrowsArgumentNullException` | The handshake name is required. | Construction throws `ArgumentNullException` with the `handshakeName` parameter name. | — |
+| `Constructor_WithNonPositiveHandshakeMaxByteSize_ThrowsArgumentOutOfRangeException` | The handshake frame cap must be at least 1. | Zero is rejected with the `handshakeMaxByteSize` parameter name. | — |
+| `Constructor_WithNonPositiveHandshakeTimeout_ThrowsArgumentOutOfRangeException` | The handshake timeout must be positive unless it is infinite. | `TimeSpan.Zero` is rejected with the `handshakeTimeout` parameter name. | — |
+| `Constructor_WithInfiniteHandshakeTimeout_AcceptsValue` | `Timeout.InfiniteTimeSpan` disables the handshake deadline. | The infinite value is accepted and exposed unchanged. | The timer itself is not created at construction. |
+| `Constructor_WithNegativeRejectLinger_ThrowsArgumentOutOfRangeException` | The reject linger must not be negative. | A negative value is rejected with the `rejectLinger` parameter name. | — |
+| `Constructor_WithDefaults_UsesDocumentedHandshakeDefaults` | Omitted optional handshake arguments use documented defaults. | The name is passed through, the frame cap is 128, the timeout is 10 s, the reject linger is 2 s, and a timer factory is present. | The test double supplies the handshake name; the other three values are the production defaults. |
+| `TryHandshake_BeforeStart_ReturnsRejectedWithoutCallingFactory` | The handshake requires a started transport. | A structurally valid request is rejected before start and the factory is not called. | The request is borrowed, so the test releases it. |
+| `TryHandshake_AfterStop_ReturnsRejectedWithoutCallingFactory` | A stopped transport admits no handshakes. | The request is rejected and the factory is not called. | — |
+| `TryHandshake_WithEmptyRequest_ReturnsRejectedWithoutCallingFactory` | The request must contain the three-element handshake dataset. | An empty list is rejected before the factory. | — |
+| `TryHandshake_WithWrongElementCount_ReturnsRejectedWithoutCallingFactory` | The request element count is validated. | A two-element list is rejected before the factory. | — |
+| `TryHandshake_WithWrongElementTypes_ReturnsRejectedWithoutCallingFactory` | The request element types are validated. | A list with a non-array name element is rejected before the factory. | — |
+| `TryHandshake_WithVersionMismatch_ReturnsVersionMismatch` | The protocol version is validated. | A different version produces `VersionMismatch` and the factory is not called. | — |
+| `TryHandshake_WithNameMismatch_ReturnsNameMismatch` | The handshake name is compared by content. | A different name produces `NameMismatch` and the factory is not called. | — |
+| `TryHandshake_WithRequestMaxBelowOne_ReturnsCapacityExceeded` | A non-positive advertised maximum cannot receive a response. | The request is rejected with `CapacityExceeded` and the factory is not called. | Built explicitly because `BuildRequest` rejects a non-positive maximum. |
+| `TryHandshake_WithRequestMaxBelowHandshakeMax_ReturnsCapacityExceeded` | The advertised maximum must cover the configured handshake frame cap. | A request one byte below the cap is rejected with `CapacityExceeded` and the factory is not called. | The default cap is 128 bytes. |
+| `TryHandshake_WithoutFactory_ReturnsRejected` | Admission requires a bound factory. | A started transport with no factory rejects the handshake with no handler or response. | Uses the harness's initialization seam so the transport can start without `Init`. |
+| `TryHandshake_WhenFactoryReturnsNull_ReturnsRejected` | A null factory result rejects the client. | The factory is called once, and the outcome has no handler or response. | — |
+| `TryHandshake_WhenFactoryThrows_ReturnsRejectedAndLogs` | A throwing factory is isolated. | The exception is logged, the outcome is a rejection, and no handler or response is produced. | Uses `RecordingLogConsumer`; the assertion is on the exception message. |
+| `TryHandshake_WhenRequestMaxIsBelowTransportMax_AcceptsWithRequestMax` | An accepted request negotiates the smaller of the request and transport maxima. | The status is `Accepted`, the handler is wrapped in `StopOnceServerHandler` around the factory handler, and the response parses with the version, name, and the request maximum. | The response is owned by the outcome and released by the test after parsing. |
+| `TryHandshake_WhenRequestMaxExceedsTransportMax_AcceptsWithTransportMax` | The transport maximum caps the negotiated size. | The agreed maximum and the parsed response maximum both equal `MessageMaxByteSize`. | The request advertises 2048 while the transport is configured for 1024. |
+| `TryHandshake_WhenResponseBuildFails_RejectsAndStopsCreatedHandlerOnce` | A response that cannot be built rejects admission and releases the created handler. | The outcome is a rejection with no response, and the factory handler receives one `OnStopped` with an `ExceptionFail`. | The transport is built with `messageMaxByteSize: 0`, so the negotiated maximum is 0 and `BuildResponse` throws. The handler is notified directly because it was never wrapped. |
 | `TryCreateHandler_WhenNotStarted_ReturnsNull` | The factory requires a started transport. | No handler is created and the factory is not called before start. | — |
 | `TryCreateHandler_ReturnsStopOnceWrapper` | A successful factory call returns a stop-once gate. | The result is a `StopOnceServerHandler` whose `Inner` is the factory's handler. | The wrapper changes handler identity; reference comparisons use `Inner`. |
 | `TryCreateHandler_WhenFactoryThrows_ReturnsNull` | A factory exception is isolated. | The result is null and the transport remains valid and started. | — |
@@ -42,15 +63,15 @@
 |---|---|
 | Inherited session admission, registry, transport stop, and ticker behaviour. | Covered once by `RawReliableServerTransportTests`; not repeated here. |
 | `RawReliable` conformance controls and suite. | Conformance controls and the conformance suite are deferred. |
+| Handshake timer expiry and the `Timeout` status. | The deadline is scheduled by the carrier's handshake server endpoint after admission, not by `TryHandshake`; it belongs to the handshake endpoint and carrier layers. |
 | Real carrier accept loops and end-to-end sessions. | Carrier and integration behaviour belong to the carrier suites. |
-| Logging verification for factory exceptions. | Requires a custom observable `ILogSink`; the transport-level policy is already covered. |
 
 ## Notes
 
 - `TestRawReliableAdmissionServerTransport` supplies the carrier hooks and a hand-driven ticker and
-  exposes `TryCreateHandler`, `TryBeginAdmission`, `CompleteAdmission`, `AbandonAdmission`,
-  `TryMarkInitialized`, `HasStartBeenAttempted`, and `ActiveSessions`. `Init` is already public on
-  the subject.
+  exposes `TryCreateHandler`, `TryHandshake`, `TryBeginAdmission`, `CompleteAdmission`,
+  `AbandonAdmission`, `TryMarkInitialized`, `HasStartBeenAttempted`, `ActiveSessions`, and the
+  handshake configuration getters. `Init` is already public on the subject.
 - `StopOnceServerHandler` wraps every handler returned by the factory. The carrier, the session
   endpoint, and the admission fallback share the gate, so the wrapped handler observes at most one
   `OnStopped`.

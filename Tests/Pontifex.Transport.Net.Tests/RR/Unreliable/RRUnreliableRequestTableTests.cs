@@ -117,6 +117,38 @@ public sealed class RRUnreliableRequestTableTests
         Assert.That(table.TryTake(1, out _, out _), Is.False);
     }
 
+    [Test]
+    public void TryGet_ReportsExpiryWithoutRemoving()
+    {
+        var clock = new ManualClock { Now = Start };
+        var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
+        var value = new Box(42);
+        table.TryAdd(1, value);
+        table.ReArm(1);
+
+        Assert.That(table.TryGet(1, out Box found, out bool expired), Is.True);
+        Assert.That(found, Is.SameAs(value));
+        Assert.That(expired, Is.False);
+
+        clock.Now = Start + TimeSpan.FromSeconds(11);
+
+        Assert.That(table.TryGet(1, out found, out expired), Is.True);
+        Assert.That(found, Is.SameAs(value));
+        Assert.That(expired, Is.True);
+        Assert.That(table.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TryGet_MissingEntry_ReturnsFalse()
+    {
+        var clock = new ManualClock { Now = Start };
+        var table = new RRUnreliableRequestTable<Box>(clock, TimeSpan.FromSeconds(10));
+
+        Assert.That(table.TryGet(1, out Box found, out bool expired), Is.False);
+        Assert.That(found, Is.Null);
+        Assert.That(expired, Is.False);
+    }
+
     private sealed class Box
     {
         public Box(int number)

@@ -196,7 +196,7 @@ public sealed class RawReliableHandshakeServerEndpointTests
     }
 
     [Test]
-    public void OnConnected_WhenHandlerThrows_StopsWithExceptionFail()
+    public void OnConnected_WhenHandlerThrows_LogsAndKeepsEndpointConnected()
     {
         using var handler = new RecordingRawReliableHandshakeServerHandler(Memory)
         {
@@ -207,14 +207,11 @@ public sealed class RawReliableHandshakeServerEndpointTests
         ep.ConnectAndComplete();
 
         Assert.That(handler.ConnectedCount, Is.EqualTo(1));
-        Assert.That(handler.DisconnectedCount, Is.EqualTo(1));
-        Assert.That(handler.DisconnectedReason, Is.TypeOf<ExceptionFail>());
-        Assert.That(ep.BeginDisconnectCalls, Is.EqualTo(1));
-
-        ep.CompleteDisconnect();
-
-        Assert.That(handler.StoppedCount, Is.EqualTo(1));
-        Assert.That(handler.StoppedReason, Is.TypeOf<ExceptionFail>());
-        Assert.That(ep.IsConnected, Is.False);
+        Assert.That(handler.DisconnectedCount, Is.Zero);
+        Assert.That(handler.DisconnectedReason, Is.Null);
+        Assert.That(ep.BeginDisconnectCalls, Is.Zero);
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(ep.IsConnected, Is.True,
+            "a throwing connection callback must not stop or disconnect the endpoint");
     }
 }

@@ -22,6 +22,10 @@
 | `Send_WhenSharedByteBudgetRejects_ReturnsBufferOverflow` | The shared byte cap rejects on the byte boundary. | Two messages fill the budget and the third returns `BufferOverflow` and is released. | The budget is sized to twice the exact message size, read from `GetDataSize`. |
 | `Send_AfterDrain_ReleasesSharedBudget` | The shared budget is released as pending messages drain. | A message-cap-1 budget accepts another send after the first message is transmitted. | Proves the negative deltas reach the shared budget through `OnPendingSendChanged`. |
 | `Send_WhenLocalBudgetOverflows_RollsSharedBudgetBack` | A local rejection must not leave a shared reservation behind. | The inherited `BufferOverflow` path emits a matching `+size/+1` and `-size/-1`, so `CanAccept` still accepts the exact message size. | The byte cap equals one message size, so a surviving reservation would make `CanAccept` return false. The local capacity is 1 to force the local rejection. |
+| `Send_WhenRunningWithNullBuffer_ReturnsInvalidMessage` | A null outbound buffer while running is invalid. | A running endpoint reports `InvalidMessage`. | The state check passes first; the null check follows. |
+| `Send_WhenRunningWithOversizedBuffer_ReturnsMessageTooBigAndReleases` | The inherited size guard applies while running. | A running endpoint reports `MessageTooBig` and releases the oversized buffer exactly once. | Delegated to the inherited implementation. |
+| `Send_WhenStoppedWithNullBuffer_ReturnsTheStateResult` | Result precedence: endpoint state before message validity. | A stopped endpoint reports the mapped state result (`Error` for the unreliable family) for a null buffer. | `RawUnreliableEndpoint` maps `NotConnected` to `Error`. |
+| `Send_WhenStoppedWithFullSharedBudget_ReturnsTheStateResultAndReleases` | Result precedence: endpoint state before outbound capacity. | A stopped endpoint reports `Error` while the shared budget is exhausted by a still-pending message, and the rejected buffer is released once. | The pending message is drained afterwards; the captured send proves it reached the carrier. |
 
 ## Planned
 

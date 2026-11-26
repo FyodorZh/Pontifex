@@ -33,12 +33,83 @@ namespace Pontifex.Raw.Unreliable.Direct
     {
         private readonly IEndPoint _serverEndPoint;
         private readonly IEndPoint _clientEndPoint;
-        private readonly IDeliverySystem _clientDeliverySystem;
-        private readonly IDeliverySystem _serverDeliverySystem;
+        private IDeliverySystem _clientDeliverySystem;
+        private IDeliverySystem _serverDeliverySystem;
+        private readonly RawUnreliableDirectClientTransport.DeliveryDirection _clientDirection;
+        private readonly RawUnreliableDirectClientTransport.DeliveryDirection _serverDirection;
         private readonly Action _onChannelDisposed;
-        private readonly SerializedCallbackQueue<UnionDataList> _sendQueue;
+        private readonly SerializedCallbackQueue<CommitItem> _sendQueue;
+        private readonly int _queueCapacity;
 
         private Channel? _channel;
+        private bool _clientSystemInstalled;
+        private bool _serverSystemInstalled;
+        private int _outstandingCommitMessages;
+
+        /// <summary>
+        /// Gets or sets a test hook invoked after a successful commit-queue post and before the send action
+        /// returns.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It lets a test throw after the post
+        /// and prove that the reservation is still released exactly once by the commit path.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Action? AfterPostForTests { get; set; }
+
+        /// <summary>
+        /// Gets the number of accepted messages whose commit has not completed.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only. The value is the internal
+        /// admission counter, not the shared transport budget.</description></item>
+        /// </list>
+        /// </remarks>
+        internal int OutstandingCommitMessagesForTests => Volatile.Read(ref _outstandingCommitMessages);
+
+        /// <summary>
+        /// Gets the channel acquired by this endpoint, for carrier-specific tests.
+        /// </summary>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Diagnostic and test seam only; the channel is present only
+        /// after the first send acquired it and before teardown.</description></item>
+        /// </list>
+        /// </remarks>
+        internal Channel? ChannelForTests => _channel;
+
+        /// <summary>
+        /// Invokes the commit path directly for carrier tests.
+        /// </summary>
+        /// <param name="bufferToSend">The buffer to commit. Ownership transfers to this method.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It runs the same commit logic as the
+        /// queue worker so a test can arrange a disposed channel deterministically.</description></item>
+        /// </list>
+        /// </remarks>
+        internal void CommitForTests(UnionDataList bufferToSend)
+        {
+            CommitSend(new CommitItem(bufferToSend, CreateSendSlotReservation(() => { })));
+        }
+
+        /// <summary>
+        /// Replaces the channel reference for carrier tests.
+        /// </summary>
+        /// <param name="channel">The channel to expose to the commit path, or <see langword="null"/>.</param>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Internal test seam only. It does not subscribe to the channel,
+        /// so a test can observe the discarded-message path without triggering the endpoint's terminal
+        /// stop.</description></item>
+        /// </list>
+        /// </remarks>
+        internal void SetChannelForTests(Channel? channel)
+        {
+            _channel = channel;
+        }
 
         internal RawUnreliableDirectClientEndpoint(
             string transportName,
@@ -51,24 +122,46 @@ namespace Pontifex.Raw.Unreliable.Direct
             long inboxCapacityBytes,
             IDeliverySystem clientDeliverySystem,
             IDeliverySystem serverDeliverySystem,
+            RawUnreliableDirectClientTransport.DeliveryDirection clientDirection,
+            RawUnreliableDirectClientTransport.DeliveryDirection serverDirection,
+            bool unboundedCommitQueue,
             IMemoryRental memory,
             ILogger log)
             : base(transportName, serverEndPoint, handler, messageMaxByteSize, bufferCapacityBytes,
                 queueCapacity, inboxCapacityBytes, memory, log)
         {
+            if (queueCapacity <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(queueCapacity));
+            }
+
             _serverEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
             _clientEndPoint = clientEndPoint ?? throw new ArgumentNullException(nameof(clientEndPoint));
             _clientDeliverySystem = clientDeliverySystem ??
                 throw new ArgumentNullException(nameof(clientDeliverySystem));
             _serverDeliverySystem = serverDeliverySystem ??
                 throw new ArgumentNullException(nameof(serverDeliverySystem));
+            _clientDirection = clientDirection ?? throw new ArgumentNullException(nameof(clientDirection));
+            _serverDirection = serverDirection ?? throw new ArgumentNullException(nameof(serverDirection));
             _onChannelDisposed = OnChannelDisposed;
+            _queueCapacity = queueCapacity;
 
-            _sendQueue = new SerializedCallbackQueue<UnionDataList>(
-                queueCapacity,
-                $"unreliable-direct-client-{transportName}",
-                CommitSend,
-                message => message.Release());
+            if (unboundedCommitQueue)
+            {
+                _sendQueue = new SerializedCallbackQueue<CommitItem>(
+                    $"unreliable-direct-client-unbounded-{transportName}",
+                    CommitSend,
+                    DisposeItem);
+            }
+            else
+            {
+                _sendQueue = new SerializedCallbackQueue<CommitItem>(
+                    queueCapacity,
+                    $"unreliable-direct-client-{transportName}",
+                    CommitSend,
+                    DisposeItem);
+            }
+
             _sendQueue.ExceptionHandler += ex => Log.wtf(ex);
 
             // Releases the channel and the commit queue after the inbox release installed by the base
@@ -77,8 +170,45 @@ namespace Pontifex.Raw.Unreliable.Direct
         }
 
         /// <inheritdoc/>
+        protected override SendSlotReservation? TryReserveSendSlot()
+        {
+            while (true)
+            {
+                int current = Volatile.Read(ref _outstandingCommitMessages);
+                if (current >= _queueCapacity)
+                {
+                    return null;
+                }
+
+                if (Interlocked.CompareExchange(ref _outstandingCommitMessages, current + 1, current) == current)
+                {
+                    return CreateSendSlotReservation(ReleaseCommitSlot);
+                }
+            }
+        }
+
+        private void ReleaseCommitSlot()
+        {
+            Interlocked.Decrement(ref _outstandingCommitMessages);
+        }
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <list type="bullet">
+        /// <item><description><b>Other notes</b>: Not used by this endpoint: admission always runs through the
+        /// token-taking overload. The override releases the buffer as a guard so a future caller cannot leak
+        /// it.</description></item>
+        /// </list>
+        /// </remarks>
         protected override void DoSendRaw(UnionDataList bufferToSend)
         {
+            bufferToSend.Release();
+        }
+
+        /// <inheritdoc/>
+        protected override void DoSendRaw(UnionDataList bufferToSend, SendSlotReservation reservation)
+        {
+            var item = new CommitItem(bufferToSend, reservation);
             Channel? channel = _channel;
             if (channel == null)
             {
@@ -86,40 +216,48 @@ namespace Pontifex.Raw.Unreliable.Direct
                 if (channel == null)
                 {
                     bufferToSend.Release();
+                    reservation.ReleaseOnce();
                     return;
                 }
             }
 
-            if (channel.IsDisposed || !_sendQueue.Post(bufferToSend))
+            if (channel.IsDisposed || !_sendQueue.Post(item))
             {
                 bufferToSend.Release();
+                reservation.ReleaseOnce();
+                return;
             }
+
+            AfterPostForTests?.Invoke();
         }
 
         /// <summary>
         /// Commits one queued buffer to the in-process channel.
         /// </summary>
-        /// <param name="bufferToSend">The buffer to commit. Ownership transfers to this method on every
-        /// path.</param>
+        /// <param name="item">The queued message and its reservation. Ownership transfers to this method on
+        /// every path.</param>
         /// <remarks>
         /// <list type="bullet">
         /// <item><description><b>Thread safety</b>: Runs on the endpoint's single commit worker, never
         /// concurrently with another commit.</description></item>
         /// <item><description><b>Other notes</b>: The channel releases the buffer on every path. A disposed
-        /// channel drops the buffer; the endpoint is stopped by the channel's own terminal
-        /// notification.</description></item>
+        /// channel drops the buffer; the endpoint is stopped by the channel's own terminal notification. The
+        /// delivery is deferred until the sender has returned from <c>Send</c>.</description></item>
         /// </list>
         /// </remarks>
-        private void CommitSend(UnionDataList bufferToSend)
+        private void CommitSend(CommitItem item)
         {
+            UnionDataList bufferToSend = item.Message;
             Channel? channel = _channel;
-            if (channel == null)
+            if (channel == null || channel.IsDisposed)
             {
                 bufferToSend.Release();
+                item.Token.ReleaseOnce();
                 return;
             }
 
             Conformance.BeforeSendCommitGate.Hit();
+            WaitForSendReturn();
             try
             {
                 channel.SendToServer(bufferToSend);
@@ -135,6 +273,7 @@ namespace Pontifex.Raw.Unreliable.Direct
             finally
             {
                 Conformance.AfterSendCommitGate.Hit();
+                item.Token.ReleaseOnce();
             }
         }
 
@@ -153,26 +292,93 @@ namespace Pontifex.Raw.Unreliable.Direct
         /// </remarks>
         private Channel? Connect()
         {
-            Channel? channel = ChannelManager.Instance.Connect(_serverEndPoint, _clientEndPoint);
-            if (channel == null)
+            Channel? channel = null;
+            bool clientInstalled = false;
+            bool serverInstalled = false;
+
+            try
             {
+                channel = ChannelManager.Instance.Connect(RawUnreliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint);
+                if (channel == null)
+                {
+                    return null;
+                }
+
+                channel.ClientHandler = OnChannelMessage;
+
+                channel.SetClientDeliverySystem(_clientDeliverySystem);
+                clientInstalled = true;
+                _clientSystemInstalled = true;
+
+                channel.SetServerDeliverySystem(_serverDeliverySystem);
+                serverInstalled = true;
+                _serverSystemInstalled = true;
+
+                channel.Disposed += _onChannelDisposed;
+                _channel = channel;
+
+                // The server may have rejected the channel synchronously, before the subscription above.
+                if (channel.IsDisposed)
+                {
+                    ((IRawUnreliableEndpoint)this).Stop(new UnknownRemoteIntention(TransportName));
+                    return null;
+                }
+
+                return channel;
+            }
+            catch (Exception ex)
+            {
+                // Manager and install failures are transient carrier failures: the endpoint stays alive and
+                // the next send retries with fresh systems. No application callback runs here.
+                Log.wtf(ex);
+
+                if (channel != null)
+                {
+                    channel.ClientHandler = null;
+
+                    // Remove the failed channel from the server registry and dispose it. The registry, not
+                    // the endpoint, owns a channel created by the manager.
+                    if (!ChannelManager.Instance.Disconnect(RawUnreliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint))
+                    {
+                        channel.Dispose();
+                    }
+                }
+
+                if (!clientInstalled)
+                {
+                    ReleaseOnce(_clientDeliverySystem);
+                }
+
+                if (!serverInstalled && !ReferenceEquals(_serverDeliverySystem, _clientDeliverySystem))
+                {
+                    ReleaseOnce(_serverDeliverySystem);
+                }
+
+                _clientDirection.AskResetToPerfect();
+                _serverDirection.AskResetToPerfect();
+                _clientDeliverySystem = _clientDirection.Materialize();
+                _serverDeliverySystem = _serverDirection.Materialize();
+                _clientSystemInstalled = false;
+                _serverSystemInstalled = false;
                 return null;
             }
+        }
 
-            channel.ClientHandler = Deliver;
-            channel.SetClientDeliverySystem(_clientDeliverySystem);
-            channel.SetServerDeliverySystem(_serverDeliverySystem);
-            channel.Disposed += _onChannelDisposed;
-            _channel = channel;
-
-            // The server may have rejected the channel synchronously, before the subscription above.
-            if (channel.IsDisposed)
+        /// <summary>
+        /// Checks one inbound frame against the message limit and hands it to the endpoint inbox.
+        /// </summary>
+        /// <param name="message">The received message. Ownership transfers to this method on every
+        /// path.</param>
+        private void OnChannelMessage(UnionDataList message)
+        {
+            if (message.GetDataSize() > MessageMaxByteSize)
             {
-                ((IRawUnreliableEndpoint)this).Stop(new UnknownRemoteIntention(TransportName));
-                return null;
+                message.Release();
+                Log.e("Inbound message exceeds MessageMaxByteSize and was discarded");
+                return;
             }
 
-            return channel;
+            Deliver(message);
         }
 
         /// <summary>
@@ -198,6 +404,33 @@ namespace Pontifex.Raw.Unreliable.Direct
         {
             _sendQueue.Dispose();
             CleanupChannel();
+
+            if (!_clientSystemInstalled)
+            {
+                ReleaseOnce(_clientDeliverySystem);
+            }
+
+            if (!_serverSystemInstalled && !ReferenceEquals(_serverDeliverySystem, _clientDeliverySystem))
+            {
+                ReleaseOnce(_serverDeliverySystem);
+            }
+        }
+
+        private static void ReleaseOnce(IDeliverySystem system)
+        {
+            try
+            {
+                DeliverySystemLifetime.Release(system);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        private static void DisposeItem(CommitItem item)
+        {
+            item.Message.Release();
+            item.Token.ReleaseOnce();
         }
 
         /// <summary>
@@ -216,7 +449,7 @@ namespace Pontifex.Raw.Unreliable.Direct
 
             // The manager removes the channel from the server registry and disposes it. When the server is
             // already gone there is no entry left to remove, so the channel is disposed directly.
-            if (!ChannelManager.Instance.Disconnect(_serverEndPoint, _clientEndPoint))
+            if (!ChannelManager.Instance.Disconnect(RawUnreliableDirectInfo.TransportName, _serverEndPoint, _clientEndPoint))
             {
                 channel.Dispose();
             }
@@ -232,6 +465,22 @@ namespace Pontifex.Raw.Unreliable.Direct
             {
                 return "direct-client-endpoint[unknown]";
             }
+        }
+
+        /// <summary>
+        /// One queued commit message and its admission reservation.
+        /// </summary>
+        private sealed class CommitItem
+        {
+            public CommitItem(UnionDataList message, SendSlotReservation token)
+            {
+                Message = message;
+                Token = token;
+            }
+
+            public UnionDataList Message { get; }
+
+            public SendSlotReservation Token { get; }
         }
     }
 }

@@ -17,7 +17,7 @@ using Pontifex.VirtualDelivery.Netem;
 ```csharp
 using Actuarius.Collections;
 using Actuarius.Memory;
-using Pontifex.Transports.Direct.Delivery;
+using Pontifex.VirtualDelivery;
 using Pontifex.VirtualDelivery.Netem;
 
 // 50ms delay, 10ms jitter, 5% random loss
@@ -92,6 +92,8 @@ config.DelayDistribution = dist;
 ```
 
 When `DelayDistribution` is `null`, jitter uses a uniform distribution.
+The table must contain at least one entry; a null or empty table is rejected at
+construction.
 
 ### `FourStateParams`
 
@@ -105,6 +107,9 @@ When `DelayDistribution` is `null`, jitter uses a uniform distribution.
 | `P14` | Start of burst loss |
 | `P23` | End of burst → isolated loss |
 
+Transitions are evaluated at packet entry: `P14` precedes `P13` in `TxGap`, and
+`P32` precedes `P31` in `LostGap`.
+
 ### `GilbertElliotParams`
 
 2-state Gilbert-Elliot model. All values scaled to `uint.MaxValue`.
@@ -115,6 +120,10 @@ When `DelayDistribution` is `null`, jitter uses a uniform distribution.
 | `R` | BAD → GOOD transition probability |
 | `H` | Loss threshold in BAD state (lost if rand > H) |
 | `K1` | Loss probability in GOOD state (lost if rand < K1) |
+
+A packet is classified with the state it entered in. A BAD → GOOD recovery still
+uses `H` for that packet, and `K1` applies from the next packet. The GOOD branch
+evaluates `P` then `K1`; the BAD branch evaluates `R` then `H`.
 
 ### `SlotConfig`
 

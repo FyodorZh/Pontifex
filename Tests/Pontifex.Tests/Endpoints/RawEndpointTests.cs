@@ -204,6 +204,7 @@ public sealed class RawEndpointTests
     {
         using var handler = new RecordingRawHandler(Memory);
         using var ep = Create(handler);
+        ep.StartAndComplete();
 
         Assert.That(ep.Send(null!), Is.EqualTo(SendResult.InvalidMessage));
     }
@@ -238,11 +239,56 @@ public sealed class RawEndpointTests
     {
         using var handler = new RecordingRawHandler(Memory);
         using var ep = Create(handler, max: 8);
+        ep.StartAndComplete();
         UnionDataList buffer = TestBuffers.WithPayload(Memory, 32);
         Assert.That(buffer.GetDataSize(), Is.GreaterThan(8));
 
         Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.MessageTooBig));
         Assert.That(buffer.IsAlive, Is.False);
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithNullBuffer_ReturnsNotConnected()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+
+        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.NotConnected));
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithOversizedBuffer_ReturnsNotConnectedAndReleasesBuffer()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler, max: 8);
+        UnionDataList buffer = TestBuffers.WithPayload(Memory, 32);
+        Assert.That(buffer.GetDataSize(), Is.GreaterThan(8));
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.NotConnected));
+        Assert.That(buffer.IsAlive, Is.False);
+        Assert.That(buffer.RefCount.RefCount, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithPendingBudget_ReturnsNotConnectedAndReleasesBuffer()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler, max: 1024, capacity: 3);
+        ep.StartAndComplete();
+        UnionDataList admitted = TestBuffers.WithByte(Memory, 1);
+        UnionDataList stoppedBuffer = TestBuffers.WithByte(Memory, 2);
+
+        // The first send reserves the whole byte budget; the stop latch then closes the send gate
+        // before the queued admission drains.
+        Assert.That(ep.Send(admitted), Is.EqualTo(SendResult.Ok));
+        ep.Stop(Reason(), tryBeGentle: false);
+
+        Assert.That(ep.Send(stoppedBuffer), Is.EqualTo(SendResult.NotConnected));
+        Assert.That(stoppedBuffer.IsAlive, Is.False);
+        Assert.That(stoppedBuffer.RefCount.RefCount, Is.Zero);
+
+        ep.DrainAll();
+        Assert.That(ep.CapturedSends, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -533,7 +579,7 @@ public sealed class RawEndpointTests
     }
 
     [Test]
-    public void ProcessInbound_IsDeliveredBeforeStopNotification()
+    public void ProcessInbound_ScheduledBeforeStopLatch_IsReleasedInsteadOfDelivered()
     {
         using var handler = new RecordingRawHandler(Memory);
         using var ep = Create(handler);
@@ -545,7 +591,13 @@ public sealed class RawEndpointTests
         ep.DrainAll();
         ep.CompleteStop();
 
-        Assert.That(handler.Events, Is.EqualTo(new[] { "received", "stopped" }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.ReceivedCount, Is.Zero,
+                "a receive job scheduled before the stop latch must not deliver after Stop returns");
+            Assert.That(buffer.IsAlive, Is.False);
+            Assert.That(handler.Events, Is.EqualTo(new[] { "stopped" }));
+        });
     }
 
     [Test]
@@ -562,6 +614,31 @@ public sealed class RawEndpointTests
 
         Assert.That(handler.ReceivedCount, Is.Zero);
         Assert.That(buffer.IsAlive, Is.False);
+    }
+
+    [Test]
+    public void ProcessInbound_WhenHandlerThrows_LogsAndLeavesEndpointUsable()
+    {
+        var logConsumer = new RecordingLogConsumer();
+        var handler = new ThrowingOnceRawHandler(Memory);
+        using var ep = new TestRawEndpoint(handler, log: new Logger([logConsumer]));
+        ep.StartAndComplete();
+        UnionDataList first = TestBuffers.WithByte(Memory, 1);
+        UnionDataList second = TestBuffers.WithByte(Memory, 2);
+
+        ep.ExposedProcessInbound(first);
+        ep.DrainAll();
+
+        Assert.That(ep.IsRunning, Is.True, "a handler exception must not stop the endpoint");
+        Assert.That(handler.StoppedCount, Is.Zero);
+        Assert.That(handler.ReceivedCount, Is.EqualTo(1));
+        Assert.That(logConsumer.Messages, Has.Some.Contains("OnReceived failed"));
+
+        ep.ExposedProcessInbound(second);
+        ep.DrainAll();
+
+        Assert.That(handler.ReceivedCount, Is.EqualTo(2), "later deliveries must still reach the handler");
+        Assert.That(ep.IsRunning, Is.True);
     }
 
     #endregion
@@ -660,6 +737,23 @@ public sealed class RawEndpointTests
         Assert.That(handler.StoppedReason, Is.SameAs(reason));
         Assert.That(handler.StoppedCount, Is.EqualTo(1));
         Assert.That(ep.IsRunning, Is.False);
+    }
+
+    [Test]
+    public void Stop_WhenFirstStoppedSubscriberThrows_StillInvokesLaterSubscribers()
+    {
+        using var handler = new RecordingRawHandler(Memory);
+        using var ep = Create(handler);
+        ep.StartAndComplete();
+        var reason = Reason();
+        int laterCalls = 0;
+        ep.Stopped += _ => throw new InvalidOperationException("subscriber failure");
+        ep.Stopped += _ => laterCalls++;
+
+        ep.StopAndComplete(reason, tryBeGentle: false);
+
+        Assert.That(laterCalls, Is.EqualTo(1));
+        Assert.That(handler.StoppedCount, Is.EqualTo(1));
     }
 
     [Test]
@@ -789,4 +883,28 @@ public sealed class RawEndpointTests
     }
 
     #endregion
+
+    /// <summary>
+    /// Recording handler that records and releases the first delivery, then throws, modelling a handler
+    /// that violates the contract after consuming the buffer.
+    /// </summary>
+    private sealed class ThrowingOnceRawHandler : RecordingRawHandler
+    {
+        private int _throwsRemaining = 1;
+
+        public ThrowingOnceRawHandler(IMemoryRental memory)
+            : base(memory)
+        {
+        }
+
+        public override void OnReceived(UnionDataList receivedBuffer)
+        {
+            base.OnReceived(receivedBuffer);
+
+            if (_throwsRemaining-- > 0)
+            {
+                throw new InvalidOperationException("OnReceived failed");
+            }
+        }
+    }
 }

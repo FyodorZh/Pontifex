@@ -223,5 +223,71 @@ public sealed class RawUnreliableServerEndpointTests
         Assert.That(budget.CanAccept(size), Is.True);
     }
 
+    [Test]
+    public void Send_WhenRunningWithNullBuffer_ReturnsInvalidMessage()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        UnionDataList trigger = TestBuffers.WithByte(Memory, 100);
+        var budget = new SendBudget(1024, 16);
+        using var ep = Create(handler, trigger, budget);
+        ep.StartAndComplete();
+
+        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.InvalidMessage));
+    }
+
+    [Test]
+    public void Send_WhenRunningWithOversizedBuffer_ReturnsMessageTooBigAndReleases()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        UnionDataList trigger = TestBuffers.WithByte(Memory, 100);
+        var budget = new SendBudget(1024, 16);
+        using var ep = Create(handler, trigger, budget, max: 8);
+        ep.StartAndComplete();
+        UnionDataList buffer = TestBuffers.WithPayload(Memory, 32);
+        Assert.That(buffer.GetDataSize(), Is.GreaterThan(8));
+
+        Assert.That(ep.Send(buffer), Is.EqualTo(SendResult.MessageTooBig));
+        Assert.That(buffer.IsAlive, Is.False);
+        Assert.That(buffer.RefCount.RefCount, Is.Zero);
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithNullBuffer_ReturnsTheStateResult()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        UnionDataList trigger = TestBuffers.WithByte(Memory, 100);
+        var budget = new SendBudget(1024, 16);
+        using var ep = Create(handler, trigger, budget);
+        ep.StartAndComplete();
+        Assert.That(ep.StopOneShot(), Is.True);
+        ep.DrainAll();
+
+        Assert.That(ep.Send(null!), Is.EqualTo(SendResult.Error));
+    }
+
+    [Test]
+    public void Send_WhenStoppedWithFullSharedBudget_ReturnsTheStateResultAndReleases()
+    {
+        using var handler = new RecordingRawUnreliableHandler(Memory);
+        UnionDataList trigger = TestBuffers.WithByte(Memory, 100);
+        var budget = new SendBudget(1024, 1);
+        using var ep = Create(handler, trigger, budget);
+        ep.StartAndComplete();
+        UnionDataList admitted = TestBuffers.WithByte(Memory, 1);
+        UnionDataList stoppedBuffer = TestBuffers.WithByte(Memory, 2);
+        Assert.That(ep.Send(admitted), Is.EqualTo(SendResult.Ok));
+
+        // The first message still holds the only shared message slot; the stop latch then closes the
+        // send gate, so the state must win over the exhausted budget.
+        Assert.That(ep.StopOneShot(), Is.True);
+
+        Assert.That(ep.Send(stoppedBuffer), Is.EqualTo(SendResult.Error));
+        Assert.That(stoppedBuffer.IsAlive, Is.False);
+        Assert.That(stoppedBuffer.RefCount.RefCount, Is.Zero);
+
+        ep.DrainAll();
+        Assert.That(ep.CapturedSends, Has.Count.EqualTo(1));
+    }
+
     #endregion
 }

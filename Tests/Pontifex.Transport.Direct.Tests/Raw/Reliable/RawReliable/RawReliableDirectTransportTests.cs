@@ -17,6 +17,7 @@ namespace Pontifex.Tests.Raw.Reliable.RawReliable;
 /// handshake, zero reject linger, and the ported Direct carrier lifecycle cases.
 /// </summary>
 [TestFixture]
+[Category("Direct.Integration")]
 public sealed class RawReliableDirectTransportTests
 {
     private const int MessageMaxByteSize = 1024 * 1024;
@@ -25,6 +26,8 @@ public sealed class RawReliableDirectTransportTests
     private static readonly ILogger Logger = new Logger([]);
 
     private readonly List<ITransport> _transports = new();
+    private readonly Pontifex.Tests.RR.TestSupport.ManualTimerFactory _clientHandshakeTimers = new();
+    private readonly Pontifex.Tests.RR.TestSupport.ManualTimerFactory _serverHandshakeTimers = new();
 
     [OneTimeTearDown]
     public void OneTimeTearDown()
@@ -69,6 +72,68 @@ public sealed class RawReliableDirectTransportTests
         Assert.That(factory.LastHandler!.ConnectedCount, Is.EqualTo(1));
 
         Assert.That(client.MessageMaxByteSize, Is.EqualTo(MessageMaxByteSize));
+        Assert.That(_clientHandshakeTimers.PendingCount, Is.Zero);
+        Assert.That(_serverHandshakeTimers.PendingCount, Is.Zero);
+    }
+
+    [Test]
+    public void Client_handshake_timeout_fires_before_a_response()
+    {
+        var serverName = NewServerName();
+        Assert.That(ChannelManager.Instance.RegisterServer(RawReliableDirectInfo.TransportName, new StringEndPoint(serverName), _ => { }),
+            Is.True);
+
+        try
+        {
+            var handler = new RecordingClientHandler();
+            var client = StartClient(serverName, handler, waitForConnect: false);
+
+            WaitFor(() => _clientHandshakeTimers.PendingCount > 0,
+                "The client did not schedule its handshake deadline");
+            Assert.That(_clientHandshakeTimers.FireAll(), Is.GreaterThan(0));
+            WaitFor(() => handler.StoppedReason != null, "The client did not time out");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handler.StoppedReason, Is.TypeOf<TimeOut>());
+                Assert.That(handler.ConnectedCount, Is.Zero);
+                Assert.That(handler.DisconnectReason, Is.Null);
+                Assert.That(client.IsStarted, Is.False);
+                Assert.That(client.IsValid, Is.True);
+            });
+        }
+        finally
+        {
+            ChannelManager.Instance.UnregisterServer(RawReliableDirectInfo.TransportName, new StringEndPoint(serverName));
+        }
+    }
+
+    [Test]
+    public void Server_handshake_timeout_fires_before_a_request()
+    {
+        var factory = new RecordingFactory(_ => new RecordingServerHandler());
+        var server = StartServer(factory, out var serverName);
+        var channel = ChannelManager.Instance.Connect(RawReliableDirectInfo.TransportName, new StringEndPoint(serverName),
+            new GuidEndPoint(Guid.NewGuid()));
+        Assert.That(channel, Is.Not.Null);
+
+        try
+        {
+            WaitFor(() => _serverHandshakeTimers.PendingCount > 0,
+                "The server did not schedule its handshake deadline");
+            Assert.That(_serverHandshakeTimers.FireAll(), Is.GreaterThan(0));
+            WaitFor(() => channel!.IsDisposed, "The server did not close the expired handshake");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(server.IsStarted, Is.True);
+                Assert.That(factory.Calls, Is.Zero);
+            });
+        }
+        finally
+        {
+            channel!.Dispose();
+        }
     }
 
     [Test]
@@ -221,7 +286,7 @@ public sealed class RawReliableDirectTransportTests
 
         var serverEndPoint = new StringEndPoint(serverName);
         var clientEndPoint = new GuidEndPoint(Guid.NewGuid());
-        var channel = ChannelManager.Instance.Connect(serverEndPoint, clientEndPoint);
+        var channel = ChannelManager.Instance.Connect(RawReliableDirectInfo.TransportName, serverEndPoint, clientEndPoint);
         Assert.That(channel, Is.Not.Null);
 
         UnionDataList? rejection = null;
@@ -256,7 +321,7 @@ public sealed class RawReliableDirectTransportTests
     }
 
     [Test]
-    public void Direct_client_endpoint_creates_no_handshake_timer()
+    public void Direct_client_uses_and_disposes_its_handshake_timer()
     {
         var factory = new RecordingFactory(_ => new RecordingServerHandler());
         var server = StartServer(factory, out var serverName);
@@ -266,10 +331,12 @@ public sealed class RawReliableDirectTransportTests
 
         var endpoint = client.CurrentEndpoint;
         Assert.That(endpoint, Is.Not.Null);
+        Assert.That(_clientHandshakeTimers.ScheduledCount, Is.GreaterThan(0),
+            "the Direct client must schedule its configured deadline");
+        Assert.That(_clientHandshakeTimers.PendingCount, Is.Zero,
+            "a completed handshake must dispose its deadline");
         Assert.That(endpoint!.HasHandshakeTimer, Is.False,
-            "the in-process handshake must not create a deadline timer");
-        Assert.That(endpoint.HandshakeTimerCreateCalls, Is.GreaterThan(0),
-            "the Direct endpoint must be the one answering the inherited timer seam");
+            "no deadline may remain installed after a completed handshake");
     }
 
     [Test]
@@ -484,9 +551,12 @@ public sealed class RawReliableDirectTransportTests
             serverName,
             Logger,
             MemoryRental.Shared,
-            messageMaxSize: messageMaxSize,
-            bufferCapacityBytes: BufferCapacityBytes,
-            handshakeName: handshakeName);
+            messageMaxSize,
+            BufferCapacityBytes,
+            handshakeName,
+            RawReliableDirectInfo.DefaultHandshakeMaxByteSize,
+            TimeSpan.FromSeconds(10),
+            _serverHandshakeTimers);
         Assert.That(server.Init(factory), Is.True);
         Assert.That(server.Start(_ => { }), Is.True);
         _transports.Add(server);
@@ -504,9 +574,12 @@ public sealed class RawReliableDirectTransportTests
             serverName,
             Logger,
             MemoryRental.Shared,
-            messageMaxSize: messageMaxSize,
-            bufferCapacityBytes: BufferCapacityBytes,
-            handshakeName: handshakeName);
+            messageMaxSize,
+            BufferCapacityBytes,
+            handshakeName,
+            RawReliableDirectInfo.DefaultHandshakeMaxByteSize,
+            TimeSpan.FromSeconds(10),
+            _clientHandshakeTimers);
 
         Assert.That(client.Init(handler), Is.True);
         Assert.That(client.Start(_ => { }), Is.True);
@@ -524,6 +597,75 @@ public sealed class RawReliableDirectTransportTests
     {
         WaitFor(() => factory.LastHandler?.Endpoint != null, "The server session was not created");
         return factory.LastHandler!.Endpoint!;
+    }
+
+    [Test]
+    public void Payload_at_exact_message_max_is_accepted_in_both_directions()
+    {
+        const int limit = 256;
+        var factory = new RecordingFactory(_ => new RecordingServerHandler());
+        var server = StartServer(factory, out var serverName, messageMaxSize: limit);
+
+        var clientHandler = new RecordingClientHandler();
+        var client = StartClient(serverName, clientHandler, waitForConnect: true,
+            messageMaxSize: limit);
+        var serverEndpoint = WaitForServerEndpoint(factory);
+        WaitFor(() => factory.LastHandler!.ConnectedCount == 1, "The server session did not connect");
+
+        UnionDataList fromClient = CreateExactSizeMessage(client, limit);
+        Assert.That(fromClient.GetDataSize(), Is.EqualTo(limit));
+        Assert.That(clientHandler.Endpoint!.Send(fromClient), Is.EqualTo(SendResult.Ok));
+
+        UnionDataList fromServer = CreateExactSizeMessage(server, limit);
+        Assert.That(fromServer.GetDataSize(), Is.EqualTo(limit));
+        Assert.That(serverEndpoint.Send(fromServer), Is.EqualTo(SendResult.Ok));
+
+        Assert.That(clientHandler.Endpoint.Send(CreateMessage(client, 7)), Is.EqualTo(SendResult.Ok));
+        WaitFor(() => factory.LastHandler!.ReceivedCount == 1,
+            "The connection did not survive the exact-limit payload");
+
+        UnionDataList overClient = CreateExactSizeMessage(client, limit);
+        overClient.PutLast((byte)1);
+        UnionDataList overServer = CreateExactSizeMessage(server, limit);
+        overServer.PutLast((byte)1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(clientHandler.Endpoint.Send(overClient), Is.EqualTo(SendResult.MessageTooBig));
+            Assert.That(serverEndpoint.Send(overServer), Is.EqualTo(SendResult.MessageTooBig));
+        });
+    }
+
+    private static UnionDataList CreateExactSizeMessage(IRawTransport transport, int limit)
+    {
+        var empty = transport.Memory.CollectablePool.Acquire<UnionDataList>();
+        if (empty.GetDataSize() == limit)
+        {
+            return empty;
+        }
+
+        empty.Release();
+
+        for (int overhead = 1; overhead <= 8; overhead++)
+        {
+            int byteCount = limit - overhead;
+            if (byteCount <= 0)
+            {
+                continue;
+            }
+
+            var message = transport.Memory.CollectablePool.Acquire<UnionDataList>();
+            var bytes = transport.Memory.ByteArraysPool.Acquire(byteCount);
+            message.PutLast(new UnionData(bytes));
+            if (message.GetDataSize() == limit)
+            {
+                return message;
+            }
+
+            message.Release();
+        }
+
+        throw new InvalidOperationException($"Unable to construct a UnionDataList of exactly {limit} bytes.");
     }
 
     private static UnionDataList CreateMessage(IRawTransport transport, int value)
@@ -576,7 +718,7 @@ public sealed class RawReliableDirectTransportTests
             _handshakeName = handshakeName;
             _messageMaxByteSize = messageMaxByteSize;
 
-            Assert.That(ChannelManager.Instance.RegisterServer(_serverEndPoint, OnChannelCreated), Is.True);
+            Assert.That(ChannelManager.Instance.RegisterServer(RawReliableDirectInfo.TransportName, _serverEndPoint, OnChannelCreated), Is.True);
         }
 
         private void OnChannelCreated(Channel channel)
@@ -605,7 +747,7 @@ public sealed class RawReliableDirectTransportTests
 
         public void Dispose()
         {
-            ChannelManager.Instance.UnregisterServer(_serverEndPoint);
+            ChannelManager.Instance.UnregisterServer(RawReliableDirectInfo.TransportName, _serverEndPoint);
         }
     }
 
