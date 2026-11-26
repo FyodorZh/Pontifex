@@ -55,7 +55,12 @@ structure. The concrete Direct RR suites remain in place and keep passing.
   `RRReliableServerSession` fixture relocated to the Direct CoreHelpers suite: the fixture
   gains `Direct.RRReliableCoreHelpers`, and only its two stress methods keep
   `Direct.RRReliable.Integration`.
-- Test names use `Scenario_ExpectedResult`.
+- Test names use `Scenario_ExpectedResult`. Names may repeat across different layer
+  fixtures; coverage is checked per test file, not globally.
+- Never place `Assert.That` inside a transport-invoked callback: `AnyTransport.Stop`,
+  `RRUnreliableClientTransport.OnFrameReceived`, and
+  `RRUnreliableServerTransport.OnFrameReceived` catch callback exceptions. Record the
+  observed value in a captured field and assert after the public call returns.
 - Do not add `[TestCase]`/parameterized tests in the new RR layers; loop inside one test
   instead, so the expected `Passed:` counts equal the listed test methods.
 - Use the suite root namespace `Pontifex.Tests.Transports` for test files and harness
@@ -182,14 +187,15 @@ CoreHelpers suite.
      the third new test and becomes part of the reliable layer's delta.
    - Move `Stop_SchedulesTerminalWorkBeforeOnStoppedBegins` to `RRTransportTests.cs` as
      `Stop_ClearsPendingBeforeTheUserOnStoppedCallback` and replace its timer-factory
-     dependency with a local `ClearPendingRequests` callback that sets a bool; assert the
-     bool inside the `Start` user callback. The reliable client layer retains its existing
-     scheduling-order test; the server stop path closes handles synchronously. Do not add
-     another reliable-specific timer-factory test.
+     dependency with a local `ClearPendingRequests` callback that records a bool inside the
+     callback and asserts it after `Stop` returns. The reliable client layer retains its
+     existing scheduling-order test; the server stop path closes handles synchronously. Do
+     not add another reliable-specific timer-factory test.
    - Strengthen the moved
-     `Stop_StopsTheCarrierWithTheSuppliedReasonAfterClearingPending` test: inside the
-     `ClearPendingRequests` callback, assert `StopCarrierCalls == 0` so the test proves
-     clearing happens before the carrier stop, not merely that both ran.
+     `Stop_StopsTheCarrierWithTheSuppliedReasonAfterClearingPending` test: record
+     `StopCarrierCalls` inside the `ClearPendingRequests` callback into a captured field,
+     then assert after `Stop` returns that the recorded value was zero. Do not assert inside
+     the callback.
 5. Copy `Tests/Pontifex.Transport.Direct.Tests/RR/TestSupport/ManualTimerFactory.cs` to
    `Tests/Pontifex.Tests/Transports/RR/Reliable/Harness/ManualTimerFactory.cs`; change the
    copied file's namespace to `Pontifex.Tests.Transports`. Keep the Direct copy.
@@ -266,7 +272,9 @@ CoreHelpers suite.
       shared rows that move to `Transports/RR/Coverage.md`;
     - re-base every moved Coverage file: update the layer/subject/directory, inheritance
       parent, dependency field, and every relative contract link for its new depth; remove
-      the stale `RRTransport outside the selected tree` deferred row;
+      the stale `RRTransport outside the selected tree` deferred row and reword the matching
+      prose paragraph to say the base is now the `RRTransport` ancestor layer and the shared
+      tests live in `Transports/RR/Coverage.md`;
     - normalize every moved/new RR `Coverage.md` heading to the exact suite form
       `## Planned` and `## Deferred by design` (the Direct files use
       `## Deferred By Design`);
@@ -323,6 +331,7 @@ git grep -n "RRReliableTransport" -- Tests/Pontifex.Transport.Direct.Tests
 grep -rn "class RRReliableServerSessionTests" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Tests
 ! grep -q "cannot be made to throw through its public contract" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Coverage.md
 ! grep -q "No missing layers: the whole selected inheritance tree is covered" Tests/Pontifex.Tests/Transports/Coverage.md
+! grep -q "stays outside the selected tree" Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs)" -eq 15
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/RRReliableTransportTests.cs
@@ -334,29 +343,19 @@ test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Client/RR
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs)" -eq 21
 python3 - <<'PY'
-import glob, re, sys
-tests = {}
+import glob, os, re, sys
 for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/*Tests.cs', recursive=True):
     source = open(path, encoding='utf-8-sig').read()
-    for match in re.finditer(r'\[Test\][\s\S]*?public void (\w+)', source):
-        tests.setdefault(match.group(1), []).append(path)
-covered = {}
-for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/Coverage.md', recursive=True):
-    for line in open(path, encoding='utf-8-sig'):
-        match = re.match(r'\|\s*`([A-Za-z0-9_]+)`\s*\|', line)
-        if match:
-            covered.setdefault(match.group(1), []).append(path)
-missing = [name for name in tests if name not in covered]
-duplicate = {name: paths for name, paths in covered.items() if len(paths) != 1}
-extra = [name for name in covered if name not in tests]
-for name in missing:
-    print(f'missing coverage: {name}')
-for name, paths in duplicate.items():
-    print(f'duplicate coverage: {name} {paths}')
-for name in extra:
-    print(f'stale coverage: {name}')
-if missing or duplicate or extra:
-    sys.exit(1)
+    tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
+    coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
+                    encoding='utf-8-sig').read()
+    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
+    for name in sorted(tests - covered):
+        print(f'missing coverage: {path} {name}')
+    for name in sorted(covered - tests):
+        print(f'stale coverage: {path} {name}')
+    if tests != covered:
+        sys.exit(1)
 PY
 test ! -d Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport
 test -f Tests/Pontifex.Tests/Transports/RR/Coverage.md
@@ -389,6 +388,8 @@ Expected:
 - all five RRTransport/RRReliable coverage files exist;
 - the root `Transports/Coverage.md` no longer claims the whole selected tree is covered
   while RRUnreliable is planned;
+- the moved reliable coverage no longer says the RRTransport base stays outside the
+  selected tree;
 - the five test files exist with exactly 15 / 3 / 8 / 30 / 21 `[Test]` methods in
   RRTransport, Reliable root, Generic, Client, and Server respectively.
 
@@ -446,8 +447,9 @@ RRTransport.
    - `DispatchHandler_IsGatedByStartAndStop`;
    - `Start_WhenCarrierReturnsFalse_LeavesHandlerUndispatched`;
    - `Stop_WhileRunning_HidesHandlerBeforeOnStopped` — record `DispatchHandler` inside the
-     test double's `StopCarrier` and assert it is already `null` there; this observes the
-     hide before the stop delta reaches the carrier;
+     test double's `StopCarrier` into a captured field, then assert after `Stop` returns
+     that the recorded value was `null`; do not assert inside `StopCarrier` because
+     `AnyTransport.Stop` swallows callback exceptions;
    - `Init_AfterStop_ReturnsFalse`.
 5. Update `Transports/RR/Unreliable/Coverage.md`, the Generic coverage file, and the
    Transports README:
@@ -478,29 +480,19 @@ test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnrel
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs)" -eq 9
 python3 - <<'PY'
-import glob, re, sys
-tests = {}
+import glob, os, re, sys
 for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/**/*Tests.cs', recursive=True):
     source = open(path, encoding='utf-8-sig').read()
-    for match in re.finditer(r'\[Test\][\s\S]*?public void (\w+)', source):
-        tests.setdefault(match.group(1), []).append(path)
-covered = {}
-for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/**/Coverage.md', recursive=True):
-    for line in open(path, encoding='utf-8-sig'):
-        match = re.match(r'\|\s*`([A-Za-z0-9_]+)`\s*\|', line)
-        if match:
-            covered.setdefault(match.group(1), []).append(path)
-missing = [name for name in tests if name not in covered]
-duplicate = {name: paths for name, paths in covered.items() if len(paths) != 1}
-extra = [name for name in covered if name not in tests]
-for name in missing:
-    print(f'missing coverage: {name}')
-for name, paths in duplicate.items():
-    print(f'duplicate coverage: {name} {paths}')
-for name in extra:
-    print(f'stale coverage: {name}')
-if missing or duplicate or extra:
-    sys.exit(1)
+    tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
+    coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
+                    encoding='utf-8-sig').read()
+    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
+    for name in sorted(tests - covered):
+        print(f'missing coverage: {path} {name}')
+    for name in sorted(covered - tests):
+        print(f'stale coverage: {path} {name}')
+    if tests != covered:
+        sys.exit(1)
 PY
 ```
 
@@ -594,8 +586,9 @@ deterministically through a concrete test double.
    - `Stop_FromInsideAResponseCallback_DoesNotDeadlock` — category
      `Transports.Concurrency`;
    - `Request_FromInsideAResponseCallback_IsAccepted` — use a second
-     `RecordingUnreliableClientHandler` for the nested request, because the first handler is
-     still bound during its callback; category `Transports.Concurrency`;
+     `RecordingUnreliableClientHandler` for the nested request, record the `SendResult`
+     inside the callback, and assert after `Receive` returns that it was `Ok`; category
+     `Transports.Concurrency`;
    - `Cancel_RemovesPendingRequestWithoutCallback`;
    - `Cancel_BeforeSend_RemovesPendingEntryAndDropsLaterResponse` — after the
      `BeforeSendForTests` hook cancels, `Request` still returns `Ok` because production does
@@ -603,8 +596,9 @@ deterministically through a concrete test double.
      response produces no callback;
    - `Cancel_InsideANonLastMessageCallback_DefersUnbind` — use a response with at least
      two messages, call `Cancel()` from the first callback while the request is still in the
-     pending table, and assert the handler stays bound inside and is unbound after the
-     callback returns;
+     pending table, record `IsBound` inside the callback, and assert after `Receive` returns
+     that the recorded value was `true` and that the handler is now unbound; do not assert
+     inside the callback;
    - `Stop_ClearsPendingWindowWithoutCallbacks`;
    - `Response_WhenTransportStopped_IsDropped`;
    - `ExpiredRequest_AllowsTheSameHandlerToBeReused`.
@@ -631,29 +625,19 @@ test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientT
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientTransportTests.cs)" -eq 35
 ! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client
 python3 - <<'PY'
-import glob, re, sys
-tests = {}
+import glob, os, re, sys
 for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/*Tests.cs'):
     source = open(path, encoding='utf-8-sig').read()
-    for match in re.finditer(r'\[Test\][\s\S]*?public void (\w+)', source):
-        tests.setdefault(match.group(1), []).append(path)
-covered = {}
-for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md'):
-    for line in open(path, encoding='utf-8-sig'):
-        match = re.match(r'\|\s*`([A-Za-z0-9_]+)`\s*\|', line)
-        if match:
-            covered.setdefault(match.group(1), []).append(path)
-missing = [name for name in tests if name not in covered]
-duplicate = {name: paths for name, paths in covered.items() if len(paths) != 1}
-extra = [name for name in covered if name not in tests]
-for name in missing:
-    print(f'missing coverage: {name}')
-for name, paths in duplicate.items():
-    print(f'duplicate coverage: {name} {paths}')
-for name in extra:
-    print(f'stale coverage: {name}')
-if missing or duplicate or extra:
-    sys.exit(1)
+    tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
+    coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
+                    encoding='utf-8-sig').read()
+    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
+    for name in sorted(tests - covered):
+        print(f'missing coverage: {path} {name}')
+    for name in sorted(covered - tests):
+        print(f'stale coverage: {path} {name}')
+    if tests != covered:
+        sys.exit(1)
 PY
 ```
 
@@ -810,29 +794,19 @@ for ref in RRTransport.cs RRReliableTransport.cs RRReliableClientTransport.cs RR
 for spec in RR/Specification.md RR/Reliable/Specification.md RR/Unreliable/Specification.md; do grep -q "$spec" Tests/Pontifex.Tests/Transports/README.md || { echo "missing README spec reference: $spec"; exit 1; }; done
 ! grep -q "cannot be made to throw through its public contract" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Coverage.md
 python3 - <<'PY'
-import glob, re, sys
-tests = {}
+import glob, os, re, sys
 for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/*Tests.cs', recursive=True):
     source = open(path, encoding='utf-8-sig').read()
-    for match in re.finditer(r'\[Test\][\s\S]*?public void (\w+)', source):
-        tests.setdefault(match.group(1), []).append(path)
-covered = {}
-for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/Coverage.md', recursive=True):
-    for line in open(path, encoding='utf-8-sig'):
-        match = re.match(r'\|\s*`([A-Za-z0-9_]+)`\s*\|', line)
-        if match:
-            covered.setdefault(match.group(1), []).append(path)
-missing = [name for name in tests if name not in covered]
-duplicate = {name: paths for name, paths in covered.items() if len(paths) != 1}
-extra = [name for name in covered if name not in tests]
-for name in missing:
-    print(f'missing coverage: {name}')
-for name, paths in duplicate.items():
-    print(f'duplicate coverage: {name} {paths}')
-for name in extra:
-    print(f'stale coverage: {name}')
-if missing or duplicate or extra:
-    sys.exit(1)
+    tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
+    coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
+                    encoding='utf-8-sig').read()
+    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
+    for name in sorted(tests - covered):
+        print(f'missing coverage: {path} {name}')
+    for name in sorted(covered - tests):
+        print(f'stale coverage: {path} {name}')
+    if tests != covered:
+        sys.exit(1)
 PY
 grep -q "ConcurrentMarkCompletedAndQueries_AreLockSafeAndExactlyOnce" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Coverage.md
 grep -q "ConcurrentCloseAndMarkCompleted_AreExactlyOnce" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Coverage.md
@@ -868,8 +842,8 @@ Expected:
 - every layer has a README row and an exact coverage link;
 - the README contract-reference list has exact production link text and the three RR
   specification links;
-- each RR test name appears in exactly one RR coverage file, with no stale or duplicate
-  rows;
+- each RR test file's coverage table exactly matches its own `[Test]` methods, with no
+  missing or stale rows (names may repeat across different layer files);
 - the server test file has exactly 32 `[Test]` methods;
 - the three CoreHelpers tests are present in CoreHelpers coverage, `CompletedWindow` is gone
   from the reliable server coverage, and the CoreHelpers README names
