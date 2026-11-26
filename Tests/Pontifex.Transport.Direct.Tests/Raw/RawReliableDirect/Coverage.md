@@ -6,7 +6,7 @@
 | Subject | Raw reliable Direct group |
 | Directory | `Tests/Pontifex.Transport.Direct.Tests/Raw/RawReliableDirect/` |
 | Inheritance parent | none |
-| Dependency | The carrier classes are internal; the suite relies on the Direct assembly's `InternalsVisibleTo` entry and on the shared loose `TestSupport/TestBuildContext.cs` and `TestSupport/ManualTimerFactory.cs`. |
+| Dependency | The carrier classes are internal; the suite relies on the Direct assembly's `InternalsVisibleTo` entry and on the shared loose `TestSupport/TestBuildContext.cs`. Handshake deadlines use the production `Pontifex.Utils.ManualTimerFactory`. |
 | Contract | [RawReliable](../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Specification.md), [Direct RawReliable](../../../../Transports/Pontifex.Transport.Direct/Raw/Reliable/Specification.md) |
 
 ## Covered
@@ -53,7 +53,7 @@
 
 | Requirement | Reason |
 | --- | --- |
-| Real-time handshake expiry | The suite injects the manual `ManualTimerFactory`; the system timer is never waited on. |
+| Real-time handshake expiry | The suite injects the production `Pontifex.Utils.ManualTimerFactory`; the system timer is never waited on. |
 | Pre-connect payload buffering, malformed frames, and unknown frame types | The abstract endpoint suites under `Tests/Pontifex.Tests/Endpoints/RawReliable` own those endpoint contracts. |
 | Reconnect after a stop or a rejection | The `RawReliable` contract treats both as terminal connection outcomes; reconnect is not part of this carrier. |
 | Cross-process, socket, and byte-wire behaviour | The Direct carrier is in-process and carries complete `UnionDataList` values. |

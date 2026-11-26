@@ -1,26 +1,36 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Pontifex.Raw.Reliable;
-using Pontifex.RR.Reliable;
+using System.Threading;
 
-namespace Pontifex.Tests.TestSupport
+namespace Pontifex.Utils
 {
     /// <summary>
-    /// Deterministic reliable timer factory for the materializing RR and Raw reliable carriers.
+    /// Deterministic <see cref="ITimerFactory"/> that never fires on its own.
     /// </summary>
     /// <remarks>
-    /// The factory never fires on its own. A test inspects <see cref="PendingCount"/> to prove that a
-    /// callback was scheduled before <c>onStopped</c>, then explicitly fires, suppresses, or disposes
-    /// every handle. The factory is shared loose test support because the helpers, abstract
-    /// transport, and Direct suites live in one test project.
+    /// <list type="bullet">
+    /// <item><description><b>Purpose</b>: a caller arms callbacks through the normal contract and then
+    /// explicitly fires, suppresses, or disposes each handle. It lets tests and deterministic harnesses
+    /// prove that work was scheduled before a lifecycle event without waiting on real time.</description></item>
+    /// <item><description><b>Infinite delay</b>: <see cref="Timeout.InfiniteTimeSpan"/> is
+    /// accepted and recorded like any other delay. The handle never fires on its own; an explicit
+    /// <see cref="ManualTimerHandle.TryFire"/> still runs the callback.</description></item>
+    /// <item><description><b>Retention</b>: every scheduled handle stays tracked until
+    /// <see cref="Clear"/> is called, so indices returned by <see cref="Handles"/> are stable for the
+    /// lifetime of the factory. A long-lived factory therefore grows without bound; call
+    /// <see cref="Clear"/> between scenarios.</description></item>
+    /// <item><description><b>Threading</b>: scheduling, firing, suppressing, and clearing are serialized by
+    /// one internal lock. A callback runs outside that lock, so it may schedule another timer or dispose
+    /// its own handle.</description></item>
+    /// </list>
     /// </remarks>
-    public sealed class ManualTimerFactory : IRRReliableTimerFactory, IRawReliableHandshakeTimerFactory
+    public sealed class ManualTimerFactory : ITimerFactory
     {
         private readonly object _locker = new object();
         private readonly List<ManualTimerHandle> _handles = new List<ManualTimerHandle>();
 
-        /// <summary>Gets the number of callbacks scheduled over the factory lifetime.</summary>
+        /// <summary>Gets the number of callbacks scheduled since the last <see cref="Clear"/>.</summary>
         public int ScheduledCount
         {
             get
@@ -45,7 +55,7 @@ namespace Pontifex.Tests.TestSupport
             }
         }
 
-        /// <summary>Gets a snapshot of every handle scheduled so far.</summary>
+        /// <summary>Gets a snapshot of every handle scheduled since the last <see cref="Clear"/>.</summary>
         public IReadOnlyList<ManualTimerHandle> Handles
         {
             get
@@ -65,7 +75,7 @@ namespace Pontifex.Tests.TestSupport
                 throw new ArgumentNullException(nameof(callback));
             }
 
-            if (delay < TimeSpan.Zero)
+            if (delay < TimeSpan.Zero && delay != Timeout.InfiniteTimeSpan)
             {
                 throw new ArgumentOutOfRangeException(nameof(delay));
             }
@@ -118,6 +128,27 @@ namespace Pontifex.Tests.TestSupport
                 handle.Suppress();
             }
         }
+
+        /// <summary>
+        /// Suppresses every pending handle and forgets all tracked handles.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ScheduledCount"/>, <see cref="PendingCount"/>, and <see cref="Handles"/> start fresh
+        /// after the call. A handle that the caller still references keeps its own state; it is simply no
+        /// longer tracked by the factory.
+        /// </remarks>
+        public void Clear()
+        {
+            lock (_locker)
+            {
+                foreach (ManualTimerHandle handle in _handles)
+                {
+                    handle.Suppress();
+                }
+
+                _handles.Clear();
+            }
+        }
     }
 
     /// <summary>
@@ -136,7 +167,7 @@ namespace Pontifex.Tests.TestSupport
             _callback = callback;
         }
 
-        /// <summary>Gets the requested delay.</summary>
+        /// <summary>Gets the requested delay, including <see cref="Timeout.InfiniteTimeSpan"/>.</summary>
         public TimeSpan Delay { get; }
 
         /// <summary>Gets whether the callback ran.</summary>
@@ -164,8 +195,8 @@ namespace Pontifex.Tests.TestSupport
         }
 
         /// <summary>
-        /// Runs the callback once. The callback runs outside the handle lock, so it may schedule
-        /// another timer or dispose this handle.
+        /// Runs the callback once. The callback runs outside the handle lock, so it may schedule another
+        /// timer or dispose this handle.
         /// </summary>
         /// <returns><see langword="true"/> when the callback ran.</returns>
         public bool TryFire()

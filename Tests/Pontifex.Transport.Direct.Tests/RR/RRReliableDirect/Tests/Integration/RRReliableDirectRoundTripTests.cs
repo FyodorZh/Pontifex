@@ -8,6 +8,7 @@ using Pontifex.RR.Reliable;
 using Pontifex.RR.Reliable.Direct;
 using Pontifex.Tests.RR.RRReliableDirect.Harness;
 using Pontifex.Tests.TestSupport;
+using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Tests.RR.RRReliableDirect;

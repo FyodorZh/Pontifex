@@ -58,18 +58,17 @@ Raw/RawReliableDirect/
 
 ## Harness
 
-There is no suite-local `Harness/` directory. The suite uses two shared, loose
-test-support types outside all suites:
+There is no suite-local `Harness/` directory. The suite uses one shared, loose
+test-support type outside all suites:
 
 - [`TestSupport/TestBuildContext.cs`](../../TestSupport/TestBuildContext.cs) is
   a hand-written `ITransportBuildContext` for the binding-parameter tests.
-- [`TestSupport/ManualTimerFactory.cs`](../../TestSupport/ManualTimerFactory.cs)
-  is the deterministic `IRawReliableHandshakeTimerFactory`; it lets the
-  handshake deadlines be fired explicitly instead of waiting on real time.
 
-They are shared loose support because the Direct suites live in one test
-project. There are no harness self-tests, so the `Direct.RawReliable.Harness`
-category is not used.
+It is shared loose support because the Direct suites live in one test project.
+Handshake deadlines use the production `Pontifex.Utils.ManualTimerFactory`, so a
+test can fire or suppress a deadline explicitly instead of waiting on real time.
+There are no harness self-tests, so the `Direct.RawReliable.Harness` category is
+not used.
 
 ## Coverage
 

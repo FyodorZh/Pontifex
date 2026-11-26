@@ -6,7 +6,7 @@
 | Subject | RR reliable Direct group |
 | Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableDirect/` |
 | Inheritance parent | none |
-| Dependency | The carrier classes are internal; the suite relies on the Direct assembly's `InternalsVisibleTo` entry and the shared loose `TestSupport/ManualTimerFactory.cs` and `TestSupport/TestBuildContext.cs`. |
+| Dependency | The carrier classes are internal; the suite relies on the Direct assembly's `InternalsVisibleTo` entry and the shared loose `TestSupport/TestBuildContext.cs`. Deadlines use the production `Pontifex.Utils.ManualTimerFactory`. |
 | Contract | [RRReliable](../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md), [Direct RRReliable](../../../../Transports/Pontifex.Transport.Direct/RR/Reliable/Specification.md) |
 
 ## Covered

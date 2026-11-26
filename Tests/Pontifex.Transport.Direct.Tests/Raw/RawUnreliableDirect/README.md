@@ -75,10 +75,8 @@ test-support types outside all suites:
   deterministically.
 
 They are shared loose support because the Direct suites live in one test
-project, following the pattern of
-[`TestSupport/ManualTimerFactory.cs`](../../TestSupport/ManualTimerFactory.cs).
-There are no harness self-tests, so the `Direct.RawUnreliable.Harness` category
-is not used.
+project. There are no harness self-tests, so the `Direct.RawUnreliable.Harness`
+category is not used.
 
 ## Coverage
 

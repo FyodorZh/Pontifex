@@ -1,23 +1,33 @@
 using System;
 using System.Threading;
 
-namespace Pontifex.RR.Reliable
+namespace Pontifex.Utils
 {
     /// <summary>
-    /// Production <see cref="IRRReliableTimerFactory"/> backed by a one-shot
+    /// Production <see cref="ITimerFactory"/> backed by a one-shot
     /// <see cref="System.Threading.Timer"/>.
     /// </summary>
     /// <remarks>
-    /// The factory is stateless. Every scheduled callback owns one timer, and disposing the returned
-    /// handle cancels it and releases the timer. A callback that has already started runs to
-    /// completion; its exception is swallowed because no logging seam is available at this level.
+    /// <list type="bullet">
+    /// <item><description><b>Stateless</b>: every scheduled callback owns one timer, and disposing the
+    /// returned handle cancels it and releases the timer.</description></item>
+    /// <item><description><b>Infinite delay</b>: <see cref="Timeout.InfiniteTimeSpan"/> returns a shared no-op
+    /// handle and creates no timer.</description></item>
+    /// <item><description><b>Exceptions</b>: a callback that has already started runs to completion; its
+    /// exception is swallowed because no logging seam is available at this level and an escaping
+    /// exception on the thread pool would terminate the process.</description></item>
+    /// </list>
     /// </remarks>
-    internal sealed class SystemRRReliableTimerFactory : IRRReliableTimerFactory
+    public sealed class SystemTimerFactory : ITimerFactory
     {
         /// <summary>
         /// The shared instance of the production factory.
         /// </summary>
-        public static readonly SystemRRReliableTimerFactory Instance = new SystemRRReliableTimerFactory();
+        public static readonly SystemTimerFactory Instance = new SystemTimerFactory();
+
+        private SystemTimerFactory()
+        {
+        }
 
         /// <inheritdoc/>
         public IDisposable Schedule(TimeSpan delay, Action callback)
@@ -27,12 +37,26 @@ namespace Pontifex.RR.Reliable
                 throw new ArgumentNullException(nameof(callback));
             }
 
+            if (delay == Timeout.InfiniteTimeSpan)
+            {
+                return NoOpHandle.Instance;
+            }
+
             if (delay < TimeSpan.Zero)
             {
                 throw new ArgumentOutOfRangeException(nameof(delay), "The delay must not be negative.");
             }
 
             return new ScheduledTimer(callback, delay);
+        }
+
+        private sealed class NoOpHandle : IDisposable
+        {
+            public static readonly NoOpHandle Instance = new NoOpHandle();
+
+            public void Dispose()
+            {
+            }
         }
 
         private sealed class ScheduledTimer : IDisposable
@@ -72,7 +96,7 @@ namespace Pontifex.RR.Reliable
                 catch (Exception)
                 {
                     // A TTL callback runs on the thread pool; an escaping exception would terminate
-                    // the process. The core callbacks log their own failures.
+                    // the process. Callers that need failure handling catch inside the callback.
                 }
                 finally
                 {

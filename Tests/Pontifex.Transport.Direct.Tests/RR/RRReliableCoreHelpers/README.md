@@ -13,25 +13,23 @@ server transports are built on them.
 
 **Test Suit.** The subject is one small, tightly coupled group of non-abstract
 types: `RRReliableFrame`, `RRReliableRequestState`, `RRReliableRequestTable`,
-`RRReliableServerSession`, and `SystemRRReliableTimerFactory`.
+and `RRReliableServerSession`.
 
 ## Root subject
 
 - `Pontifex.RR.Reliable.RRReliableFrame` and its header types;
 - `Pontifex.RR.Reliable.RRReliableRequestState`;
 - `Pontifex.RR.Reliable.RRReliableRequestTable`;
-- `Pontifex.RR.Reliable.RRReliableServerSession`;
-- `Pontifex.RR.Reliable.SystemRRReliableTimerFactory`.
+- `Pontifex.RR.Reliable.RRReliableServerSession`.
 
-The suite also pins the loose
-[`ManualTimerFactory`](../../TestSupport/ManualTimerFactory.cs) support it uses to
-drive every deterministic timer assertion.
+Deterministic timer assertions use the production
+`Pontifex.Utils.ManualTimerFactory`; its own contract is owned by the
+[`TimerFactory` suite](../../../Pontifex.Tests/TimerFactory/README.md).
 
 ## Contract references
 
 - [`RRReliable` specification](../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md)
   — sections 6.4, 6.6, 8, 10, and 15.
-- [`IRRReliableTimerFactory`](../../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTimerFactory.cs).
 - Production sources:
   [`Pontifex/Implementations/RR/Reliable/`](../../../../Pontifex/Implementations/RR/Reliable/).
 
@@ -55,11 +53,9 @@ RR/RRReliableCoreHelpers/
   Harness/
     RecordingReliableRequestHandler.cs
   Tests/
-    ManualTimerFactoryTests.cs
     RRReliableFrameTests.cs
     RRReliableRequestStateTests.cs
     RRReliableRequestTableTests.cs
-    SystemRRReliableTimerFactoryTests.cs
     Integration/
       RRReliableServerSessionTests.cs
 ```
@@ -78,9 +74,9 @@ RR/RRReliableCoreHelpers/
 There are no harness self-tests, so the `Direct.RRReliableCoreHelpers.Harness`
 category is not used.
 
-The suite also uses the loose
-[`ManualTimerFactory`](../../TestSupport/ManualTimerFactory.cs). It is loose test
-support, not a harness of this layer.
+The suite uses the production `Pontifex.Utils.ManualTimerFactory` to drive every
+deterministic timer assertion. It is production code, not harness or loose support of
+this layer.
 
 ## Coverage
 
@@ -119,8 +115,10 @@ New harness types belong in `Harness/`; groups must not contain harness.
 - The client and server transport behaviour: the abstract RR transport suite
   under `Tests/Pontifex.Tests/Transports/RR/Reliable` and its client and server
   layers own it.
+- The timer factory contract and its real-timer integration: the
+  [`TimerFactory` suite](../../../Pontifex.Tests/TimerFactory/README.md) owns it.
 - Real timer firing: the production factory is tested for synchronous
-  scheduling and disposal only; deterministic TTL tests use the manual factory.
+  scheduling and disposal only here; deterministic TTL tests use the manual factory.
 - The Direct carrier and binding: a later stage.
 - Payload serialization internals of `UnionDataList`.
 

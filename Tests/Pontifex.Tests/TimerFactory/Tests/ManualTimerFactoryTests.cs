@@ -1,10 +1,11 @@
 using System;
-using Pontifex.Tests.TestSupport;
+using System.Threading;
+using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableCoreHelpers;
+namespace Pontifex.Tests.TimerFactory;
 
 [TestFixture]
-[Category("Direct.RRReliableCoreHelpers")]
+[Category("TimerFactory")]
 public sealed class ManualTimerFactoryTests
 {
     [Test]
@@ -17,6 +18,22 @@ public sealed class ManualTimerFactoryTests
         Assert.That(factory.ScheduledCount, Is.EqualTo(1));
         Assert.That(factory.PendingCount, Is.EqualTo(1));
         Assert.That(((ManualTimerHandle)handle).Delay, Is.EqualTo(TimeSpan.FromSeconds(3)));
+    }
+
+    [Test]
+    public void Schedule_WithInfiniteDelay_RecordsAPendingHandleThatNeverFiresOnItsOwn()
+    {
+        var factory = new ManualTimerFactory();
+        int fired = 0;
+        factory.Schedule(Timeout.InfiniteTimeSpan, () => fired++);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(factory.ScheduledCount, Is.EqualTo(1));
+            Assert.That(factory.PendingCount, Is.EqualTo(1));
+            Assert.That(factory.Handles[0].Delay, Is.EqualTo(Timeout.InfiniteTimeSpan));
+            Assert.That(fired, Is.Zero);
+        });
     }
 
     [Test]
@@ -75,6 +92,36 @@ public sealed class ManualTimerFactoryTests
         Assert.That(factory.FireAll(), Is.EqualTo(2));
         Assert.That(fired, Is.EqualTo(2));
         Assert.That(factory.PendingCount, Is.Zero);
+    }
+
+    [Test]
+    public void Clear_SuppressesPendingHandlesAndResetsTheCounts()
+    {
+        var factory = new ManualTimerFactory();
+        int fired = 0;
+        factory.Schedule(TimeSpan.FromSeconds(1), () => fired++);
+        factory.Schedule(TimeSpan.FromSeconds(2), () => fired++);
+
+        factory.Clear();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(factory.ScheduledCount, Is.Zero);
+            Assert.That(factory.PendingCount, Is.Zero);
+            Assert.That(factory.Handles, Is.Empty);
+            Assert.That(factory.FireAll(), Is.Zero);
+            Assert.That(fired, Is.Zero);
+        });
+    }
+
+    [Test]
+    public void Clear_WhenNothingIsScheduled_IsSafe()
+    {
+        var factory = new ManualTimerFactory();
+
+        factory.Clear();
+
+        Assert.That(factory.ScheduledCount, Is.Zero);
     }
 
     [Test]

@@ -71,9 +71,9 @@ RR/RRReliableDirect/
 
 The binding tests use the shared loose
 [`TestSupport/TestBuildContext.cs`](../../TestSupport/TestBuildContext.cs)
-outside the suite. The deterministic timer is the shared loose
-[`ManualTimerFactory`](../../TestSupport/ManualTimerFactory.cs); both are
-shared because the Direct suites live in one test project.
+outside the suite. Handshake and TTL deadlines use the production
+`Pontifex.Utils.ManualTimerFactory`, shared because both test projects reference
+the Pontifex assembly.
 
 There are no harness self-tests, so the `Direct.RRReliable.Harness` category is
 not used.

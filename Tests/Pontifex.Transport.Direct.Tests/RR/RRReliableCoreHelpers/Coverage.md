@@ -7,7 +7,7 @@
 | Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/` |
 | Inheritance parent | none |
 | Dependency | The helpers are internal; the suite relies on the Pontifex assembly's `InternalsVisibleTo` entry. |
-| Contract | [RRReliable specification](../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md), [IRRReliableTimerFactory](../../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTimerFactory.cs) |
+| Contract | [RRReliable specification](../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md) |
 
 ## Covered
 
@@ -60,27 +60,16 @@
 | `CompletedWindow_IsPerSessionAndFullAfterEveryId` | Session window | The 65,536-bit window fills after every id and a fresh session starts empty | The transport rejects new ids only when its own session window is full. |
 | `ConcurrentMarkCompletedAndQueries_AreLockSafeAndExactlyOnce` | Session concurrency | Parallel mark/query calls are lock-safe and every marked id becomes completed | Runs in the `Tests/Integration/` group and carries `Direct.RRReliable.Integration`. |
 | `ConcurrentCloseAndMarkCompleted_AreExactlyOnce` | Session concurrency | A parallel close racing mark-completed calls is exception-free and leaves the session closed | Runs in the `Tests/Integration/` group and carries `Direct.RRReliable.Integration`. |
-| `Schedule_WithNullCallback_Throws` | Factory guard | A null callback throws | The factory never schedules a null action. |
-| `Schedule_WithNegativeDelay_Throws` | Factory guard | A negative delay throws | TTL delays are positive. |
-| `Schedule_WithALongDelay_DoesNotFireSynchronouslyAndDisposeCancelsIt` | Factory disposal | Scheduling is non-blocking and disposing the handle cancels it | Proves no real time is waited for; the fire path is deferred. |
-| `Dispose_IsIdempotent` | Factory disposal | Disposing a handle twice is safe | The core may dispose a timer more than once on racing closes. |
-| `Schedule_RecordsTheDelayAndCallback` | Manual timer support | Scheduling records one pending callback with its delay | Shared loose support; it lets a test assert that work was scheduled before `onStopped`. |
-| `Fire_RunsTheCallbackOnlyOnce` | Manual timer support | Firing runs the callback once and closes the handle | A second fire is a no-op. |
-| `Suppress_ClosesTheHandleWithoutRunningTheCallback` | Manual timer support | Suppression closes a handle without a callback | Models a cancelled TTL. |
-| `Dispose_ClosesTheHandleWithoutRunningTheCallback` | Manual timer support | Disposal closes a handle without a callback and is idempotent | Models a closed request. |
-| `FireAll_RunsEveryPendingCallback` | Manual timer support | Every pending handle fires and the pending count reaches zero | Used to drive several TTLs without ordering assumptions. |
-| `Schedule_WithNullCallback_Throws` (manual) | Manual timer support | The manual factory rejects a null callback | Mirrors the production contract. |
-| `Schedule_WithNegativeDelay_Throws` (manual) | Manual timer support | The manual factory rejects a negative delay | Mirrors the production contract. |
 
 ## Planned
 
 | Missing test | Owner layer |
 | --- | --- |
 | Client and server transport use of the state, table, and timer | The abstract RR transport suite under `Tests/Pontifex.Tests/Transports/RR/Reliable`, client and server layers. |
-| Real timer fire and callback delivery | Root — deferred by design; the manual factory drives every deterministic TTL test. |
+| Timer factory contract and real-timer delivery | The `TimerFactory` suite under `Tests/Pontifex.Tests/TimerFactory/`. |
 
 ## Deferred By Design
 
 | Requirement | Reason |
 | --- | --- |
-| Firing the production timer with real time | The suite is deterministic and does not wait; firing is exercised through the manual factory in the transport layers. |
+| Firing the production timer with real time | Out of scope here; the `TimerFactory` suite covers it in the `TimerFactory.Integration` category, and this suite stays deterministic. |

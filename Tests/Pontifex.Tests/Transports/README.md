@@ -86,7 +86,7 @@ Coverage gaps are recorded in the owning layer's `Coverage.md`.
 - [IRRReliableTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTransport.cs)
 - [RRReliableClientTransport.cs](../../../Pontifex/Implementations/RR/Reliable/RRReliableClientTransport.cs)
 - [RRReliableServerTransport.cs](../../../Pontifex/Implementations/RR/Reliable/RRReliableServerTransport.cs)
-- [IRRReliableTimerFactory.cs](../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTimerFactory.cs)
+- [ITimerFactory.cs](../../../Pontifex/Utils/TimerFactory/ITimerFactory.cs)
 - [RRUnreliableTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableTransport.cs)
 - [IRRUnreliableTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/IRRUnreliableTransport.cs)
 - [RRUnreliableClientTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableClientTransport.cs)
@@ -214,7 +214,6 @@ Transports/
     │   ├── Coverage.md
     │   ├── RRReliableTransportTests.cs
     │   ├── Harness/
-    │   │   ├── ManualTimerFactory.cs
     │   │   ├── ScriptedReliableCarrier.cs
     │   │   └── TestRRReliableTransport.cs
     │   ├── Generic/                                 RRReliableTransport<THandler> layer
@@ -292,10 +291,9 @@ drivers.
   `TestRawUnreliableServerEndpoint` sessions from the `Endpoints` suite and reuses the same recording
   handler and log consumer.
 - `RR/Harness/` holds `TestRRTransport`, the concrete double for the shared RR lifecycle base.
-- `RR/Reliable/Harness/` holds `TestRRReliableTransport`, the deterministic
-  `ScriptedReliableCarrier` shared by the client and server layers, and the copied
-  `ManualTimerFactory`. It is the nearest common ancestor of the two sibling layers, so neither
-  sibling references the other's harness.
+- `RR/Reliable/Harness/` holds `TestRRReliableTransport` and the deterministic
+  `ScriptedReliableCarrier` shared by the client and server layers. It is the nearest common
+  ancestor of the two sibling layers, so neither sibling references the other's harness.
 - `RR/Reliable/Generic/Harness/` holds `TestRRReliableTransportGeneric` and its empty handler.
 - `RR/Reliable/Client/Harness/` holds `TestReliableClientTransport`, its recording client handler,
   and the plain non-`RRRequestHandler` handler used by the type-check test.
@@ -681,8 +679,8 @@ covered by the `RRTransport` layer and are not repeated.
 - **Type**: the transport reports `TransportType.RRReliable`.
 - **Overhead**: `FrameOverheadBytes` is `RRReliableFrame.MaxOverheadBytes`, so the ceiling is the
   message limit plus that constant plus one.
-- **Timer injection**: a constructor-supplied `IRRReliableTimerFactory` becomes the base's timer
-  seam; a null argument falls back to the system timer.
+- **Timer injection**: a constructor-supplied `Pontifex.Utils.ITimerFactory` becomes the base's
+  timer seam; a null argument falls back to `SystemTimerFactory.Instance`.
 
 ### `RRReliableTransport<THandler>` contract matrix
 
@@ -955,8 +953,9 @@ never use reflection. Only these are asserted:
   and handles, can answer, finish, reject, block, or throw, and tracks the maximum active count.
 - `ScriptedReliableCarrier` records and queues reliable frames in both directions, exposes optional
   per-direction send overrides, and releases every undelivered frame.
-- The `ManualTimerFactory` copy in `RR/Reliable/Harness/` is deterministic loose support: it never
-  fires on its own, and a test explicitly fires, suppresses, or disposes each handle.
+- The production `Pontifex.Utils.ManualTimerFactory` is deterministic support shared with the
+  `TimerFactory` suite and the Direct suites: it never fires on its own, and a test explicitly
+  fires, suppresses, or disposes each handle.
 - A trivial `RawReliableConformanceControl` is passed only because the production constructor
   requires one. It is never armed, inspected, or asserted.
 

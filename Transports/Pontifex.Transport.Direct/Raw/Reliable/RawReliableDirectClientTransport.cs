@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
+using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Raw.Reliable.Direct
@@ -31,7 +32,7 @@ namespace Pontifex.Raw.Reliable.Direct
         private readonly string _handshakeName;
         private readonly int _handshakeMaxByteSize;
         private readonly TimeSpan _handshakeTimeout;
-        private readonly IRawReliableHandshakeTimerFactory _timerFactory;
+        private readonly ITimerFactory _timerFactory;
 
         public override int MessageMaxByteSize => _messageMaxByteSize;
 
@@ -77,7 +78,7 @@ namespace Pontifex.Raw.Reliable.Direct
             string handshakeName,
             int handshakeMaxByteSize,
             TimeSpan handshakeTimeout,
-            IRawReliableHandshakeTimerFactory? timerFactory)
+            ITimerFactory? timerFactory)
             : base(RawReliableDirectInfo.TransportName, logger, memory)
         {
             if (handshakeTimeout != Timeout.InfiniteTimeSpan && handshakeTimeout <= TimeSpan.Zero)
@@ -86,7 +87,7 @@ namespace Pontifex.Raw.Reliable.Direct
             }
 
             _handshakeTimeout = handshakeTimeout;
-            _timerFactory = timerFactory ?? SystemRawReliableHandshakeTimerFactory.Instance;
+            _timerFactory = timerFactory ?? SystemTimerFactory.Instance;
 
             if (serverName == null)
             {

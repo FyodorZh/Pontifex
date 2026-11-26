@@ -46,7 +46,7 @@ namespace Pontifex.RR.Reliable
         /// <param name="dispatchCapacity">The number of frames the serialized dispatch queue and
         /// its pre-start pending list may hold.</param>
         protected RRReliableServerTransport(string typeName, TimeSpan responseTtl, ILogger logger,
-            IMemoryRental memory, IRRReliableTimerFactory? timerFactory = null,
+            IMemoryRental memory, ITimerFactory? timerFactory = null,
             int dispatchCapacity = 1024)
             : this(typeName, responseTtl, logger, memory, timerFactory, dispatchCapacity,
                 (capacity, name, handler, disposer) =>
@@ -64,7 +64,7 @@ namespace Pontifex.RR.Reliable
         /// </list>
         /// </remarks>
         internal RRReliableServerTransport(string typeName, TimeSpan responseTtl, ILogger logger,
-            IMemoryRental memory, IRRReliableTimerFactory? timerFactory, int dispatchCapacity,
+            IMemoryRental memory, ITimerFactory? timerFactory, int dispatchCapacity,
             Func<int, string, Action<DispatchItem>, Action<DispatchItem>,
                 ISerializedCallbackQueue<DispatchItem>> dispatchQueueFactory)
             : base(typeName, logger, memory, timerFactory)
