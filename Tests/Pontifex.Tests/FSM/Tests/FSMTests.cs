@@ -1,5 +1,9 @@
-namespace Pontifex.Utils.FSM;
+using Pontifex.Utils.FSM;
 
+namespace Pontifex.Tests.StateMachine;
+
+[TestFixture]
+[Category("FSM")]
 public sealed class FSMTests
 {
     private static FSM<int, int> CreateFsm(StateChangedReaction<int>? onStateChanged = null)

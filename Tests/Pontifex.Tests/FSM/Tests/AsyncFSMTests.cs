@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using Pontifex.Utils.FSM;
 
-namespace Pontifex.Utils.FSM;
+namespace Pontifex.Tests.StateMachine;
 
+[TestFixture]
+[Category("FSM")]
 public sealed class AsyncFSMTests
 {
     private static (FSM<int, int> core, AsyncFSM<int> fsm) CreatePair(StateChangedReaction<int>? onStateChanged = null)
