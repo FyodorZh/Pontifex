@@ -1,11 +1,12 @@
 using System;
 using Pontifex.RR.Reliable;
-using Pontifex.Tests.RR.RRReliableTransport.Harness;
 
-namespace Pontifex.Tests.RR.RRReliableTransport;
+namespace Pontifex.Tests.Transports;
 
 [TestFixture]
-[Category("Direct.RRReliableTransport")]
+[Category("Transports")]
+[Category("Transports.RR")]
+[Category("Transports.RR.Reliable")]
 public sealed class RRReliableTransportGenericTests
 {
     [Test]

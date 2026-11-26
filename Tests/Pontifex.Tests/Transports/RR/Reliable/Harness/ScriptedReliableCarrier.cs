@@ -4,7 +4,7 @@ using Pontifex.Endpoints;
 using Pontifex.RR.Reliable;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableTransport.Harness;
+namespace Pontifex.Tests.Transports;
 
 /// <summary>
 /// One sent reliable frame recorded by <see cref="ScriptedReliableCarrier"/>.

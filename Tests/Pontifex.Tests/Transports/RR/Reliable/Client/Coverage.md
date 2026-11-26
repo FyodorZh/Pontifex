@@ -4,10 +4,10 @@
 | --- | --- |
 | Layer | `RRReliableClientTransport` |
 | Subject | `Pontifex.RR.Reliable.RRReliableClientTransport` |
-| Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Client/` |
+| Directory | `Tests/Pontifex.Tests/Transports/RR/Reliable/Client` |
 | Inheritance parent | `Pontifex.RR.Reliable.RRReliableTransport` |
-| Dependency | The transport and the frame codec are internal or protected; the suite relies on the Direct test assembly's `InternalsVisibleTo` entry. |
-| Contract | [RRReliable specification](../../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md), [shared RR specification](../../../../../Pontifex/Abstractions/Transports/RR/Specification.md) |
+| Dependency | — |
+| Contract | [RRReliableClientTransport.cs](../../../../../../Pontifex/Implementations/RR/Reliable/RRReliableClientTransport.cs), [RRReliable specification](../../../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md), [shared RR specification](../../../../../../Pontifex/Abstractions/Transports/RR/Specification.md) |
 
 ## Covered
 
@@ -42,16 +42,17 @@
 | `Request_WithNullPayload_ReturnsInvalidMessage` | Section 9 message validity | A null request returns `InvalidMessage` and is not consumed | Null has no buffer. |
 | `ThrowingClientHandler_IsIsolatedAndTheTerminalStillArrives` | Section 11 exception isolation | A throwing `Response` callback does not stop the transport or hide the terminal | The handler still receives `Finish`. |
 | `ConcurrentResponsesForDifferentRequests_AreDeliveredSafely` | Section 11 concurrency | Two requests can receive responses from different threads | Table and per-request locks guard the state. |
+| `Request_WhenTheTimerFactoryThrows_ReturnsErrorAndUnbindsTheHandler` | Section 6.5 / section 9 timer failure | A throwing timer factory fails the request, removes the pending entry, and leaves the handler unbound with no callback | The request was already accepted, so the failure is reported as `Error` rather than a callback. |
 
 ## Planned
 
 | Missing test | Owner layer |
 | --- | --- |
-| None. The Direct carrier round trip belongs to the Direct suite of the later stage. | — |
+| None. The Direct carrier round trip belongs to the Direct suite. | — |
 
-## Deferred By Design
+## Deferred by design
 
-| Requirement | Reason |
+| Gap | Reason |
 | --- | --- |
 | Real timer firing | The suite is deterministic; the manual factory fires the request TTL explicitly. |
-| A live carrier round trip | The client layer uses the scripted carrier; the Direct carrier and binding are out of this stage. |
+| A live carrier round trip | The client layer uses the scripted carrier; the Direct carrier and binding belong to the Direct suite. |

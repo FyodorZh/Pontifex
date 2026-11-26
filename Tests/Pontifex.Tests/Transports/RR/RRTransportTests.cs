@@ -1,38 +1,19 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.RR.Reliable;
 using Pontifex.StopReasons;
-using Pontifex.Tests.RR.RRReliableTransport.Harness;
-using Pontifex.Tests.RR.TestSupport;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableTransport;
+namespace Pontifex.Tests.Transports;
 
 [TestFixture]
-[Category("Direct.RRReliableTransport")]
-public sealed class RRReliableTransportTests
+[Category("Transports")]
+[Category("Transports.RR")]
+public sealed class RRTransportTests
 {
-    [Test]
-    public void Type_IsRRReliable()
-    {
-        var transport = new TestRRReliableTransport();
-
-        Assert.That(transport.Type, Is.EqualTo(TransportType.RRReliable));
-    }
-
-    [Test]
-    public void FrameMaxByteSize_IsTheMessageLimitPlusTheLargestHeaderAndOne()
-    {
-        var transport = new TestRRReliableTransport(100);
-
-        Assert.That(transport.ExposedFrameMaxByteSize,
-            Is.EqualTo(100 + RRReliableFrame.MaxOverheadBytes + 1));
-    }
-
     [Test]
     public void Start_IsOneTimeAndCallsTheCarrierOnce()
     {
-        var transport = new TestRRReliableTransport();
+        var transport = new TestRRTransport();
         int stopped = 0;
 
         Assert.That(transport.Start(_ => stopped++), Is.True);
@@ -44,7 +25,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void Stop_BeforeStart_DoesNotClearOrStopTheCarrier()
     {
-        var transport = new TestRRReliableTransport();
+        var transport = new TestRRTransport();
         int stopped = 0;
 
         Assert.That(transport.Stop(), Is.True);
@@ -56,10 +37,15 @@ public sealed class RRReliableTransportTests
     [Test]
     public void Stop_StopsTheCarrierWithTheSuppliedReasonAfterClearingPending()
     {
-        var transport = new TestRRReliableTransport();
+        var transport = new TestRRTransport();
         var reason = new TextFail("test", "stopped");
         StopReason? seenDuringStop = null;
-        transport.OnClearPending = () => seenDuringStop = reason;
+        int carrierCallsDuringClear = -1;
+        transport.OnClearPending = () =>
+        {
+            seenDuringStop = reason;
+            carrierCallsDuringClear = transport.StopCarrierCalls;
+        };
 
         Assert.That(transport.Start(_ => { }), Is.True);
         Assert.That(transport.Stop(reason), Is.True);
@@ -68,34 +54,30 @@ public sealed class RRReliableTransportTests
         Assert.That(transport.StopCarrierCalls, Is.EqualTo(1));
         Assert.That(transport.LastStopReason, Is.SameAs(reason));
         Assert.That(seenDuringStop, Is.SameAs(reason));
+        Assert.That(carrierCallsDuringClear, Is.Zero,
+            "the carrier must not stop before the pending state is cleared");
     }
 
     [Test]
-    public void Stop_SchedulesTerminalWorkBeforeOnStoppedBegins()
+    public void Stop_ClearsPendingBeforeTheUserOnStoppedCallback()
     {
-        var factory = new ManualTimerFactory();
-        var transport = new TestRRReliableTransport(timerFactory: factory);
-        transport.OnClearPending = () => factory.Schedule(TimeSpan.FromSeconds(1), () => { });
-        bool sawScheduledWork = false;
-        int stopped = 0;
+        var transport = new TestRRTransport();
+        bool clearRan = false;
+        bool sawClear = false;
+        transport.OnClearPending = () => clearRan = true;
 
-        Assert.That(transport.Start(_ =>
-        {
-            stopped++;
-            sawScheduledWork = factory.PendingCount > 0;
-        }), Is.True);
+        Assert.That(transport.Start(_ => sawClear = clearRan), Is.True);
 
         Assert.That(transport.Stop(), Is.True);
 
-        Assert.That(stopped, Is.EqualTo(1));
-        Assert.That(sawScheduledWork, Is.True);
-        Assert.That(factory.PendingCount, Is.EqualTo(1));
+        Assert.That(clearRan, Is.True);
+        Assert.That(sawClear, Is.True, "clearing must happen before the user stop callback");
     }
 
     [Test]
     public void Start_WhenTheCarrierReturnsFalse_InvalidatesWithoutOnStopped()
     {
-        var transport = new TestRRReliableTransport { StartCarrierResult = false };
+        var transport = new TestRRTransport { StartCarrierResult = false };
         int stopped = 0;
 
         Assert.That(transport.Start(_ => stopped++), Is.False);
@@ -108,7 +90,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void Start_WhenTheCarrierThrows_AbortsWithoutOnStopped()
     {
-        var transport = new TestRRReliableTransport { StartCarrierThrows = true };
+        var transport = new TestRRTransport { StartCarrierThrows = true };
         int stopped = 0;
 
         Assert.That(transport.Start(_ => stopped++), Is.False);
@@ -121,7 +103,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void ValidatePayload_WhenNotStarted_ReleasesAndReturnsTheSelectedResult()
     {
-        var transport = new TestRRReliableTransport();
+        var transport = new TestRRTransport();
         UnionDataList payload = Payload(1);
 
         Assert.That(transport.Validate(payload, SendResult.NotConnected, out SendResult failure),
@@ -133,7 +115,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void ValidatePayload_WhenNotStartedWithNull_ReturnsTheStateResult()
     {
-        var transport = new TestRRReliableTransport();
+        var transport = new TestRRTransport();
 
         Assert.That(transport.Validate(null!, SendResult.Error, out SendResult failure), Is.False);
         Assert.That(failure, Is.EqualTo(SendResult.Error),
@@ -143,7 +125,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void ValidatePayload_WhenNotStartedWithOversizedPayload_ReturnsTheStateResultAndReleases()
     {
-        var transport = new TestRRReliableTransport(10);
+        var transport = new TestRRTransport(10);
         UnionDataList payload = Payload(1, 2, 3);
 
         Assert.That(transport.Validate(payload, SendResult.NotConnected, out SendResult failure),
@@ -157,7 +139,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void ValidatePayload_WhenStartedWithNull_ReturnsInvalidMessage()
     {
-        var transport = new TestRRReliableTransport(64);
+        var transport = new TestRRTransport(64);
         Assert.That(transport.Start(_ => { }), Is.True);
 
         Assert.That(transport.Validate(null!, SendResult.Error, out SendResult failure), Is.False);
@@ -167,7 +149,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void ValidatePayload_WhenStartedAndWithinTheLimit_AcceptsIt()
     {
-        var transport = new TestRRReliableTransport(64);
+        var transport = new TestRRTransport(64);
         Assert.That(transport.Start(_ => { }), Is.True);
         UnionDataList payload = Payload(1);
 
@@ -186,7 +168,7 @@ public sealed class RRReliableTransportTests
     [Test]
     public void ValidatePayload_AboveTheLimit_ReturnsMessageTooBigAndReleases()
     {
-        var transport = new TestRRReliableTransport(10);
+        var transport = new TestRRTransport(10);
         Assert.That(transport.Start(_ => { }), Is.True);
         UnionDataList payload = Payload(1, 2, 3);
 
@@ -196,12 +178,33 @@ public sealed class RRReliableTransportTests
     }
 
     [Test]
+    public void ValidatePayload_WhenSerializationThrows_ReturnsInvalidMessageAndReleases()
+    {
+        var transport = new TestRRTransport(64);
+        Assert.That(transport.Start(_ => { }), Is.True);
+        UnionDataList payload = Payload();
+        payload.PutLast(default(UnionData));
+
+        Assert.That(transport.Validate(payload, SendResult.Error, out SendResult failure), Is.False);
+        Assert.That(failure, Is.EqualTo(SendResult.InvalidMessage));
+        Assert.That(payload.IsAlive, Is.False);
+    }
+
+    [Test]
     public void NextServerRequestId_StartsAtOneAndIncrements()
     {
-        var transport = new TestRRReliableTransport();
+        var transport = new TestRRTransport();
 
         Assert.That(transport.NextRequestId(), Is.EqualTo(1));
         Assert.That(transport.NextRequestId(), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void FrameMaxByteSize_IsTheMessageLimitPlusTheOverheadAndOne()
+    {
+        var transport = new TestRRTransport(100, frameOverheadBytes: 7);
+
+        Assert.That(transport.ExposedFrameMaxByteSize, Is.EqualTo(100 + 7 + 1));
     }
 
     private static UnionDataList Payload(params int[] values)

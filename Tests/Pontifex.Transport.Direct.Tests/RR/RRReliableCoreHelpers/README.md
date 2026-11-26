@@ -12,14 +12,15 @@ server transports are built on them.
 ## Suite type
 
 **Test Suit.** The subject is one small, tightly coupled group of non-abstract
-types: `RRReliableFrame`, `RRReliableRequestState`, `RRReliableRequestTable`, and
-`SystemRRReliableTimerFactory`.
+types: `RRReliableFrame`, `RRReliableRequestState`, `RRReliableRequestTable`,
+`RRReliableServerSession`, and `SystemRRReliableTimerFactory`.
 
 ## Root subject
 
 - `Pontifex.RR.Reliable.RRReliableFrame` and its header types;
 - `Pontifex.RR.Reliable.RRReliableRequestState`;
 - `Pontifex.RR.Reliable.RRReliableRequestTable`;
+- `Pontifex.RR.Reliable.RRReliableServerSession`;
 - `Pontifex.RR.Reliable.SystemRRReliableTimerFactory`.
 
 The suite also pins the loose
@@ -59,7 +60,15 @@ RR/RRReliableCoreHelpers/
     RRReliableRequestStateTests.cs
     RRReliableRequestTableTests.cs
     SystemRRReliableTimerFactoryTests.cs
+    Integration/
+      RRReliableServerSessionTests.cs
 ```
+
+## Groups
+
+| Group | Directory |
+| --- | --- |
+| Integration | `Tests/Integration/` |
 
 ## Harness
 
@@ -70,8 +79,8 @@ There are no harness self-tests, so the `Direct.RRReliableCoreHelpers.Harness`
 category is not used.
 
 The suite also uses the loose
-[`ManualTimerFactory`](../TestSupport/ManualTimerFactory.cs) shared with the
-abstract transport suite. It is loose test support, not a harness of this layer.
+[`ManualTimerFactory`](../TestSupport/ManualTimerFactory.cs). It is loose test
+support, not a harness of this layer.
 
 ## Coverage
 
@@ -80,10 +89,14 @@ Coverage is recorded in [`Coverage.md`](Coverage.md).
 ## Categories and commands
 
 - Suite root category: `Direct.RRReliableCoreHelpers`.
+- Additional filtering category: `Direct.RRReliable.Integration` for the parallel
+  `RRReliableServerSession` stress methods in `Tests/Integration/`.
 
 ```bash
 dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
   --filter "TestCategory=Direct.RRReliableCoreHelpers"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.RRReliable.Integration"
 ```
 
 ## Adding tests
@@ -95,15 +108,17 @@ fixture named `<Subject>Tests`, carries
 `Coverage.md` in the same change.
 
 A Test Suit has exactly one root layer. Do not add a nested layer; a different
-subject needs a separate suite. This suite has no groups: every test file sits
-directly in `Tests/`.
+subject needs a separate suite. Test files sit directly in `Tests/`, except the
+parallel `RRReliableServerSession` stress tests, which live in the
+`Tests/Integration/` group and carry `Direct.RRReliable.Integration`.
 
 New harness types belong in `Harness/`; groups must not contain harness.
 
 ## Out of scope
 
-- The client and server transport behaviour: the `RRReliableTransport` abstract
-  suite and its client and server layers own it.
+- The client and server transport behaviour: the abstract RR transport suite
+  under `Tests/Pontifex.Tests/Transports/RR/Reliable` and its client and server
+  layers own it.
 - Real timer firing: the production factory is tested for synchronous
   scheduling and disposal only; deterministic TTL tests use the manual factory.
 - The Direct carrier and binding: a later stage.

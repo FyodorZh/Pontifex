@@ -1,12 +1,13 @@
-# RRReliableTransport&lt;THandler&gt; Coverage
+# RRReliableTransportGeneric Coverage
 
 | Field | Value |
 | --- | --- |
 | Layer | `RRReliableTransportGeneric` |
 | Subject | `Pontifex.RR.Reliable.RRReliableTransport<THandler>` |
-| Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport/Generic/` |
+| Directory | `Tests/Pontifex.Tests/Transports/RR/Reliable/Generic` |
 | Inheritance parent | `Pontifex.RR.Reliable.RRReliableTransport` |
-| Contract | [RRReliable specification](../../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md), [shared RR specification](../../../../../Pontifex/Abstractions/Transports/RR/Specification.md) |
+| Dependency | — |
+| Contract | [RRReliableTransport.cs](../../../../../../Pontifex/Implementations/RR/Reliable/RRReliableTransport.cs), [RRReliable specification](../../../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md), [shared RR specification](../../../../../../Pontifex/Abstractions/Transports/RR/Specification.md) |
 
 ## Covered
 
@@ -27,9 +28,9 @@
 | --- | --- |
 | None. The server layer exists and owns the server behaviour. | — |
 
-## Deferred By Design
+## Deferred by design
 
-| Requirement | Reason |
+| Gap | Reason |
 | --- | --- |
 | Carrier registration during `Init` | `Init` must not start carrier activity; the concrete carrier registers in `StartCarrier`. |
 | Handler callbacks during the initial-start window | The generic layer only exposes the gate; callback scheduling belongs to the client and server layers. |

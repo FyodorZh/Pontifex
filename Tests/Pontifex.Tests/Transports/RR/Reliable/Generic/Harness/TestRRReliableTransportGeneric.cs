@@ -3,7 +3,7 @@ using Pontifex.RR.Reliable;
 using Pontifex.StopReasons;
 using Scriba;
 
-namespace Pontifex.Tests.RR.RRReliableTransport.Harness;
+namespace Pontifex.Tests.Transports;
 
 /// <summary>
 /// Empty handler used by the generic layer.

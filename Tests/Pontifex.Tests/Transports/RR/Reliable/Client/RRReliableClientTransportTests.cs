@@ -7,17 +7,15 @@ using Pontifex.Endpoints;
 using Pontifex.RR;
 using Pontifex.RR.Reliable;
 using Pontifex.StopReasons;
-using Pontifex.Tests.RR.RRReliableTransport.Client.Harness;
-using Pontifex.Tests.RR.RRReliableTransport.Harness;
-using Pontifex.Tests.RR.TestSupport;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableTransport;
+namespace Pontifex.Tests.Transports;
 
 [TestFixture]
-[Category("Direct.Integration")]
-[Category("Direct.RRReliableTransport")]
-[Category("Direct.RRReliableTransport.Client")]
+[Category("Transports")]
+[Category("Transports.RR")]
+[Category("Transports.RR.Reliable")]
+[Category("Transports.RR.Reliable.Client")]
 public sealed class RRReliableClientTransportTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
@@ -291,6 +289,7 @@ public sealed class RRReliableClientTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void TerminalKeepsTheHandlerBoundUntilTheFinishCallbackReturns()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -353,6 +352,7 @@ public sealed class RRReliableClientTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void CancelOutsideACallback_DeliversOneCanceledAndSuppressesLateResponses()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -392,6 +392,7 @@ public sealed class RRReliableClientTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void Stop_SchedulesOneFailedPerPendingRequestBeforeOnStoppedAndDeliversAfter()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -584,6 +585,7 @@ public sealed class RRReliableClientTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void ConcurrentResponsesForDifferentRequests_AreDeliveredSafely()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -667,26 +669,5 @@ public sealed class RRReliableClientTransportTests
         UnionDataList frame = MemoryRental.Shared.CollectablePool.Acquire<UnionDataList>();
         RRReliableFrame.EncodeFinish(frame, id, completion);
         return frame;
-    }
-}
-
-/// <summary>
-/// A handler that implements the interface without deriving from <see cref="RRRequestHandler"/>.
-/// </summary>
-internal sealed class PlainReliableClientHandler : IRRReliableRequestHandler
-{
-    public ushort? RequestId => null;
-
-    public void Cancel()
-    {
-    }
-
-    public void Response(UnionDataList response)
-    {
-        response.Release();
-    }
-
-    public void Finish(RRReliableCompletionType type)
-    {
     }
 }

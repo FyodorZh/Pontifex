@@ -5,17 +5,15 @@ using System.Threading.Tasks;
 using Actuarius.Memory;
 using Pontifex.Endpoints;
 using Pontifex.RR.Reliable;
-using Pontifex.Tests.RR.RRReliableTransport.Harness;
-using Pontifex.Tests.RR.RRReliableTransport.Server.Harness;
-using Pontifex.Tests.RR.TestSupport;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableTransport;
+namespace Pontifex.Tests.Transports;
 
 [TestFixture]
-[Category("Direct.Integration")]
-[Category("Direct.RRReliableTransport")]
-[Category("Direct.RRReliableTransport.Server")]
+[Category("Transports")]
+[Category("Transports.RR")]
+[Category("Transports.RR.Reliable")]
+[Category("Transports.RR.Reliable.Server")]
 public sealed class RRReliableServerTransportTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
@@ -35,6 +33,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void ResponseAndFinish_ProduceOrderedFramesWithServerIdsFromOne()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -68,6 +67,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void ResponseOrdinal_IsCommittedOnlyAfterOk()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -95,6 +95,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void ResponseHandle_MatrixOfFinishRejectAndClosedCalls()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -120,6 +121,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void Finish_WhenTheSendFails_LeavesTheHandleRetryable()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -144,6 +146,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void Reject_WhenTheSendFails_LeavesTheHandleRetryable()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -168,6 +171,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void Reject_AfterTheResponseTtlClosedTheHandle_ReturnsError()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -190,6 +194,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void Reject_ClosesTheHandleAndRepeatedRejectReturnsOk()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -212,6 +217,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void Cancel_ClosesTheLiveHandleAndSuppressesLaterResponses()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -231,6 +237,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void CancelOfAQueuedRequest_PreventsPresentation()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -254,6 +261,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void ResponseTtlWhileQueued_SendsFailedAndNeverPresents()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -287,6 +295,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void FullDispatchQueue_ReleasesTheOverflowingRequest()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -315,6 +324,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void DuplicateRequest_IsSuppressedLiveAndAfterEveryTerminalCause()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -348,6 +358,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void TwoClientsWithTheSameClientLocalId_DoNotSuppressEachOther()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -365,22 +376,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
-    public void CompletedWindow_IsPerSessionAndFullAfterEveryId()
-    {
-        var session = new RRReliableServerSession();
-
-        for (int id = 0; id <= ushort.MaxValue; id++)
-        {
-            session.MarkCompleted((ushort)id, null);
-        }
-
-        Assert.That(session.IsFull, Is.True);
-        Assert.That(session.IsCompleted(0), Is.True);
-        Assert.That(session.IsCompleted(ushort.MaxValue), Is.True);
-        Assert.That(new RRReliableServerSession().IsFull, Is.False);
-    }
-
-    [Test]
+    [Category("Transports.Concurrency")]
     public void OnRequested_IsSerializedAcrossRequests()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -404,6 +400,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void ThrowingHandler_RejectsTheUndecidedHandle()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -421,6 +418,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void RequestBeforeOnStarted_IsHeldUntilTheReadyGateOpens()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -439,6 +437,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void FullPendingListBeforeStart_ReleasesTheOverflowingFrame()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -463,6 +462,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void StopDispatch_ReleasesARequestStillQueued()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -482,6 +482,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void OnSessionClosed_ClosesOnlyThatSession()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -507,6 +508,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void BlockedResponse_WithConcurrentStop_DoesNotHang()
     {
         using var carrier = new ScriptedReliableCarrier();
@@ -538,6 +540,7 @@ public sealed class RRReliableServerTransportTests
     }
 
     [Test]
+    [Category("Transports.Concurrency")]
     public void TwoThreadsOnOneHandle_ProduceOneTerminalResult()
     {
         using var carrier = new ScriptedReliableCarrier();

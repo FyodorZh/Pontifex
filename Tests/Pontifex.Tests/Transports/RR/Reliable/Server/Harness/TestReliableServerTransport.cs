@@ -4,11 +4,10 @@ using System.Threading;
 using Actuarius.Memory;
 using Pontifex.RR.Reliable;
 using Pontifex.StopReasons;
-using Pontifex.Tests.RR.RRReliableTransport.Harness;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.RR.RRReliableTransport.Server.Harness;
+namespace Pontifex.Tests.Transports;
 
 /// <summary>
 /// Concrete carrier-free reliable RR server used by the server layer.

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Layer | Root |
-| Subject | RR reliable core helper group |
+| Subject | RR reliable core helper group including `RRReliableServerSession` |
 | Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/` |
 | Inheritance parent | none |
 | Dependency | The helpers are internal; the suite relies on the Pontifex assembly's `InternalsVisibleTo` entry. |
@@ -57,6 +57,9 @@
 | `Clear_InvokesEveryEntryAndEmptiesTheTable` | Stop clearing | Clear visits every entry and empties the table | The callback runs while the table is locked, matching the unreliable table. |
 | `TakeAll_RemovesEveryEntryOutsideTheTableLock` | Stop clearing | TakeAll removes every entry and returns them for processing outside the table lock | The client clears provisional entries without nesting a state transition under the table lock. |
 | `ConcurrentAccess_AddsEveryEntryAndReadsThemSafely` | Lock protection | Parallel adds and reads see a consistent table | No entry is lost or observed with a foreign state. |
+| `CompletedWindow_IsPerSessionAndFullAfterEveryId` | Session window | The 65,536-bit window fills after every id and a fresh session starts empty | The transport rejects new ids only when its own session window is full. |
+| `ConcurrentMarkCompletedAndQueries_AreLockSafeAndExactlyOnce` | Session concurrency | Parallel mark/query calls are lock-safe and every marked id becomes completed | Runs in the `Tests/Integration/` group and carries `Direct.RRReliable.Integration`. |
+| `ConcurrentCloseAndMarkCompleted_AreExactlyOnce` | Session concurrency | A parallel close racing mark-completed calls is exception-free and leaves the session closed | Runs in the `Tests/Integration/` group and carries `Direct.RRReliable.Integration`. |
 | `Schedule_WithNullCallback_Throws` | Factory guard | A null callback throws | The factory never schedules a null action. |
 | `Schedule_WithNegativeDelay_Throws` | Factory guard | A negative delay throws | TTL delays are positive. |
 | `Schedule_WithALongDelay_DoesNotFireSynchronouslyAndDisposeCancelsIt` | Factory disposal | Scheduling is non-blocking and disposing the handle cancels it | Proves no real time is waited for; the fire path is deferred. |
@@ -73,7 +76,7 @@
 
 | Missing test | Owner layer |
 | --- | --- |
-| Client and server transport use of the state, table, and timer | `RRReliableTransport` suite, client and server layers. |
+| Client and server transport use of the state, table, and timer | The abstract RR transport suite under `Tests/Pontifex.Tests/Transports/RR/Reliable`, client and server layers. |
 | Real timer fire and callback delivery | Root — deferred by design; the manual factory drives every deterministic TTL test. |
 
 ## Deferred By Design
@@ -81,4 +84,3 @@
 | Requirement | Reason |
 | --- | --- |
 | Firing the production timer with real time | The suite is deterministic and does not wait; firing is exercised through the manual factory in the transport layers. |
-| `UnionDataList.GetDataSize` failure path | A live `UnionDataList` cannot be made to throw through its public contract; the guard is defensive. |

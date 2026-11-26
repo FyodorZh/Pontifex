@@ -1,27 +1,32 @@
 using System;
 using Actuarius.Memory;
-using Pontifex.RR.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.RR.RRReliableTransport.Harness;
+namespace Pontifex.Tests.Transports;
 
 /// <summary>
-/// Concrete carrier-free <see cref="RRReliableTransport"/> used by the root layer.
+/// Concrete carrier-free <see cref="Pontifex.RR.RRTransport"/> used by the shared RR layer.
 /// </summary>
-internal sealed class TestRRReliableTransport : Pontifex.RR.Reliable.RRReliableTransport
+internal sealed class TestRRTransport : Pontifex.RR.RRTransport
 {
-    public TestRRReliableTransport(int messageMaxByteSize = 26,
-        IRRReliableTimerFactory? timerFactory = null)
-        : base("test-rr-reliable", new Logger([]), MemoryRental.Shared, timerFactory)
+    public TestRRTransport(int messageMaxByteSize = 26, int frameOverheadBytes = 0)
+        : base("test-rr", new Logger([]), MemoryRental.Shared)
     {
         MessageLimit = messageMaxByteSize;
+        FrameOverhead = frameOverheadBytes;
     }
 
     public int MessageLimit { get; }
 
     public override int MessageMaxByteSize => MessageLimit;
+
+    public override TransportType Type => TransportType.RRReliable;
+
+    protected override int FrameOverheadBytes => FrameOverhead;
+
+    public int FrameOverhead { get; }
 
     public bool StartCarrierResult { get; set; } = true;
 
