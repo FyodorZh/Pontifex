@@ -1062,8 +1062,10 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
   to the conformance suite in `Tests/Pontifex.Transports.Tests`.
 - Concrete carrier transports in the `Transports` projects (Direct, TCP, UDP), including the
   concrete RR carriers.
-- The Direct RR suites (`RRReliableDirect`, `RRUnreliableDirect`, and `RRReliableCoreHelpers`):
-  they cover the frame codec, request tables, session maps, and the in-process carrier round trip.
+- The Direct RR suites (`RRReliableDirect` and `RRUnreliableDirect`): they cover the in-process
+  carrier round trip.
+- The RR reliable helpers suite (`RRReliableHelpers`) under `Tests/Pontifex.Tests/Misc/`: it covers
+  the frame codec, request state, and request tables.
 - Arming the conformance subsystem (gates and failure injection). The unreliable root layer only
   asserts that the control object is published and that the debug-reliability lookup is preferred.
 - The public `Stopped` event on transports, where it is raised independently of the handler

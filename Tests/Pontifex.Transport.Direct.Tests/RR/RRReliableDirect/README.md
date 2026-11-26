@@ -117,7 +117,7 @@ New harness types belong in `Harness/`; groups must not contain harness.
 ## Out of scope
 
 - The reusable reliable RR core, including the shared `Pontifex.RR.RRTransport`
-  base: it is covered by `RRReliableCoreHelpers` and the abstract transport
+  base: it is covered by `RRReliableHelpers` and the abstract transport
   suite under `Tests/Pontifex.Tests/Transports/RR`.
 - The shared Direct RR carriers as standalone subjects: the RRUnreliable Direct
   suite pins their carrier-level behaviour.

@@ -1,4 +1,4 @@
-# RRReliable Core Helpers Test Suit
+# RRReliable Helpers Test Suit
 
 ## Rationale
 
@@ -37,7 +37,7 @@ Deterministic timer assertions use the production
 
 | Layer | Subject | Directory | Inheritance parent | Coverage |
 | --- | --- | --- | --- | --- |
-| Root | RR reliable core helper group | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/` | none | [`Coverage.md`](Coverage.md) |
+| Root | RR reliable helper group | `Tests/Pontifex.Tests/Misc/RRReliableHelpers/` | none | [`Coverage.md`](Coverage.md) |
 
 ## Naming convention
 
@@ -47,7 +47,7 @@ example `ResponseFrame_RoundTripsUIntMaxOrdinal`.
 ## Directory layout
 
 ```text
-RR/RRReliableCoreHelpers/
+Misc/RRReliableHelpers/
   README.md
   Coverage.md
   Harness/
@@ -71,7 +71,7 @@ RR/RRReliableCoreHelpers/
 - `RecordingReliableRequestHandler.cs` is a `RRRequestHandler` that records
   response values and completion types and releases every delivered payload.
 
-There are no harness self-tests, so the `Direct.RRReliableCoreHelpers.Harness`
+There are no harness self-tests, so the `RRReliableHelpers.Harness`
 category is not used.
 
 The suite uses the production `Pontifex.Utils.ManualTimerFactory` to drive every
@@ -84,29 +84,29 @@ Coverage is recorded in [`Coverage.md`](Coverage.md).
 
 ## Categories and commands
 
-- Suite root category: `Direct.RRReliableCoreHelpers`.
-- Additional filtering category: `Direct.RRReliable.Integration` for the parallel
+- Suite root category: `RRReliableHelpers`.
+- Additional filtering category: `RRReliableHelpers.Integration` for the parallel
   `RRReliableServerSession` stress methods in `Tests/Integration/`.
 
 ```bash
-dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
-  --filter "TestCategory=Direct.RRReliableCoreHelpers"
-dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
-  --filter "TestCategory=Direct.RRReliable.Integration"
+dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj \
+  --filter "TestCategory=RRReliableHelpers"
+dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj \
+  --filter "TestCategory=RRReliableHelpers.Integration"
 ```
 
 ## Adding tests
 
 Add a new `*Tests.cs` file under `Tests/`. Each file contains exactly one
 fixture named `<Subject>Tests`, carries
-`[Category("Direct.RRReliableCoreHelpers")]`, and uses the
-`Pontifex.Tests.RR.RRReliableCoreHelpers` namespace. Record the test in
+`[Category("RRReliableHelpers")]`, and uses the
+`Pontifex.Tests.Misc.RRReliableHelpers` namespace. Record the test in
 `Coverage.md` in the same change.
 
 A Test Suit has exactly one root layer. Do not add a nested layer; a different
 subject needs a separate suite. Test files sit directly in `Tests/`, except the
 parallel `RRReliableServerSession` stress tests, which live in the
-`Tests/Integration/` group and carry `Direct.RRReliable.Integration`.
+`Tests/Integration/` group and carry `RRReliableHelpers.Integration`.
 
 New harness types belong in `Harness/`; groups must not contain harness.
 
@@ -119,7 +119,7 @@ New harness types belong in `Harness/`; groups must not contain harness.
   [`TimerFactory` suite](../../../Pontifex.Tests/TimerFactory/README.md) owns it.
 - Real timer firing: the production factory is tested for synchronous
   scheduling and disposal only here; deterministic TTL tests use the manual factory.
-- The Direct carrier and binding: a later stage.
+- The Direct and Net carriers and bindings.
 - Payload serialization internals of `UnionDataList`.
 
 ## Rules
@@ -128,16 +128,14 @@ This suite follows [`Tests/RULES.md`](../../../RULES.md).
 
 ## Default and integration runs
 
-The default Direct run excludes every fixture that carries an `*.Integration`
-category. The integration run executes only those fixtures.
+The default run of `Tests/Pontifex.Tests` excludes every fixture that carries an
+`*.Integration` category. The integration run executes only those fixtures.
 
 ```bash
-dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj \
   --filter "TestCategory!~Integration"
-dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj \
   --filter "TestCategory~Integration"
 ```
 
-Integration categories in use: `Direct.ChannelManager.Integration`,
-`Direct.RawReliable.Integration`, `Direct.RawUnreliable.Integration`,
-`Direct.RRReliable.Integration`, and `Direct.RRUnreliable.Integration`.
+The suite's integration category is `RRReliableHelpers.Integration`.

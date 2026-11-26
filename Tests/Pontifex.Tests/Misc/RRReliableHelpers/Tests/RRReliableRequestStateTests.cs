@@ -2,14 +2,13 @@ using System;
 using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.RR.Reliable;
-using Pontifex.Tests.RR.RRReliableCoreHelpers.Harness;
-using Pontifex.Tests.TestSupport;
+using Pontifex.Tests.Misc.RRReliableHelpers.Harness;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableCoreHelpers;
+namespace Pontifex.Tests.Misc.RRReliableHelpers;
 
 [TestFixture]
-[Category("Direct.RRReliableCoreHelpers")]
+[Category("RRReliableHelpers")]
 public sealed class RRReliableRequestStateTests
 {
     [Test]

@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using Pontifex.RR.Reliable;
 
-namespace Pontifex.Tests.RR.RRReliableCoreHelpers;
+namespace Pontifex.Tests.Misc.RRReliableHelpers;
 
 /// <summary>
 /// Fixture for the reliable server session maps. The two stress methods live in the
@@ -11,11 +11,11 @@ namespace Pontifex.Tests.RR.RRReliableCoreHelpers;
 /// integration category; the window test is deterministic.
 /// </summary>
 [TestFixture]
-[Category("Direct.RRReliableCoreHelpers")]
+[Category("RRReliableHelpers")]
 public sealed class RRReliableServerSessionTests
 {
     [Test]
-    [Category("Direct.RRReliable.Integration")]
+    [Category("RRReliableHelpers.Integration")]
     public void ConcurrentMarkCompletedAndQueries_AreLockSafeAndExactlyOnce()
     {
         var session = new RRReliableServerSession();
@@ -44,7 +44,7 @@ public sealed class RRReliableServerSessionTests
     }
 
     [Test]
-    [Category("Direct.RRReliable.Integration")]
+    [Category("RRReliableHelpers.Integration")]
     public void ConcurrentCloseAndMarkCompleted_AreExactlyOnce()
     {
         var session = new RRReliableServerSession();

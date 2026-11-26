@@ -39,7 +39,7 @@
 
 | Missing test | Owner layer |
 | --- | --- |
-| The transport-level full-window `Reject` path | The session window is unit-tested in `RRReliableCoreHelpers`; a transport-level path would need 65,536 presented requests. The branch is a direct `Reject` on a new handle and is covered by the response-handle matrix and the session window test. |
+| The transport-level full-window `Reject` path | The session window is unit-tested in `RRReliableHelpers`; a transport-level path would need 65,536 presented requests. The branch is a direct `Reject` on a new handle and is covered by the response-handle matrix and the session window test. |
 | None for the remaining server behaviour. | — |
 
 ## Deferred by design
@@ -48,4 +48,4 @@
 | --- | --- |
 | Real response-TTL timing | The suite is deterministic; the manual factory fires the timer explicitly. |
 | A live carrier round trip | The server layer uses the scripted carrier; the Direct carrier and binding belong to the Direct suite. |
-| A full 65,536-request transport run | Exhausting the window through the transport would present 65,536 requests; the window itself is exercised directly in `RRReliableCoreHelpers`. |
+| A full 65,536-request transport run | Exhausting the window through the transport would present 65,536 requests; the window itself is exercised directly in `RRReliableHelpers`. |

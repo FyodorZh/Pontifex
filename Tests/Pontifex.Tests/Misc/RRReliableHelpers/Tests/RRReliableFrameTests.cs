@@ -3,10 +3,10 @@ using Actuarius.Memory;
 using Pontifex.RR.Reliable;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableCoreHelpers;
+namespace Pontifex.Tests.Misc.RRReliableHelpers;
 
 [TestFixture]
-[Category("Direct.RRReliableCoreHelpers")]
+[Category("RRReliableHelpers")]
 public sealed class RRReliableFrameTests
 {
     [Test]

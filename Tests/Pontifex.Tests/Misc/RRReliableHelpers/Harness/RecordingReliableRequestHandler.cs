@@ -3,7 +3,7 @@ using Pontifex.RR;
 using Pontifex.RR.Reliable;
 using Pontifex.Utils;
 
-namespace Pontifex.Tests.RR.RRReliableCoreHelpers.Harness;
+namespace Pontifex.Tests.Misc.RRReliableHelpers.Harness;
 
 /// <summary>
 /// Client request handler that records the callbacks it receives and releases every payload.

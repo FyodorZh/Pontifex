@@ -1,12 +1,12 @@
-# RRReliable Core Helpers Coverage
+# RRReliable Helpers Coverage
 
 | Field | Value |
 | --- | --- |
 | Layer | Root |
-| Subject | RR reliable core helper group including `RRReliableServerSession` |
-| Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/` |
+| Subject | RR reliable helper group including `RRReliableServerSession` |
+| Directory | `Tests/Pontifex.Tests/Misc/RRReliableHelpers/` |
 | Inheritance parent | none |
-| Dependency | The helpers are internal; the suite relies on the Pontifex assembly's `InternalsVisibleTo` entry. |
+| Dependency | The helpers are internal; the suite relies on the Pontifex assembly's `InternalsVisibleTo` entry for `Pontifex.Tests`. |
 | Contract | [RRReliable specification](../../../../Pontifex/Abstractions/Transports/RR/Reliable/Specification.md) |
 
 ## Covered
