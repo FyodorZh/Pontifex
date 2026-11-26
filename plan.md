@@ -434,6 +434,10 @@ Expected:
   selected tree;
 - the five test files exist with exactly 15 / 3 / 8 / 30 / 21 `[Test]` methods in
   RRTransport, Reliable root, Generic, Client, and Server respectively;
+- manual stage review: every test name enumerated in action 4 exists in the named file, no
+  test was renamed or substituted, the 13 shared names are absent from the reliable root
+  file, and the moved bodies differ from the originals only by namespace/category/coverage
+  changes (inspect `git diff -M`); the only intended body rewrite is the stop-ordering test;
 - manual README review: the selected tree includes `RRTransport` and the RRReliable
   branch; the layer table has rows for RRTransport and the four RRReliable layers with the
   correct subject, directory, inheritance parent, and coverage link; the directory and
@@ -553,9 +557,10 @@ Expected: build succeeds; `Transports` = **Passed: 323** (312 + 2 base + 9 gener
 `Transports.RR.Unreliable` = **Passed: 11**; both coverage files exist and each test has
 exactly one coverage row; the base file has 2 `[Test]` methods and the generic file has 9;
 the client/server planned rows are present in their nearest ancestor coverage files and the
-four parent planned rows are gone; manual README review: layer-table rows for
-`RRUnreliableTransport` and `RRUnreliableTransportGeneric`, directory/harness layout,
-contract summary, categories, and filter commands are present.
+four parent planned rows are gone; manual stage review: all 2 base and 9 generic test names
+enumerated in action 4 exist in the named files with no substitutions; manual README review:
+layer-table rows for `RRUnreliableTransport` and `RRUnreliableTransportGeneric`,
+directory/harness layout, contract summary, categories, and filter commands are present.
 
 **Definition of done**
 
@@ -640,12 +645,12 @@ deterministically through a concrete test double.
      callbacks is 1 and both message ids are delivered. Only a duplicate message id is
      dropped, and that is covered by `Response_WithDuplicateMessageId_IsDropped`. Category
      `Transports.Concurrency`;
-   - `Stop_FromInsideAResponseCallback_DoesNotDeadlock` — category
-     `Transports.Concurrency`;
+   - `Stop_FromInsideAResponseCallback_DoesNotDeadlock` — mark `[Timeout(5000)]` so a
+     deadlock fails instead of hanging the run; category `Transports.Concurrency`;
    - `Request_FromInsideAResponseCallback_IsAccepted` — use a second
      `RecordingUnreliableClientHandler` for the nested request, record the `SendResult`
-     inside the callback, and assert after `Receive` returns that it was `Ok`; category
-     `Transports.Concurrency`;
+     inside the callback, assert after `Receive` returns that it was `Ok`, and mark
+     `[Timeout(5000)]`; category `Transports.Concurrency`;
    - `Cancel_RemovesPendingRequestWithoutCallback`;
    - `Cancel_BeforeSend_RemovesPendingEntryAndDropsLaterResponse` — after the
      `BeforeSendForTests` hook cancels, `Request` still returns `Ok` because production does
@@ -701,9 +706,11 @@ PY
 Expected: build succeeds; `Transports` = **Passed: 358** (323 + 35 client tests);
 `Transports.Concurrency` = **Passed: 33** (30 + 3 client concurrency tests); the client
 Coverage file exists, the client test file has exactly 35 `[Test]` methods, and each test
-has exactly one coverage row; manual README review: the client layer row, directory/harness
-entries, contract matrix, category prose/count, and planned-row removal are present; no
-real timers, sockets, or sleeps are introduced.
+has exactly one coverage row; manual stage review: all 35 client test names enumerated in
+action 2 exist in the named file with no substitutions, and the two deadlock tests carry
+`[Timeout(5000)]`; manual README review: the client layer row, directory/harness entries,
+contract matrix, category prose/count, and planned-row removal are present; no real timers,
+sockets, or sleeps are introduced.
 
 **Definition of done**
 
@@ -725,8 +732,8 @@ from action 4.
 **Objective**
 
 The Transports suite covers the RRUnreliable server dispatch, response handle, message
-sequence, TTL, and stop contract; the RR branch documentation is complete and the full
-solution is green.
+sequence, TTL, and stop contract; the RR branch documentation is complete and both affected
+test projects are green.
 
 **Inputs**
 
@@ -926,7 +933,7 @@ grep -qi "wraparound" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Cover
 grep -qi "generator" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 grep -qi "BufferOverflow" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 sed -n '/^## Deferred/,/^## /p' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/Coverage.md | grep -qi "carrier-owned"
-dotnet test Pontifex.sln
+# The two affected test projects are run above; do not gate on unrelated projects.
 ```
 
 Expected:
@@ -950,6 +957,8 @@ Expected:
 - each RR test file's coverage table exactly matches its own `[Test]` methods, with no
   missing or stale rows (names may repeat across different layer files);
 - the server test file has exactly 32 `[Test]` methods;
+- manual stage review: all 32 server test names enumerated in action 2 exist in the named
+  file with no substitutions;
 - manual README review: the selected tree shows the complete RR branch; all nine layer
   rows have correct subject/directory/parent/coverage; the directory and harness layouts,
   contract matrices, category prose/count (34), filter commands, and out-of-scope list are
