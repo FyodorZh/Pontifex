@@ -275,8 +275,10 @@ CoreHelpers suite.
     - re-base every moved Coverage file: update the layer/subject/directory, inheritance
       parent, dependency field, and every relative contract link for its new depth; use the
       exact identity rows `| Layer | \`<layer>\` |`, `| Subject | \`<type>\` |`,
-      `| Directory | \`<path without trailing slash>\` |`, and
-      `| Inheritance parent | \`<parent>\` |`; remove the stale
+      `| Directory | \`<path without trailing slash>\` |`,
+      `| Inheritance parent | \`<parent>\` |`, `| Dependency | <text> |`, and a
+      `| Contract | [<name>](<relative path>)... |` row with at least one resolving link;
+      remove the stale
       `RRTransport outside the selected tree` deferred row and reword the matching
       prose paragraph to say the base is now the `RRTransport` ancestor layer and the shared
       tests live in `Transports/RR/Coverage.md`;
@@ -347,7 +349,8 @@ import sys
 text = open('Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md',
             encoding='utf-8-sig').read()
 deferred = text.split('## Deferred by design', 1)[1].split('\n## ', 1)[0]
-if 'RRTransport' in deferred:
+if ('| An `RRTransport` layer |' in deferred or
+        'shared base is outside the selected tree' in deferred):
     print('stale RRTransport deferred row')
     sys.exit(1)
 PY
@@ -366,7 +369,7 @@ python3 - <<'PY'
 import os, re, sys
 base = 'Tests/Pontifex.Tests/Transports/RR'
 expected = {
- 'Coverage.md': ('RRTransport', 'Pontifex.RR.RRTransport', base, 'AnyTransport'),
+ 'Coverage.md': ('RRTransport', 'Pontifex.RR.RRTransport', base, 'Pontifex.AnyTransport'),
  'Reliable/Coverage.md': ('RRReliableTransport',
    'Pontifex.RR.Reliable.RRReliableTransport', f'{base}/Reliable',
    'Pontifex.RR.RRTransport'),
@@ -388,8 +391,18 @@ for rel, (layer, subject, directory, parent) in expected.items():
         if f'| {field} | `{value}` |' not in text:
             print(f'bad {field}: {path} expected {value}')
             sys.exit(1)
-    if 'Direct test assembly' in text:
+    if '| Dependency |' not in text:
+        print(f'missing Dependency row: {path}')
+        sys.exit(1)
+    if 'Direct assembly' in text or 'Direct test assembly' in text:
         print(f'stale dependency text: {path}')
+        sys.exit(1)
+    if '| Contract |' not in text:
+        print(f'missing Contract row: {path}')
+        sys.exit(1)
+    contract = text.split('| Contract |', 1)[1].split('\n', 1)[0]
+    if '](' not in contract:
+        print(f'Contract row has no link: {path}')
         sys.exit(1)
     for link in re.findall(r'\]\(([^)]+)\)', text):
         if link.startswith(('..', '.')):
@@ -576,8 +589,9 @@ RRTransport.
    Transports README:
    - add both layer rows (`RRUnreliableTransport` and
      `RRUnreliableTransportGeneric`);
-   - create both Coverage files with the exact headings `## Planned` and
-     `## Deferred by design`;
+   - create both Coverage files with the exact identity rows (Layer, Subject,
+     Directory without trailing slash, Inheritance parent, Dependency, Contract link) and
+     the headings `## Planned` and `## Deferred by design`;
    - remove all four RRUnreliable rows from the `Planned` table in
      `Transports/RR/Coverage.md`;
    - add `RRUnreliableClientTransport` to the `Transports/RR/Unreliable/Coverage.md`
@@ -663,9 +677,9 @@ deterministically through a concrete test double.
 
 **Actions**
 
-1. Create `Transports/RR/Unreliable/Client/Coverage.md` (with exact `## Planned` and
-   `## Deferred by design` headings), `RRUnreliableClientTransportTests.cs`, and `Harness/`
-   files:
+1. Create `Transports/RR/Unreliable/Client/Coverage.md` (with exact identity rows, the
+   `## Planned` and `## Deferred by design` headings), `RRUnreliableClientTransportTests.cs`,
+   and `Harness/` files:
    - `TestRRUnreliableClientTransport.cs` — concrete client with configurable `SendFrame`
      result/throw/capture, exposed `OnFrameReceived`, `PendingCountForTests`, and the three
      internal test hooks; construct it with a public `StringEndPoint` server route (or a
@@ -716,11 +730,12 @@ deterministically through a concrete test double.
    - `Response_WhenHandlerThrows_IsIsolatedAndStillCompletes`;
    - `Response_Callbacks_AreSerializedPerRequest` — mark `[Timeout(5000)]`; give the
      recording handler an active-callback counter. The first callback increments it, signals
-     entry, and waits on a release gate. Start a second thread delivering message id 1; wait
-     with bounded `SpinWait` until that thread reports `ThreadState.WaitSleepJoin` (blocked
-     on the production state lock) or the second callback count remains zero while the first
-     is active. Assert active callbacks == 1 and second callback not entered, then release
-     and join. Assert both ids were delivered in order and max active callbacks stayed 1.
+     entry, and waits on a release gate. Run the first `Receive` on worker A and the second
+     on worker B; the main thread waits with bounded `SpinWait` until worker B reports
+     `ThreadState.WaitSleepJoin` (blocked on the production state lock). Do not accept any
+     fallback condition; fail if the wait is not observed. Assert active callbacks == 1 and
+     second callback not entered, then release and join. Assert both ids were delivered in
+     order and max active callbacks stayed 1.
      Only a duplicate id is dropped, covered by
      `Response_WithDuplicateMessageId_IsDropped`. Category `Transports.Concurrency`;
    - `Stop_FromInsideAResponseCallback_DoesNotDeadlock` — mark `[Timeout(5000)]` so a
@@ -829,9 +844,9 @@ test projects are green.
 
 **Actions**
 
-1. Create `Transports/RR/Unreliable/Server/Coverage.md` (with exact `## Planned` and
-   `## Deferred by design` headings), `RRUnreliableServerTransportTests.cs`, and `Harness/`
-   files:
+1. Create `Transports/RR/Unreliable/Server/Coverage.md` (with exact identity rows, the
+   `## Planned` and `## Deferred by design` headings), `RRUnreliableServerTransportTests.cs`,
+   and `Harness/` files:
    - `TestRRUnreliableServerTransport.cs` — concrete server with configurable
      `SendFrame` result/throw/capture, exposed `OnFrameReceived`, a manual clock, a
      `StringEndPoint`-based source route helper, and a logger constructor parameter so the
@@ -889,11 +904,12 @@ test projects are green.
      duplicate presentation; this pins the absence of base-level suppression;
    - `OnFrameReceived_FromDifferentClients_HaveIndependentHandles`;
    - `Response_ConcurrentCallsProduceOneSequence` — mark `[Timeout(5000)]`; the test double
-     records active `SendFrame` calls and blocks the first send on a release gate. Start a
-     second thread calling `Response`; wait with bounded `SpinWait` until its
-     `ThreadState.WaitSleepJoin` is observed while the first send is still active. Assert
-     active sends == 1, release, join, and assert the two frames carry message ids 0 and 1
-     with no interleaving. Categorized `Transports.Concurrency`.
+     records active `SendFrame` calls and blocks the first send on a release gate. Run the
+     first `Response` on worker A and the second on worker B; the main thread starts both
+     and waits with bounded `SpinWait` until worker B reports `ThreadState.WaitSleepJoin`
+     while worker A is blocked in `SendFrame`. Assert active sends == 1, release A, join
+     both, and assert the two frames carry message ids 0 and 1 with no interleaving.
+     Categorized `Transports.Concurrency`.
 3. Update the layer Coverage.md, Transports README layer table/directory/harness,
    RRUnreliable contract matrix, categories, the `Transports.Concurrency` prose/count, and
    planned/deferred tables:
@@ -948,7 +964,7 @@ python3 - <<'PY'
 import os, re, sys
 base = 'Tests/Pontifex.Tests/Transports/RR'
 expected = {
- 'Coverage.md': ('RRTransport', 'Pontifex.RR.RRTransport', base, 'AnyTransport'),
+ 'Coverage.md': ('RRTransport', 'Pontifex.RR.RRTransport', base, 'Pontifex.AnyTransport'),
  'Reliable/Coverage.md': ('RRReliableTransport',
    'Pontifex.RR.Reliable.RRReliableTransport', f'{base}/Reliable',
    'Pontifex.RR.RRTransport'),
