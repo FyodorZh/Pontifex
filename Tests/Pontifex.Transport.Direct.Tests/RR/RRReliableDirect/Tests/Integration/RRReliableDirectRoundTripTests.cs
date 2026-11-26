@@ -7,7 +7,7 @@ using Pontifex.RR.Direct;
 using Pontifex.RR.Reliable;
 using Pontifex.RR.Reliable.Direct;
 using Pontifex.Tests.RR.RRReliableDirect.Harness;
-using Pontifex.Tests.RR.TestSupport;
+using Pontifex.Tests.TestSupport;
 using Scriba;
 
 namespace Pontifex.Tests.RR.RRReliableDirect;
@@ -17,8 +17,8 @@ namespace Pontifex.Tests.RR.RRReliableDirect;
 /// in-process RR reliable carrier.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
 [Category("Direct.RRReliable")]
+[Category("Direct.RRReliable.Integration")]
 public sealed class RRReliableDirectRoundTripTests
 {
     private static readonly ILogger Logger = new Logger([]);

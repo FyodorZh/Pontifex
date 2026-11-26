@@ -2,16 +2,17 @@ using System;
 using Actuarius.Memory;
 using Pontifex.Factory.Registration;
 using Pontifex.Raw.Reliable.Direct;
-using Pontifex.Tests.RR.RRReliableDirect.Harness;
+using Pontifex.Tests.TestSupport;
 using Scriba;
 
-namespace Pontifex.Tests.Raw.Reliable.RawReliable;
+namespace Pontifex.Tests.Raw.RawReliableDirect;
 
 /// <summary>
 /// Pins the Direct RawReliable binding parameters: the full handshake-maximum range, the message/buffer
 /// parameters, the positive handshake timeout, and the handshake-versus-message consistency check.
 /// </summary>
 [TestFixture]
+[Category("Direct.RawReliable")]
 public sealed class RawReliableDirectBindingParametersTests
 {
     private static readonly ILogger Logger = new Logger([]);

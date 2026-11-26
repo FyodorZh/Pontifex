@@ -8,14 +8,15 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
 /// Pins the inbound size limit of the in-process unreliable client endpoint: an oversized frame is released
 /// and logged without reaching the handler and without stopping the transport.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
+[Category("Direct.RawUnreliable")]
+[Category("Direct.RawUnreliable.Integration")]
 public sealed class RawUnreliableDirectInboundLimitTests
 {
     private static readonly ILogger Logger = new Logger([]);

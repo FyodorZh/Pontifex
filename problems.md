@@ -913,7 +913,7 @@ documentation defect, not a coverage failure.
 ### L-25 — Direct tests poll wall-clock time instead of using a scheduling seam
 
 **Where:** Many Direct test fixtures, for example
-`Tests/Pontifex.Transport.Direct.Tests/Raw/RawUnreliableDirectChannelOwnershipTests.cs`,
+`Tests/Pontifex.Transport.Direct.Tests/Raw/RawUnreliableDirect/Tests/Integration/RawUnreliableDirectChannelOwnershipTests.cs`,
 `RawUnreliableDirectInboundLimitTests.cs`, and the RR lifecycle/integration
 fixtures.
 

@@ -11,8 +11,8 @@ namespace Pontifex.Tests.Channels;
 /// replacement.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
 [Category("Direct.ChannelManager")]
+[Category("Direct.ChannelManager.Integration")]
 public sealed class ChannelTests
 {
     [Test]

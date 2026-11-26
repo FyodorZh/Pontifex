@@ -7,19 +7,20 @@ using Pontifex.Raw;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.StopReasons;
-using Pontifex.Tests.Raw.TestSupport;
+using Pontifex.Tests.TestSupport;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
 /// Pins the RawUnreliable Direct outbound admission: the declared 100-message commit window, the exact-once
 /// reservation release on every path, and the send-return barrier that defers peer callbacks.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
+[Category("Direct.RawUnreliable")]
+[Category("Direct.RawUnreliable.Integration")]
 public sealed class RawUnreliableDirectSendAdmissionTests
 {
     private static readonly ILogger Logger = new Logger([]);

@@ -51,16 +51,16 @@ RR/RRUnreliableDirect/
     ManualClock.cs
     RecordingHandlers.cs
     ScriptedDeliverySystem.cs
-    TestBuildContext.cs
     TestMessages.cs
     TrackingDeliverySystem.cs
   Tests/
     RRUnreliableDirectBindingTests.cs
-    RRUnreliableDirectCarrierTests.cs
-    RRUnreliableDirectLifecycleTests.cs
     RRUnreliableDirectRoundTripTests.cs
     Integration/
+      RRUnreliableDirectCarrierTests.cs
       RRUnreliableDirectIntegrationTests.cs
+      RRUnreliableDirectLifecycleTests.cs
+      RRUnreliableDirectStopRaceIntegrationTests.cs
 ```
 
 `Tests/Integration/` is a group, not a layer.
@@ -74,10 +74,12 @@ RR/RRUnreliableDirect/
   duplicate, and throw actions.
 - `RecordingHandlers.cs` supplies a recording request handler and a server
   handler with respond, reject, silent-accept, and blocking modes.
-- `TestBuildContext.cs` is a hand-written `ITransportBuildContext` for the
-  binding tests.
 - `TestMessages.cs` builds integer payloads and payloads of an exact serialized
   size.
+
+The binding tests use the shared loose
+[`TestSupport/TestBuildContext.cs`](../../TestSupport/TestBuildContext.cs)
+outside the suite.
 
 There are no harness self-tests, so the `Direct.RRUnreliable.Harness` category
 is not used.
@@ -144,6 +146,6 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
   --filter "TestCategory~Integration"
 ```
 
-Integration categories in use: `Direct.RRReliable.Integration`,
-`Direct.RRUnreliable.Integration`, `Direct.RawUnreliable.Integration`, and
-`Direct.Integration`.
+Integration categories in use: `Direct.ChannelManager.Integration`,
+`Direct.RawReliable.Integration`, `Direct.RawUnreliable.Integration`,
+`Direct.RRReliable.Integration`, and `Direct.RRUnreliable.Integration`.

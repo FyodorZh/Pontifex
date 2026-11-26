@@ -48,11 +48,12 @@ ChannelManager/
   Harness/
     TrackingDeliverySystem.cs
   Tests/
-    ChannelTests.cs
     ChannelManagerTests.cs
+    Integration/
+      ChannelTests.cs
 ```
 
-There are no groups and no nested layers.
+`Tests/Integration/` is a group, not a layer.
 
 ## Harness
 
@@ -67,11 +68,13 @@ Coverage is recorded per layer in [`Coverage.md`](Coverage.md).
 ## Categories and commands
 
 - Suite root category: `Direct.ChannelManager`.
-- Additional categories: none.
+- Additional category: `Direct.ChannelManager.Integration`.
 
 ```bash
 dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
-  --filter "TestCategory=Direct.ChannelManager"
+  --filter "TestCategory=Direct.ChannelManager&TestCategory!=Direct.ChannelManager.Integration"
+dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj \
+  --filter "TestCategory=Direct.ChannelManager.Integration"
 ```
 
 ## Adding tests
@@ -79,7 +82,9 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
 Add a new test file under `Tests/`. A new `*Tests.cs` file contains exactly one
 fixture named `<Subject>Tests`, carries `[Category("Direct.ChannelManager")]`,
 and uses the `Pontifex.Tests.Channels` namespace. Record the test in
-`Coverage.md` in the same change.
+`Coverage.md` in the same change. Add a test that needs real scheduling or
+bounded waits under `Tests/Integration/` and add the
+`Direct.ChannelManager.Integration` category as well.
 
 A Test Suit has exactly one root layer. Do not add a nested layer; if a test
 needs a different subject, create a separate suite.
@@ -90,7 +95,9 @@ tests. Dispose any detached channel in the test that detached it.
 
 ## Groups
 
-None.
+| Group | Directory |
+| --- | --- |
+| Integration | `Tests/Integration/` |
 
 ## Out of scope
 
@@ -115,6 +122,6 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
   --filter "TestCategory~Integration"
 ```
 
-Integration categories in use: `Direct.RRReliable.Integration`,
-`Direct.RRUnreliable.Integration`, `Direct.RawUnreliable.Integration`, and
-`Direct.Integration`.
+Integration categories in use: `Direct.ChannelManager.Integration`,
+`Direct.RawReliable.Integration`, `Direct.RawUnreliable.Integration`,
+`Direct.RRReliable.Integration`, and `Direct.RRUnreliable.Integration`.

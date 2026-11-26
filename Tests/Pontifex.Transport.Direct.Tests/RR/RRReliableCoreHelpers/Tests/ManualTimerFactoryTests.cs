@@ -1,5 +1,5 @@
 using System;
-using Pontifex.Tests.RR.TestSupport;
+using Pontifex.Tests.TestSupport;
 
 namespace Pontifex.Tests.RR.RRReliableCoreHelpers;
 

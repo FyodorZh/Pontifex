@@ -9,12 +9,12 @@ using Pontifex.Factory.Registration;
 using Pontifex.Raw.Unreliable;
 using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.StopReasons;
-using Pontifex.Tests.RR.RRUnreliableDirect.Harness;
+using Pontifex.Tests.TestSupport;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
 /// Pins the RawUnreliable Direct delivery-system ownership: construction only during start, exact-once release
@@ -22,7 +22,8 @@ namespace Pontifex.Tests.Raw;
 /// debug commit queue.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
+[Category("Direct.RawUnreliable")]
+[Category("Direct.RawUnreliable.Integration")]
 public sealed class RawUnreliableDirectOwnershipTests
 {
     private static readonly ILogger Logger = new Logger([]);

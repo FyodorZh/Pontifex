@@ -4,10 +4,10 @@ using System.Linq;
 using Pontifex.Raw.Reliable;
 using Pontifex.RR.Reliable;
 
-namespace Pontifex.Tests.RR.TestSupport
+namespace Pontifex.Tests.TestSupport
 {
     /// <summary>
-    /// Deterministic <see cref="IRRReliableTimerFactory"/> for the RR reliable suites.
+    /// Deterministic reliable timer factory for the materializing RR and Raw reliable carriers.
     /// </summary>
     /// <remarks>
     /// The factory never fires on its own. A test inspects <see cref="PendingCount"/> to prove that a

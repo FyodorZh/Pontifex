@@ -9,13 +9,14 @@ using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
 /// Pins the unreliable Direct client's delivery-system ownership: configured systems are released even when
 /// the endpoint never installed them on a channel.
 /// </summary>
 [TestFixture]
+[Category("Direct.RawUnreliable")]
 public sealed class RawUnreliableDirectDeliverySystemTests
 {
     private static readonly ILogger Logger = new Logger([]);

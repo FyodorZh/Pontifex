@@ -18,8 +18,8 @@ namespace Pontifex.Tests.RR.RRUnreliableDirect;
 /// accept-without-peer and live-session rules.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
 [Category("Direct.RRUnreliable")]
+[Category("Direct.RRUnreliable.Integration")]
 public sealed class RRUnreliableDirectCarrierTests
 {
     private static readonly ILogger Logger = new Logger([]);

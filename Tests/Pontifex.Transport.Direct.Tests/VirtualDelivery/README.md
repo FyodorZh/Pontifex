@@ -129,6 +129,6 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
   --filter "TestCategory~Integration"
 ```
 
-Integration categories in use: `Direct.RRReliable.Integration`,
-`Direct.RRUnreliable.Integration`, `Direct.RawUnreliable.Integration`, and
-`Direct.Integration`.
+Integration categories in use: `Direct.ChannelManager.Integration`,
+`Direct.RawReliable.Integration`, `Direct.RawUnreliable.Integration`,
+`Direct.RRReliable.Integration`, and `Direct.RRUnreliable.Integration`.

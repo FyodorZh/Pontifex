@@ -9,14 +9,15 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
 /// Pins the channel ownership of the in-process unreliable carrier: a channel that stops must leave no entry
 /// behind in the server registry.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
+[Category("Direct.RawUnreliable")]
+[Category("Direct.RawUnreliable.Integration")]
 public sealed class RawUnreliableDirectChannelOwnershipTests
 {
     private static readonly ILogger Logger = new Logger([]);

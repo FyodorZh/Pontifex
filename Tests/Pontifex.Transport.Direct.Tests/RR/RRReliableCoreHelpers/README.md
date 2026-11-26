@@ -24,7 +24,7 @@ types: `RRReliableFrame`, `RRReliableRequestState`, `RRReliableRequestTable`,
 - `Pontifex.RR.Reliable.SystemRRReliableTimerFactory`.
 
 The suite also pins the loose
-[`ManualTimerFactory`](../TestSupport/ManualTimerFactory.cs) support it uses to
+[`ManualTimerFactory`](../../TestSupport/ManualTimerFactory.cs) support it uses to
 drive every deterministic timer assertion.
 
 ## Contract references
@@ -79,7 +79,7 @@ There are no harness self-tests, so the `Direct.RRReliableCoreHelpers.Harness`
 category is not used.
 
 The suite also uses the loose
-[`ManualTimerFactory`](../TestSupport/ManualTimerFactory.cs). It is loose test
+[`ManualTimerFactory`](../../TestSupport/ManualTimerFactory.cs). It is loose test
 support, not a harness of this layer.
 
 ## Coverage
@@ -140,6 +140,6 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
   --filter "TestCategory~Integration"
 ```
 
-Integration categories in use: `Direct.RRReliable.Integration`,
-`Direct.RRUnreliable.Integration`, `Direct.RawUnreliable.Integration`, and
-`Direct.Integration`.
+Integration categories in use: `Direct.ChannelManager.Integration`,
+`Direct.RawReliable.Integration`, `Direct.RawUnreliable.Integration`,
+`Direct.RRReliable.Integration`, and `Direct.RRUnreliable.Integration`.

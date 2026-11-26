@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Actuarius.Memory;
 using Pontifex.RR.Reliable;
 using Pontifex.Tests.RR.RRReliableCoreHelpers.Harness;
-using Pontifex.Tests.RR.TestSupport;
+using Pontifex.Tests.TestSupport;
 using Pontifex.Utils;
 
 namespace Pontifex.Tests.RR.RRReliableCoreHelpers;

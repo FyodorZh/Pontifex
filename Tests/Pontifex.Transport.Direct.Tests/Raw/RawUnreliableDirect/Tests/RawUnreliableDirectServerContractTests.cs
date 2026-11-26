@@ -10,7 +10,7 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
 /// Pins the server-side RawUnreliable Direct contract: the supplied stop reason reaches an active handler, an
@@ -18,6 +18,7 @@ namespace Pontifex.Tests.Raw;
 /// carrier declines the endpoint.
 /// </summary>
 [TestFixture]
+[Category("Direct.RawUnreliable")]
 public sealed class RawUnreliableDirectServerContractTests
 {
     private static readonly ILogger Logger = new Logger([]);

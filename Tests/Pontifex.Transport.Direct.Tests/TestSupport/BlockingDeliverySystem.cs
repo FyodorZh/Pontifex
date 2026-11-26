@@ -3,7 +3,7 @@ using System.Threading;
 using Pontifex.Utils;
 using Pontifex.VirtualDelivery;
 
-namespace Pontifex.Tests.Raw.TestSupport;
+namespace Pontifex.Tests.TestSupport;
 
 /// <summary>
 /// Delivery system double that stalls the delivery worker at <see cref="Deliver"/> until

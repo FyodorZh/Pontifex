@@ -7,17 +7,19 @@ using Pontifex.Raw;
 using Pontifex.Raw.Reliable;
 using Pontifex.Raw.Reliable.Direct;
 using Pontifex.StopReasons;
+using Pontifex.Tests.TestSupport;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.Raw.Reliable.RawReliable;
+namespace Pontifex.Tests.Raw.RawReliableDirect;
 
 /// <summary>
 /// Focused behavioural tests for the in-process reliable Direct transport pair: the mandatory transport
 /// handshake, zero reject linger, and the ported Direct carrier lifecycle cases.
 /// </summary>
 [TestFixture]
-[Category("Direct.Integration")]
+[Category("Direct.RawReliable")]
+[Category("Direct.RawReliable.Integration")]
 public sealed class RawReliableDirectTransportTests
 {
     private const int MessageMaxByteSize = 1024 * 1024;
@@ -26,8 +28,8 @@ public sealed class RawReliableDirectTransportTests
     private static readonly ILogger Logger = new Logger([]);
 
     private readonly List<ITransport> _transports = new();
-    private readonly Pontifex.Tests.RR.TestSupport.ManualTimerFactory _clientHandshakeTimers = new();
-    private readonly Pontifex.Tests.RR.TestSupport.ManualTimerFactory _serverHandshakeTimers = new();
+    private readonly ManualTimerFactory _clientHandshakeTimers = new();
+    private readonly ManualTimerFactory _serverHandshakeTimers = new();
 
     [OneTimeTearDown]
     public void OneTimeTearDown()

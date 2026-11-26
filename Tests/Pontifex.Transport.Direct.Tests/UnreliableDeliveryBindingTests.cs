@@ -6,7 +6,7 @@ using Pontifex.Raw.Unreliable.Direct;
 using Pontifex.VirtualDelivery;
 using Pontifex.VirtualDelivery.Netem;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Direct;
 
 /// <summary>
 /// Pins the delivery-config parser defaults and the explicit rejection of unknown values.

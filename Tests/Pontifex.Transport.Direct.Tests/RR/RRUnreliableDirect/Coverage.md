@@ -6,7 +6,7 @@
 | Subject | RR unreliable Direct group |
 | Directory | `Tests/Pontifex.Transport.Direct.Tests/RR/RRUnreliableDirect/` |
 | Inheritance parent | none |
-| Dependency | The carrier classes are internal; the suite relies on the Direct assembly's `InternalsVisibleTo` entry. |
+| Dependency | The carrier classes are internal; the suite relies on the Direct assembly's `InternalsVisibleTo` entry and the shared loose `TestSupport/TestBuildContext.cs`. |
 | Contract | [RRUnreliable](../../../../Pontifex/Abstractions/Transports/RR/Unreliable/Specification.md), [Direct RRUnreliable](../../../../Transports/Pontifex.Transport.Direct/RR/Unreliable/Specification.md) |
 
 ## Covered

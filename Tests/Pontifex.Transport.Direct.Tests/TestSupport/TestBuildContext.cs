@@ -4,10 +4,11 @@ using Actuarius.Memory;
 using Pontifex.Factory.Registration;
 using Scriba;
 
-namespace Pontifex.Tests.RR.RRUnreliableDirect.Harness;
+namespace Pontifex.Tests.TestSupport;
 
 /// <summary>
-/// Hand-written build context for the binding tests. It exposes only the parameters a test sets.
+/// Shared hand-written build context for the Direct binding tests. It exposes only the parameters a
+/// test sets.
 /// </summary>
 internal sealed class TestBuildContext : ITransportBuildContext
 {

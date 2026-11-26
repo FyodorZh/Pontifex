@@ -3,14 +3,14 @@ using NUnit.Framework;
 using Pontifex.Raw.Unreliable.Direct;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
-/// Pins the budget constants a concrete unreliable Direct leaf wires into the transport limits hook.
+/// Pins the budget constants the unreliable Direct leaf wires into the transport limits hook.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The carrier constants live in the leaf's <c>*Info</c> class and are the single source of truth. This loose
+/// The carrier constants live in the leaf's <c>*Info</c> class and are the single source of truth. This
 /// test asserts the derived transport values, so a wrong queue capacity or a mismatched Info pair cannot
 /// escape. It does not start a transport.
 /// </para>
@@ -20,6 +20,8 @@ namespace Pontifex.Tests.Raw;
 /// is a test failure, not a calibration change.
 /// </para>
 /// </remarks>
+[TestFixture]
+[Category("Direct.RawUnreliable")]
 public sealed class RawUnreliableDirectBudgetWiringTests
 {
     [Test]

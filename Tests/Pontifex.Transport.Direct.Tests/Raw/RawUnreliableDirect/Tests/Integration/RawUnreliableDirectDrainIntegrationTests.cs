@@ -12,13 +12,14 @@ using Pontifex.Utils;
 using Pontifex.Utils.CheckPointGate;
 using Scriba;
 
-namespace Pontifex.Tests.Raw;
+namespace Pontifex.Tests.Raw.RawUnreliableDirect;
 
 /// <summary>
 /// Pins the mid-drain stop window of the unreliable endpoint: a stop latched while the startup drain is blocked
 /// at the pre-delivery gate must release every message that has not begun delivery.
 /// </summary>
 [TestFixture]
+[Category("Direct.RawUnreliable")]
 [Category("Direct.RawUnreliable.Integration")]
 public sealed class RawUnreliableDirectDrainIntegrationTests
 {
