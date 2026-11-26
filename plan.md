@@ -186,11 +186,11 @@ CoreHelpers suite.
      `TimerFactory` on `TestRRReliableTransport` and assert constructor injection. This is
      the third new test and becomes part of the reliable layer's delta.
    - Move `Stop_SchedulesTerminalWorkBeforeOnStoppedBegins` to `RRTransportTests.cs` as
-     `Stop_ClearsPendingBeforeTheUserOnStoppedCallback` and replace its timer-factory
-     dependency with a local `ClearPendingRequests` callback that records a bool inside the
-     callback and asserts it after `Stop` returns. The reliable client layer retains its
-     existing scheduling-order test; the server stop path closes handles synchronously. Do
-     not add another reliable-specific timer-factory test.
+     `Stop_ClearsPendingBeforeTheUserOnStoppedCallback`: the `ClearPendingRequests` override
+     sets `clearRan = true`; the user stop callback records `sawClear = clearRan`; after
+     `Stop` returns, assert `sawClear` is true. Do not assert inside either callback. The
+     reliable client layer retains its existing scheduling-order test; the server stop path
+     closes handles synchronously.
    - Strengthen the moved
      `Stop_StopsTheCarrierWithTheSuppliedReasonAfterClearingPending` test: record
      `StopCarrierCalls` inside the `ClearPendingRequests` callback into a captured field,
@@ -330,10 +330,13 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
 grep -rn 'Category("Direct' Tests/Pontifex.Tests/Transports
 git grep -n "Direct.RRReliableTransport" -- ':!plan.md'
 git grep -n "RRReliableTransport" -- Tests/Pontifex.Transport.Direct.Tests
+! grep -q "shared with the abstract transport suite" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/README.md
 grep -rn "class RRReliableServerSessionTests" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Tests
 ! grep -q "cannot be made to throw through its public contract" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Coverage.md
 ! grep -q "No missing layers: the whole selected inheritance tree is covered" Tests/Pontifex.Tests/Transports/Coverage.md
 ! grep -q "stays outside the selected tree" Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
+! grep -q "An \`RRTransport\` layer" Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
+! grep -q "shared base is outside the selected tree" Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs)" -eq 15
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/RRReliableTransportTests.cs
@@ -344,6 +347,33 @@ test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Client/RRReliableClientTrans
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Client/RRReliableClientTransportTests.cs)" -eq 30
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs)" -eq 21
+! grep -rn "Tests/Pontifex.Transport.Direct.Tests" Tests/Pontifex.Tests/Transports/RR --include=Coverage.md
+python3 - <<'PY'
+import os, re, sys
+base = 'Tests/Pontifex.Tests/Transports/RR'
+expected = {
+ 'Coverage.md': (base, 'AnyTransport'),
+ 'Reliable/Coverage.md': (f'{base}/Reliable', 'Pontifex.RR.RRTransport'),
+ 'Reliable/Generic/Coverage.md': (f'{base}/Reliable/Generic', 'Pontifex.RR.Reliable.RRReliableTransport'),
+ 'Reliable/Client/Coverage.md': (f'{base}/Reliable/Client', 'Pontifex.RR.Reliable.RRReliableTransport'),
+ 'Reliable/Server/Coverage.md': (f'{base}/Reliable/Server', 'Pontifex.RR.Reliable.RRReliableTransport'),
+}
+for rel, (directory, parent) in expected.items():
+    path = os.path.join(base, rel)
+    text = open(path, encoding='utf-8-sig').read()
+    if f'| Directory | `{directory}` |' not in text:
+        print(f'bad directory: {path}')
+        sys.exit(1)
+    if '| Inheritance parent |' not in text or parent not in text:
+        print(f'bad inheritance parent: {path}')
+        sys.exit(1)
+    for link in re.findall(r'\]\(([^)]+)\)', text):
+        if link.startswith(('..', '.')):
+            target = os.path.normpath(os.path.join(os.path.dirname(path), link))
+            if not os.path.exists(target):
+                print(f'broken link: {path} {link}')
+                sys.exit(1)
+PY
 python3 - <<'PY'
 import glob, re, sys
 expected = {
@@ -390,12 +420,20 @@ for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/*Tests.cs', recursi
     tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
     coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
                     encoding='utf-8-sig').read()
-    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
-    for name in sorted(tests - covered):
+    counts = {}
+    for name in re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M):
+        counts[name] = counts.get(name, 0) + 1
+    covered = set(counts)
+    missing = tests - covered
+    stale = covered - tests
+    duplicates = {name: count for name, count in counts.items() if count != 1}
+    for name in sorted(missing):
         print(f'missing coverage: {path} {name}')
-    for name in sorted(covered - tests):
+    for name in sorted(stale):
         print(f'stale coverage: {path} {name}')
-    if tests != covered:
+    for name, count in duplicates.items():
+        print(f'duplicate coverage: {path} {name} x{count}')
+    if missing or stale or duplicates:
         sys.exit(1)
 PY
 test ! -d Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableTransport
@@ -417,12 +455,13 @@ Expected:
 - full `Pontifex.Tests` = **Passed: 907** (830 baseline + 77);
 - Direct unfiltered run = **Passed: 315** (389 baseline − 74 moved);
 - `Direct.RRReliableCoreHelpers` = **Passed: 61** (58 + 2 stress + 1 session-window test);
-- `Direct.RRReliable.Integration` = **Passed: 3** (the two moved stress tests keep the
-  category);
+- `Direct.RRReliable.Integration` = **Passed: 3** (the two moved stress methods plus the
+  existing Direct RRReliable integration test);
 - `grep -rn 'Category("Direct'` prints no output;
 - `git grep "Direct.RRReliableTransport"` prints no match outside `plan.md`;
 - `git grep "RRReliableTransport" -- Tests/Pontifex.Transport.Direct.Tests` prints no
   output (old-suite prose redirected);
+- the stale `ManualTimerFactory` sentence is gone from the CoreHelpers README;
 - the stale CoreHelpers `GetDataSize` sentence is gone;
 - the coverage Python check finds every `[Test]` method in its sibling `Coverage.md`;
 - `grep "class RRReliableServerSessionTests"` finds exactly the moved file;
@@ -431,20 +470,24 @@ Expected:
 - the root `Transports/Coverage.md` no longer claims the whole selected tree is covered
   while RRUnreliable is planned;
 - the moved reliable coverage no longer says the RRTransport base stays outside the
-  selected tree;
+  selected tree, and the stale `An \`RRTransport\` layer` deferred row is gone;
 - the five test files exist with exactly 15 / 3 / 8 / 30 / 21 `[Test]` methods in
   RRTransport, Reliable root, Generic, Client, and Server respectively;
-- manual stage review: every test name enumerated in action 4 exists in the named file, no
-  test was renamed or substituted, the 13 shared names are absent from the reliable root
-  file, and the moved bodies differ from the originals only by namespace/category/coverage
-  changes (inspect `git diff -M`); the only intended body rewrite is the stop-ordering test;
+- each moved Coverage file has the expected Directory and Inheritance parent, contains no
+  old Direct path, and every relative contract link resolves;
+- manual stage review: every test name enumerated in action 4 exists in the named file, and
+  the 13 shared names are absent from the reliable root file. Inspect `git diff -M` and
+  confirm the only semantic edits are: retargeting the 13 shared tests to `TestRRTransport`;
+  the stop-ordering rewrite; the strengthened stop-reason assertion; the new frame-size,
+  serialization-failure, and `TimerFactory_IsInjected` tests; and namespace/category/
+  coverage changes. No other assertion may be weakened;
 - manual README review: the selected tree includes `RRTransport` and the RRReliable
   branch; the layer table has rows for RRTransport and the four RRReliable layers with the
   correct subject, directory, inheritance parent, and coverage link; the directory and
   harness layouts include `RR/`; the RR contract matrices have headings; the categories
-  section names `Transports.RR` and `Transports.RR.Reliable`; the filter commands are
-  present; the out-of-scope list mentions concrete RR carriers and Direct RR suites; no
-  planned coverage status appears in the README.
+  section names `Transports.RR` and `Transports.RR.Reliable` and states the concurrency
+  count as 30; the filter commands are present; the out-of-scope list mentions concrete RR
+  carriers and Direct RR suites; no planned coverage status appears in the README.
 
 **Definition of done**
 
@@ -499,12 +542,12 @@ RRTransport.
    - `Start_WithoutInit_ReturnsFalseAndInvalidates`;
    - `DispatchHandler_IsGatedByStartAndStop`;
    - `Start_WhenCarrierReturnsFalse_LeavesHandlerUndispatched`;
-   - `Stop_WhileRunning_HidesHandlerBeforeOnStopped` — record `DispatchHandler` inside the
-     test double's `StopCarrier` into a captured field, then assert after `Stop` returns
-     that the recorded value was `null`; do not assert inside `StopCarrier` because
+   - `Stop_WhileRunning_HidesHandlerBeforeTheCarrierStops` — record `DispatchHandler`
+     inside the test double's `StopCarrier` into a captured field, then assert after `Stop`
+     returns that the recorded value was `null`; do not assert inside `StopCarrier` because
      `AnyTransport.Stop` swallows callback exceptions;
    - `Init_AfterStop_ReturnsFalse` — start successfully first, then stop, then call `Init`
-     again; a pre-start stop does not consume the one-time initialization.
+     again.
 5. Update `Transports/RR/Unreliable/Coverage.md`, the Generic coverage file, and the
    Transports README:
    - add both layer rows (`RRUnreliableTransport` and
@@ -543,12 +586,20 @@ for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/**/*Tests.c
     tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
     coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
                     encoding='utf-8-sig').read()
-    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
-    for name in sorted(tests - covered):
+    counts = {}
+    for name in re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M):
+        counts[name] = counts.get(name, 0) + 1
+    covered = set(counts)
+    missing = tests - covered
+    stale = covered - tests
+    duplicates = {name: count for name, count in counts.items() if count != 1}
+    for name in sorted(missing):
         print(f'missing coverage: {path} {name}')
-    for name in sorted(covered - tests):
+    for name in sorted(stale):
         print(f'stale coverage: {path} {name}')
-    if tests != covered:
+    for name, count in duplicates.items():
+        print(f'duplicate coverage: {path} {name} x{count}')
+    if missing or stale or duplicates:
         sys.exit(1)
 PY
 ```
@@ -639,12 +690,12 @@ deterministically through a concrete test double.
    - `Response_LastMessage_UnbindsHandlerAfterCallback` — reuse the same handler for a
      second request after the last callback to prove unbinding;
    - `Response_WhenHandlerThrows_IsIsolatedAndStillCompletes`;
-   - `Response_Callbacks_AreSerializedPerRequest` — use a two-message response; from inside
-     the first callback, deliver the second message on another thread. The second callback
-     waits on `state.SyncRoot` and is delivered after the first returns, so assert max active
-     callbacks is 1 and both message ids are delivered. Only a duplicate message id is
-     dropped, and that is covered by `Response_WithDuplicateMessageId_IsDropped`. Category
-     `Transports.Concurrency`;
+   - `Response_Callbacks_AreSerializedPerRequest` — use a two-message response and a
+     `Barrier`/gate pair: the first callback signals it is active and waits; the second
+     delivery is started on another thread and signals that it is blocked; only then release
+     the first. Assert max active callbacks is 1 and both message ids are delivered. Only a
+     duplicate message id is dropped, covered by
+     `Response_WithDuplicateMessageId_IsDropped`. Category `Transports.Concurrency`;
    - `Stop_FromInsideAResponseCallback_DoesNotDeadlock` — mark `[Timeout(5000)]` so a
      deadlock fails instead of hanging the run; category `Transports.Concurrency`;
    - `Request_FromInsideAResponseCallback_IsAccepted` — use a second
@@ -693,12 +744,20 @@ for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/*Tes
     tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
     coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
                     encoding='utf-8-sig').read()
-    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
-    for name in sorted(tests - covered):
+    counts = {}
+    for name in re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M):
+        counts[name] = counts.get(name, 0) + 1
+    covered = set(counts)
+    missing = tests - covered
+    stale = covered - tests
+    duplicates = {name: count for name, count in counts.items() if count != 1}
+    for name in sorted(missing):
         print(f'missing coverage: {path} {name}')
-    for name in sorted(covered - tests):
+    for name in sorted(stale):
         print(f'stale coverage: {path} {name}')
-    if tests != covered:
+    for name, count in duplicates.items():
+        print(f'duplicate coverage: {path} {name} x{count}')
+    if missing or stale or duplicates:
         sys.exit(1)
 PY
 ```
@@ -790,7 +849,8 @@ test projects are green.
    - `Response_WithOversizedPayload_ReturnsMessageTooBigAndReleases` — build the payload
      above `MessageMaxByteSize` before the response header is added; the base checks the
      payload size, not the framed size;
-   - `Response_DeclaredSequenceSendsZeroBasedIdsAndCloses`;
+   - `Response_DeclaredSequenceSendsZeroBasedIds`; the separate last-message test
+     asserts the later `Response` returns `Error`;
    - `Response_AfterLastMessage_ReturnsError`;
    - `Response_AfterResponseTtlExpires_ReturnsError` — the server expiry is strict
      `Now > ExpiresAt`, so advance the clock by `ResponseTtl + 1 tick`; the public
@@ -801,8 +861,10 @@ test projects are green.
    - `OnFrameReceived_DuplicateClientRequest_IsPresentedAgain` — RRUnreliable permits
      duplicate presentation; this pins the absence of base-level suppression;
    - `OnFrameReceived_FromDifferentClients_HaveIndependentHandles`;
-   - `Response_ConcurrentCallsProduceOneSequence` (categorized
-     `Transports.Concurrency`).
+   - `Response_ConcurrentCallsProduceOneSequence` — use a `Barrier`/gate pair so both
+     calls are provably waiting on the handle gate before either completes; assert one
+     terminal result per message and the expected sequence. Categorized
+     `Transports.Concurrency`.
 3. Update the layer Coverage.md, Transports README layer table/directory/harness,
    RRUnreliable contract matrix, categories, the `Transports.Concurrency` prose/count, and
    planned/deferred tables:
@@ -911,12 +973,20 @@ for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/*Tests.cs', recursi
     tests = set(re.findall(r'\[Test\][\s\S]*?public void (\w+)', source))
     coverage = open(os.path.join(os.path.dirname(path), 'Coverage.md'),
                     encoding='utf-8-sig').read()
-    covered = set(re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M))
-    for name in sorted(tests - covered):
+    counts = {}
+    for name in re.findall(r'^\|\s*`([A-Za-z0-9_]+)`\s*\|', coverage, re.M):
+        counts[name] = counts.get(name, 0) + 1
+    covered = set(counts)
+    missing = tests - covered
+    stale = covered - tests
+    duplicates = {name: count for name, count in counts.items() if count != 1}
+    for name in sorted(missing):
         print(f'missing coverage: {path} {name}')
-    for name in sorted(covered - tests):
+    for name in sorted(stale):
         print(f'stale coverage: {path} {name}')
-    if tests != covered:
+    for name, count in duplicates.items():
+        print(f'duplicate coverage: {path} {name} x{count}')
+    if missing or stale or duplicates:
         sys.exit(1)
 PY
 grep -q "ConcurrentMarkCompletedAndQueries_AreLockSafeAndExactlyOnce" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Coverage.md
@@ -941,7 +1011,7 @@ Expected:
 - build succeeds with no errors;
 - `Transports` = **Passed: 390** (235 baseline + 74 moved + 3 Stage 1 new + 11 Stage 2 +
   35 Stage 3 + 32 Stage 4);
-- `Transports.Concurrency` = **Passed: 34** (exactly the 25 moved tests plus the 4 named
+- `Transports.Concurrency` = **Passed: 34** (5 baseline Raw tests + 25 moved tests + 4 new
   Stage 3/4 tests; the category-member script passes);
 - `Transports.RR` = **Passed: 155**;
 - `Transports.RR.Reliable` = **Passed: 62**;
