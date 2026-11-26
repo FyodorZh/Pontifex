@@ -622,6 +622,18 @@ grep -q '| Directory | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic` |
 grep -q '| Inheritance parent | `Pontifex.RR.Unreliable.RRUnreliableTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 grep -q '| Dependency | — |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 grep -Eq '^\| Contract \|.*\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
+! grep -rn "Tests/Pontifex.Transport.Direct.Tests" Tests/Pontifex.Tests/Transports/RR/Unreliable --include=Coverage.md
+python3 - <<'PY'
+import glob, os, re, sys
+for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/**/Coverage.md', recursive=True):
+    text = open(path, encoding='utf-8-sig').read()
+    for link in re.findall(r'\]\(([^)]+)\)', text):
+        if link.startswith(('..', '.')):
+            target = os.path.normpath(os.path.join(os.path.dirname(path), link))
+            if not os.path.exists(target):
+                print(f'broken link: {path} {link}')
+                sys.exit(1)
+PY
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests.cs)" -eq 2
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs
@@ -745,11 +757,11 @@ deterministically through a concrete test double.
    - `Response_Callbacks_AreSerializedPerRequest` — mark `[Timeout(5000)]`; give the
      recording handler an active-callback counter. Start worker A with the first `Receive`;
      wait for its entry signal (first callback active) before starting worker B with the
-     second `Receive`. The main thread then waits with bounded `SpinWait` until worker B
-     reports `ThreadState.WaitSleepJoin` (blocked on the production state lock). Treat
-     `ThreadState` as a secondary diagnostic; the active-callback counter is the primary
-     evidence. Do not accept any fallback condition; fail if the wait is not observed.
-     Assert active callbacks
+     second `Receive`. The main thread must explicitly assert
+     `SpinWait.SpinUntil(() => bWaitSleepJoin, Timeout)` is true while A is blocked; a
+     timeout is a test failure, not permission to continue. Treat `ThreadState` as the
+     diagnostic establishing that B is blocked; the active-callback counter is the primary
+     evidence. Assert active callbacks
      == 1 and second callback not entered, then release A and join both. Assert both ids were
      delivered in order and max active callbacks stayed 1.
      Only a duplicate id is dropped, covered by
@@ -798,6 +810,18 @@ grep -q '| Directory | `Tests/Pontifex.Tests/Transports/RR/Unreliable/Client` |'
 grep -q '| Inheritance parent | `Pontifex.RR.Unreliable.RRUnreliableTransport` |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 grep -q '| Dependency | — |' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 grep -Eq '^\| Contract \|.*\]\(\.\./' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
+! grep -rn "Tests/Pontifex.Transport.Direct.Tests" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client --include=Coverage.md
+python3 - <<'PY'
+import os, re, sys
+path = 'Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md'
+text = open(path, encoding='utf-8-sig').read()
+for link in re.findall(r'\]\(([^)]+)\)', text):
+    if link.startswith(('..', '.')):
+        target = os.path.normpath(os.path.join(os.path.dirname(path), link))
+        if not os.path.exists(target):
+            print(f'broken link: {path} {link}')
+            sys.exit(1)
+PY
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientTransportTests.cs)" -eq 35
 ! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client
@@ -930,11 +954,13 @@ test projects are green.
    - `Response_ConcurrentCallsProduceOneSequence` — mark `[Timeout(5000)]`; the test double
      records active `SendFrame` calls and blocks the first send on a release gate. Start
      worker A with the first `Response`; wait for its `SendFrame` entry signal before
-     starting worker B with the second `Response`. The main thread then waits with bounded
-     `SpinWait` until worker B reports `ThreadState.WaitSleepJoin` while A is blocked; treat
-     `ThreadState` as a secondary diagnostic and the active-send counter as primary.
-     Assert active sends == 1, release A, join both, and assert the two frames carry message
-     ids 0 and 1 with no interleaving. Categorized `Transports.Concurrency`.
+     starting worker B with the second `Response`. The main thread must explicitly assert
+     `SpinWait.SpinUntil(() => bWaitSleepJoin, Timeout)` is true while A is blocked; a
+     timeout is a test failure, not permission to continue. Then assert active sends == 1,
+     release A, join both, and assert the two frames carry message ids 0 and 1 with no
+     interleaving. Treat `ThreadState` as the diagnostic establishing that B is blocked;
+     the active-send counter is the primary behavioral assertion. Categorized
+     `Transports.Concurrency`.
 3. Update the layer Coverage.md, Transports README layer table/directory/harness,
    RRUnreliable contract matrix, categories, the `Transports.Concurrency` prose/count, and
    planned/deferred tables:
@@ -975,6 +1001,7 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj
 dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj
 grep -rn 'Category("Direct' Tests/Pontifex.Tests/Transports
 git status --porcelain -- Pontifex/
+! grep -rn "Tests/Pontifex.Transport.Direct.Tests" Tests/Pontifex.Tests/Transports/RR --include=Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Generic/Coverage.md
@@ -1148,6 +1175,7 @@ Expected:
 - full `Pontifex.Transport.Direct.Tests` = **Passed: 315**;
 - `grep -rn 'Category("Direct'` prints no output;
 - `git status --porcelain -- Pontifex/` prints no output (no production changes);
+- no Coverage file contains the old `Tests/Pontifex.Transport.Direct.Tests` path;
 - all nine layer Coverage files exist, each with exact Layer/Subject/Directory/
   Inheritance-parent rows, no old Direct dependency text, resolving relative links, and
   `## Planned` plus `## Deferred by design`;
