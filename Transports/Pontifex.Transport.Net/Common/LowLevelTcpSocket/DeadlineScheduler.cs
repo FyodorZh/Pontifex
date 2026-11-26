@@ -1,14 +1,14 @@
 using System;
 using System.Diagnostics;
-using System.Threading;
+using Pontifex.Utils;
 
 namespace Pontifex.NetSockets.Tcp
 {
     /// <summary>
     /// Internal monotonic clock plus one-shot deadline scheduling seam for the sender shutdown
-    /// deadline. The production adapter uses <see cref="Stopwatch"/> timestamps and
-    /// <see cref="System.Threading.Timer"/>; tests substitute a manual scheduler that advances time
-    /// and releases captured callbacks explicitly. Not public API.
+    /// deadline. The production adapter uses <see cref="Stopwatch"/> timestamps and the shared
+    /// <see cref="ITimerFactory"/>; tests substitute a manual scheduler that advances time and
+    /// releases captured callbacks explicitly. Not public API.
     /// </summary>
     internal interface IDeadlineScheduler
     {
@@ -30,14 +30,19 @@ namespace Pontifex.NetSockets.Tcp
     }
 
     /// <summary>
-    /// Production <see cref="IDeadlineScheduler"/>: monotonic <see cref="Stopwatch"/> time and a
-    /// single reusable one-shot <see cref="System.Threading.Timer"/>.
+    /// Production <see cref="IDeadlineScheduler"/>: monotonic <see cref="Stopwatch"/> time and one
+    /// pending <see cref="ITimerFactory"/> handle that is replaced on every schedule.
     /// </summary>
     internal sealed class SystemDeadlineScheduler : IDeadlineScheduler
     {
-        private readonly object _sync = new();
-        private Timer? _timer;
-        private Action? _callback;
+        private readonly object _sync = new object();
+        private readonly ITimerFactory _timerFactory;
+        private IDisposable? _timer;
+
+        public SystemDeadlineScheduler(ITimerFactory? timerFactory = null)
+        {
+            _timerFactory = timerFactory ?? SystemTimerFactory.Instance;
+        }
 
         public long GetTimestamp() => Stopwatch.GetTimestamp();
 
@@ -51,20 +56,8 @@ namespace Pontifex.NetSockets.Tcp
         {
             lock (_sync)
             {
-                _callback = callback;
-
-                if (_timer == null)
-                {
-                    _timer = new Timer(
-                        static state => ((SystemDeadlineScheduler)state!).Fire(),
-                        this,
-                        dueTime,
-                        Timeout.InfiniteTimeSpan);
-                }
-                else
-                {
-                    _timer.Change(dueTime, Timeout.InfiniteTimeSpan);
-                }
+                _timer?.Dispose();
+                _timer = _timerFactory.Schedule(dueTime, callback);
             }
         }
 
@@ -72,21 +65,9 @@ namespace Pontifex.NetSockets.Tcp
         {
             lock (_sync)
             {
-                _callback = null;
-                _timer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _timer?.Dispose();
+                _timer = null;
             }
-        }
-
-        private void Fire()
-        {
-            Action? callback;
-            lock (_sync)
-            {
-                callback = _callback;
-                _callback = null;
-            }
-
-            callback?.Invoke();
         }
     }
 }

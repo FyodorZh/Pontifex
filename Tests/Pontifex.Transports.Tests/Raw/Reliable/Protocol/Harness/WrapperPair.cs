@@ -24,7 +24,7 @@ namespace Pontifex.Tests.Raw.Reliable.Protocol.Harness
             RecordingWrapperLogic? clientLogic = null,
             RecordingWrapperLogic? serverLogic = null)
         {
-            Clock = new ManualNegotiationClock();
+            Clock = new ManualTimerFactory();
             var log = new Logger([]);
 
             ClientLogic = clientLogic ?? new RecordingWrapperLogic(log, MemoryRental.Shared);
@@ -56,7 +56,7 @@ namespace Pontifex.Tests.Raw.Reliable.Protocol.Harness
             }
         }
 
-        public ManualNegotiationClock Clock { get; }
+        public ManualTimerFactory Clock { get; }
 
         public RecordingWrapperLogic ClientLogic { get; }
 

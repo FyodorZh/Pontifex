@@ -17,7 +17,8 @@ that contract before it is consumed by the carriers.
 
 - `Pontifex.Utils.ITimerFactory` and its contract;
 - `Pontifex.Utils.SystemTimerFactory`;
-- `Pontifex.Utils.ManualTimerFactory` and `Pontifex.Utils.ManualTimerHandle`.
+- `Pontifex.Utils.ManualTimerFactory` (a manual factory with a caller-driven virtual clock)
+  and `Pontifex.Utils.ManualTimerHandle`.
 
 ## Contract references
 

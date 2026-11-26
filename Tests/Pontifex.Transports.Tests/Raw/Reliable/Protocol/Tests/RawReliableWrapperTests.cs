@@ -92,7 +92,7 @@ public sealed class RawReliableWrapperTests
     [Test]
     public void ServerHandshakeTimeout_RejectsWithTimeoutTextAndStopsAfterLinger()
     {
-        var clock = new ManualNegotiationClock();
+        var clock = new ManualTimerFactory();
         var log = new Logger([]);
         var logic = new RecordingWrapperLogic(log, MemoryRental.Shared);
         var inner = new FakeReliableServer();
@@ -137,7 +137,7 @@ public sealed class RawReliableWrapperTests
         var logic = new RecordingWrapperLogic(Log, MemoryRental.Shared);
         var handler = new RecordingRawReliableClientHandler();
         var wrapper = new RawReliableWrapperClient("client", "layer", client, logic, 1, 128, null,
-            new ManualNegotiationClock());
+            new ManualTimerFactory());
 
         Assert.That(wrapper.Init(handler), Is.True);
         Assert.That(wrapper.Start(_ => { }), Is.True);
@@ -161,7 +161,7 @@ public sealed class RawReliableWrapperTests
         var logic = new RecordingWrapperLogic(Log, MemoryRental.Shared);
         var handler = new RecordingRawReliableClientHandler();
         var wrapper = new RawReliableWrapperClient("client", "layer", client, logic, 1, 128, null,
-            new ManualNegotiationClock());
+            new ManualTimerFactory());
 
         Assert.That(wrapper.Init(handler), Is.True);
         Assert.That(wrapper.Start(_ => { }), Is.True);
@@ -180,7 +180,7 @@ public sealed class RawReliableWrapperTests
     [Test]
     public void HandshakeTimeout_StopsClientWithoutOnConnected()
     {
-        var clock = new ManualNegotiationClock();
+        var clock = new ManualTimerFactory();
         var client = new FakeReliableClient();
         var logic = new RecordingWrapperLogic(Log, MemoryRental.Shared);
         var handler = new RecordingRawReliableClientHandler();
@@ -222,7 +222,7 @@ public sealed class RawReliableWrapperTests
 
         Assert.That(defaultSession.RejectLinger, Is.EqualTo(TimeSpan.FromSeconds(2)));
 
-        var clock = new ManualNegotiationClock();
+        var clock = new ManualTimerFactory();
         var sent = new List<UnionDataList>();
         var disconnects = new List<StopReason>();
         StopReason? rejection = null;
@@ -271,7 +271,7 @@ public sealed class RawReliableWrapperTests
         var logic = new RecordingWrapperLogic(Log, MemoryRental.Shared);
         var handler = new RecordingRawReliableClientHandler();
         var wrapper = new RawReliableWrapperClient("client", "layer", client, logic, 1, 128, null,
-            new ManualNegotiationClock());
+            new ManualTimerFactory());
 
         Assert.That(wrapper.Init(handler), Is.True);
         Assert.That(wrapper.Start(_ => { }), Is.True);
@@ -295,7 +295,7 @@ public sealed class RawReliableWrapperTests
         var logic = new RecordingWrapperLogic(Log, MemoryRental.Shared);
         var handler = new RecordingRawReliableClientHandler();
         var wrapper = new RawReliableWrapperClient("client", "layer", client, logic, 1, 128, null,
-            new ManualNegotiationClock());
+            new ManualTimerFactory());
 
         Assert.That(wrapper.Init(handler), Is.True);
         Assert.That(wrapper.Start(_ => { }), Is.True);
@@ -421,7 +421,7 @@ public sealed class RawReliableWrapperTests
         var client = new FakeReliableClient();
         var handler = new RecordingRawReliableClientHandler();
         var wrapper = new RawReliableWrapperClient("client", "layer", client, logic, 1, 16, null,
-            new ManualNegotiationClock());
+            new ManualTimerFactory());
 
         Assert.That(wrapper.Init(handler), Is.True);
         Assert.That(wrapper.Start(_ => { }), Is.True);
@@ -492,7 +492,7 @@ public sealed class RawReliableWrapperTests
         var logic = new RecordingWrapperLogic(Log, MemoryRental.Shared);
         var handler = new RecordingRawReliableClientHandler();
         var wrapper = new RawReliableWrapperClient("client", "layer", client, logic, 1, 128, null,
-            new ManualNegotiationClock());
+            new ManualTimerFactory());
 
         Assert.That(wrapper.Init(handler), Is.True);
         Assert.That(wrapper.Start(_ => { }), Is.True);
@@ -523,7 +523,7 @@ public sealed class RawReliableWrapperTests
         var logic = new RecordingWrapperLogic(Log, MemoryRental.Shared);
         var handler = new RecordingRawReliableClientHandler();
         var wrapper = new RawReliableWrapperClient("client", "layer", client, logic, 1, 128, null,
-            new ManualNegotiationClock());
+            new ManualTimerFactory());
 
         Assert.That(wrapper.Init(handler), Is.True);
         Assert.That(wrapper.Start(_ => { }), Is.True);

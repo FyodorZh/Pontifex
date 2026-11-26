@@ -79,9 +79,10 @@ There are no groups under `Tests/`: the suite has one layer and one test file.
 
 All harness types are hand-written (no mocking library) and test-only:
 
-- `ReconnectableTestSupport.cs` contains the manual `Pontifex.Utils.ITimerFactory` seam,
-  a hand-driven multi-logic `ILogicDriver`, endpoint and payload helpers, and
-  recording application client/server handlers plus a recording server factory.
+- `ReconnectableTestSupport.cs` contains a hand-driven multi-logic
+  `ILogicDriver`, endpoint and payload helpers, and recording application
+  client/server handlers plus a recording server factory. The timer seam is the
+  production `Pontifex.Utils.ManualTimerFactory`, shared with `ReconnectablePair`.
 - `FakeReconnectableTransport.cs` contains the scripted `IRawReliableClient`,
   `IRawReliableServer`, endpoint, and physical server session. Delivery is
   synchronous and caller-driven; outbound payloads are cloned into `Sent` for

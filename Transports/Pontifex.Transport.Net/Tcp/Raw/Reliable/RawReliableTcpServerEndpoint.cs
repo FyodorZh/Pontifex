@@ -852,7 +852,8 @@ namespace Pontifex.Raw.Reliable.Tcp
             int receiveBufferSize = DefaultReceiveBufferSize,
             int messagePartMaxSize = DefaultReceiveBufferSize,
             TimeSpan? gracefulShutdownDeadline = null,
-            int sendSourceInitialCapacity = 10)
+            int sendSourceInitialCapacity = 10,
+            ITimerFactory? timerFactory = null)
         {
             if (socket == null)
             {
@@ -962,7 +963,8 @@ namespace Pontifex.Raw.Reliable.Tcp
                 shutdownDeadline,
                 sendSourceInitialCapacity,
                 (byte)MessageType.HandshakeRequestMessage,
-                (byte)MessageType.HandshakeRejectMessage);
+                (byte)MessageType.HandshakeRejectMessage,
+                timerFactory);
 
             handshake.Start();
         }
@@ -996,10 +998,11 @@ namespace Pontifex.Raw.Reliable.Tcp
             private readonly int _sendSourceInitialCapacity;
             private readonly byte _handshakeRequestFrameType;
             private readonly byte _handshakeRejectFrameType;
+            private readonly ITimerFactory _timerFactory;
 
             private readonly byte[] _prefix = new byte[PrefixSize];
             private IMultiRefByteArray? _body;
-            private Timer? _timer;
+            private IDisposable? _timer;
             private int _prefixRead;
             private int _bodyRead;
             private int _bodyLength;
@@ -1025,7 +1028,8 @@ namespace Pontifex.Raw.Reliable.Tcp
                 TimeSpan gracefulShutdownDeadline,
                 int sendSourceInitialCapacity,
                 byte handshakeRequestFrameType,
-                byte handshakeRejectFrameType)
+                byte handshakeRejectFrameType,
+                ITimerFactory? timerFactory)
             {
                 _transportName = transportName;
                 _socket = socket;
@@ -1047,16 +1051,14 @@ namespace Pontifex.Raw.Reliable.Tcp
                 _sendSourceInitialCapacity = sendSourceInitialCapacity;
                 _handshakeRequestFrameType = handshakeRequestFrameType;
                 _handshakeRejectFrameType = handshakeRejectFrameType;
+                _timerFactory = timerFactory ?? SystemTimerFactory.Instance;
             }
 
             public void Start()
             {
                 try
                 {
-                    var timer = new Timer(
-                        OnHandshakeDeadline, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                    _timer = timer;
-                    timer.Change(_handshakeTimeout, Timeout.InfiniteTimeSpan);
+                    _timer = _timerFactory.Schedule(_handshakeTimeout, OnHandshakeDeadline);
                     BeginReadPrefix();
                 }
                 catch (Exception ex)
@@ -1065,7 +1067,7 @@ namespace Pontifex.Raw.Reliable.Tcp
                 }
             }
 
-            private void OnHandshakeDeadline(object? state)
+            private void OnHandshakeDeadline()
             {
                 Reject(TcpHandshakeResult.TimedOut(_transportName));
             }

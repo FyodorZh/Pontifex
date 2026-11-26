@@ -309,7 +309,7 @@ public sealed class RawReliableZipTests
     [Test]
     public void RawClientWithoutZipNegotiation_IsRejectedAndSkipsTheFactory()
     {
-        var clock = new ManualZipClock();
+        var clock = new ManualTimerFactory();
         var innerServer = new FakeZipServer();
         var serverLogic = new RawReliableZipServerLogic(innerServer.Log, innerServer.Memory, 9);
         var server = new RawReliableWrapperServer("server", ZipInfo.TransportName, innerServer,

@@ -27,7 +27,7 @@ namespace Pontifex.Tests.Raw.Reliable.Reconnectable.Harness
             string? serverName = null,
             TimeSpan? disconnectTimeout = null)
         {
-            Clock = new ManualReconnectableClock();
+            Clock = new ManualTimerFactory();
             ClientDriver = new ManualReconnectableDriver();
             ServerDriver = new ManualReconnectableDriver();
             InnerServer = new FakeReconnectableServer();
@@ -75,7 +75,7 @@ namespace Pontifex.Tests.Raw.Reliable.Reconnectable.Harness
             }
         }
 
-        public ManualReconnectableClock Clock { get; }
+        public ManualTimerFactory Clock { get; }
 
         public ManualReconnectableDriver ClientDriver { get; }
 

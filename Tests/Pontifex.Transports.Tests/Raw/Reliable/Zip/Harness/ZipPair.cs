@@ -145,7 +145,7 @@ namespace Pontifex.Tests.Raw.Reliable.Zip.Harness
             short serverVersion = 1,
             int compressionLevel = 9)
         {
-            Clock = new ManualZipClock();
+            Clock = new ManualTimerFactory();
             InnerServer = new FakeZipServer();
             _compressionLevel = compressionLevel;
             _clientName = clientName;
@@ -170,7 +170,7 @@ namespace Pontifex.Tests.Raw.Reliable.Zip.Harness
             _links.Add(FirstClient);
         }
 
-        public ManualZipClock Clock { get; }
+        public ManualTimerFactory Clock { get; }
 
         public RecordingZipClientHandler ClientHandler => FirstClient.Handler;
 

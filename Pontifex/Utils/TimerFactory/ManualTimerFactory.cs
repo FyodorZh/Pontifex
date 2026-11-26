@@ -6,29 +6,47 @@ using System.Threading;
 namespace Pontifex.Utils
 {
     /// <summary>
-    /// Deterministic <see cref="ITimerFactory"/> that never fires on its own.
+    /// Deterministic <see cref="ITimerFactory"/> with a caller-driven virtual clock.
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
     /// <item><description><b>Purpose</b>: a caller arms callbacks through the normal contract and then
-    /// explicitly fires, suppresses, or disposes each handle. It lets tests and deterministic harnesses
-    /// prove that work was scheduled before a lifecycle event without waiting on real time.</description></item>
-    /// <item><description><b>Infinite delay</b>: <see cref="Timeout.InfiniteTimeSpan"/> is
-    /// accepted and recorded like any other delay. The handle never fires on its own; an explicit
-    /// <see cref="ManualTimerHandle.TryFire"/> still runs the callback.</description></item>
+    /// explicitly fires a handle or advances <see cref="Now"/> with <see cref="Advance"/>. It lets tests
+    /// and deterministic harnesses prove that work was scheduled before a lifecycle event without waiting
+    /// on real time.</description></item>
+    /// <item><description><b>Infinite delay</b>: <see cref="Timeout.InfiniteTimeSpan"/> is accepted and
+    /// recorded like any other delay, but the handle never becomes due, so <see cref="Advance"/> never
+    /// fires it. An explicit <see cref="ManualTimerHandle.TryFire"/> still runs the callback.</description></item>
     /// <item><description><b>Retention</b>: every scheduled handle stays tracked until
     /// <see cref="Clear"/> is called, so indices returned by <see cref="Handles"/> are stable for the
     /// lifetime of the factory. A long-lived factory therefore grows without bound; call
     /// <see cref="Clear"/> between scenarios.</description></item>
-    /// <item><description><b>Threading</b>: scheduling, firing, suppressing, and clearing are serialized by
-    /// one internal lock. A callback runs outside that lock, so it may schedule another timer or dispose
-    /// its own handle.</description></item>
+    /// <item><description><b>Threading</b>: scheduling, advancing, firing, suppressing, and clearing are
+    /// serialized by one internal lock. A callback runs outside that lock, so it may schedule another
+    /// timer, advance the clock, or dispose its own handle.</description></item>
     /// </list>
     /// </remarks>
     public sealed class ManualTimerFactory : ITimerFactory
     {
         private readonly object _locker = new object();
         private readonly List<ManualTimerHandle> _handles = new List<ManualTimerHandle>();
+        private DateTime _now = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        /// <summary>Gets the current virtual time.</summary>
+        /// <remarks>
+        /// Time moves only through <see cref="Advance"/>. The initial value is fixed so a harness can pass
+        /// <see cref="Now"/> to code that needs a timestamp without depending on the wall clock.
+        /// </remarks>
+        public DateTime Now
+        {
+            get
+            {
+                lock (_locker)
+                {
+                    return _now;
+                }
+            }
+        }
 
         /// <summary>Gets the number of callbacks scheduled since the last <see cref="Clear"/>.</summary>
         public int ScheduledCount
@@ -67,6 +85,22 @@ namespace Pontifex.Utils
             }
         }
 
+        /// <summary>Gets the scheduled delays of every pending handle in due-time order.</summary>
+        public IReadOnlyList<TimeSpan> PendingDelays
+        {
+            get
+            {
+                lock (_locker)
+                {
+                    return _handles
+                        .Where(handle => !handle.IsClosed)
+                        .OrderBy(handle => handle.Due)
+                        .Select(handle => handle.Delay)
+                        .ToList();
+                }
+            }
+        }
+
         /// <inheritdoc/>
         public IDisposable Schedule(TimeSpan delay, Action callback)
         {
@@ -80,14 +114,56 @@ namespace Pontifex.Utils
                 throw new ArgumentOutOfRangeException(nameof(delay));
             }
 
-            var handle = new ManualTimerHandle(delay, callback);
+            lock (_locker)
+            {
+                DateTime due = delay == Timeout.InfiniteTimeSpan
+                    ? DateTime.MaxValue
+                    : _now + delay;
+                var handle = new ManualTimerHandle(delay, due, callback);
+                _handles.Add(handle);
+                return handle;
+            }
+        }
+
+        /// <summary>
+        /// Advances the virtual clock and fires every handle that becomes due, in due-time order.
+        /// </summary>
+        /// <remarks>
+        /// A callback may schedule another timer that is already due at the new time; it fires in the same
+        /// call. A callback exception stops the advance and propagates to the caller; the handle that threw
+        /// stays closed. Infinite handles never become due.
+        /// </remarks>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="by"/> is negative.</exception>
+        public void Advance(TimeSpan by)
+        {
+            if (by < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(by));
+            }
 
             lock (_locker)
             {
-                _handles.Add(handle);
+                _now += by;
             }
 
-            return handle;
+            while (true)
+            {
+                ManualTimerHandle? next;
+                lock (_locker)
+                {
+                    next = _handles
+                        .Where(handle => !handle.IsClosed && handle.Due <= _now)
+                        .OrderBy(handle => handle.Due)
+                        .FirstOrDefault();
+                }
+
+                if (next == null)
+                {
+                    return;
+                }
+
+                next.TryFire();
+            }
         }
 
         /// <summary>
@@ -133,9 +209,9 @@ namespace Pontifex.Utils
         /// Suppresses every pending handle and forgets all tracked handles.
         /// </summary>
         /// <remarks>
-        /// <see cref="ScheduledCount"/>, <see cref="PendingCount"/>, and <see cref="Handles"/> start fresh
-        /// after the call. A handle that the caller still references keeps its own state; it is simply no
-        /// longer tracked by the factory.
+        /// <see cref="ScheduledCount"/>, <see cref="PendingCount"/>, <see cref="PendingDelays"/>, and
+        /// <see cref="Handles"/> start fresh after the call. A handle that the caller still references keeps
+        /// its own state; it is simply no longer tracked by the factory. <see cref="Now"/> is not reset.
         /// </remarks>
         public void Clear()
         {
@@ -161,14 +237,19 @@ namespace Pontifex.Utils
         private bool _closed;
         private bool _fired;
 
-        internal ManualTimerHandle(TimeSpan delay, Action callback)
+        internal ManualTimerHandle(TimeSpan delay, DateTime due, Action callback)
         {
             Delay = delay;
+            Due = due;
             _callback = callback;
         }
 
         /// <summary>Gets the requested delay, including <see cref="Timeout.InfiniteTimeSpan"/>.</summary>
         public TimeSpan Delay { get; }
+
+        /// <summary>Gets the virtual time at which the handle becomes due.</summary>
+        /// <remarks><see cref="DateTime.MaxValue"/> for an infinite delay.</remarks>
+        public DateTime Due { get; }
 
         /// <summary>Gets whether the callback ran.</summary>
         public bool IsFired
