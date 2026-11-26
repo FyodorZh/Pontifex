@@ -300,9 +300,11 @@ CoreHelpers suite.
 12. Update Direct documentation and category references:
     - search for `RRReliableTransport`, `Direct.RRReliableTransport`, and plain
       `RRReliableTransport` prose outside the moved files;
-    - remove or redirect references to the deleted abstract suite, including
-      `RRReliableCoreHelpers/README.md`, `RRReliableCoreHelpers/Coverage.md`, and
-      `RRReliableDirect/README.md`; remove or reword the stale CoreHelpers sentence that
+    - remove every literal `RRReliableTransport` reference to the deleted abstract suite
+      from `RRReliableCoreHelpers/README.md`, `RRReliableCoreHelpers/Coverage.md`, and
+      `RRReliableDirect/README.md`, replacing it with the new
+      `Tests/Pontifex.Tests/Transports/RR/Reliable` path where a pointer is still needed;
+      remove or reword the stale CoreHelpers sentence that
       says `ManualTimerFactory` is shared with the abstract transport suite; remove or
       reword the stale CoreHelpers `Coverage.md` deferred row that says
       `UnionDataList.GetDataSize` cannot throw through the public contract, because the new
@@ -343,6 +345,45 @@ test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Client/RR
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs)" -eq 21
 python3 - <<'PY'
+import glob, re, sys
+expected = {
+ 'TerminalKeepsTheHandlerBoundUntilTheFinishCallbackReturns',
+ 'CancelOutsideACallback_DeliversOneCanceledAndSuppressesLateResponses',
+ 'Stop_SchedulesOneFailedPerPendingRequestBeforeOnStoppedAndDeliversAfter',
+ 'ConcurrentResponsesForDifferentRequests_AreDeliveredSafely',
+ 'ResponseAndFinish_ProduceOrderedFramesWithServerIdsFromOne',
+ 'ResponseOrdinal_IsCommittedOnlyAfterOk',
+ 'ResponseHandle_MatrixOfFinishRejectAndClosedCalls',
+ 'Finish_WhenTheSendFails_LeavesTheHandleRetryable',
+ 'Reject_WhenTheSendFails_LeavesTheHandleRetryable',
+ 'Reject_AfterTheResponseTtlClosedTheHandle_ReturnsError',
+ 'Reject_ClosesTheHandleAndRepeatedRejectReturnsOk',
+ 'Cancel_ClosesTheLiveHandleAndSuppressesLaterResponses',
+ 'CancelOfAQueuedRequest_PreventsPresentation',
+ 'ResponseTtlWhileQueued_SendsFailedAndNeverPresents',
+ 'FullDispatchQueue_ReleasesTheOverflowingRequest',
+ 'DuplicateRequest_IsSuppressedLiveAndAfterEveryTerminalCause',
+ 'TwoClientsWithTheSameClientLocalId_DoNotSuppressEachOther',
+ 'OnRequested_IsSerializedAcrossRequests',
+ 'ThrowingHandler_RejectsTheUndecidedHandle',
+ 'RequestBeforeOnStarted_IsHeldUntilTheReadyGateOpens',
+ 'FullPendingListBeforeStart_ReleasesTheOverflowingFrame',
+ 'StopDispatch_ReleasesARequestStillQueued',
+ 'OnSessionClosed_ClosesOnlyThatSession',
+ 'BlockedResponse_WithConcurrentStop_DoesNotHang',
+ 'TwoThreadsOnOneHandle_ProduceOneTerminalResult',
+}
+found = set()
+for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/*Tests.cs', recursive=True):
+    source = open(path, encoding='utf-8-sig').read()
+    for match in re.finditer(r'\[Test\]([\s\S]*?)public void (\w+)', source):
+        if 'Transports.Concurrency' in match.group(1):
+            found.add(match.group(2))
+if found != expected:
+    print('concurrency category mismatch:', sorted(found ^ expected))
+    sys.exit(1)
+PY
+python3 - <<'PY'
 import glob, os, re, sys
 for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/*Tests.cs', recursive=True):
     source = open(path, encoding='utf-8-sig').read()
@@ -369,11 +410,12 @@ Expected:
 
 - build succeeds with no errors;
 - `Transports` = **Passed: 312** (235 baseline + 74 moved + 3 new);
-- `Transports.Concurrency` = **Passed: 30** (5 baseline + 25 moved threaded tests);
+- `Transports.Concurrency` = **Passed: 30** (5 baseline + exactly the 25 named moved
+  threaded tests; the category-member script passes);
 - `Transports.RR` = **Passed: 77**;
 - `Transports.RR.Reliable` = **Passed: 62**;
 - full `Pontifex.Tests` = **Passed: 907** (830 baseline + 77);
-- Direct default = **Passed: 315** (389 baseline − 74 moved);
+- Direct unfiltered run = **Passed: 315** (389 baseline − 74 moved);
 - `Direct.RRReliableCoreHelpers` = **Passed: 61** (58 + 2 stress + 1 session-window test);
 - `Direct.RRReliable.Integration` = **Passed: 3** (the two moved stress tests keep the
   category);
@@ -391,13 +433,20 @@ Expected:
 - the moved reliable coverage no longer says the RRTransport base stays outside the
   selected tree;
 - the five test files exist with exactly 15 / 3 / 8 / 30 / 21 `[Test]` methods in
-  RRTransport, Reliable root, Generic, Client, and Server respectively.
+  RRTransport, Reliable root, Generic, Client, and Server respectively;
+- manual README review: the selected tree includes `RRTransport` and the RRReliable
+  branch; the layer table has rows for RRTransport and the four RRReliable layers with the
+  correct subject, directory, inheritance parent, and coverage link; the directory and
+  harness layouts include `RR/`; the RR contract matrices have headings; the categories
+  section names `Transports.RR` and `Transports.RR.Reliable`; the filter commands are
+  present; the out-of-scope list mentions concrete RR carriers and Direct RR suites; no
+  planned coverage status appears in the README.
 
 **Definition of done**
 
 The RRTransport and RRReliable layers exist under `Transports/RR`, all moved tests pass
-under the new categories, the Direct abstract suite is gone, and the CoreHelpers suite
-owns the session stress tests.
+under the new categories, the Direct abstract suite is gone, the CoreHelpers suite owns the
+session stress tests, and the README sections listed in action 10/12 are updated.
 
 **Risks / notes**
 
@@ -450,7 +499,8 @@ RRTransport.
      test double's `StopCarrier` into a captured field, then assert after `Stop` returns
      that the recorded value was `null`; do not assert inside `StopCarrier` because
      `AnyTransport.Stop` swallows callback exceptions;
-   - `Init_AfterStop_ReturnsFalse`.
+   - `Init_AfterStop_ReturnsFalse` — start successfully first, then stop, then call `Init`
+     again; a pre-start stop does not consume the one-time initialization.
 5. Update `Transports/RR/Unreliable/Coverage.md`, the Generic coverage file, and the
    Transports README:
    - add both layer rows (`RRUnreliableTransport` and
@@ -479,6 +529,9 @@ test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests.cs)" -eq 2
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs)" -eq 9
+sed -n '/^## Planned/,/^## /p' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md | grep -q "RRUnreliableClientTransport"
+sed -n '/^## Planned/,/^## /p' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md | grep -q "RRUnreliableServerTransport"
+! sed -n '/^## Planned/,/^## /p' Tests/Pontifex.Tests/Transports/RR/Coverage.md | grep -q "RRUnreliable"
 python3 - <<'PY'
 import glob, os, re, sys
 for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/Unreliable/**/*Tests.cs', recursive=True):
@@ -498,12 +551,16 @@ PY
 
 Expected: build succeeds; `Transports` = **Passed: 323** (312 + 2 base + 9 generic);
 `Transports.RR.Unreliable` = **Passed: 11**; both coverage files exist and each test has
-exactly one coverage row; the base file has 2 `[Test]` methods and the generic file has 9.
+exactly one coverage row; the base file has 2 `[Test]` methods and the generic file has 9;
+the client/server planned rows are present in their nearest ancestor coverage files and the
+four parent planned rows are gone; manual README review: layer-table rows for
+`RRUnreliableTransport` and `RRUnreliableTransportGeneric`, directory/harness layout,
+contract summary, categories, and filter commands are present.
 
 **Definition of done**
 
-Both RRUnreliable base and generic layers exist, have coverage files and tests, and pass
-in the Transports run.
+Both RRUnreliable base and generic layers exist, have coverage files and tests, pass in
+the Transports run, and have the README layer/contract entries from action 5.
 
 **Risks / notes**
 
@@ -644,13 +701,16 @@ PY
 Expected: build succeeds; `Transports` = **Passed: 358** (323 + 35 client tests);
 `Transports.Concurrency` = **Passed: 33** (30 + 3 client concurrency tests); the client
 Coverage file exists, the client test file has exactly 35 `[Test]` methods, and each test
-has exactly one coverage row; no real timers, sockets, or sleeps are introduced.
+has exactly one coverage row; manual README review: the client layer row, directory/harness
+entries, contract matrix, category prose/count, and planned-row removal are present; no
+real timers, sockets, or sleeps are introduced.
 
 **Definition of done**
 
 The RRUnreliable client layer exists with deterministic coverage of request acceptance,
 pending-window TTL/cancel/stop, response correlation, message-count fixing, duplicate
-suppression, callback isolation, and send-result paths.
+suppression, callback isolation, and send-result paths, and has the README/contract entries
+from action 4.
 
 **Risks / notes**
 
@@ -705,8 +765,9 @@ solution is green.
    - `OnRequested_AssignsServerGlobalIdsFromOne`;
    - `Response_SendsClientRequestIdMessageIdAndCount`;
    - `Response_DefaultMessageCountIsOne`;
-   - `SetMessageCount_AcceptsOneTo256` — loop over 1 and 256 inside one test, not
-     `[TestCase]`;
+   - `SetMessageCount_AcceptsOneTo256` — use two separate requests/handles, one set to 1
+     and one set to 256; `SetMessageCount` is one-time per handle, so do not loop on one
+     handle;
    - `SetMessageCount_RejectsOutOfRange` — call it on a closed handle with 0 and 257 to
      prove the range check precedes the state check;
    - `SetMessageCount_IsOneTimeBeforeFirstResponse`;
@@ -786,6 +847,49 @@ test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/RRUnreliableServerTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/RRUnreliableServerTransportTests.cs)" -eq 32
+python3 - <<'PY'
+import glob, re, sys
+expected = {
+ 'TerminalKeepsTheHandlerBoundUntilTheFinishCallbackReturns',
+ 'CancelOutsideACallback_DeliversOneCanceledAndSuppressesLateResponses',
+ 'Stop_SchedulesOneFailedPerPendingRequestBeforeOnStoppedAndDeliversAfter',
+ 'ConcurrentResponsesForDifferentRequests_AreDeliveredSafely',
+ 'ResponseAndFinish_ProduceOrderedFramesWithServerIdsFromOne',
+ 'ResponseOrdinal_IsCommittedOnlyAfterOk',
+ 'ResponseHandle_MatrixOfFinishRejectAndClosedCalls',
+ 'Finish_WhenTheSendFails_LeavesTheHandleRetryable',
+ 'Reject_WhenTheSendFails_LeavesTheHandleRetryable',
+ 'Reject_AfterTheResponseTtlClosedTheHandle_ReturnsError',
+ 'Reject_ClosesTheHandleAndRepeatedRejectReturnsOk',
+ 'Cancel_ClosesTheLiveHandleAndSuppressesLaterResponses',
+ 'CancelOfAQueuedRequest_PreventsPresentation',
+ 'ResponseTtlWhileQueued_SendsFailedAndNeverPresents',
+ 'FullDispatchQueue_ReleasesTheOverflowingRequest',
+ 'DuplicateRequest_IsSuppressedLiveAndAfterEveryTerminalCause',
+ 'TwoClientsWithTheSameClientLocalId_DoNotSuppressEachOther',
+ 'OnRequested_IsSerializedAcrossRequests',
+ 'ThrowingHandler_RejectsTheUndecidedHandle',
+ 'RequestBeforeOnStarted_IsHeldUntilTheReadyGateOpens',
+ 'FullPendingListBeforeStart_ReleasesTheOverflowingFrame',
+ 'StopDispatch_ReleasesARequestStillQueued',
+ 'OnSessionClosed_ClosesOnlyThatSession',
+ 'BlockedResponse_WithConcurrentStop_DoesNotHang',
+ 'TwoThreadsOnOneHandle_ProduceOneTerminalResult',
+ 'Response_Callbacks_AreSerializedPerRequest',
+ 'Stop_FromInsideAResponseCallback_DoesNotDeadlock',
+ 'Request_FromInsideAResponseCallback_IsAccepted',
+ 'Response_ConcurrentCallsProduceOneSequence',
+}
+found = set()
+for path in glob.glob('Tests/Pontifex.Tests/Transports/RR/**/*Tests.cs', recursive=True):
+    source = open(path, encoding='utf-8-sig').read()
+    for match in re.finditer(r'\[Test\]([\s\S]*?)public void (\w+)', source):
+        if 'Transports.Concurrency' in match.group(1):
+            found.add(match.group(2))
+if found != expected:
+    print('concurrency category mismatch:', sorted(found ^ expected))
+    sys.exit(1)
+PY
 for f in $(find Tests/Pontifex.Tests/Transports/RR -name Coverage.md); do grep -q '^## Planned' "$f" || { echo "missing Planned: $f"; exit 1; }; grep -q '^## Deferred by design' "$f" || { echo "missing Deferred: $f"; exit 1; }; done
 ! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server
 for layer in RRTransport RRReliableTransport RRReliableTransportGeneric RRReliableClientTransport RRReliableServerTransport RRUnreliableTransport RRUnreliableTransportGeneric RRUnreliableClientTransport RRUnreliableServerTransport; do grep -q "| \`$layer\` |" Tests/Pontifex.Tests/Transports/README.md || { echo "missing README row: $layer"; exit 1; }; done
@@ -830,7 +934,8 @@ Expected:
 - build succeeds with no errors;
 - `Transports` = **Passed: 390** (235 baseline + 74 moved + 3 Stage 1 new + 11 Stage 2 +
   35 Stage 3 + 32 Stage 4);
-- `Transports.Concurrency` = **Passed: 34**;
+- `Transports.Concurrency` = **Passed: 34** (exactly the 25 moved tests plus the 4 named
+  Stage 3/4 tests; the category-member script passes);
 - `Transports.RR` = **Passed: 155**;
 - `Transports.RR.Reliable` = **Passed: 62**;
 - `Transports.RR.Unreliable` = **Passed: 78**;
@@ -845,6 +950,10 @@ Expected:
 - each RR test file's coverage table exactly matches its own `[Test]` methods, with no
   missing or stale rows (names may repeat across different layer files);
 - the server test file has exactly 32 `[Test]` methods;
+- manual README review: the selected tree shows the complete RR branch; all nine layer
+  rows have correct subject/directory/parent/coverage; the directory and harness layouts,
+  contract matrices, category prose/count (34), filter commands, and out-of-scope list are
+  complete; no planned coverage status remains in the README;
 - the three CoreHelpers tests are present in CoreHelpers coverage, `CompletedWindow` is gone
   from the reliable server coverage, and the CoreHelpers README names
   `RRReliableServerSession`;
