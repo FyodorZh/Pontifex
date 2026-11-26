@@ -56,7 +56,9 @@ structure. The concrete Direct RR suites remain in place and keep passing.
   gains `Direct.RRReliableCoreHelpers`, and only its two stress methods keep
   `Direct.RRReliable.Integration`.
 - Test names use `Scenario_ExpectedResult`. Names may repeat across different layer
-  fixtures; coverage is checked per test file, not globally.
+  fixtures; coverage is checked per test file, not globally. Planned rows use `—` in the
+  first cell; deferred rows use prose in the first cell without backticks, so the coverage
+  checker does not count them as tests.
 - Never place `Assert.That` inside a transport-invoked callback: `AnyTransport.Stop`,
   `RRUnreliableClientTransport.OnFrameReceived`, and
   `RRUnreliableServerTransport.OnFrameReceived` catch callback exceptions. Record the
@@ -271,8 +273,11 @@ CoreHelpers suite.
     - move the old root coverage to `Transports/RR/Reliable/Coverage.md` and trim the
       shared rows that move to `Transports/RR/Coverage.md`;
     - re-base every moved Coverage file: update the layer/subject/directory, inheritance
-      parent, dependency field, and every relative contract link for its new depth; remove
-      the stale `RRTransport outside the selected tree` deferred row and reword the matching
+      parent, dependency field, and every relative contract link for its new depth; use the
+      exact identity rows `| Layer | \`<layer>\` |`, `| Subject | \`<type>\` |`,
+      `| Directory | \`<path without trailing slash>\` |`, and
+      `| Inheritance parent | \`<parent>\` |`; remove the stale
+      `RRTransport outside the selected tree` deferred row and reword the matching
       prose paragraph to say the base is now the `RRTransport` ancestor layer and the shared
       tests live in `Transports/RR/Coverage.md`;
     - normalize every moved/new RR `Coverage.md` heading to the exact suite form
@@ -337,6 +342,15 @@ grep -rn "class RRReliableServerSessionTests" Tests/Pontifex.Transport.Direct.Te
 ! grep -q "stays outside the selected tree" Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
 ! grep -q "An \`RRTransport\` layer" Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
 ! grep -q "shared base is outside the selected tree" Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md
+python3 - <<'PY'
+import sys
+text = open('Tests/Pontifex.Tests/Transports/RR/Reliable/Coverage.md',
+            encoding='utf-8-sig').read()
+deferred = text.split('## Deferred by design', 1)[1].split('\n## ', 1)[0]
+if 'RRTransport' in deferred:
+    print('stale RRTransport deferred row')
+    sys.exit(1)
+PY
 test -f Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs)" -eq 15
 test -f Tests/Pontifex.Tests/Transports/RR/Reliable/RRReliableTransportTests.cs
@@ -352,20 +366,30 @@ python3 - <<'PY'
 import os, re, sys
 base = 'Tests/Pontifex.Tests/Transports/RR'
 expected = {
- 'Coverage.md': (base, 'AnyTransport'),
- 'Reliable/Coverage.md': (f'{base}/Reliable', 'Pontifex.RR.RRTransport'),
- 'Reliable/Generic/Coverage.md': (f'{base}/Reliable/Generic', 'Pontifex.RR.Reliable.RRReliableTransport'),
- 'Reliable/Client/Coverage.md': (f'{base}/Reliable/Client', 'Pontifex.RR.Reliable.RRReliableTransport'),
- 'Reliable/Server/Coverage.md': (f'{base}/Reliable/Server', 'Pontifex.RR.Reliable.RRReliableTransport'),
+ 'Coverage.md': ('RRTransport', 'Pontifex.RR.RRTransport', base, 'AnyTransport'),
+ 'Reliable/Coverage.md': ('RRReliableTransport',
+   'Pontifex.RR.Reliable.RRReliableTransport', f'{base}/Reliable',
+   'Pontifex.RR.RRTransport'),
+ 'Reliable/Generic/Coverage.md': ('RRReliableTransportGeneric',
+   'Pontifex.RR.Reliable.RRReliableTransport<THandler>', f'{base}/Reliable/Generic',
+   'Pontifex.RR.Reliable.RRReliableTransport'),
+ 'Reliable/Client/Coverage.md': ('RRReliableClientTransport',
+   'Pontifex.RR.Reliable.RRReliableClientTransport', f'{base}/Reliable/Client',
+   'Pontifex.RR.Reliable.RRReliableTransport'),
+ 'Reliable/Server/Coverage.md': ('RRReliableServerTransport',
+   'Pontifex.RR.Reliable.RRReliableServerTransport', f'{base}/Reliable/Server',
+   'Pontifex.RR.Reliable.RRReliableTransport<THandler>'),
 }
-for rel, (directory, parent) in expected.items():
+for rel, (layer, subject, directory, parent) in expected.items():
     path = os.path.join(base, rel)
     text = open(path, encoding='utf-8-sig').read()
-    if f'| Directory | `{directory}` |' not in text:
-        print(f'bad directory: {path}')
-        sys.exit(1)
-    if '| Inheritance parent |' not in text or parent not in text:
-        print(f'bad inheritance parent: {path}')
+    for field, value in (('Layer', layer), ('Subject', subject),
+                         ('Directory', directory), ('Inheritance parent', parent)):
+        if f'| {field} | `{value}` |' not in text:
+            print(f'bad {field}: {path} expected {value}')
+            sys.exit(1)
+    if 'Direct test assembly' in text:
+        print(f'stale dependency text: {path}')
         sys.exit(1)
     for link in re.findall(r'\]\(([^)]+)\)', text):
         if link.startswith(('..', '.')):
@@ -690,11 +714,14 @@ deterministically through a concrete test double.
    - `Response_LastMessage_UnbindsHandlerAfterCallback` — reuse the same handler for a
      second request after the last callback to prove unbinding;
    - `Response_WhenHandlerThrows_IsIsolatedAndStillCompletes`;
-   - `Response_Callbacks_AreSerializedPerRequest` — use a two-message response and a
-     `Barrier`/gate pair: the first callback signals it is active and waits; the second
-     delivery is started on another thread and signals that it is blocked; only then release
-     the first. Assert max active callbacks is 1 and both message ids are delivered. Only a
-     duplicate message id is dropped, covered by
+   - `Response_Callbacks_AreSerializedPerRequest` — mark `[Timeout(5000)]`; give the
+     recording handler an active-callback counter. The first callback increments it, signals
+     entry, and waits on a release gate. Start a second thread delivering message id 1; wait
+     with bounded `SpinWait` until that thread reports `ThreadState.WaitSleepJoin` (blocked
+     on the production state lock) or the second callback count remains zero while the first
+     is active. Assert active callbacks == 1 and second callback not entered, then release
+     and join. Assert both ids were delivered in order and max active callbacks stayed 1.
+     Only a duplicate id is dropped, covered by
      `Response_WithDuplicateMessageId_IsDropped`. Category `Transports.Concurrency`;
    - `Stop_FromInsideAResponseCallback_DoesNotDeadlock` — mark `[Timeout(5000)]` so a
      deadlock fails instead of hanging the run; category `Transports.Concurrency`;
@@ -861,10 +888,12 @@ test projects are green.
    - `OnFrameReceived_DuplicateClientRequest_IsPresentedAgain` — RRUnreliable permits
      duplicate presentation; this pins the absence of base-level suppression;
    - `OnFrameReceived_FromDifferentClients_HaveIndependentHandles`;
-   - `Response_ConcurrentCallsProduceOneSequence` — use a `Barrier`/gate pair so both
-     calls are provably waiting on the handle gate before either completes; assert one
-     terminal result per message and the expected sequence. Categorized
-     `Transports.Concurrency`.
+   - `Response_ConcurrentCallsProduceOneSequence` — mark `[Timeout(5000)]`; the test double
+     records active `SendFrame` calls and blocks the first send on a release gate. Start a
+     second thread calling `Response`; wait with bounded `SpinWait` until its
+     `ThreadState.WaitSleepJoin` is observed while the first send is still active. Assert
+     active sends == 1, release, join, and assert the two frames carry message ids 0 and 1
+     with no interleaving. Categorized `Transports.Concurrency`.
 3. Update the layer Coverage.md, Transports README layer table/directory/harness,
    RRUnreliable contract matrix, categories, the `Transports.Concurrency` prose/count, and
    planned/deferred tables:
@@ -915,6 +944,54 @@ test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/RRUnreliableServerTransportTests.cs
+python3 - <<'PY'
+import os, re, sys
+base = 'Tests/Pontifex.Tests/Transports/RR'
+expected = {
+ 'Coverage.md': ('RRTransport', 'Pontifex.RR.RRTransport', base, 'AnyTransport'),
+ 'Reliable/Coverage.md': ('RRReliableTransport',
+   'Pontifex.RR.Reliable.RRReliableTransport', f'{base}/Reliable',
+   'Pontifex.RR.RRTransport'),
+ 'Reliable/Generic/Coverage.md': ('RRReliableTransportGeneric',
+   'Pontifex.RR.Reliable.RRReliableTransport<THandler>', f'{base}/Reliable/Generic',
+   'Pontifex.RR.Reliable.RRReliableTransport'),
+ 'Reliable/Client/Coverage.md': ('RRReliableClientTransport',
+   'Pontifex.RR.Reliable.RRReliableClientTransport', f'{base}/Reliable/Client',
+   'Pontifex.RR.Reliable.RRReliableTransport'),
+ 'Reliable/Server/Coverage.md': ('RRReliableServerTransport',
+   'Pontifex.RR.Reliable.RRReliableServerTransport', f'{base}/Reliable/Server',
+   'Pontifex.RR.Reliable.RRReliableTransport<THandler>'),
+ 'Unreliable/Coverage.md': ('RRUnreliableTransport',
+   'Pontifex.RR.Unreliable.RRUnreliableTransport', f'{base}/Unreliable',
+   'Pontifex.RR.RRTransport'),
+ 'Unreliable/Generic/Coverage.md': ('RRUnreliableTransportGeneric',
+   'Pontifex.RR.Unreliable.RRUnreliableTransport<THandler>', f'{base}/Unreliable/Generic',
+   'Pontifex.RR.Unreliable.RRUnreliableTransport'),
+ 'Unreliable/Client/Coverage.md': ('RRUnreliableClientTransport',
+   'Pontifex.RR.Unreliable.RRUnreliableClientTransport', f'{base}/Unreliable/Client',
+   'Pontifex.RR.Unreliable.RRUnreliableTransport'),
+ 'Unreliable/Server/Coverage.md': ('RRUnreliableServerTransport',
+   'Pontifex.RR.Unreliable.RRUnreliableServerTransport', f'{base}/Unreliable/Server',
+   'Pontifex.RR.Unreliable.RRUnreliableTransport<THandler>'),
+}
+for rel, (layer, subject, directory, parent) in expected.items():
+    path = os.path.join(base, rel)
+    text = open(path, encoding='utf-8-sig').read()
+    for field, value in (('Layer', layer), ('Subject', subject),
+                         ('Directory', directory), ('Inheritance parent', parent)):
+        if f'| {field} | `{value}` |' not in text:
+            print(f'bad {field}: {path} expected {value}')
+            sys.exit(1)
+    if 'Direct test assembly' in text or 'Tests/Pontifex.Transport.Direct.Tests' in text:
+        print(f'stale dependency text: {path}')
+        sys.exit(1)
+    for link in re.findall(r'\]\(([^)]+)\)', text):
+        if link.startswith(('..', '.')):
+            target = os.path.normpath(os.path.join(os.path.dirname(path), link))
+            if not os.path.exists(target):
+                print(f'broken link: {path} {link}')
+                sys.exit(1)
+PY
 test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/RRUnreliableServerTransportTests.cs)" -eq 32
 python3 - <<'PY'
 import glob, re, sys
@@ -1020,7 +1097,9 @@ Expected:
 - full `Pontifex.Transport.Direct.Tests` = **Passed: 315**;
 - `grep -rn 'Category("Direct'` prints no output;
 - `git status --porcelain -- Pontifex/` prints no output (no production changes);
-- all nine layer Coverage files exist, each with `## Planned` and `## Deferred by design`;
+- all nine layer Coverage files exist, each with exact Layer/Subject/Directory/
+  Inheritance-parent rows, no old Direct dependency text, resolving relative links, and
+  `## Planned` plus `## Deferred by design`;
 - every layer has a README row and an exact coverage link;
 - the README contract-reference list has exact production link text and the three RR
   specification links;
