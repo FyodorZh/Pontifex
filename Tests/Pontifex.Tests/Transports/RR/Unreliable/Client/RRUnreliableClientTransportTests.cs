@@ -488,7 +488,6 @@ public sealed class RRUnreliableClientTransportTests
     }
 
     [Test]
-    [Timeout(5000)]
     [Category("Transports.Concurrency")]
     public void Response_Callbacks_AreSerializedPerRequest()
     {
@@ -542,7 +541,6 @@ public sealed class RRUnreliableClientTransportTests
     }
 
     [Test]
-    [Timeout(5000)]
     [Category("Transports.Concurrency")]
     public void Stop_FromInsideAResponseCallback_DoesNotDeadlock()
     {
@@ -556,9 +554,13 @@ public sealed class RRUnreliableClientTransportTests
             stopCompleted = true;
         };
         Assert.That(client.Request(TestMessages.Int(1), handler), Is.EqualTo(SendResult.Ok));
+        UnionDataList response = ResponseFrame(handler.RequestId!.Value, 0, 1, 10);
 
-        Assert.DoesNotThrow(() =>
-            client.Receive(ResponseFrame(handler.RequestId!.Value, 0, 1, 10)));
+        Task receive = Task.Run(() => client.Receive(response));
+
+        Assert.That(SpinWait.SpinUntil(() => receive.IsCompleted, Timeout), Is.True,
+            "Receive must return; Stop from inside the response callback must not deadlock");
+        Assert.DoesNotThrow(() => receive.GetAwaiter().GetResult());
 
         Assert.Multiple(() =>
         {
@@ -571,7 +573,6 @@ public sealed class RRUnreliableClientTransportTests
     }
 
     [Test]
-    [Timeout(5000)]
     [Category("Transports.Concurrency")]
     public void Request_FromInsideAResponseCallback_IsAccepted()
     {
@@ -582,9 +583,13 @@ public sealed class RRUnreliableClientTransportTests
         outer.OnResponse = () =>
             nestedResult = client.Request(TestMessages.Int(2), nested);
         Assert.That(client.Request(TestMessages.Int(1), outer), Is.EqualTo(SendResult.Ok));
+        UnionDataList response = ResponseFrame(outer.RequestId!.Value, 0, 1, 10);
 
-        Assert.DoesNotThrow(() =>
-            client.Receive(ResponseFrame(outer.RequestId!.Value, 0, 1, 10)));
+        Task receive = Task.Run(() => client.Receive(response));
+
+        Assert.That(SpinWait.SpinUntil(() => receive.IsCompleted, Timeout), Is.True,
+            "Receive must return; the nested request must be accepted without deadlocking");
+        Assert.DoesNotThrow(() => receive.GetAwaiter().GetResult());
 
         Assert.Multiple(() =>
         {

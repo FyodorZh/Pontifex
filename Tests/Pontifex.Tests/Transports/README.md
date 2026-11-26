@@ -355,8 +355,9 @@ reliable server dispatch, handle, and session tests, three unreliable client req
 tests, and one unreliable server response-sequence test. Most of them use gates and joined workers
 with bounded timeouts, and gates are always released in `finally`; no test sleeps or polls. Two of
 the unreliable client tests — `Stop_FromInsideAResponseCallback_DoesNotDeadlock` and
-`Request_FromInsideAResponseCallback_IsAccepted` — exercise callback reentrancy and stop on the
-`Receive` caller thread rather than gated threads. The remaining worker-based tests are
+`Request_FromInsideAResponseCallback_IsAccepted` — exercise callback reentrancy: they dispatch the
+reentrant `Receive` call to a worker and assert a bounded completion within `Timeout`, so a
+self-deadlock fails the test instead of hanging the run. The remaining worker-based tests are
 `Response_Callbacks_AreSerializedPerRequest` (unreliable client) and
 `Response_ConcurrentCallsProduceOneSequence` (unreliable server). A bounded test completes
 synchronously and asserts an invariant, not a scheduling order. The tests still run in the default
@@ -1072,7 +1073,7 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
   callbacks.
 - Real time, threads, timers, and wall-clock scheduling, except the deterministic,
   concurrency-categorised `Transports.Concurrency` tests: most are gated and joined, while two
-  exercise callback reentrancy and stop on the `Receive` caller thread.
+  dispatch the reentrant `Receive` call to a worker and bound its completion.
 
 ## Rules
 
