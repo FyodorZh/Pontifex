@@ -17,7 +17,7 @@ internal sealed class TestReliableServerTransport : RRReliableServerTransport
     private readonly ScriptedReliableCarrier _carrier;
 
     public TestReliableServerTransport(ScriptedReliableCarrier carrier, TimeSpan responseTtl,
-        IRRReliableTimerFactory timerFactory, int dispatchCapacity = 1024,
+        ITimerFactory timerFactory, int dispatchCapacity = 1024,
         int messageMaxByteSize = 64)
         : base("test-reliable-server", responseTtl, new Logger([]), MemoryRental.Shared,
             timerFactory, dispatchCapacity)

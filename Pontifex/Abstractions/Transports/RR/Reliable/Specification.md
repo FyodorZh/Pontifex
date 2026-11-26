@@ -102,7 +102,7 @@ public enum RRReliableCompletionType
     Failed
 }
 
-public interface IRRReliableTimerFactory
+public interface ITimerFactory
 {
     IDisposable Schedule(TimeSpan delay, Action callback);
 }
@@ -111,10 +111,13 @@ public interface IRRReliableTimerFactory
 `IRRClientTransport`, `IRRServerTransport`, `IRRRequestHandler`, `IRRResponse`,
 `RRRequestHandler`, and `RRResponse` come from the shared contract.
 
-`IRRReliableTimerFactory` is the abstraction the type uses to schedule its TTL
+`Pontifex.Utils.ITimerFactory` is the abstraction the type uses to schedule its TTL
 callbacks. It appears in protected constructors of the public abstract core
 types, so a carrier implementation supplies the clock-free timer seam. The core
-types default to a system timer when no factory is passed.
+types default to `SystemTimerFactory.Instance` when no factory is passed. The
+contract is documented on the interface: scheduling is one-shot,
+`Timeout.InfiniteTimeSpan` arms a callback that never fires, any other negative
+delay is rejected, and a callback exception is swallowed by the factory.
 
 The client binds no transport-level handler and has no `Init`; it is ready to
 start after construction. The server binds one `IRRReliableServerHandler`

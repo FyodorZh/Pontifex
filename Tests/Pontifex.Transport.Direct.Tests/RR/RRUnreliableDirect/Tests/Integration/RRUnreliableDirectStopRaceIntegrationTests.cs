@@ -9,13 +9,14 @@ using Pontifex.Tests.RR.RRUnreliableDirect.Harness;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.RR.RRUnreliableDirect.Tests;
+namespace Pontifex.Tests.RR.RRUnreliableDirect;
 
 /// <summary>
 /// Integration stop-race fixture for the RRUnreliable Direct client. The send is gated, so the interleaving is
 /// deterministic even though it uses a task.
 /// </summary>
 [TestFixture]
+[Category("Direct.RRUnreliable")]
 [Category("Direct.RRUnreliable.Integration")]
 public sealed class RRUnreliableDirectStopRaceIntegrationTests
 {

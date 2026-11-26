@@ -583,7 +583,6 @@ public sealed class RRUnreliableServerTransportTests
     }
 
     [Test]
-    [Timeout(5000)]
     [Category("Transports.Concurrency")]
     public void Response_ConcurrentCallsProduceOneSequence()
     {

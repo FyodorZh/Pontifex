@@ -119,7 +119,7 @@ An admitted session endpoint closes its channel when it stops.
 The reject linger of this carrier is `TimeSpan.Zero`: the reject frame is
 delivered synchronously before the channel closes, so no waiting is required.
 Both roles nevertheless enforce the positive handshake deadline through
-`IRawReliableHandshakeTimerFactory`. The system factory uses a
+`Pontifex.Utils.ITimerFactory`. The system factory uses a
 `System.Threading.Timer`; a test injects a manual factory through the internal
 constructor.
 

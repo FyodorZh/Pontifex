@@ -31,7 +31,7 @@ namespace Pontifex.Api
         private readonly IApiRoot _api;
         private readonly IMemoryRental _memoryRental;
         private readonly ILogger Log;
-        private readonly INegotiationClock? _negotiationClock;
+        private readonly ITimerFactory? _negotiationTimerFactory;
 
         private IRawReliableEndpoint? _endpoint;
         private NegotiationSession? _negotiation;
@@ -59,19 +59,19 @@ namespace Pontifex.Api
         }
 
         /// <summary>
-        /// Creates the client Api logic with an explicit negotiation clock. Used by deterministic tests; the
-        /// public constructor selects the production clock.
+        /// Creates the client Api logic with an explicit timer seam. Used by deterministic tests; the
+        /// public constructor selects the system timer.
         /// </summary>
         internal ClientSideApi(
             IApiRoot api,
             IMemoryRental memoryRental,
             ILogger logger,
-            INegotiationClock? negotiationClock)
+            ITimerFactory? negotiationTimerFactory)
         {
             _api = api;
             _memoryRental = memoryRental;
             Log = logger;
-            _negotiationClock = negotiationClock;
+            _negotiationTimerFactory = negotiationTimerFactory;
         }
 
         void IRawReliableClientHandler.OnConnected(IRawReliableEndpoint endPoint)
@@ -87,7 +87,7 @@ namespace Pontifex.Api
                 _ => { },
                 HandleNegotiationAccepted,
                 appendData: AppendNegotiationData,
-                clock: _negotiationClock,
+                timerFactory: _negotiationTimerFactory,
                 log: Log);
 
             _negotiation = negotiation;

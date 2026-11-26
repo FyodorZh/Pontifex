@@ -45,7 +45,7 @@ namespace Pontifex.Raw.Reliable.Direct
             string handshakeName,
             int handshakeMaxByteSize,
             TimeSpan handshakeTimeout,
-            IRawReliableHandshakeTimerFactory? timerFactory)
+            ITimerFactory? timerFactory)
             : base(transportName, serverEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log,
                 null, handshakeName, handshakeMaxByteSize, handshakeTimeout, timerFactory)
         {

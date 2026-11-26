@@ -86,7 +86,7 @@ Coverage gaps are recorded in the owning layer's `Coverage.md`.
 - [IRRReliableTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTransport.cs)
 - [RRReliableClientTransport.cs](../../../Pontifex/Implementations/RR/Reliable/RRReliableClientTransport.cs)
 - [RRReliableServerTransport.cs](../../../Pontifex/Implementations/RR/Reliable/RRReliableServerTransport.cs)
-- [IRRReliableTimerFactory.cs](../../../Pontifex/Abstractions/Transports/RR/Reliable/IRRReliableTimerFactory.cs)
+- [ITimerFactory.cs](../../../Pontifex/Utils/TimerFactory/ITimerFactory.cs)
 - [RRUnreliableTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableTransport.cs)
 - [IRRUnreliableTransport.cs](../../../Pontifex/Abstractions/Transports/RR/Unreliable/IRRUnreliableTransport.cs)
 - [RRUnreliableClientTransport.cs](../../../Pontifex/Implementations/RR/Unreliable/RRUnreliableClientTransport.cs)
@@ -214,7 +214,6 @@ Transports/
     │   ├── Coverage.md
     │   ├── RRReliableTransportTests.cs
     │   ├── Harness/
-    │   │   ├── ManualTimerFactory.cs
     │   │   ├── ScriptedReliableCarrier.cs
     │   │   └── TestRRReliableTransport.cs
     │   ├── Generic/                                 RRReliableTransport<THandler> layer
@@ -292,10 +291,9 @@ drivers.
   `TestRawUnreliableServerEndpoint` sessions from the `Endpoints` suite and reuses the same recording
   handler and log consumer.
 - `RR/Harness/` holds `TestRRTransport`, the concrete double for the shared RR lifecycle base.
-- `RR/Reliable/Harness/` holds `TestRRReliableTransport`, the deterministic
-  `ScriptedReliableCarrier` shared by the client and server layers, and the copied
-  `ManualTimerFactory`. It is the nearest common ancestor of the two sibling layers, so neither
-  sibling references the other's harness.
+- `RR/Reliable/Harness/` holds `TestRRReliableTransport` and the deterministic
+  `ScriptedReliableCarrier` shared by the client and server layers. It is the nearest common
+  ancestor of the two sibling layers, so neither sibling references the other's harness.
 - `RR/Reliable/Generic/Harness/` holds `TestRRReliableTransportGeneric` and its empty handler.
 - `RR/Reliable/Client/Harness/` holds `TestReliableClientTransport`, its recording client handler,
   and the plain non-`RRRequestHandler` handler used by the type-check test.
@@ -357,8 +355,9 @@ reliable server dispatch, handle, and session tests, three unreliable client req
 tests, and one unreliable server response-sequence test. Most of them use gates and joined workers
 with bounded timeouts, and gates are always released in `finally`; no test sleeps or polls. Two of
 the unreliable client tests — `Stop_FromInsideAResponseCallback_DoesNotDeadlock` and
-`Request_FromInsideAResponseCallback_IsAccepted` — exercise callback reentrancy and stop on the
-`Receive` caller thread rather than gated threads. The remaining worker-based tests are
+`Request_FromInsideAResponseCallback_IsAccepted` — exercise callback reentrancy: they dispatch the
+reentrant `Receive` call to a worker and assert a bounded completion within `Timeout`, so a
+self-deadlock fails the test instead of hanging the run. The remaining worker-based tests are
 `Response_Callbacks_AreSerializedPerRequest` (unreliable client) and
 `Response_ConcurrentCallsProduceOneSequence` (unreliable server). A bounded test completes
 synchronously and asserts an invariant, not a scheduling order. The tests still run in the default
@@ -681,8 +680,8 @@ covered by the `RRTransport` layer and are not repeated.
 - **Type**: the transport reports `TransportType.RRReliable`.
 - **Overhead**: `FrameOverheadBytes` is `RRReliableFrame.MaxOverheadBytes`, so the ceiling is the
   message limit plus that constant plus one.
-- **Timer injection**: a constructor-supplied `IRRReliableTimerFactory` becomes the base's timer
-  seam; a null argument falls back to the system timer.
+- **Timer injection**: a constructor-supplied `Pontifex.Utils.ITimerFactory` becomes the base's
+  timer seam; a null argument falls back to `SystemTimerFactory.Instance`.
 
 ### `RRReliableTransport<THandler>` contract matrix
 
@@ -955,8 +954,9 @@ never use reflection. Only these are asserted:
   and handles, can answer, finish, reject, block, or throw, and tracks the maximum active count.
 - `ScriptedReliableCarrier` records and queues reliable frames in both directions, exposes optional
   per-direction send overrides, and releases every undelivered frame.
-- The `ManualTimerFactory` copy in `RR/Reliable/Harness/` is deterministic loose support: it never
-  fires on its own, and a test explicitly fires, suppresses, or disposes each handle.
+- The production `Pontifex.Utils.ManualTimerFactory` is deterministic support shared with the
+  `TimerFactory` suite and the Direct suites: it never fires on its own, and a test explicitly
+  fires, suppresses, or disposes each handle.
 - A trivial `RawReliableConformanceControl` is passed only because the production constructor
   requires one. It is never armed, inspected, or asserted.
 
@@ -1063,15 +1063,17 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
   to the conformance suite in `Tests/Pontifex.Transports.Tests`.
 - Concrete carrier transports in the `Transports` projects (Direct, TCP, UDP), including the
   concrete RR carriers.
-- The Direct RR suites (`RRReliableDirect`, `RRUnreliableDirect`, and `RRReliableCoreHelpers`):
-  they cover the frame codec, request tables, session maps, and the in-process carrier round trip.
+- The Direct RR suites (`RRReliableDirect` and `RRUnreliableDirect`): they cover the in-process
+  carrier round trip.
+- The RR reliable helpers suite (`RRReliableHelpers`) under `Tests/Pontifex.Tests/Misc/`: it covers
+  the frame codec, request state, and request tables.
 - Arming the conformance subsystem (gates and failure injection). The unreliable root layer only
   asserts that the control object is published and that the debug-reliability lookup is preferred.
 - The public `Stopped` event on transports, where it is raised independently of the handler
   callbacks.
 - Real time, threads, timers, and wall-clock scheduling, except the deterministic,
   concurrency-categorised `Transports.Concurrency` tests: most are gated and joined, while two
-  exercise callback reentrancy and stop on the `Receive` caller thread.
+  dispatch the reentrant `Receive` call to a worker and bound its completion.
 
 ## Rules
 

@@ -63,7 +63,7 @@ internal sealed class TestRawReliableAdmissionServerTransport : RawReliableAdmis
 
     public TimeSpan ExposedRejectLinger => RejectLinger;
 
-    public IRawReliableHandshakeTimerFactory ExposedHandshakeTimerFactory => HandshakeTimerFactory;
+    public ITimerFactory ExposedHandshakeTimerFactory => HandshakeTimerFactory;
 
     public HandshakeOutcome ExposedTryHandshake(IEndPoint remote, UnionDataList request)
     {

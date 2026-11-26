@@ -49,7 +49,7 @@ namespace Pontifex.Raw.Reliable
         private readonly string _handshakeName;
         private readonly int _handshakeMaxByteSize;
         private readonly TimeSpan _handshakeTimeout;
-        private readonly IRawReliableHandshakeTimerFactory _timerFactory;
+        private readonly ITimerFactory _timerFactory;
         private int _handshakeTimerCreateCalls;
 
         private volatile State _stage;
@@ -88,7 +88,7 @@ namespace Pontifex.Raw.Reliable
             IMemoryRental memory, ILogger log, RawReliableClientEndpoint.PingOptions? pingOptions,
             string handshakeName, int handshakeMaxByteSize = RawReliableHandshake.DefaultMaxByteSize,
             TimeSpan? handshakeTimeout = null,
-            IRawReliableHandshakeTimerFactory? timerFactory = null)
+            ITimerFactory? timerFactory = null)
             : base(transportName, remoteEndPoint, handler, messageMaxByteSize, bufferCapacityBytes, memory, log, pingOptions)
         {
             if (handshakeName == null)
@@ -117,7 +117,7 @@ namespace Pontifex.Raw.Reliable
             _handshakeName = handshakeName;
             _handshakeMaxByteSize = handshakeMaxByteSize;
             _handshakeTimeout = resolvedTimeout;
-            _timerFactory = timerFactory ?? SystemRawReliableHandshakeTimerFactory.Instance;
+            _timerFactory = timerFactory ?? SystemTimerFactory.Instance;
 
             Stopped += OnEndpointStopped;
         }

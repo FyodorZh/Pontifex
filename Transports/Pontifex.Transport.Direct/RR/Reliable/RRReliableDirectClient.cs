@@ -25,7 +25,7 @@ namespace Pontifex.RR.Reliable.Direct
             TimeSpan requestTtl,
             ILogger logger,
             IMemoryRental memory,
-            IRRReliableTimerFactory? timerFactory = null)
+            ITimerFactory? timerFactory = null)
             : base(RRDirectInfo.ReliableTransportName + "_rr", serverEndPoint, requestTtl, logger,
                 memory, timerFactory)
         {

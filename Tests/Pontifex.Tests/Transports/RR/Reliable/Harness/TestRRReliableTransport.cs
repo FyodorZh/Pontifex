@@ -13,7 +13,7 @@ namespace Pontifex.Tests.Transports;
 internal sealed class TestRRReliableTransport : Pontifex.RR.Reliable.RRReliableTransport
 {
     public TestRRReliableTransport(int messageMaxByteSize = 26,
-        IRRReliableTimerFactory? timerFactory = null)
+        ITimerFactory? timerFactory = null)
         : base("test-rr-reliable", new Logger([]), MemoryRental.Shared, timerFactory)
     {
         MessageLimit = messageMaxByteSize;
@@ -39,7 +39,7 @@ internal sealed class TestRRReliableTransport : Pontifex.RR.Reliable.RRReliableT
 
     public int ExposedFrameMaxByteSize => FrameMaxByteSize;
 
-    public IRRReliableTimerFactory ExposedTimerFactory => TimerFactory;
+    public ITimerFactory ExposedTimerFactory => TimerFactory;
 
     public bool Validate(UnionDataList message, SendResult notStartedResult,
         out SendResult failure)

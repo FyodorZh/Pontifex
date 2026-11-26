@@ -1,6 +1,7 @@
 using System;
 using Actuarius.Memory;
 using Pontifex.StopReasons;
+using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.RR.Reliable
@@ -26,16 +27,16 @@ namespace Pontifex.RR.Reliable
         /// <param name="timerFactory">The timer seam for TTL callbacks, or <see langword="null"/>
         /// for the system timer.</param>
         protected RRReliableTransport(string typeName, ILogger logger, IMemoryRental memory,
-            IRRReliableTimerFactory? timerFactory = null)
+            ITimerFactory? timerFactory = null)
             : base(typeName, logger, memory)
         {
-            TimerFactory = timerFactory ?? SystemRRReliableTimerFactory.Instance;
+            TimerFactory = timerFactory ?? SystemTimerFactory.Instance;
         }
 
         /// <summary>
         /// Gets the timer factory that schedules every TTL and deferred terminal callback.
         /// </summary>
-        protected IRRReliableTimerFactory TimerFactory { get; }
+        protected ITimerFactory TimerFactory { get; }
 
         /// <inheritdoc/>
         public override TransportType Type => TransportType.RRReliable;
@@ -66,7 +67,7 @@ namespace Pontifex.RR.Reliable
         /// <param name="timerFactory">The timer seam for TTL callbacks, or <see langword="null"/>
         /// for the system timer.</param>
         protected RRReliableTransport(string typeName, ILogger logger, IMemoryRental memory,
-            IRRReliableTimerFactory? timerFactory = null)
+            ITimerFactory? timerFactory = null)
             : base(typeName, logger, memory, timerFactory)
         {
         }

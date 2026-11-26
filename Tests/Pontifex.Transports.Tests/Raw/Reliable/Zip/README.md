@@ -3,8 +3,8 @@
 Contract tests for the `zip` reliable wrapper: it negotiates its own `"zip"`
 dataset over any `RawReliable` transport and compresses/decompresses every
 application payload in place. Every test runs over hand-written fake reliable
-transports and a manual negotiation clock: no real time, timers, sockets, or
-networks.
+transports and the production `Pontifex.Utils.ManualTimerFactory` virtual clock:
+no real time, timers, sockets, or networks.
 
 ## Suite type
 
@@ -77,8 +77,9 @@ All harness types are hand-written (no mocking library) and test-only:
   `IRawReliableServer`, `IRawReliableEndpoint`, and one server-session driver.
   Delivery is synchronous and caller-driven; outbound payloads are cloned into
   `Sent` for assertions and released with `ReleaseSent`.
-- `ZipTestSupport.cs` contains the manual `INegotiationClock` seam, a minimal
-  `IEndPoint`, and payload build/describe helpers.
+- `ZipTestSupport.cs` contains a minimal `IEndPoint` and payload build/describe
+  helpers. The timer seam is the production `Pontifex.Utils.ManualTimerFactory`,
+  shared with `ZipPair`.
 - `ZipPair.cs` links fake clients and one fake server through the public
   `RawReliableWrapperClient`/`RawReliableWrapperServer` bases and the internal
   `RawReliableZipClientLogic`/`RawReliableZipServerLogic`, including the deferred

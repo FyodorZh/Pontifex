@@ -1,6 +1,7 @@
 using Actuarius.Memory;
 using Pontifex.RR.Reliable;
 using Pontifex.StopReasons;
+using Pontifex.Utils;
 using Scriba;
 
 namespace Pontifex.Tests.Transports;
@@ -19,7 +20,7 @@ internal sealed class TestRRReliableTransportGeneric<THandler>
     : Pontifex.RR.Reliable.RRReliableTransport<THandler>
     where THandler : class, IHandler
 {
-    public TestRRReliableTransportGeneric(IRRReliableTimerFactory? timerFactory = null)
+    public TestRRReliableTransportGeneric(ITimerFactory? timerFactory = null)
         : base("test-rr-reliable-generic", new Logger([]), MemoryRental.Shared, timerFactory)
     {
     }

@@ -9,67 +9,6 @@ using Pontifex.Utils;
 namespace Pontifex.Tests.Raw.Reliable.Zip.Harness
 {
     /// <summary>
-    /// A deterministic, manual <see cref="INegotiationClock"/>: no wall-clock time and no real timers.
-    /// </summary>
-    internal sealed class ManualZipClock : INegotiationClock
-    {
-        private sealed class Entry : IDisposable
-        {
-            public TimeSpan Delay;
-            public DateTime Due;
-            public Action Callback = null!;
-            public bool Cancelled;
-
-            public void Dispose()
-            {
-                Cancelled = true;
-            }
-        }
-
-        private readonly List<Entry> _entries = new List<Entry>();
-
-        public DateTime Now { get; private set; } = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        public IReadOnlyList<TimeSpan> PendingDelays =>
-            _entries.Where(e => !e.Cancelled).Select(e => e.Delay).ToList();
-
-        public int PendingCount => _entries.Count(e => !e.Cancelled);
-
-        public IDisposable Schedule(TimeSpan delay, Action callback)
-        {
-            var entry = new Entry
-            {
-                Delay = delay,
-                Due = Now + (delay < TimeSpan.Zero ? TimeSpan.Zero : delay),
-                Callback = callback
-            };
-            _entries.Add(entry);
-            return entry;
-        }
-
-        public void Advance(TimeSpan by)
-        {
-            Now += by;
-            while (true)
-            {
-                var due = _entries
-                    .Where(e => !e.Cancelled && e.Due <= Now)
-                    .OrderBy(e => e.Due)
-                    .FirstOrDefault();
-
-                if (due == null)
-                {
-                    return;
-                }
-
-                _entries.Remove(due);
-                due.Cancelled = true;
-                due.Callback();
-            }
-        }
-    }
-
-    /// <summary>
     /// A minimal <see cref="IEndPoint"/> carrying only the identity the wrapper proxies forward.
     /// </summary>
     internal sealed class FakeZipEndPoint : IEndPoint

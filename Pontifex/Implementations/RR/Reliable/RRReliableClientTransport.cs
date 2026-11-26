@@ -42,7 +42,7 @@ namespace Pontifex.RR.Reliable
         /// for the system timer.</param>
         protected RRReliableClientTransport(string typeName, IEndPoint serverEndPoint,
             TimeSpan requestTtl, ILogger logger, IMemoryRental memory,
-            IRRReliableTimerFactory? timerFactory = null)
+            ITimerFactory? timerFactory = null)
             : base(typeName, logger, memory, timerFactory)
         {
             if (requestTtl <= TimeSpan.Zero)

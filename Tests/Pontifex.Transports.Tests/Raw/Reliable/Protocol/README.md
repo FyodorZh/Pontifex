@@ -64,8 +64,8 @@ Protocol/
 ├── README.md
 ├── Coverage.md                              RawReliableWrapper layer
 ├── Harness/
+│   ├── FakeNegotiationSupport.cs
 │   ├── FakeReliableTransport.cs
-│   ├── ManualNegotiationClock.cs
 │   ├── RecordingWrapperLogic.cs
 │   └── WrapperPair.cs
 └── Tests/
@@ -76,17 +76,19 @@ Protocol/
 
 All harness types are hand-written (no mocking library) and test-only:
 
-- `ManualNegotiationClock` implements the internal `INegotiationClock` seam so
-  the ten-second deadline and the two-second rejection linger are advanced
-  explicitly. `PendingDelays` and `PendingCount` expose what is scheduled;
-  `Advance`/`FireNext` fire due callbacks in due-time order.
+- The timer seam is the production `Pontifex.Utils.ManualTimerFactory`, advanced
+  explicitly so the ten-second deadline and the two-second rejection linger fire
+  without real time. `PendingDelays` and `PendingCount` expose what is scheduled;
+  `Advance` fires due callbacks in due-time order.
 - `FakeReliableTransport.cs` contains the scripted `FakeReliableClient`,
-  `FakeReliableServer`, `FakeReliableEndpoint`, `FakeEndPoint`, `Payload`, the
-  `FakeServerSession` driver, and the recording
+  `FakeReliableServer`, `FakeReliableEndpoint`, the `FakeServerSession` driver,
+  and the recording
   `RecordingRawReliableClientHandler`/`RecordingRawReliableServerHandler`
   application handlers. Delivery is synchronous and caller-driven; outbound
   payloads are cloned into `Sent` for assertions and released with
   `ReleaseSent`.
+- `FakeNegotiationSupport.cs` contains the minimal `FakeEndPoint` and the
+  `Payload` build/describe helpers.
 - `RecordingWrapperLogic` records every negotiation hook, the connected and
   disconnected hooks, and lets a test script the fill/check/response tails.
 - `RecordingServerFactory` counts `TryCreate` calls and captures the remote.

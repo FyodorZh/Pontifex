@@ -23,7 +23,7 @@ namespace Pontifex.RR.Reliable.Direct
             TimeSpan responseTtl,
             ILogger logger,
             IMemoryRental memory,
-            IRRReliableTimerFactory? timerFactory = null)
+            ITimerFactory? timerFactory = null)
             : this(serverId, responseTtl, logger, memory, timerFactory, 1024,
                 (capacity, name, handler, disposer) =>
                     new SerializedCallbackQueue<DispatchItem>(capacity, name, handler, disposer))
@@ -35,7 +35,7 @@ namespace Pontifex.RR.Reliable.Direct
             TimeSpan responseTtl,
             ILogger logger,
             IMemoryRental memory,
-            IRRReliableTimerFactory? timerFactory,
+            ITimerFactory? timerFactory,
             int dispatchCapacity,
             Func<int, string, Action<DispatchItem>, Action<DispatchItem>,
                 ISerializedCallbackQueue<DispatchItem>> dispatchQueueFactory)

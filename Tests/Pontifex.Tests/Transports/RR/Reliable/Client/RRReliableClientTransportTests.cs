@@ -626,7 +626,7 @@ public sealed class RRReliableClientTransportTests
         });
     }
 
-    private sealed class ThrowingTimerFactory : IRRReliableTimerFactory
+    private sealed class ThrowingTimerFactory : ITimerFactory
     {
         public IDisposable Schedule(TimeSpan delay, Action callback)
         {

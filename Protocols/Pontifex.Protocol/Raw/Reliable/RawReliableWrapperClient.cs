@@ -32,7 +32,7 @@ namespace Pontifex.Raw.Reliable.Protocols
         private readonly string _negotiationName;
         private readonly int _handshakeMaxByteSize;
         private readonly TimeSpan _rejectLinger;
-        private readonly INegotiationClock _clock;
+        private readonly ITimerFactory _timerFactory;
 
         private IRawReliableWrapperLogic? _logic;
         private IRawReliableClientHandler? _userHandler;
@@ -77,16 +77,16 @@ namespace Pontifex.Raw.Reliable.Protocols
         /// </summary>
         internal RawReliableWrapperClient(string typeName, string negotiationName, IRawReliableClient inner,
             IRawReliableWrapperLogic logic, short version, int handshakeMaxByteSize, TimeSpan? rejectLinger,
-            INegotiationClock? clock)
+            ITimerFactory? timerFactory)
             : this(typeName, negotiationName, inner, inner.Log, inner.Memory, version, handshakeMaxByteSize,
-                rejectLinger, clock)
+                rejectLinger, timerFactory)
         {
             SetupLogic(logic);
         }
 
         private RawReliableWrapperClient(string typeName, string negotiationName, IRawReliableClient inner,
             ILogger logger, IMemoryRental memory, short version, int handshakeMaxByteSize,
-            TimeSpan? rejectLinger, INegotiationClock? clock)
+            TimeSpan? rejectLinger, ITimerFactory? timerFactory)
             : base(typeName, logger, memory, new RawReliableConformanceControl())
         {
             if (negotiationName == null)
@@ -104,7 +104,7 @@ namespace Pontifex.Raw.Reliable.Protocols
             _negotiationName = negotiationName;
             _handshakeMaxByteSize = handshakeMaxByteSize;
             _rejectLinger = rejectLinger ?? RawReliableNegotiation.DefaultRejectLinger;
-            _clock = clock ?? NegotiationClock.Shared;
+            _timerFactory = timerFactory ?? SystemTimerFactory.Instance;
         }
 
         /// <inheritdoc/>
@@ -353,7 +353,7 @@ namespace Pontifex.Raw.Reliable.Protocols
                     appendData: _logic.FillNegotiationData,
                     handshakeMaxByteSize: _wrapper._handshakeMaxByteSize,
                     rejectLinger: _wrapper._rejectLinger,
-                    clock: _wrapper._clock,
+                    timerFactory: _wrapper._timerFactory,
                     log: _wrapper.Log);
 
                 _negotiation = negotiation;

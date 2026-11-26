@@ -137,7 +137,7 @@ audit finding. **Commit:** `Add implementation report (stage 13)`.
 
 **Why:** Abstract §7.2 requires the exact `StopReason` instance at the handler.
 
-**Files:** `RawUnreliableServerTransport.cs`, `Tests/Pontifex.Transport.Direct.Tests/Raw/RawUnreliableDirectServerContractTests.cs`.
+**Files:** `RawUnreliableServerTransport.cs`, `Tests/Pontifex.Transport.Direct.Tests/Raw/RawUnreliableDirect/Tests/RawUnreliableDirectServerContractTests.cs`.
 
 **Verification:** `ServerStop_ActiveHandler_ReceivesTheSuppliedReasonInstance`, `Stop_WhenRoutesExist_StopsEveryLiveEndpointWithTransportReason`.
 

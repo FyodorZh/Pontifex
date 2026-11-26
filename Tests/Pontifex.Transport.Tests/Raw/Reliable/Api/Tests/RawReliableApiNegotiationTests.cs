@@ -123,7 +123,7 @@ public sealed class RawReliableApiNegotiationTests
     [Test]
     public void ClientApi_WithManualClock_TimesOutAtTheNegotiationDeadline()
     {
-        var clock = new ManualApiNegotiationClock();
+        var clock = new ManualTimerFactory();
         var clientApi = new ClientSideApi(new ApiNegotiationTestApi(), MemoryRental.Shared, Log, clock);
         var serverInstance = new ServerSideApiInstance<ApiNegotiationTestApi>(
             new ApiNegotiationTestApi(), MemoryRental.Shared, Log, clock);
@@ -150,7 +150,7 @@ public sealed class RawReliableApiNegotiationTests
     [Test]
     public void ServerApi_WithManualClock_RejectsAtTheDeadlineAndLingersTwoSeconds()
     {
-        var clock = new ManualApiNegotiationClock();
+        var clock = new ManualTimerFactory();
         var clientApi = new ClientSideApi(new ApiNegotiationTestApi(), MemoryRental.Shared, Log, clock);
         var serverInstance = new ServerSideApiInstance<ApiNegotiationTestApi>(
             new ApiNegotiationTestApi(), MemoryRental.Shared, Log, clock);

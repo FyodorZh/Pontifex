@@ -24,73 +24,6 @@ namespace Pontifex.Raw.Reliable
     }
 
     /// <summary>
-    /// A deterministic time seam for <see cref="NegotiationSession"/>: the monotonic source of "now" and
-    /// the scheduler used by the negotiation deadline and the rejection linger.
-    /// </summary>
-    internal interface INegotiationClock
-    {
-        /// <summary>
-        /// Gets the current UTC time.
-        /// </summary>
-        DateTime Now { get; }
-
-        /// <summary>
-        /// Schedules <paramref name="callback"/> once after <paramref name="delay"/>. A non-positive delay
-        /// fires as soon as the clock permits; <see cref="Timeout.InfiniteTimeSpan"/> schedules nothing.
-        /// </summary>
-        /// <returns>A handle that cancels the scheduled callback when disposed.</returns>
-        IDisposable Schedule(TimeSpan delay, Action callback);
-    }
-
-    /// <summary>
-    /// The production clock: wall-clock time and <see cref="System.Threading.Timer"/>.
-    /// </summary>
-    internal sealed class NegotiationClock : INegotiationClock
-    {
-        /// <summary>
-        /// The shared production instance.
-        /// </summary>
-        public static readonly NegotiationClock Shared = new NegotiationClock();
-
-        private NegotiationClock()
-        {
-        }
-
-        /// <inheritdoc/>
-        public DateTime Now => DateTime.UtcNow;
-
-        /// <inheritdoc/>
-        public IDisposable Schedule(TimeSpan delay, Action callback)
-        {
-            if (callback == null)
-            {
-                throw new ArgumentNullException(nameof(callback));
-            }
-
-            if (delay == Timeout.InfiniteTimeSpan)
-            {
-                return NoopDisposable.Instance;
-            }
-
-            if (delay < TimeSpan.Zero)
-            {
-                delay = TimeSpan.Zero;
-            }
-
-            return new Timer(_ => callback(), null, delay, Timeout.InfiniteTimeSpan);
-        }
-
-        private sealed class NoopDisposable : IDisposable
-        {
-            public static readonly NoopDisposable Instance = new NoopDisposable();
-
-            public void Dispose()
-            {
-            }
-        }
-    }
-
-    /// <summary>
     /// Drives one reliable-wrapper negotiation over an already-admitted inner session.
     /// </summary>
     /// <remarks>
@@ -106,7 +39,7 @@ namespace Pontifex.Raw.Reliable
     /// once after the hook returns. Hooks must neither retain nor release it. The append hook is append-only.
     /// </description></item>
     /// <item><description><b>Threading</b>: all state transitions are serialized by an internal lock. The
-    /// clock callback may race with the inbound path; the lock and the terminal latch make rejection and
+    /// timer callback may race with the inbound path; the lock and the terminal latch make rejection and
     /// timeout idempotent.</description></item>
     /// </list>
     /// </remarks>
@@ -118,7 +51,7 @@ namespace Pontifex.Raw.Reliable
         private readonly int _handshakeMaxByteSize;
         private readonly TimeSpan _handshakeTimeout;
         private readonly TimeSpan _rejectLinger;
-        private readonly INegotiationClock _clock;
+        private readonly ITimerFactory _timerFactory;
         private readonly Func<UnionDataList, SendResult> _send;
         private readonly Action<UnionDataList>? _appendData;
         private readonly Func<UnionDataList>? _createResponse;
@@ -161,7 +94,7 @@ namespace Pontifex.Raw.Reliable
         /// ten-second default. <see cref="Timeout.InfiniteTimeSpan"/> disables the deadline.</param>
         /// <param name="rejectLinger">How long the server keeps the inner session open after sending a reject,
         /// or <see langword="null"/> for the two-second default. Must not be negative.</param>
-        /// <param name="clock">The time seam, or <see langword="null"/> for the production clock.</param>
+        /// <param name="timerFactory">The timer seam, or <see langword="null"/> for the system timer.</param>
         /// <param name="log">An optional logger for hook and send exceptions.</param>
         public NegotiationSession(
             NegotiationRole role,
@@ -177,7 +110,7 @@ namespace Pontifex.Raw.Reliable
             int handshakeMaxByteSize = RawReliableNegotiation.DefaultMaxByteSize,
             TimeSpan? handshakeTimeout = null,
             TimeSpan? rejectLinger = null,
-            INegotiationClock? clock = null,
+            ITimerFactory? timerFactory = null,
             ILogger? log = null)
         {
             if (name == null)
@@ -235,7 +168,7 @@ namespace Pontifex.Raw.Reliable
             _handshakeMaxByteSize = handshakeMaxByteSize;
             _handshakeTimeout = resolvedTimeout;
             _rejectLinger = resolvedLinger;
-            _clock = clock ?? NegotiationClock.Shared;
+            _timerFactory = timerFactory ?? SystemTimerFactory.Instance;
             _log = log;
         }
 
@@ -593,7 +526,7 @@ namespace Pontifex.Raw.Reliable
                 return;
             }
 
-            _timer = _clock.Schedule(_handshakeTimeout, OnDeadline);
+            _timer = _timerFactory.Schedule(_handshakeTimeout, OnDeadline);
         }
 
         private void OnDeadline()
@@ -684,7 +617,7 @@ namespace Pontifex.Raw.Reliable
                 return;
             }
 
-            _lingerTimer = _clock.Schedule(_rejectLinger, () =>
+            _lingerTimer = _timerFactory.Schedule(_rejectLinger, () =>
             {
                 lock (_lock)
                 {

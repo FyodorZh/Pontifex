@@ -171,7 +171,7 @@ confidentiality, or integrity protection.
 | Wire correlation | The client-local `ushort` request id is the first frame element. A response adds a `uint` ordinal starting at one; a finish adds a completion byte; a cancel carries only the id. The server-global id stays local. |
 | Duplicate-suppression scope | Per session, keyed by the client-local id, with a full 65,536-bit bitmap. The window is not shared between clients and does not survive a session. |
 | Completion transport | A `Finish` frame carries the id and an `RRReliableCompletionType` byte; `Reject` sends `Rejected`, `Finish` sends `Normal`, the response TTL sends `Failed`, a session close and a disposal close send nothing, and the client's own stop or failure supplies `Failed`. |
-| Timer factory | `IRRReliableTimerFactory`; the concrete transports accept an optional factory and default to the system timer. The binding exposes no timer parameter. |
+| Timer factory | `Pontifex.Utils.ITimerFactory`; the concrete transports accept an optional factory and default to `SystemTimerFactory.Instance`. The binding exposes no timer parameter. |
 | Capacity | The server dispatch queue and its pre-start pending list default to `1024` items; a full list releases the request and closes its handle. |
 | Persistence | None. Pending requests, sessions, and the duplicate window do not survive a restart. |
 | Payload limit | `1048576` bytes, excluding the reliable header and channel framing. |

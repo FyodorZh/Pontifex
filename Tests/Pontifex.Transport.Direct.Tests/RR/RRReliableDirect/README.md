@@ -50,14 +50,13 @@ RR/RRReliableDirect/
   Coverage.md
   Harness/
     RecordingReliableHandlers.cs
-    TestBuildContext.cs
     TestMessages.cs
   Tests/
     RRReliableDirectBindingTests.cs
     RRReliableDirectLifecycleTests.cs
-    RRReliableDirectRoundTripTests.cs
     Integration/
       RRReliableDirectIntegrationTests.cs
+      RRReliableDirectRoundTripTests.cs
 ```
 
 `Tests/Integration/` is a group, not a layer.
@@ -67,14 +66,14 @@ RR/RRReliableDirect/
 - `RecordingReliableHandlers.cs` supplies a client request handler that records
   responses and completions and can act from inside a response callback, and a
   server handler with accept, respond, finish, and reject modes.
-- `TestBuildContext.cs` is a hand-written `ITransportBuildContext` for the
-  binding tests.
 - `TestMessages.cs` builds integer payloads and payloads of an exact serialized
   size.
 
-The deterministic timer is the loose
-[`ManualTimerFactory`](../TestSupport/ManualTimerFactory.cs) outside all suites;
-it is shared because the RR suites live in one test project.
+The binding tests use the shared loose
+[`TestSupport/TestBuildContext.cs`](../../TestSupport/TestBuildContext.cs)
+outside the suite. Handshake and TTL deadlines use the production
+`Pontifex.Utils.ManualTimerFactory`, shared because both test projects reference
+the Pontifex assembly.
 
 There are no harness self-tests, so the `Direct.RRReliable.Harness` category is
 not used.
@@ -118,7 +117,7 @@ New harness types belong in `Harness/`; groups must not contain harness.
 ## Out of scope
 
 - The reusable reliable RR core, including the shared `Pontifex.RR.RRTransport`
-  base: it is covered by `RRReliableCoreHelpers` and the abstract transport
+  base: it is covered by `RRReliableHelpers` and the abstract transport
   suite under `Tests/Pontifex.Tests/Transports/RR`.
 - The shared Direct RR carriers as standalone subjects: the RRUnreliable Direct
   suite pins their carrier-level behaviour.
@@ -142,6 +141,6 @@ dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Test
   --filter "TestCategory~Integration"
 ```
 
-Integration categories in use: `Direct.RRReliable.Integration`,
-`Direct.RRUnreliable.Integration`, `Direct.RawUnreliable.Integration`, and
-`Direct.Integration`.
+Integration categories in use: `Direct.ChannelManager.Integration`,
+`Direct.RawReliable.Integration`, `Direct.RawUnreliable.Integration`,
+`Direct.RRReliable.Integration`, and `Direct.RRUnreliable.Integration`.
