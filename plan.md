@@ -45,8 +45,12 @@ structure. The concrete Direct RR suites remain in place and keep passing.
 - RR fixtures additionally carry `[Category("Transports.RR")]`; RRReliable fixtures carry
   `[Category("Transports.RR.Reliable")]`; RRUnreliable fixtures carry
   `[Category("Transports.RR.Unreliable")]`. Client/server subcategories may be added.
-- The enumerated Stage 1 concurrency facet carries `[Category("Transports.Concurrency")]`;
-  do not tag additional tests beyond that authoritative list.
+- Exactly the 25 enumerated Stage 1 moved tests carry
+  `[Category("Transports.Concurrency")]`. Additionally, exactly four new Stage 3/4 tests
+  carry it: `Response_Callbacks_AreSerializedPerRequest`,
+  `Stop_FromInsideAResponseCallback_DoesNotDeadlock`,
+  `Request_FromInsideAResponseCallback_IsAccepted`, and
+  `Response_ConcurrentCallsProduceOneSequence`. Do not tag other tests.
 - Remove `Direct.*` categories from moved abstract tests. The exception is the
   `RRReliableServerSession` fixture relocated to the Direct CoreHelpers suite: the fixture
   gains `Direct.RRReliableCoreHelpers`, and only its two stress methods keep
@@ -136,6 +140,8 @@ CoreHelpers suite.
    `Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs`, and
    `Tests/Pontifex.Tests/Transports/RR/Harness/TestRRTransport.cs`.
 2. Add a concrete `TestRRTransport : Pontifex.RR.RRTransport` double with:
+   - `public override TransportType Type => TransportType.RRReliable;` (the abstract
+     `Type` must be implemented for the double to compile);
    - configurable `MessageMaxByteSize` and `FrameOverheadBytes`;
    - configurable `StartCarrier` result/throw and recorded `StartCarrierCalls`;
    - recorded `StopCarrierCalls` and `LastStopReason`;
@@ -280,7 +286,9 @@ CoreHelpers suite.
       `RRUnreliableTransport<THandler>`, `RRUnreliableClientTransport`, and
       `RRUnreliableServerTransport`) to the `Planned` section of
       `Transports/RR/Coverage.md`; the Unreliable layer files do not exist until Stage 2.
-      Do not put planned coverage status in the README (README-16).
+      Write planned rows with `—` in the first cell and the layer name in prose, so the
+      coverage checker does not mistake a planned row for a covered test. Do not put planned
+      coverage status in the README (README-16).
 12. Update Direct documentation and category references:
     - search for `RRReliableTransport`, `Direct.RRReliableTransport`, and plain
       `RRReliableTransport` prose outside the moved files;
@@ -314,6 +322,17 @@ git grep -n "Direct.RRReliableTransport" -- ':!plan.md'
 git grep -n "RRReliableTransport" -- Tests/Pontifex.Transport.Direct.Tests
 grep -rn "class RRReliableServerSessionTests" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Tests
 ! grep -q "cannot be made to throw through its public contract" Tests/Pontifex.Transport.Direct.Tests/RR/RRReliableCoreHelpers/Coverage.md
+! grep -q "No missing layers: the whole selected inheritance tree is covered" Tests/Pontifex.Tests/Transports/Coverage.md
+test -f Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/RRTransportTests.cs)" -eq 15
+test -f Tests/Pontifex.Tests/Transports/RR/Reliable/RRReliableTransportTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/RRReliableTransportTests.cs)" -eq 3
+test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Generic/RRReliableTransportGenericTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Generic/RRReliableTransportGenericTests.cs)" -eq 8
+test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Client/RRReliableClientTransportTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Client/RRReliableClientTransportTests.cs)" -eq 30
+test -f Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Reliable/Server/RRReliableServerTransportTests.cs)" -eq 21
 python3 - <<'PY'
 import glob, re, sys
 tests = {}
@@ -367,7 +386,11 @@ Expected:
 - the coverage Python check finds every `[Test]` method in its sibling `Coverage.md`;
 - `grep "class RRReliableServerSessionTests"` finds exactly the moved file;
 - the old `RRReliableTransport` directory no longer exists;
-- all five RRTransport/RRReliable coverage files exist.
+- all five RRTransport/RRReliable coverage files exist;
+- the root `Transports/Coverage.md` no longer claims the whole selected tree is covered
+  while RRUnreliable is planned;
+- the five test files exist with exactly 15 / 3 / 8 / 30 / 21 `[Test]` methods in
+  RRTransport, Reliable root, Generic, Client, and Server respectively.
 
 **Definition of done**
 
@@ -437,7 +460,8 @@ RRTransport.
    - add `RRUnreliableClientTransport` to the `Transports/RR/Unreliable/Coverage.md`
      Planned table and `RRUnreliableServerTransport` to the
      `Transports/RR/Unreliable/Generic/Coverage.md` Planned table (nearest existing
-     ancestor);
+     ancestor), using `—` in the first cell and the layer name in prose so the coverage
+     checker does not treat a planned row as a covered test;
    - add the RRUnreliable contract summary for the base and generic layers;
    - add directory and harness entries. Do not put planned coverage status in the README.
 
@@ -449,6 +473,10 @@ dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Tra
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.RR.Unreliable
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
+test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/RRUnreliableTransportTests.cs)" -eq 2
+test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/RRUnreliableTransportGenericTests.cs)" -eq 9
 python3 - <<'PY'
 import glob, re, sys
 tests = {}
@@ -478,7 +506,7 @@ PY
 
 Expected: build succeeds; `Transports` = **Passed: 323** (312 + 2 base + 9 generic);
 `Transports.RR.Unreliable` = **Passed: 11**; both coverage files exist and each test has
-exactly one coverage row.
+exactly one coverage row; the base file has 2 `[Test]` methods and the generic file has 9.
 
 **Definition of done**
 
@@ -506,8 +534,9 @@ deterministically through a concrete test double.
 
 **Actions**
 
-1. Create `Transports/RR/Unreliable/Client/Coverage.md`,
-   `RRUnreliableClientTransportTests.cs`, and `Harness/` files:
+1. Create `Transports/RR/Unreliable/Client/Coverage.md` (with exact `## Planned` and
+   `## Deferred by design` headings), `RRUnreliableClientTransportTests.cs`, and `Harness/`
+   files:
    - `TestRRUnreliableClientTransport.cs` — concrete client with configurable `SendFrame`
      result/throw/capture, exposed `OnFrameReceived`, `PendingCountForTests`, and the three
      internal test hooks; construct it with a public `StringEndPoint` server route (or a
@@ -598,7 +627,9 @@ dotnet build Pontifex.sln
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports
 dotnet test Tests/Pontifex.Tests/Pontifex.Tests.csproj --filter TestCategory=Transports.Concurrency
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
-! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Thread\(|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client
+test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientTransportTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/RRUnreliableClientTransportTests.cs)" -eq 35
+! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Client
 python3 - <<'PY'
 import glob, re, sys
 tests = {}
@@ -628,8 +659,8 @@ PY
 
 Expected: build succeeds; `Transports` = **Passed: 358** (323 + 35 client tests);
 `Transports.Concurrency` = **Passed: 33** (30 + 3 client concurrency tests); the client
-Coverage file exists and each test has exactly one coverage row; no real timers, sockets, or
-sleeps are introduced.
+Coverage file exists, the client test file has exactly 35 `[Test]` methods, and each test
+has exactly one coverage row; no real timers, sockets, or sleeps are introduced.
 
 **Definition of done**
 
@@ -661,8 +692,9 @@ solution is green.
 
 **Actions**
 
-1. Create `Transports/RR/Unreliable/Server/Coverage.md`,
-   `RRUnreliableServerTransportTests.cs`, and `Harness/` files:
+1. Create `Transports/RR/Unreliable/Server/Coverage.md` (with exact `## Planned` and
+   `## Deferred by design` headings), `RRUnreliableServerTransportTests.cs`, and `Harness/`
+   files:
    - `TestRRUnreliableServerTransport.cs` — concrete server with configurable
      `SendFrame` result/throw/capture, exposed `OnFrameReceived`, a manual clock, a
      `StringEndPoint`-based source route helper, and a logger constructor parameter so the
@@ -694,7 +726,9 @@ solution is green.
    - `SetMessageCount_RejectsOutOfRange` — call it on a closed handle with 0 and 257 to
      prove the range check precedes the state check;
    - `SetMessageCount_IsOneTimeBeforeFirstResponse`;
-   - `SetMessageCount_AfterFirstResponseThrows`;
+   - `SetMessageCount_AfterFirstResponseThrows` — call `SetMessageCount(2)` first, send one
+     response, then assert the second call throws while the handle is still open (not because
+     the last message closed it);
    - `SetMessageCount_AfterCloseThrows`;
    - `SetMessageCount_AfterExpiryThrows`;
    - `SetMessageCount_AfterStopThrows`;
@@ -733,7 +767,9 @@ solution is green.
      `IRRUnreliable*` interfaces, and `Pontifex/Abstractions/Transports/RR/Unreliable/Specification.md`;
    - RR contract matrices for shared, reliable, unreliable client, and unreliable server;
    - categories and commands;
-   - out-of-scope: concrete RR carriers, Direct RR suites, conformance, real timing.
+   - out-of-scope: concrete RR carriers, Direct RR suites, conformance, real timing;
+   - manually verify the selected tree, directory/harness layout, naming convention, and
+     category/filter commands match the final file tree.
 5. Ensure no `Planned` entry claims a layer that now exists. Restore the root
    `Tests/Pontifex.Tests/Transports/Coverage.md` statement to
    `No missing layers: the whole selected inheritance tree is covered` once the
@@ -764,8 +800,10 @@ test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/Coverage.md
+test -f Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/RRUnreliableServerTransportTests.cs
+test "$(grep -c '\[Test\]' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/RRUnreliableServerTransportTests.cs)" -eq 32
 for f in $(find Tests/Pontifex.Tests/Transports/RR -name Coverage.md); do grep -q '^## Planned' "$f" || { echo "missing Planned: $f"; exit 1; }; grep -q '^## Deferred by design' "$f" || { echo "missing Deferred: $f"; exit 1; }; done
-! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Thread\(|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server
+! grep -rnE 'Thread\.Sleep|Task\.Delay|DateTime\.UtcNow|new Timer\(' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server
 for layer in RRTransport RRReliableTransport RRReliableTransportGeneric RRReliableClientTransport RRReliableServerTransport RRUnreliableTransport RRUnreliableTransportGeneric RRUnreliableClientTransport RRUnreliableServerTransport; do grep -q "| \`$layer\` |" Tests/Pontifex.Tests/Transports/README.md || { echo "missing README row: $layer"; exit 1; }; done
 for path in RR/Coverage.md RR/Reliable/Coverage.md RR/Reliable/Generic/Coverage.md RR/Reliable/Client/Coverage.md RR/Reliable/Server/Coverage.md RR/Unreliable/Coverage.md RR/Unreliable/Generic/Coverage.md RR/Unreliable/Client/Coverage.md RR/Unreliable/Server/Coverage.md; do grep -q "($path)" Tests/Pontifex.Tests/Transports/README.md || { echo "missing README coverage link: $path"; exit 1; }; done
 for ref in RRTransport.cs RRReliableTransport.cs RRReliableClientTransport.cs RRReliableServerTransport.cs RRUnreliableTransport.cs RRUnreliableClientTransport.cs RRUnreliableServerTransport.cs; do grep -q "\[$ref\](" Tests/Pontifex.Tests/Transports/README.md || { echo "missing README contract reference: $ref"; exit 1; }; done
@@ -806,6 +844,8 @@ grep -q "No missing layers: the whole selected inheritance tree is covered" Test
 ! sed -n '/^## Planned/,/^## /p' Tests/Pontifex.Tests/Transports/RR/Unreliable/Coverage.md | grep -q "RRUnreliableClientTransport"
 ! sed -n '/^## Planned/,/^## /p' Tests/Pontifex.Tests/Transports/RR/Unreliable/Generic/Coverage.md | grep -q "RRUnreliableServerTransport"
 grep -qi "random request-id seed" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
+grep -qi "wraparound" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
+grep -qi "generator" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 grep -qi "BufferOverflow" Tests/Pontifex.Tests/Transports/RR/Unreliable/Client/Coverage.md
 sed -n '/^## Deferred/,/^## /p' Tests/Pontifex.Tests/Transports/RR/Unreliable/Server/Coverage.md | grep -qi "carrier-owned"
 dotnet test Pontifex.sln
@@ -830,6 +870,7 @@ Expected:
   specification links;
 - each RR test name appears in exactly one RR coverage file, with no stale or duplicate
   rows;
+- the server test file has exactly 32 `[Test]` methods;
 - the three CoreHelpers tests are present in CoreHelpers coverage, `CompletedWindow` is gone
   from the reliable server coverage, and the CoreHelpers README names
   `RRReliableServerSession`;
