@@ -6,7 +6,7 @@ using Pontifex.StopReasons;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.Raw.Reliable.Api.Harness;
+namespace Pontifex.Api.Tests.ApiNegotiation.Harness;
 
 /// <summary>
 /// A minimal <see cref="IEndPoint"/> carrying only an identity.

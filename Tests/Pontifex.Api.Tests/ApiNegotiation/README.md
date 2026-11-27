@@ -1,4 +1,4 @@
-# Reliable Api Negotiation Test Suite
+# API Negotiation Test Suite
 
 Black-box contract tests for the Api negotiation layer that `Pontifex.Api` runs
 on top of an already-admitted reliable raw transport: `ClientSideApi`,
@@ -23,13 +23,13 @@ Root subject: `Pontifex.Api.ClientSideApi`,
 
 ## Contract references
 
-- [ClientSideApi.cs](../../../../../Api/Pontifex.Api/Transport/Transport/ClientSideApi.cs)
-- [ServerSideApi.cs](../../../../../Api/Pontifex.Api/Transport/Transport/ServerSideApi.cs)
-- [ServerSideApiInstance.cs](../../../../../Api/Pontifex.Api/Transport/Transport/ServerSideApiInstance.cs)
-- [NegotiationSession.cs](../../../../../Pontifex/Implementations/Raw/Reliable/Negotiation/NegotiationSession.cs)
-- [RawReliableNegotiation.cs](../../../../../Pontifex/Implementations/Raw/Reliable/Negotiation/RawReliableNegotiation.cs)
-- [IRawReliableClientHandler.cs](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClientHandler.cs)
-- [IRawReliableServerHandlerFactory.cs](../../../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServerHandlerFactory.cs)
+- [ClientSideApi.cs](../../../Api/Pontifex.Api/Transport/Transport/ClientSideApi.cs)
+- [ServerSideApi.cs](../../../Api/Pontifex.Api/Transport/Transport/ServerSideApi.cs)
+- [ServerSideApiInstance.cs](../../../Api/Pontifex.Api/Transport/Transport/ServerSideApiInstance.cs)
+- [NegotiationSession.cs](../../../Pontifex/Implementations/Raw/Reliable/Negotiation/NegotiationSession.cs)
+- [RawReliableNegotiation.cs](../../../Pontifex/Implementations/Raw/Reliable/Negotiation/RawReliableNegotiation.cs)
+- [IRawReliableClientHandler.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Client/IRawReliableClientHandler.cs)
+- [IRawReliableServerHandlerFactory.cs](../../../Pontifex/Abstractions/Transports/Raw/Reliable/Server/IRawReliableServerHandlerFactory.cs)
 
 The Api negotiation envelope is the flat reliable-wrapper envelope
 `[version (short), name (UTF-8 string), NegotiationStatus (byte), ...custom elements]`
@@ -44,26 +44,27 @@ directory, and coverage file.
 
 | Layer | Subject | Directory | Coverage |
 |---|---|---|---|
-| `RawReliableApiNegotiation` | `ClientSideApi`, `ServerSideApiFactory<TApi>`, `ServerSideApiInstance<TApi>` | `Tests/Pontifex.Transport.Tests/Raw/Reliable/Api` | [`Coverage.md`](Coverage.md) |
+| `ApiNegotiation` | `ClientSideApi`, `ServerSideApiFactory<TApi>`, `ServerSideApiInstance<TApi>` | `Tests/Pontifex.Api.Tests/ApiNegotiation` | [`Coverage.md`](Coverage.md) |
 
 ## Naming conventions
 
 - Test file = `<Subject>Tests.cs`; fixture class = `<Subject>Tests`.
-- Namespace = `Pontifex.Tests.Raw.Reliable.Api`.
+- Namespace = `Pontifex.Api.Tests.ApiNegotiation`.
+- Harness namespace = `Pontifex.Api.Tests.ApiNegotiation.Harness`.
 - Test methods = `Scenario_ExpectedResult`, for example
   `ClientApi_WithWrongVersionResponse_RaisesDisconnectedOnceAndNoConnected`.
-- Every fixture carries `[Category("RawReliableApiNegotiation")]`.
+- Every fixture carries `[Category("ApiNegotiation")]`.
 
 ## Directory layout
 
 ```
-Api/
+ApiNegotiation/
 ├── README.md
-├── Coverage.md                              RawReliableApiNegotiation layer
+├── Coverage.md                              ApiNegotiation layer
 ├── Harness/
 │   └── ApiNegotiationHarness.cs
 └── Tests/
-    └── RawReliableApiNegotiationTests.cs
+    └── ApiNegotiationTests.cs
 ```
 
 ## Harness layout
@@ -88,20 +89,20 @@ advance it to fire the negotiation deadline and the rejection linger without
 real time.
 
 There are no harness self-tests, so the
-`RawReliableApiNegotiation.Harness` category is not used.
+`ApiNegotiation.Harness` category is not used.
 
 ## Coverage
 
 Coverage is recorded per layer, next to the layer's tests:
 
-- [`Coverage.md`](Coverage.md) — `RawReliableApiNegotiation`
+- [`Coverage.md`](Coverage.md) — `ApiNegotiation`
 
 A layer's `Coverage.md` lists current covered tests, planned gaps, and
 deferred-by-design gaps.
 
 ## Categories
 
-- Suite root category: `RawReliableApiNegotiation`. Every fixture carries it.
+- Suite root category: `ApiNegotiation`. Every fixture carries it.
 - Additional filtering categories: none.
 - Harness category: not used (no harness self-tests).
 
@@ -114,24 +115,24 @@ category.
 Run the whole test project:
 
 ```
-dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj
+dotnet test Tests/Pontifex.Api.Tests/Pontifex.Api.Tests.csproj
 ```
 
 Filter to this suite:
 
 ```
-dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj --filter TestCategory=RawReliableApiNegotiation
+dotnet test Tests/Pontifex.Api.Tests/Pontifex.Api.Tests.csproj --filter TestCategory=ApiNegotiation
 ```
 
 Filter to the fixture:
 
 ```
-dotnet test Tests/Pontifex.Transport.Tests/Pontifex.Transport.Tests.csproj --filter "FullyQualifiedName~RawReliableApiNegotiationTests"
+dotnet test Tests/Pontifex.Api.Tests/Pontifex.Api.Tests.csproj --filter "FullyQualifiedName~ApiNegotiationTests"
 ```
 
 ## Adding tests
 
-1. Put the test in `Tests/RawReliableApiNegotiationTests.cs`; the suite has
+1. Put the test in `Tests/ApiNegotiationTests.cs`; the suite has
    exactly one layer.
 2. Drive connection, inbound traffic, and server sessions through the harness.
    Do not use real clocks, timers, sockets, or threads.
@@ -155,4 +156,4 @@ becomes an inheritance tree, convert the suite according to the rules.
 
 ## Rules
 
-This suite follows [Tests/RULES.md](../../../../RULES.md).
+This suite follows [Tests/RULES.md](../../RULES.md).

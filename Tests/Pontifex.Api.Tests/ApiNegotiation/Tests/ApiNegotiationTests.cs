@@ -2,11 +2,11 @@ using Actuarius.Memory;
 using Pontifex.Api;
 using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
-using Pontifex.Tests.Raw.Reliable.Api.Harness;
+using Pontifex.Api.Tests.ApiNegotiation.Harness;
 using Pontifex.Utils;
 using Scriba;
 
-namespace Pontifex.Tests.Raw.Reliable.Api;
+namespace Pontifex.Api.Tests.ApiNegotiation;
 
 /// <summary>
 /// Deterministic tests for the Api negotiation layer (<c>"api"</c>, version <c>1</c>): the flat request, the
@@ -14,8 +14,8 @@ namespace Pontifex.Tests.Raw.Reliable.Api;
 /// synchronous, caller-driven delivery: no real time, sockets, or networks.
 /// </summary>
 [TestFixture]
-[Category("RawReliableApiNegotiation")]
-public sealed class RawReliableApiNegotiationTests
+[Category("ApiNegotiation")]
+public sealed class ApiNegotiationTests
 {
     private static ILogger Log => new Logger([]);
 

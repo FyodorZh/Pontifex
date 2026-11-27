@@ -1,16 +1,16 @@
-# RawReliableApiNegotiation Coverage
+# ApiNegotiation Coverage
 
-Layer: `RawReliableApiNegotiation`
+Layer: `ApiNegotiation`
 Subject: `Pontifex.Api.ClientSideApi`, `Pontifex.Api.ServerSideApiFactory<TApi>`,
 and `Pontifex.Api.ServerSideApiInstance<TApi>`
-Directory: `Tests/Pontifex.Transport.Tests/Raw/Reliable/Api`
+Directory: `Tests/Pontifex.Api.Tests/ApiNegotiation`
 
 Contract references:
-[ClientSideApi.cs](../../../../../Api/Pontifex.Api/Transport/Transport/ClientSideApi.cs),
-[ServerSideApi.cs](../../../../../Api/Pontifex.Api/Transport/Transport/ServerSideApi.cs),
-[ServerSideApiInstance.cs](../../../../../Api/Pontifex.Api/Transport/Transport/ServerSideApiInstance.cs),
-[NegotiationSession.cs](../../../../../Pontifex/Implementations/Raw/Reliable/Negotiation/NegotiationSession.cs),
-[RawReliableNegotiation.cs](../../../../../Pontifex/Implementations/Raw/Reliable/Negotiation/RawReliableNegotiation.cs).
+[ClientSideApi.cs](../../../Api/Pontifex.Api/Transport/Transport/ClientSideApi.cs),
+[ServerSideApi.cs](../../../Api/Pontifex.Api/Transport/Transport/ServerSideApi.cs),
+[ServerSideApiInstance.cs](../../../Api/Pontifex.Api/Transport/Transport/ServerSideApiInstance.cs),
+[NegotiationSession.cs](../../../Pontifex/Implementations/Raw/Reliable/Negotiation/NegotiationSession.cs),
+[RawReliableNegotiation.cs](../../../Pontifex/Implementations/Raw/Reliable/Negotiation/RawReliableNegotiation.cs).
 
 ## Covered
 
@@ -29,10 +29,10 @@ Contract references:
 
 | Missing test | Owning layer |
 | --- | --- |
-| A user `AppendNegotiationData` hook exception and the resulting stop path. | `RawReliableApiNegotiation`. |
-| A fabricated status value in the third element (unknown discriminator) rejected before the custom tail is parsed. | `RawReliableApiNegotiation` (not covered by the wrapper suite; it is a genuine gap here). |
-| `ClientSideApi` delivering admitted application data into the `TransportPipeSystem`. | `RawReliableApiNegotiation` (requires a declared Api pipe; the Api pipe suite covers pipes over in-memory transports). |
-| Concurrent Api sessions on one `ServerSideApiFactory` with independent instances. | `RawReliableApiNegotiation` (only the overlap clause needs a concurrency harness; sequential per-session freshness is now covered). |
+| A user `AppendNegotiationData` hook exception and the resulting stop path. | `ApiNegotiation`. |
+| A fabricated status value in the third element (unknown discriminator) rejected before the custom tail is parsed. | `ApiNegotiation` (not covered by the wrapper suite; it is a genuine gap here). |
+| `ClientSideApi` delivering admitted application data into the `TransportPipeSystem`. | `ApiNegotiation` (requires a declared Api pipe; the Api pipe suite covers pipes over in-memory transports). |
+| Concurrent Api sessions on one `ServerSideApiFactory` with independent instances. | `ApiNegotiation` (only the overlap clause needs a concurrency harness; sequential per-session freshness is now covered). |
 
 ## Deferred By Design
 
