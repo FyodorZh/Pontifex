@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.Api;
@@ -17,26 +18,36 @@ public class TestServerSideApiInstance<TApi> : ServerSideApiInstance<TApi>
     }
 }
 
-public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
+public class ApiTestHarness<TClientApi, TServerApi> : IAsyncDisposable
     where TClientApi : class, IApiRoot, new()
     where TServerApi : class, IApiRoot, new()
 {
     private readonly ITransportStack _stack;
-    private readonly TaskCompletionSource _connectedTcs = new();
+    private readonly TaskCompletionSource _connectedTcs =
+        RawReliableTestSupport.CreateCompletionSource();
+    private readonly TaskCompletionSource<StopReason> _clientStoppedTcs =
+        RawReliableTestSupport.CreateCompletionSource<StopReason>();
+    private readonly TaskCompletionSource<StopReason> _serverStoppedTcs =
+        RawReliableTestSupport.CreateCompletionSource<StopReason>();
+    private readonly TrackingServerHandlerFactory _serverSessions;
     private TestServerSideApiInstance<TServerApi>? _serverInstance;
+    private bool _clientStarted;
+    private bool _serverStarted;
     private bool _disposed;
 
     public TClientApi ClientApi { get; }
     public TServerApi? ServerApi => _serverInstance?.Api;
     public IRawReliableClient ClientTransport { get; }
     public IRawReliableServer ServerTransport { get; }
+    public RecordingLogger Logger { get; }
 
     public ApiTestHarness(ITransportStack stack, bool failIfError)
     {
         _stack = stack;
         var memory = TransportRegistry.Memory;
-        var logger = TransportRegistry.GetLogger(failIfError);
         var factory = stack.GetTransportFactory(failIfError);
+        Logger = factory.Logger;
+        var logger = Logger.Inner;
 
         ClientTransport = (IRawReliableClient)factory.BuildClient();
         ServerTransport = (IRawReliableServer)factory.BuildServer();
@@ -53,16 +64,19 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
             _serverInstance = new TestServerSideApiInstance<TServerApi>(api, memory, logger);
             return _serverInstance;
         });
-        Assert.That(ServerTransport.Init(serverFactory), Is.True,
+        _serverSessions = new TrackingServerHandlerFactory(serverFactory);
+        Assert.That(ServerTransport.Init(_serverSessions), Is.True,
             $"{stack.Id}: ServerTransport.Init failed");
     }
 
     public async Task StartAsync()
     {
-        Assert.That(ServerTransport.Start(_ => { }), Is.True,
+        Assert.That(ServerTransport.Start(reason => _serverStoppedTcs.TrySetResult(reason)), Is.True,
             $"{_stack.Id}: ServerTransport.Start failed");
-        Assert.That(ClientTransport.Start(_ => { }), Is.True,
+        _serverStarted = true;
+        Assert.That(ClientTransport.Start(reason => _clientStoppedTcs.TrySetResult(reason)), Is.True,
             $"{_stack.Id}: ClientTransport.Start failed");
+        _clientStarted = true;
 
         try
         {
@@ -76,12 +90,32 @@ public class ApiTestHarness<TClientApi, TServerApi> : IDisposable
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (_disposed)
+        {
+            return;
+        }
 
-        try { ClientTransport.Stop(new UserIntention("test", "Test completed")); } catch { }
-        try { ServerTransport.Stop(new UserIntention("test", "Test completed")); } catch { }
+        _disposed = true;
+        var errors = new ConcurrentBag<string>();
+        if (_clientStarted)
+        {
+            await RawReliableTestSupport.StopClientAsync(
+                ClientTransport, _clientStoppedTcs, TimeSpan.FromSeconds(5), errors, _stack.Id);
+        }
+
+        if (_serverStarted)
+        {
+            await RawReliableTestSupport.StopServerAsync(
+                ServerTransport, _serverStoppedTcs, _serverSessions, TimeSpan.FromSeconds(5),
+                errors, _stack.Id);
+        }
+
+        Logger.AddErrorsTo(errors, _stack.Id);
+        if (!errors.IsEmpty)
+        {
+            throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
+        }
     }
 }

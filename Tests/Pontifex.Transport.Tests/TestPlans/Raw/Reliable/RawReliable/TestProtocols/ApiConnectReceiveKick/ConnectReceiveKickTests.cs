@@ -85,97 +85,117 @@ public class ConnectReceiveKick
         var shutdownTimeout = TimeSpan.FromSeconds(clientCount <= 1 ? 5 : 30);
 
         var memory = TransportRegistry.Memory;
-        var logger = TransportRegistry.GetLogger(true);
         var factory = _stack.GetTransportFactory(true);
+        var recordingLogger = factory.Logger;
+        var logger = recordingLogger.Inner;
 
         var serverTransport = (IRawReliableServer)factory.BuildServer();
-        var serverStoppedTcs = new TaskCompletionSource<StopReason>();
-
+        var serverStoppedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
         var kickCount = 0;
 
-        var serverFactory = new ServerSideApiFactory<KickApiServer>(() =>
+        var apiFactory = new ServerSideApiFactory<KickApiServer>(() =>
         {
             var api = new KickApiServer();
             var instance = new TestServerSideApiInstance<KickApiServer>(api, memory, logger);
             instance.ApiStarted += _ =>
             {
                 Interlocked.Increment(ref kickCount);
-                var fireAndForget = Task.Run(() =>
-                {
-                    api.Kick.Send(new KickMessage());
-                    api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
-                });
+                api.Kick.Send(new KickMessage());
+                api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
             };
             return instance;
         });
-
-        Assert.That(serverTransport.Init(serverFactory), Is.True,
-            $"{_stack.Id}: ServerTransport.Init failed");
-        Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
-            $"{_stack.Id}: ServerTransport.Start failed");
-
+        var serverFactory = new TrackingServerHandlerFactory(apiFactory);
         var errors = new ConcurrentBag<string>();
+        var serverStarted = false;
 
-        await Parallel.ForEachAsync(
-            Enumerable.Range(0, clientCount),
-            new ParallelOptions { MaxDegreeOfParallelism = concurrency },
-            async (_, ct) =>
-            {
-                try
+        try
+        {
+            Assert.That(serverTransport.Init(serverFactory), Is.True,
+                $"{_stack.Id}: ServerTransport.Init failed");
+            Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
+                $"{_stack.Id}: ServerTransport.Start failed");
+            serverStarted = true;
+
+            await Parallel.ForEachAsync(
+                Enumerable.Range(0, clientCount),
+                new ParallelOptions { MaxDegreeOfParallelism = concurrency },
+                async (_, ct) =>
                 {
                     var api = new KickApiClient();
                     var handler = new ClientSideApi(api, memory, logger);
-                    var connectedTcs = new TaskCompletionSource();
-                    var kickedTcs = new TaskCompletionSource();
-                    var disconnectedTcs = new TaskCompletionSource<StopReason>();
-                    var stoppedTcs = new TaskCompletionSource<StopReason>();
+                    var connectedTcs = RawReliableTestSupport.CreateCompletionSource();
+                    var kickedTcs = RawReliableTestSupport.CreateCompletionSource();
+                    var disconnectedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
+                    var stoppedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
+                    IRawReliableClient? transport = null;
+                    var started = false;
 
                     handler.Connected += _ => connectedTcs.TrySetResult();
                     api.Kick.SetProcessor(_ => kickedTcs.TrySetResult());
                     api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
 
-                    var transport = (IRawReliableClient)factory.BuildClient();
-
-                    if (!transport.Init(handler))
+                    try
                     {
-                        errors.Add($"{_stack.Id}: ClientTransport.Init failed");
-                        return;
-                    }
+                        transport = (IRawReliableClient)factory.BuildClient();
+                        if (!transport.Init(handler))
+                        {
+                            errors.Add($"{_stack.Id}: ClientTransport.Init failed");
+                            return;
+                        }
 
-                    if (!transport.Start(reason => stoppedTcs.TrySetResult(reason)))
+                        if (!transport.Start(reason => stoppedTcs.TrySetResult(reason)))
+                        {
+                            errors.Add($"{_stack.Id}: ClientTransport.Start failed");
+                            return;
+                        }
+
+                        started = true;
+                        await WaitWithTimeout("connect", connectedTcs.Task, connectTimeout, ct);
+                        await WaitWithTimeout("kick", kickedTcs.Task, shutdownTimeout, ct);
+
+                        var disconnectReason = await WaitWithTimeout("disconnect", disconnectedTcs.Task, shutdownTimeout, ct);
+                        if (disconnectReason is AnyFail)
+                        {
+                            errors.Add($"{_stack.Id}: Client disconnected with error: {disconnectReason}");
+                            return;
+                        }
+
+                        await WaitWithTimeout("stop", stoppedTcs.Task, shutdownTimeout, ct);
+                    }
+                    catch (Exception ex)
                     {
-                        errors.Add($"{_stack.Id}: ClientTransport.Start failed");
-                        return;
+                        errors.Add($"{_stack.Id}: {ex.GetType().Name}: {ex.Message}");
                     }
-
-                    await WaitWithTimeout("connect", connectedTcs.Task, connectTimeout, ct);
-                    await WaitWithTimeout("kick", kickedTcs.Task, shutdownTimeout, ct);
-
-                    var disconnectReason = await WaitWithTimeout("disconnect", disconnectedTcs.Task, shutdownTimeout, ct);
-                    if (disconnectReason is AnyFail)
+                    finally
                     {
-                        errors.Add($"{_stack.Id}: Client disconnected with error: {disconnectReason}");
-                        return;
+                        if (started && transport != null)
+                        {
+                            await RawReliableTestSupport.StopClientAsync(
+                                transport, stoppedTcs, shutdownTimeout, errors, _stack.Id);
+                        }
                     }
+                });
+        }
+        finally
+        {
+            if (serverStarted)
+            {
+                await RawReliableTestSupport.StopServerAsync(
+                    serverTransport, serverStoppedTcs, serverFactory, shutdownTimeout, errors, _stack.Id);
+            }
 
-                    await WaitWithTimeout("stop", stoppedTcs.Task, shutdownTimeout, ct);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    errors.Add($"{_stack.Id}: {ex.GetType().Name}: {ex.Message}");
-                }
-            });
+            recordingLogger.AddErrorsTo(errors, _stack.Id);
+        }
 
-        Assert.That(errors, Is.Empty,
-            $"{_stack.Id}: {errors.Count}/{clientCount} clients failed. " +
-            $"First error: {errors.FirstOrDefault()}");
-        Assert.That(kickCount, Is.EqualTo(clientCount),
-            $"{_stack.Id}: Server should have kicked {clientCount} clients, got {kickCount}");
-
-        serverTransport.Stop(new UserIntention("test", "complete"));
-        var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
-            $"{_stack.Id}: Server transport must not stop with an error, got {serverStopReason}");
+        Assert.Multiple(() =>
+        {
+            Assert.That(errors, Is.Empty,
+                $"{_stack.Id}: {errors.Count} errors for {clientCount} clients. " +
+                $"First error: {errors.FirstOrDefault()}");
+            Assert.That(kickCount, Is.EqualTo(clientCount),
+                $"{_stack.Id}: Server should have kicked {clientCount} clients, got {kickCount}");
+        });
     }
 
     /// <summary>

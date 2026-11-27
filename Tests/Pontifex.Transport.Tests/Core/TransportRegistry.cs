@@ -8,7 +8,6 @@ using Pontifex.Raw.Unreliable.Udp;
 using Pontifex.RR.Reliable.Direct;
 using Pontifex.RR.Unreliable.Direct;
 using Scriba;
-using Scriba.Consumers;
 using FormulaRegistry = Pontifex.TransportFormula.Registry;
 
 namespace Pontifex.Tests;
@@ -18,18 +17,8 @@ public static class TransportRegistry
     public static IMemoryRental Memory { get; }
     public static ITransportFactory Factory { get; }
 
-    public static ILogger GetLogger(bool failIfError)
-    {
-        var logger = new Logger([new ConsoleConsumer(), new LogConsumer(msg =>
-        {
-            if (failIfError)
-            {
-                Assert.That(msg.Severity > Severity.ERROR);
-            }
-        })]);
-        logger.LogFor = Severity.WARN;
-        return logger;
-    }
+    public static RecordingLogger GetLogger(bool failIfError, bool writeToConsole = true) =>
+        new(failIfError, writeToConsole);
 
     static TransportRegistry()
     {
@@ -50,28 +39,5 @@ public static class TransportRegistry
         builder.RegisterTransport(RawUnreliableUdpBinding.CreateRegistration());
 
         Factory = builder.Build();
-    }
-
-    private class LogConsumer : ILogConsumer
-    {
-        private readonly Action<MessageData> _processor;
-        
-        public LogConsumer(Action<MessageData> processor)
-        {
-            _processor = processor;
-        }
-        
-        public void Message(MessageData logMessage)
-        {
-            _processor.Invoke(logMessage);
-        }
-
-        public void AddRef()
-        {
-        }
-
-        public void Release()
-        {
-        }
     }
 }

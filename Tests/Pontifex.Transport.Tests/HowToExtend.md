@@ -227,68 +227,87 @@ public class PingTests
     private async Task RunPing(int clientCount, int concurrency)
     {
         const int pingCount = 100;
-        Console.WriteLine($"Run '{clientCount}' clients, '{pingCount}' pings each, using '{concurrency}' tasks");
-
         var memory = TransportRegistry.Memory;
-        var logger = TransportRegistry.GetLogger(true);
         var factory = _stack.GetTransportFactory(true);
+        var recordingLogger = factory.Logger;
+        var logger = recordingLogger.Inner;
 
         var serverTransport = (IRawReliableServer)factory.BuildServer();
-        var serverStoppedTcs = new TaskCompletionSource<StopReason>();
-
-        var serverFactory = new ServerSideApiFactory<PingApiServer>(
-            _ => new TestServerSideApiInstance<PingApiServer>(new PingApiServer(), memory, logger));
-
-        Assert.That(serverTransport.Init(serverFactory), Is.True);
-        Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True);
-
+        var serverStoppedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
+        var serverFactory = new TrackingServerHandlerFactory(
+            new ServerSideApiFactory<PingApiServer>(
+                _ => new TestServerSideApiInstance<PingApiServer>(new PingApiServer(), memory, logger)));
         var errors = new ConcurrentBag<string>();
+        var serverStarted = false;
 
-        await Parallel.ForEachAsync(
-            Enumerable.Range(0, clientCount),
-            new ParallelOptions { MaxDegreeOfParallelism = concurrency },
-            async (_, ct) =>
-            {
-                try
+        try
+        {
+            Assert.That(serverTransport.Init(serverFactory), Is.True);
+            Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True);
+            serverStarted = true;
+
+            await Parallel.ForEachAsync(
+                Enumerable.Range(0, clientCount),
+                new ParallelOptions { MaxDegreeOfParallelism = concurrency },
+                async (_, ct) =>
                 {
                     var api = new PingApiClient();
                     var handler = new ClientSideApi(api, memory, logger);
-                    var connectedTcs = new TaskCompletionSource();
-                    var disconnectedTcs = new TaskCompletionSource<StopReason>();
-                    var stoppedTcs = new TaskCompletionSource<StopReason>();
+                    var connectedTcs = RawReliableTestSupport.CreateCompletionSource();
+                    var disconnectedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
+                    var stoppedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
+                    IRawReliableClient? transport = null;
+                    var started = false;
 
                     handler.Connected += _ => connectedTcs.TrySetResult();
                     api.Disconnected += reason => disconnectedTcs.TrySetResult(reason);
 
-                    var transport = (IRawReliableClient)factory.BuildClient();
-                    if (!transport.Init(handler)) { errors.Add("Init failed"); return; }
-                    if (!transport.Start(reason => stoppedTcs.TrySetResult(reason))) { errors.Add("Start failed"); return; }
-
-                    await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
-
-                    for (var i = 0; i < pingCount; i++)
+                    try
                     {
-                        var response = await api.SendPing(i);
-                        if (response.Seq != i) { errors.Add($"Seq mismatch at {i}"); return; }
+                        transport = (IRawReliableClient)factory.BuildClient();
+                        if (!transport.Init(handler)) { errors.Add("Init failed"); return; }
+                        if (!transport.Start(reason => stoppedTcs.TrySetResult(reason))) { errors.Add("Start failed"); return; }
+                        started = true;
+
+                        await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+                        for (var i = 0; i < pingCount; i++)
+                        {
+                            var response = await api.SendPing(i);
+                            if (response.Seq != i) { errors.Add($"Seq mismatch at {i}"); return; }
+                        }
+
+                        api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
+                        var disconnectReason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+                        if (disconnectReason is AnyFail) { errors.Add($"Error: {disconnectReason}"); return; }
+                        await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
                     }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{ex.GetType().Name}: {ex.Message}");
+                    }
+                    finally
+                    {
+                        if (started && transport != null)
+                        {
+                            await RawReliableTestSupport.StopClientAsync(
+                                transport, stoppedTcs, TimeSpan.FromSeconds(5), errors, _stack.Id);
+                        }
+                    }
+                });
+        }
+        finally
+        {
+            if (serverStarted)
+            {
+                await RawReliableTestSupport.StopServerAsync(
+                    serverTransport, serverStoppedTcs, serverFactory, TimeSpan.FromSeconds(5),
+                    errors, _stack.Id);
+            }
 
-                    api.GracefulShutdown(TimeSpan.FromMilliseconds(100));
-
-                    var disconnectReason = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
-                    if (disconnectReason is AnyFail) { errors.Add($"Error: {disconnectReason}"); return; }
-
-                    await stoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    errors.Add($"{ex.GetType().Name}: {ex.Message}");
-                }
-            });
+            recordingLogger.AddErrorsTo(errors, _stack.Id);
+        }
 
         Assert.That(errors, Is.Empty);
-        serverTransport.Stop(new UserIntention("test", "complete"));
-        var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)));
     }
 
     [Test]
@@ -318,10 +337,9 @@ public class PingTests
 **Note:** `ApiTestHarness<TClientApi, TServerApi>` is available as a convenience wrapper for simple single-client scenarios:
 
 ```csharp
-var harness = new ApiTestHarness<PingApiClient, PingApiServer>(_stack, failIfError: true);
+await using var harness = new ApiTestHarness<PingApiClient, PingApiServer>(_stack, failIfError: true);
 await harness.StartAsync();
 // use harness.ClientApi, harness.ServerApi
-harness.Dispose();
 ```
 
 ---
@@ -539,23 +557,18 @@ Per-type files in `TransportStacks/`. Each file contains a class implementing `I
 Static class in `Core/TransportRegistry.cs`. Exposes:
 - `TransportRegistry.Memory` — `IMemoryRental` singleton (`MemoryRental.Shared`)
 - `TransportRegistry.Factory` — `ITransportFactory` with the type catalog and bindings registered
-- `TransportRegistry.GetLogger(bool failIfError)` — creates a new `ILogger`; when `failIfError` is true, any error-severity message fails the test
+- `TransportRegistry.GetLogger(bool failIfError)` — creates a recording `ILogger`. Pass `Inner` to
+  production constructors; error messages are captured for `AssertNoErrors()` or `AddErrorsTo(...)` on
+  the test thread. Assertions are never made inside the log consumer.
 
 ### ApiTestHarness<TClientApi, TServerApi>
 
 Creates a running client-server API pair over a transport stack. Usage:
 
 ```csharp
-var harness = new ApiTestHarness<MyClientApi, MyServerApi>(stack, failIfError: true);
-try
-{
-    await harness.StartAsync();  // builds transports, starts them, waits for API connection
-    // use: harness.ClientApi, harness.ServerApi
-}
-finally
-{
-    harness.Dispose();  // stops both transports with UserIntention
-}
+await using var harness = new ApiTestHarness<MyClientApi, MyServerApi>(stack, failIfError: true);
+await harness.StartAsync();  // builds transports, starts them, waits for API connection
+// use: harness.ClientApi, harness.ServerApi
 ```
 
 Where `TClientApi : class, IApiRoot, new()` and `TServerApi : class, IApiRoot, new()`.
@@ -576,9 +589,15 @@ Use for TCP/UDP stacks that need real network sockets. Avoids port conflicts dur
 Tests/Pontifex.Transport.Tests/
 ├── Core/                                    # Test infrastructure
 │   ├── DynamicPortAllocator.cs              # Random port helper
+│   ├── RawReliableTestSupport.cs             # TCS, client/server stop, and session-wait helpers
+│   ├── RecordingLogger.cs                   # Test-thread log assertions
+│   ├── TrackingServerHandlerFactory.cs      # Server-session teardown tracking
 │   ├── TestHarness.cs                       # ApiTestHarness + TestServerSideApiInstance
 │   ├── TransportFactory.cs                  # Builds client/server transports from formulas
 │   ├── TransportRegistry.cs                 # Shared ITransportFactory, Memory, GetLogger()
+│   ├── TransportRegistryTests.cs            # Logging regressions
+│   ├── TrackingServerHandlerFactoryTests.cs # Session-tracking regressions
+│   ├── HighLoadDataTransferSendResultTests.cs # Send ownership regression
 │   └── Stacks/                              # Stack interface + implementations
 │       ├── ITransportStack.cs               # Interface (Id + GetTransportFactory)
 │       ├── StaticTransportStack.cs          # Fixed formula
@@ -622,4 +641,6 @@ log(zip(tcp("127.0.0.1", 9000, disconnection_timeout = 60)))
 - Use the `"direct"` stack for the fastest feedback loop — it has no network dependency.
 - Network stacks (`"tcp"`) need a few seconds for connection; the harness has a 10-second timeout.
 - If a test hangs, check that the server transport starts before the client (the harness already does this).
-- `TransportRegistry.GetLogger(failIfError: false)` returns a logger that writes to console at `WARN` level. Pass `failIfError: true` to fail the test on any error-severity log message.
+- `TransportRegistry.GetLogger(failIfError: false)` records messages without adding them to the test's error bag.
+  Pass `failIfError: true` and call `AssertNoErrors()` or `AddErrorsTo(...)` after teardown to fail on recorded
+  error-severity messages.

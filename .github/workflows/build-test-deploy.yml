@@ -34,7 +34,7 @@ jobs:
           dotnet test Tests/Pontifex.Transport.Net.Tests/Pontifex.Transport.Net.Tests.csproj --configuration Release --no-build --filter "TestCategory!~Integration" --blame-hang-timeout 120s --blame-hang-dump-type none
           dotnet test Tests/Pontifex.Factory.Tests/Pontifex.Factory.Tests.csproj --configuration Release --no-build --filter "TestCategory!~Integration" --blame-hang-timeout 120s --blame-hang-dump-type none
           dotnet test Tests/Pontifex.TransportFormula.Tests/Pontifex.TransportFormula.Tests.csproj --configuration Release --no-build --filter "TestCategory!~Integration" --blame-hang-timeout 120s --blame-hang-dump-type none
-          dotnet test Api/Pontifex.Api.Tests/Pontifex.Api.Tests.csproj --configuration Release --no-build --filter "TestCategory!~Integration" --blame-hang-timeout 120s --blame-hang-dump-type none
+          dotnet test Tests/Pontifex.Api.Tests/Pontifex.Api.Tests.csproj --configuration Release --no-build --filter "TestCategory!~Integration" --blame-hang-timeout 120s --blame-hang-dump-type none
           dotnet test Tests/Pontifex.Transport.Direct.Tests/Pontifex.Transport.Direct.Tests.csproj --configuration Release --no-build --filter "TestCategory!~Integration" --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run integration test pass

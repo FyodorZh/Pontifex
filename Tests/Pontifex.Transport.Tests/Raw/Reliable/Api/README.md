@@ -148,7 +148,7 @@ becomes an inheritance tree, convert the suite according to the rules.
 - The transport handshake and carrier admission; those belong to the core
   endpoint and carrier suites.
 - The `TransportPipeSystem` and the declared Api pipes; the Api tests in
-  `Api/Pontifex.Api.Tests` cover them over in-memory pipes.
+  `Tests/Pontifex.Api.Tests` cover them over in-memory pipes.
 - Real TCP/Direct transports, sockets, real time, and concurrency stress.
 - Zip, Reconnectable, and logger wrappers.
 - Logging output and performance.

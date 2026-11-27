@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Threading;
-using Actuarius.Collections;
 using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
@@ -56,79 +55,181 @@ namespace Pontifex.Raw.Reliable.Tests
             private readonly int _unconfirmedTicks;
             private readonly long _lastTickId;
             private readonly TaskCompletionSource _completedTcs;
+            private readonly TaskCompletionSource<Exception> _failedTcs;
+            private readonly TaskCompletionSource<StopReason> _stoppedTcs =
+                RawReliableTestSupport.CreateCompletionSource<StopReason>();
+            private readonly CancellationTokenSource _stop = new();
+            private readonly SemaphoreSlim _sendWindow = new(0);
 
             private volatile IRawReliableEndpoint? _endpoint;
             private long _sendId;
             private long _receiveId;
+            private Task _worker = Task.CompletedTask;
+            private int _workerStopped;
 
             public ClientHandler(IMemoryRental memory, int unconfirmedTicks, long lastTickId,
-                TaskCompletionSource completedTcs)
+                TaskCompletionSource completedTcs, TaskCompletionSource<Exception> failedTcs)
             {
                 _memory = memory;
                 _unconfirmedTicks = unconfirmedTicks;
                 _lastTickId = lastTickId;
                 _completedTcs = completedTcs;
+                _failedTcs = failedTcs;
             }
 
             public void OnConnected(IRawReliableEndpoint endPoint)
             {
                 _endpoint = endPoint;
-                var thread = new Thread(Work) { IsBackground = true };
-                thread.Start();
+                _worker = Task.Run(() => WorkAsync(_stop.Token));
             }
 
             public void OnDisconnected(StopReason reason)
             {
                 _endpoint = null;
+                _stop.Cancel();
+                _sendWindow.Release();
             }
 
             public void OnStopped(StopReason reason)
             {
+                _endpoint = null;
+                _stop.Cancel();
+                _sendWindow.Release();
+                _stoppedTcs.TrySetResult(reason);
             }
 
             public void OnReceived(UnionDataList receivedBuffer)
             {
+                IMultiRefReadOnlyByteArray? buffer = null;
                 try
                 {
                     var id = Interlocked.Increment(ref _receiveId);
-                    if (!receivedBuffer.TryPopFirst(out IMultiRefReadOnlyByteArray? buffer) ||
-                        !CheckBuffer(id, buffer) || id == _lastTickId)
+                    if (!receivedBuffer.TryPopFirst(out buffer) || buffer == null)
                     {
-                        if (id == _lastTickId)
-                        {
-                            _endpoint?.Disconnect(new UserIntention("test", "Last tick received " + id));
-                            _completedTcs.TrySetResult();
-                        }
-                        else
-                        {
-                            _endpoint?.Disconnect(new UserFail("Message check (c) failed #" + id));
-                        }
+                        Fail(new InvalidOperationException($"Message extraction failed #{id}"));
+                        return;
                     }
 
-                    buffer?.Release();
+                    if (!CheckBuffer(id, buffer))
+                    {
+                        Fail(new InvalidOperationException($"Message check (c) failed #{id}"));
+                        return;
+                    }
+
+                    if (id > _lastTickId)
+                    {
+                        Fail(new InvalidOperationException($"Unexpected message #{id}"));
+                        return;
+                    }
+
+                    if (id == _lastTickId)
+                    {
+                        _completedTcs.TrySetResult();
+                        _endpoint?.Disconnect(new UserIntention("test", "Last tick received " + id));
+                    }
                 }
                 finally
                 {
+                    buffer?.Release();
                     receivedBuffer.Release();
+                    _sendWindow.Release();
                 }
             }
 
-            private void Work()
+            public async Task StopAsync(bool waitForStopped, TimeSpan timeout)
             {
-                while (_endpoint != null)
+                if (Interlocked.Exchange(ref _workerStopped, 1) != 0)
                 {
-                    var endpoint = _endpoint;
+                    return;
+                }
 
-                    while (_sendId - Volatile.Read(ref _receiveId) < _unconfirmedTicks)
+                _stop.Cancel();
+                _sendWindow.Release();
+                await _worker;
+                if (waitForStopped)
+                {
+                    await _stoppedTcs.Task.WaitAsync(timeout);
+                }
+            }
+
+            private void Fail(Exception exception)
+            {
+                _failedTcs.TrySetResult(exception);
+                _endpoint?.Disconnect(new UserFail("test", exception.Message));
+                _stop.Cancel();
+                _sendWindow.Release();
+            }
+
+            private async Task WorkAsync(CancellationToken cancellationToken)
+            {
+                try
+                {
+                    while (!cancellationToken.IsCancellationRequested)
                     {
-                        var id = Interlocked.Increment(ref _sendId);
+                        var endpoint = _endpoint;
+                        if (endpoint == null || Volatile.Read(ref _sendId) >= _lastTickId)
+                        {
+                            return;
+                        }
+
+                        if (Volatile.Read(ref _sendId) - Volatile.Read(ref _receiveId) >= _unconfirmedTicks)
+                        {
+                            await _sendWindow.WaitAsync(cancellationToken);
+                            continue;
+                        }
+
+                        var id = _sendId + 1;
                         var buffer = GenBuffer(_memory, id);
                         var dataToSend = _memory.CollectablePool.Acquire<UnionDataList>();
-                        dataToSend.PutFirst(new UnionData(buffer));
-                        endpoint.Send(dataToSend);
-                    }
+                        try
+                        {
+                            dataToSend.PutFirst(new UnionData(buffer));
+                        }
+                        catch
+                        {
+                            buffer.Release();
+                            dataToSend.Release();
+                            throw;
+                        }
 
-                    Thread.Sleep(50);
+                        SendResult result;
+                        try
+                        {
+                            result = endpoint.Send(dataToSend);
+                        }
+                        catch
+                        {
+                            dataToSend.Release();
+                            throw;
+                        }
+
+                        if (result == SendResult.Ok)
+                        {
+                            _sendId = id;
+                            continue;
+                        }
+
+                        if (result == SendResult.BufferOverflow)
+                        {
+                            await _sendWindow.WaitAsync(cancellationToken);
+                            continue;
+                        }
+
+                        if (result == SendResult.InvalidMessage)
+                        {
+                            dataToSend.Release();
+                        }
+
+                        Fail(new InvalidOperationException($"Send failed for message #{id}: {result}"));
+                        return;
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                }
+                catch (Exception ex)
+                {
+                    Fail(ex);
                 }
             }
         }
@@ -136,27 +237,35 @@ namespace Pontifex.Raw.Reliable.Tests
         private class ServerFactory : IRawReliableServerHandlerFactory<IRawReliableServerHandler>
         {
             private readonly IMemoryRental _memory;
+            private readonly long _lastTickId;
+            private readonly bool _corruptLastResponse;
 
-            public ServerFactory(IMemoryRental memory)
+            public ServerFactory(IMemoryRental memory, long lastTickId, bool corruptLastResponse)
             {
                 _memory = memory;
+                _lastTickId = lastTickId;
+                _corruptLastResponse = corruptLastResponse;
             }
 
             public IRawReliableServerHandler? TryCreate(IEndPoint remote)
             {
-                return new ServerHandler(_memory);
+                return new ServerHandler(_memory, _lastTickId, _corruptLastResponse);
             }
         }
 
         private class ServerHandler : IRawReliableServerHandler
         {
             private readonly IMemoryRental _memory;
+            private readonly long _lastTickId;
+            private readonly bool _corruptLastResponse;
             private volatile IRawReliableEndpoint? _endpoint;
             private long _receiveId;
 
-            public ServerHandler(IMemoryRental memory)
+            public ServerHandler(IMemoryRental memory, long lastTickId, bool corruptLastResponse)
             {
                 _memory = memory;
+                _lastTickId = lastTickId;
+                _corruptLastResponse = corruptLastResponse;
             }
 
             public void OnConnected(IRawReliableEndpoint endPoint)
@@ -204,10 +313,15 @@ namespace Pontifex.Raw.Reliable.Tests
                         return;
                     }
 
+                    if (_corruptLastResponse && id == _lastTickId)
+                    {
+                        buffer[0] ^= 0xFF;
+                    }
+
                     var endpoint = _endpoint;
                     if (endpoint != null)
                     {
-                        endpoint.Send(toSend.Acquire());
+                        SendServerResponse(endpoint, toSend, id);
                     }
                 }
                 finally
@@ -217,107 +331,147 @@ namespace Pontifex.Raw.Reliable.Tests
             }
         }
 
-        private static async Task<StopReason?> TryGetStopReason(TaskCompletionSource<StopReason> tcs)
+        internal static SendResult SendServerResponse(
+            IRawReliableEndpoint endpoint,
+            UnionDataList toSend,
+            long id)
         {
-            try
+            var acquired = toSend.Acquire();
+            var result = endpoint.Send(acquired);
+            if (result == SendResult.InvalidMessage)
             {
-                return await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                acquired.Release();
             }
-            catch (TimeoutException)
+
+            if (result != SendResult.Ok)
             {
-                return null;
+                endpoint.Disconnect(new UserFail($"Server send failed for message #{id}: {result}"));
             }
+
+            return result;
         }
 
         /// <summary>
-        /// Runs the core data-transfer scenario: <paramref name="clientCount"/> concurrent clients
-        /// connect to the server, each sending <paramref name="lastTickId"/> messages
-        /// with increasing IDs and verifying each echo response. Asserts no errors occur.
+        /// Runs the core data-transfer scenario and returns every observed client, cleanup, or log error.
         /// </summary>
-        private async Task RunDataTransfer(int clientCount, int concurrency, int lastTickId)
+        private async Task<IReadOnlyCollection<string>> RunDataTransfer(
+            int clientCount,
+            int concurrency,
+            int lastTickId,
+            bool corruptLastResponse = false)
         {
             Console.WriteLine($"Run '{clientCount}' using '{concurrency}' tasks");
-            
-            var memory = TransportRegistry.Memory;
-            var factory = _stack.GetTransportFactory(clientCount <= 1);
-
-            var serverTransport = (IRawReliableServer)factory.BuildServer();
-            var serverFactory = new ServerFactory(memory);
-            var serverStoppedTcs = new TaskCompletionSource<StopReason>();
-
-            Assert.That(serverTransport.Init(serverFactory), Is.True,
-                $"{_stack.Id}: ServerTransport.Init failed");
-            Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
-                $"{_stack.Id}: ServerTransport.Start failed");
 
             var errors = new ConcurrentBag<string>();
+            var memory = TransportRegistry.Memory;
+            var factory = _stack.GetTransportFactory(true);
 
-            await Parallel.ForEachAsync(
-                Enumerable.Range(0, clientCount),
-                new ParallelOptions { MaxDegreeOfParallelism = concurrency },
-                async (_, ct) =>
-                {
-                    try
+            var serverTransport = (IRawReliableServer)factory.BuildServer();
+            var serverFactory = new TrackingServerHandlerFactory(
+                new ServerFactory(memory, lastTickId, corruptLastResponse));
+            var serverStoppedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
+            var serverStarted = false;
+
+            try
+            {
+                Assert.That(serverTransport.Init(serverFactory), Is.True,
+                    $"{_stack.Id}: ServerTransport.Init failed");
+                Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
+                    $"{_stack.Id}: ServerTransport.Start failed");
+                serverStarted = true;
+
+                await Parallel.ForEachAsync(
+                    Enumerable.Range(0, clientCount),
+                    new ParallelOptions { MaxDegreeOfParallelism = concurrency },
+                    async (_, ct) =>
                     {
-                        var clientCompletedTcs = new TaskCompletionSource();
+                        var clientCompletedTcs = RawReliableTestSupport.CreateCompletionSource();
+                        var clientFailedTcs = RawReliableTestSupport.CreateCompletionSource<Exception>();
+                        var clientStoppedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
                         var clientHandler = new ClientHandler(memory, unconfirmedTicks: 10,
-                            lastTickId, clientCompletedTcs);
-                        var clientStoppedTcs = new TaskCompletionSource<StopReason>();
-                        var clientTransport = (IRawReliableClient)factory.BuildClient();
+                            lastTickId, clientCompletedTcs, clientFailedTcs);
+                        IRawReliableClient? clientTransport = null;
+                        var clientStarted = false;
 
-                        if (!clientTransport.Init(clientHandler))
-                        {
-                            errors.Add("ClientTransport.Init failed");
-                            return;
-                        }
-
-                        if (!clientTransport.Start(reason => clientStoppedTcs.TrySetResult(reason)))
-                        {
-                            errors.Add("ClientTransport.Start failed");
-                            return;
-                        }
-
-                        var completionTimeout = TimeSpan.FromSeconds(clientCount <= 1 ? 30 : 120);
                         try
                         {
-                            await clientCompletedTcs.Task.WaitAsync(completionTimeout, ct);
-                        }
-                        catch (TimeoutException)
-                        {
-                            clientTransport.Stop(new UserIntention("test", "client timed out"));
-
-                            var hungReason = await TryGetStopReason(clientStoppedTcs);
-                            if (hungReason != null)
+                            clientTransport = (IRawReliableClient)factory.BuildClient();
+                            if (!clientTransport.Init(clientHandler))
                             {
-                                errors.Add($"Client did not complete data transfer within {completionTimeout.TotalSeconds:F0}s. Stop reason: {hungReason}");
+                                errors.Add("ClientTransport.Init failed");
+                                return;
                             }
-                            else
+
+                            if (!clientTransport.Start(reason => clientStoppedTcs.TrySetResult(reason)))
                             {
-                                errors.Add($"Client did not complete data transfer within {completionTimeout.TotalSeconds:F0}s (no stop reason)");
+                                errors.Add("ClientTransport.Start failed");
+                                return;
                             }
-                            return;
-                        }
 
-                        var clientReason = await clientStoppedTcs.Task.WaitAsync(
-                            TimeSpan.FromSeconds(5), ct);
-                        if (clientReason is AnyFail)
+                            clientStarted = true;
+                            var completionTimeout = TimeSpan.FromSeconds(clientCount <= 1 ? 30 : 120);
+                            Task completed;
+                            try
+                            {
+                                completed = await Task.WhenAny(clientCompletedTcs.Task, clientFailedTcs.Task)
+                                    .WaitAsync(completionTimeout, ct);
+                            }
+                            catch (TimeoutException)
+                            {
+                                errors.Add($"Client did not complete data transfer within {completionTimeout.TotalSeconds:F0}s.");
+                                return;
+                            }
+
+                            if (completed == clientFailedTcs.Task)
+                            {
+                                errors.Add((await clientFailedTcs.Task).Message);
+                                return;
+                            }
+
+                            await clientCompletedTcs.Task;
+                            var clientReason = await clientStoppedTcs.Task.WaitAsync(
+                                TimeSpan.FromSeconds(5), ct);
+                            if (clientReason is AnyFail)
+                            {
+                                errors.Add($"Client transport stopped with error: {clientReason}");
+                            }
+                        }
+                        catch (Exception ex)
                         {
-                            errors.Add($"Client transport stopped with error: {clientReason}");
+                            errors.Add($"{ex.GetType().Name}: {ex.Message}");
                         }
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        errors.Add($"{ex.GetType().Name}: {ex.Message}");
-                    }
-                });
+                        finally
+                        {
+                            if (clientStarted && clientTransport != null)
+                            {
+                                await RawReliableTestSupport.StopClientAsync(
+                                    clientTransport, clientStoppedTcs, TimeSpan.FromSeconds(5), errors, "HighLoad");
+                            }
 
-            Assert.That(errors, Is.Empty,
-                $"{_stack.Id}: {errors.Count}/{clientCount} clients failed. First error: {errors.FirstOrDefault()}");
+                            try
+                            {
+                                await clientHandler.StopAsync(clientStarted, TimeSpan.FromSeconds(5));
+                            }
+                            catch (Exception ex)
+                            {
+                                errors.Add($"HighLoad: client worker cleanup failed: {ex.GetType().Name}: {ex.Message}");
+                            }
+                        }
+                    });
+            }
+            finally
+            {
+                if (serverStarted)
+                {
+                    await RawReliableTestSupport.StopServerAsync(
+                        serverTransport, serverStoppedTcs, serverFactory, TimeSpan.FromSeconds(30),
+                        errors, "HighLoad");
+                }
 
-            serverTransport.Stop(new UserIntention("test", "complete"));
-            var serverReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.That(serverReason, Is.Not.InstanceOf(typeof(AnyFail)),
-                $"{_stack.Id}: Server transport must not stop with an error, got {serverReason}");
+                factory.Logger.AddErrorsTo(errors, "HighLoad");
+            }
+
+            return errors.ToArray();
         }
 
         /// <summary>
@@ -327,7 +481,8 @@ namespace Pontifex.Raw.Reliable.Tests
         [Category("Small")]
         public async Task HighLoadDataTransfer_Single()
         {
-            await RunDataTransfer(1, 1, 100);
+            var errors = await RunDataTransfer(1, 1, 100);
+            Assert.That(errors, Is.Empty);
         }
 
         /// <summary>
@@ -339,7 +494,8 @@ namespace Pontifex.Raw.Reliable.Tests
         public async Task HighLoadDataTransfer_Small()
         {
             var (size, concurrency) = _stack.GetSmallTestSize();
-            await RunDataTransfer(size, concurrency, 100);
+            var errors = await RunDataTransfer(size, concurrency, 100);
+            Assert.That(errors, Is.Empty);
         }
 
         /// <summary>
@@ -351,7 +507,20 @@ namespace Pontifex.Raw.Reliable.Tests
         public async Task HighLoadDataTransfer_Big()
         {
             var (size, concurrency) = _stack.GetBigTestSize();
-            await RunDataTransfer(size, concurrency, 100);
+            var errors = await RunDataTransfer(size, concurrency, 100);
+            Assert.That(errors, Is.Empty);
+        }
+
+        /// <summary>
+        /// A corrupt final response is reported as a failure instead of successful completion.
+        /// </summary>
+        [Test]
+        [Category("Small")]
+        public async Task HighLoadDataTransfer_CorruptFinalResponse_ReportsFailure()
+        {
+            var errors = await RunDataTransfer(1, 1, lastTickId: 1, corruptLastResponse: true);
+
+            Assert.That(errors, Has.Some.Contains("Message check (c) failed #1"));
         }
     }
 }

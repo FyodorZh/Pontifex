@@ -12,6 +12,8 @@ public class TransportFactory
     private readonly ITransportCompiler _serverCompiler;
     private readonly ITransportCompiler _clientCompiler;
 
+    public RecordingLogger Logger { get; }
+
     public TransportFactory(
         string serverFormula,
         string clientFormula,
@@ -21,7 +23,8 @@ public class TransportFactory
         _clientFormula = clientFormula;
 
         var memory = TransportRegistry.Memory;
-        var logger = TransportRegistry.GetLogger(failIfError);
+        Logger = TransportRegistry.GetLogger(failIfError);
+        var logger = Logger.Inner;
 
         _serverCompiler = TransportRegistry.Factory.CreateCompiler(
             TransportRole.Server,

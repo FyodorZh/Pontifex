@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Actuarius.Memory;
 using Pontifex.Raw.Reliable;
 using Pontifex.StopReasons;
 using Pontifex.Tests;
@@ -19,8 +18,10 @@ namespace Pontifex.Raw.Reliable.Tests
 
         private class ClientHandler : IRawReliableClientHandler
         {
-            public TaskCompletionSource<StopReason> DisconnectedTcs { get; } = new();
-            public TaskCompletionSource<StopReason> StoppedTcs { get; } = new();
+            public TaskCompletionSource<StopReason> DisconnectedTcs { get; } =
+                RawReliableTestSupport.CreateCompletionSource<StopReason>();
+            public TaskCompletionSource<StopReason> StoppedTcs { get; } =
+                RawReliableTestSupport.CreateCompletionSource<StopReason>();
 
             public void OnConnected(IRawReliableEndpoint endPoint)
             {
@@ -44,35 +45,47 @@ namespace Pontifex.Raw.Reliable.Tests
 
         private class ServerFactory : IRawReliableServerHandlerFactory<IRawReliableServerHandler>
         {
+            private readonly ConcurrentBag<ServerHandler> _handlers = new();
+
             public IRawReliableServerHandler? TryCreate(IEndPoint remote)
             {
-                return new ServerHandler();
+                var handler = new ServerHandler();
+                _handlers.Add(handler);
+                return handler;
+            }
+
+            public async Task StopAsync()
+            {
+                var tasks = _handlers.Select(handler => handler.DisconnectTask).ToArray();
+                try
+                {
+                    await Task.WhenAll(tasks);
+                }
+                catch (OperationCanceledException) when (tasks.All(task => task.IsCanceled))
+                {
+                }
             }
         }
 
         private class ServerHandler : IRawReliableServerHandler
         {
-            private volatile IRawReliableEndpoint? _endpoint;
+            public Task DisconnectTask { get; private set; } = Task.CompletedTask;
 
             public void OnConnected(IRawReliableEndpoint endPoint)
             {
-                _endpoint = endPoint;
-
-                _ = Task.Run(async () =>
+                DisconnectTask = Task.Run(async () =>
                 {
                     await Task.Delay(100);
-                    _endpoint?.Disconnect(new UserIntention("server", "Server graceful disconnect"));
+                    endPoint.Disconnect(new UserIntention("server", "Server graceful disconnect"));
                 });
             }
 
             public void OnDisconnected(StopReason reason)
             {
-                _endpoint = null;
             }
 
             public void OnStopped(StopReason reason)
             {
-                // do nothing?
             }
 
             public void OnReceived(UnionDataList receivedBuffer)
@@ -83,84 +96,113 @@ namespace Pontifex.Raw.Reliable.Tests
 
         /// <summary>
         /// Runs the core graceful-disconnect scenario: <paramref name="clientCount"/> concurrent
-        /// clients connect to the server. The server waits 100ms then gracefully disconnects
-        /// each client. Asserts every client observes a non-error disconnect reason, and that
-        /// no error-level stop reasons occur on either side.
+        /// clients connect to the server, which gracefully disconnects each session after a tracked
+        /// 100 ms driver. Asserts every client observes a non-error disconnect reason and clean teardown.
         /// </summary>
         private async Task RunGracefulDisconnect(int clientCount, int concurrency)
         {
             var factory = _stack.GetTransportFactory(true);
+            var logger = factory.Logger;
 
             var serverTransport = (IRawReliableServer)factory.BuildServer();
-            var serverFactory = new ServerFactory();
-            var serverStoppedTcs = new TaskCompletionSource<StopReason>();
-
-            Assert.That(serverTransport.Init(serverFactory), Is.True,
-                $"{_stack.Id}: ServerTransport.Init failed");
-            Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
-                $"{_stack.Id}: ServerTransport.Start failed");
-
+            var sessionFactory = new ServerFactory();
+            var serverFactory = new TrackingServerHandlerFactory(sessionFactory);
+            var serverStoppedTcs = RawReliableTestSupport.CreateCompletionSource<StopReason>();
             var errors = new ConcurrentBag<string>();
+            var serverStarted = false;
 
-            await Parallel.ForEachAsync(
-                Enumerable.Range(0, clientCount),
-                new ParallelOptions { MaxDegreeOfParallelism = concurrency },
-                async (_, ct) =>
-                {
-                    try
+            try
+            {
+                Assert.That(serverTransport.Init(serverFactory), Is.True,
+                    $"{_stack.Id}: ServerTransport.Init failed");
+                Assert.That(serverTransport.Start(reason => serverStoppedTcs.TrySetResult(reason)), Is.True,
+                    $"{_stack.Id}: ServerTransport.Start failed");
+                serverStarted = true;
+
+                await Parallel.ForEachAsync(
+                    Enumerable.Range(0, clientCount),
+                    new ParallelOptions { MaxDegreeOfParallelism = concurrency },
+                    async (_, ct) =>
                     {
                         var clientHandler = new ClientHandler();
-                        var clientStoppedTcs = new TaskCompletionSource<StopReason>();
-                        var clientTransport = (IRawReliableClient)factory.BuildClient();
+                        IRawReliableClient? clientTransport = null;
+                        var clientStarted = false;
 
-                        if (!clientTransport.Init(clientHandler))
+                        try
                         {
-                            errors.Add("ClientTransport.Init failed");
-                            return;
-                        }
+                            clientTransport = (IRawReliableClient)factory.BuildClient();
+                            if (!clientTransport.Init(clientHandler))
+                            {
+                                errors.Add("ClientTransport.Init failed");
+                                return;
+                            }
 
-                        if (!clientTransport.Start(reason => clientStoppedTcs.TrySetResult(reason)))
+                            if (!clientTransport.Start(reason => clientHandler.StoppedTcs.TrySetResult(reason)))
+                            {
+                                errors.Add("ClientTransport.Start failed");
+                                return;
+                            }
+
+                            clientStarted = true;
+                            var clientDisconnectReason = await clientHandler.DisconnectedTcs.Task
+                                .WaitAsync(TimeSpan.FromSeconds(10), ct);
+
+                            if (clientDisconnectReason is AnyFail)
+                            {
+                                errors.Add($"Client disconnect reason is an error: {clientDisconnectReason}");
+                                return;
+                            }
+
+                            var clientStopReason = await clientHandler.StoppedTcs.Task
+                                .WaitAsync(TimeSpan.FromSeconds(5), ct);
+                            if (clientStopReason is AnyFail)
+                            {
+                                errors.Add($"Client transport stopped with error: {clientStopReason}");
+                            }
+                        }
+                        catch (Exception ex)
                         {
-                            errors.Add("ClientTransport.Start failed");
-                            return;
+                            errors.Add($"{ex.GetType().Name}: {ex.Message}");
                         }
-
-                        var clientDisconnectReason = await clientHandler.DisconnectedTcs.Task
-                            .WaitAsync(TimeSpan.FromSeconds(10), ct);
-
-                        if (clientDisconnectReason is AnyFail)
+                        finally
                         {
-                            errors.Add(
-                                $"Client disconnect reason is an error: {clientDisconnectReason}");
-                            return;
+                            if (clientStarted && clientTransport != null)
+                            {
+                                await RawReliableTestSupport.StopClientAsync(
+                                    clientTransport, clientHandler.StoppedTcs, TimeSpan.FromSeconds(5),
+                                    errors, _stack.Id);
+                            }
                         }
+                    });
+            }
+            finally
+            {
+                if (serverStarted)
+                {
+                    await RawReliableTestSupport.StopServerAsync(
+                        serverTransport, serverStoppedTcs, serverFactory, TimeSpan.FromSeconds(30),
+                        errors, _stack.Id);
+                }
 
-                        var clientStopReason = await clientStoppedTcs.Task
-                            .WaitAsync(TimeSpan.FromSeconds(5), ct);
-                        if (clientStopReason is AnyFail)
-                        {
-                            errors.Add(
-                                $"Client transport stopped with error: {clientStopReason}");
-                        }
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        errors.Add($"{ex.GetType().Name}: {ex.Message}");
-                    }
-                });
+                try
+                {
+                    await sessionFactory.StopAsync();
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{_stack.Id}: server disconnect drivers did not stop: {ex.GetType().Name}: {ex.Message}");
+                }
+
+                logger.AddErrorsTo(errors, _stack.Id);
+            }
 
             Assert.That(errors, Is.Empty,
-                $"{_stack.Id}: {errors.Count}/{clientCount} clients failed. " +
+                $"{_stack.Id}: {errors.Count} errors for {clientCount} clients. " +
                 $"First error: {errors.FirstOrDefault()}");
-
-            serverTransport.Stop(new UserIntention("test", "complete"));
-            var serverStopReason = await serverStoppedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.That(serverStopReason, Is.Not.InstanceOf(typeof(AnyFail)),
-                $"{_stack.Id}: Server transport must not stop with an error, got {serverStopReason}");
         }
 
         /// <summary>
-        /// A single client connects to the server and is gracefully disconnected after 100ms.
+        /// A single client connects and is gracefully disconnected by the server.
         /// </summary>
         [Test]
         [Category("Small")]
